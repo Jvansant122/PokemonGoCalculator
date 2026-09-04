@@ -9,6 +9,7 @@ const sampleScenario: Scenario = {
   dodgeModel: { kind: "none" },
   partySize: 4,
   teammateDps: 26.5,
+  teammateTypeMatches: true,
   phase: "opening-burst",
 };
 
@@ -29,5 +30,15 @@ describe("scenario serialization", () => {
 
   it("returns null when the URL carries no scenario", () => {
     expect(parseScenarioFromUrl("https://pogo-analyzer.example/compare")).toBeNull();
+  });
+
+  it("round-trips a non-default teammateTypeMatches rather than silently reverting to true", () => {
+    // Regression guard: this field was previously missing from Scenario
+    // entirely, so a shared link always restored the default (true) no
+    // matter what the sharer had selected — silently changing which
+    // candidate the crossover chart favored.
+    const offType: Scenario = { ...sampleScenario, teammateTypeMatches: false };
+    expect(decodeScenario(encodeScenario(offType)).teammateTypeMatches).toBe(false);
+    expect(parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", offType))!.teammateTypeMatches).toBe(false);
   });
 });

@@ -17,6 +17,8 @@ export interface Scenario {
   dodgeModel: DodgeBehavior;
   partySize: number;
   teammateDps: number;
+  /** Whether the party's attacking type matches the lead candidate's boost type — see convertUptimeToTeamDamage. */
+  teammateTypeMatches: boolean;
   phase: CombatPhase;
 }
 

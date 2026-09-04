@@ -42,6 +42,7 @@ function assumptionsToScenario(a: Assumptions): Scenario {
     dodgeModel: a.dodge,
     partySize: a.partySize,
     teammateDps: a.teammateDps,
+    teammateTypeMatches: a.teammateTypeMatches,
     phase: a.phase,
   };
 }
@@ -59,7 +60,7 @@ function scenarioToAssumptions(s: Scenario): Assumptions {
     phase: s.phase,
     partySize: s.partySize,
     teammateDps: s.teammateDps,
-    teammateTypeMatches: DEFAULT_ASSUMPTIONS.teammateTypeMatches,
+    teammateTypeMatches: s.teammateTypeMatches,
   };
 }
 
