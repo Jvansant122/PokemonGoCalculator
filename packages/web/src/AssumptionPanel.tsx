@@ -132,14 +132,14 @@ export function AssumptionPanel({ value, onChange, targetOptions }: Props) {
           <label htmlFor="phase">Combat phase</label>
           <select id="phase" value={value.phase} onChange={(e) => set("phase", e.target.value as CombatPhase)}>
             <option value="opening-burst">Opening burst (boss uses only its fast move)</option>
-            <option value="sustained" disabled>
-              Sustained (Phase 5, not yet modeled)
-            </option>
+            <option value="sustained">Sustained (boss's charged moves are randomized — reports a distribution)</option>
           </select>
         </div>
 
         <div className="field">
-          <label htmlFor="openingBurst">Opening-burst window (s)</label>
+          <label htmlFor="openingBurst">
+            {value.phase === "opening-burst" ? "Opening-burst window (s)" : "Simulated fight length (s)"}
+          </label>
           <input
             id="openingBurst"
             type="number"
@@ -147,20 +147,28 @@ export function AssumptionPanel({ value, onChange, targetOptions }: Props) {
             max={60}
             value={value.openingBurstSeconds}
             onChange={(e) => set("openingBurstSeconds", Number(e.target.value))}
-            title="How long the boss goes without a charged move. The comparison only models this window."
+            title={
+              value.phase === "opening-burst"
+                ? "How long the boss goes without a charged move. The comparison only models this window."
+                : "How long each simulated run lasts before being cut off."
+            }
           />
         </div>
 
         <div className="field">
-          <label htmlFor="bossFreq">Boss charged-move frequency (s)</label>
+          <label htmlFor="bossFreq">Boss charged-move mean frequency (s)</label>
           <input
             id="bossFreq"
             type="number"
             min={1}
             value={value.bossChargedMoveFrequencySeconds}
             onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
-            disabled
-            title="Not modeled during the opening-burst phase — the boss doesn't throw charged moves yet. Wired up in Phase 5."
+            disabled={value.phase !== "sustained"}
+            title={
+              value.phase !== "sustained"
+                ? "Only used in the sustained phase — the opening burst assumes the boss hasn't used a charged move yet."
+                : "Mean seconds between the boss's charged moves (randomized +/-40% per run)."
+            }
           />
         </div>
 

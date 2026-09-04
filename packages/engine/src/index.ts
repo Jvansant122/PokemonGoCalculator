@@ -12,3 +12,4 @@ export * from "./uptime.js";
 export * from "./scenario.js";
 export * from "./comparison.js";
 export * from "./fixtures/scenarioA.js";
+export * from "./simulate.js";

@@ -7,6 +7,7 @@ import {
   buildScenarioUrl,
   parseScenarioFromUrl,
   runComparison,
+  runSustainedComparison,
   type Scenario,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
@@ -80,8 +81,10 @@ export function App() {
   );
 
   const boss = TARGETS.find((t) => t.id === assumptions.targetId) ?? PRIMAL_KYOGRE;
+  const isSustained = assumptions.phase === "sustained";
 
   const results = useMemo(() => {
+    if (isSustained) return { candidates: null, error: null as string | null };
     try {
       return {
         candidates: runComparison({
@@ -97,15 +100,36 @@ export function App() {
     } catch (err) {
       return { candidates: null, error: (err as Error).message };
     }
-  }, [boss, assumptions.level, ivs, assumptions.dodge, assumptions.openingBurstSeconds]);
+  }, [isSustained, boss, assumptions.level, ivs, assumptions.dodge, assumptions.openingBurstSeconds]);
+
+  const sustainedResults = useMemo(() => {
+    if (!isSustained) return { candidates: null, error: null as string | null };
+    try {
+      return {
+        candidates: runSustainedComparison({
+          candidates: CANDIDATES,
+          boss,
+          level: assumptions.level,
+          ivs,
+          dodge: assumptions.dodge,
+          bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
+          maxSeconds: assumptions.openingBurstSeconds,
+        }),
+        error: null as string | null,
+      };
+    } catch (err) {
+      return { candidates: null, error: (err as Error).message };
+    }
+  }, [isSustained, boss, assumptions.level, ivs, assumptions.dodge, assumptions.bossChargedMoveFrequencySeconds, assumptions.openingBurstSeconds]);
 
   const sensitivity = useMemo(() => {
+    if (isSustained) return [];
     try {
       return computeSensitivity(CANDIDATES, boss, assumptions);
     } catch {
       return [];
     }
-  }, [boss, assumptions]);
+  }, [isSustained, boss, assumptions]);
 
   function handleShare() {
     const url = buildScenarioUrl(window.location.href.split("?")[0]!, assumptionsToScenario(assumptions));
@@ -126,13 +150,13 @@ export function App() {
         targetOptions={TARGETS.map((t) => ({ id: t.id, name: t.name }))}
       />
 
-      {results.error && (
+      {(results.error || sustainedResults.error) && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this scenario: {results.error}</p>
+          <p style={{ color: "#ff6b6b" }}>Could not compute this scenario: {results.error ?? sustainedResults.error}</p>
         </section>
       )}
 
-      {results.candidates && (
+      {!isSustained && results.candidates && (
         <>
           <section className="panel">
             <h2>Opening burst, no boss charged moves</h2>
@@ -168,6 +192,38 @@ export function App() {
 
           <SensitivityView checks={sensitivity} />
         </>
+      )}
+
+      {isSustained && sustainedResults.candidates && (
+        <section className="panel">
+          <h2>Sustained fight — distribution over {sustainedResults.candidates[0]!.iterations} randomized runs</h2>
+          <p className="caveats" style={{ marginBottom: 12 }}>
+            The boss's charged-move timing is randomized each run (mean {assumptions.bossChargedMoveFrequencySeconds}s
+            between casts, +/-40%), so results are reported as a distribution rather than a single number — including
+            how often each candidate faints mid-animation on its own charged move.
+          </p>
+          <div className="result-row">
+            {sustainedResults.candidates.map((c, i) => (
+              <div key={c.id} className={`result-card ${i === 0 ? "x" : "y"}`}>
+                <h3>{c.name}</h3>
+                <dl>
+                  <dt>Mean survival</dt>
+                  <dd>{c.meanSecondsSurvived.toFixed(1)}s</dd>
+                  <dt>Survived full window</dt>
+                  <dd>{(c.fractionSurvivedFullWindow * 100).toFixed(0)}%</dd>
+                  <dt>Died mid own-animation</dt>
+                  <dd>{(c.fractionDiedDuringOwnAnimation * 100).toFixed(0)}%</dd>
+                  <dt>Median damage</dt>
+                  <dd>{c.medianTotalDamage.toFixed(0)}</dd>
+                  <dt>Damage p10-p90</dt>
+                  <dd>
+                    {c.p10TotalDamage.toFixed(0)} - {c.p90TotalDamage.toFixed(0)}
+                  </dd>
+                </dl>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       <section className="panel">

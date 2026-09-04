@@ -82,6 +82,16 @@ export const WATERFALL: FastMove = {
  * straight through the same effectiveStat() pipeline used for trainer
  * Pokémon, with iv = 0 and RAID_BOSS_CPM = 1.0.
  */
+export const HYDRO_PUMP: ChargedMove = {
+  id: "hydro-pump",
+  name: "Hydro Pump",
+  type: "water",
+  power: 130,
+  energyCost: 100,
+  durationSeconds: 3.5,
+  vulnerableWindowSeconds: 3.5,
+};
+
 export const PRIMAL_KYOGRE: SpeciesDefinition = {
   id: "kyogre-primal",
   name: "Primal Kyogre",
@@ -90,7 +100,7 @@ export const PRIMAL_KYOGRE: SpeciesDefinition = {
   baseDefense: 200,
   baseStamina: 15000,
   fastMoves: [WATERFALL],
-  chargedMoves: [],
+  chargedMoves: [HYDRO_PUMP],
 };
 
 export const SKY_ATTACK: FastMove = {
@@ -109,6 +119,16 @@ export const SKY_ATTACK: FastMove = {
  * less per hit here than Y's pure Electric — the mechanism behind "X survives
  * longer against this specific raid boss" without changing X's raw stats.
  */
+export const BRAVE_BIRD: ChargedMove = {
+  id: "brave-bird",
+  name: "Brave Bird",
+  type: "flying",
+  power: 90,
+  energyCost: 55,
+  durationSeconds: 2.2,
+  vulnerableWindowSeconds: 2.2,
+};
+
 export const MEGA_SKARMORY: SpeciesDefinition = {
   id: "skarmory-mega",
   name: "Mega Skarmory",
@@ -117,7 +137,7 @@ export const MEGA_SKARMORY: SpeciesDefinition = {
   baseDefense: 250,
   baseStamina: 12000,
   fastMoves: [SKY_ATTACK],
-  chargedMoves: [],
+  chargedMoves: [BRAVE_BIRD],
 };
 
 export const SCENARIO_A_LEVEL = 35;
