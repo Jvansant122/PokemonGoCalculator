@@ -79,6 +79,42 @@ describe("simulateStepwiseBattle", () => {
     expect(a).toEqual(b);
   });
 
+  it("never lets a dodge reduce damage from a hit landing during the attacker's own charged-move animation", () => {
+    // A dodge input can't be thrown while locked into your own charged-move
+    // cast, and even if it could, a dodge's ~0.7s reduction window can't
+    // cover a multi-second animation. So under "perfect" dodge: the attacker
+    // gets full energy from its first fast move at t=1s (ready immediately,
+    // energyGain=100=cost) and casts a 3s animation from t=1 to t=4. Boss
+    // fast-move hits at t=2 and t=3 land squarely inside that window and
+    // must deal full (undodged) damage; the hits at t=1 and t=4 are outside
+    // it and get the normal 0.25x "perfect dodge" reduction.
+    const dodgeAttacker = {
+      hp: 100000,
+      defenseStat: 100,
+      attackStat: 100,
+      fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 100, durationSeconds: 1 },
+      chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 10, energyCost: 100, durationSeconds: 3, vulnerableWindowSeconds: 3 },
+      damageOut: { stab: false },
+    };
+    const dodgeBoss = {
+      attackStat: 100,
+      defenseStat: 100,
+      fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 10, energyGain: 0, durationSeconds: 1 },
+      damageOut: { stab: false },
+    };
+
+    const result = simulateStepwiseBattle({
+      attacker: dodgeAttacker,
+      boss: dodgeBoss,
+      dodge: { kind: "perfect" },
+      maxSeconds: 4,
+    });
+
+    // Full damage per hit is floor(0.5*10*(100/100))+1 = 6; dodged is floor(6*0.25) = 1.
+    // t=1 (outside window): 1, t=2 & t=3 (inside window): 6 each, t=4 (window just closed): 1.
+    expect(result.totalDamageTaken).toBe(1 + 6 + 6 + 1);
+  });
+
   it("models dying mid-animation as a real, non-assumed-away outcome across a distribution", () => {
     // A synthetic matchup built so death is dominated by a randomly-timed
     // boss charged move that sometimes overlaps the attacker's own cast

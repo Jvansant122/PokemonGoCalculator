@@ -13,7 +13,14 @@ import type { ChargedMove, FastMove } from "./types.js";
  * window: if the boss's next hit lands before that animation completes, the
  * attacker faints before the attack lands and it counts for nothing — the
  * "died mid-animation" failure mode the source analysis flagged as a known
- * caveat instead of assuming it away.
+ * caveat instead of assuming it away. Every boss hit (fast or charged) that
+ * lands during that window is guaranteed to deal full damage: a dodge input
+ * cannot be thrown mid-animation, and a dodge's ~0.7s reduction window
+ * couldn't cover a multi-second cast even if it could — so the configured
+ * DodgeBehavior is ignored for hits landing in this window specifically.
+ * Boss charged moves are modeled as landing all at once at their fire time
+ * (a "fast damage window"), the same as boss fast moves — there is no
+ * separate windup phase to dodge around.
  */
 
 export const DEFAULT_TICK_SECONDS = 0.1;
@@ -136,7 +143,14 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     if (bossHitDamage !== null) {
       bossHitIndex += 1;
       if (isBossChargedHit) bossChargedHitsTaken += 1;
-      const damage = Math.floor(bossHitDamage * dodgeMultiplierForHit(dodge, bossHitIndex));
+      // Locked into your own charged-move animation, you cannot input a new
+      // dodge — a dodge's damage-reduction window (~0.7s, see
+      // DODGE_WINDOW_SECONDS) cannot cover a multi-second cast anyway. Any
+      // hit landing in this window is guaranteed to land at full damage,
+      // regardless of the configured dodge behavior.
+      const isMidOwnAnimation = attackerAnimationEndsAt !== null && roundedT < attackerAnimationEndsAt - EPS;
+      const dodgeMultiplier = isMidOwnAnimation ? 1 : dodgeMultiplierForHit(dodge, bossHitIndex);
+      const damage = Math.floor(bossHitDamage * dodgeMultiplier);
       totalDamageTaken += damage;
       hp -= damage;
       if (hp <= 0) {

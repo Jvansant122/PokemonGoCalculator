@@ -52,6 +52,20 @@ export function findFastMoveBreakpoints(params: {
 /** Damage taken while successfully dodging is reduced to this fraction of full damage. */
 export const DODGE_DAMAGE_MULTIPLIER = 0.25;
 
+/**
+ * A dodge's damage-reduction window lasts roughly this long from the swipe.
+ * It is not a standing shield: a player has to re-dodge before each incoming
+ * hit, which is only feasible against attacks with a slower cadence than
+ * this window — and is not feasible at all while locked into your own
+ * charged-move animation (multiple seconds long, no input accepted). See
+ * simulate.ts's stepwise battle model, which enforces that a boss hit
+ * landing during the attacker's own cast is never reduced by dodging,
+ * regardless of which DodgeBehavior is configured — "perfect" dodge here
+ * means perfectly timed against everything a dodge window CAN cover, not
+ * invulnerability.
+ */
+export const DODGE_WINDOW_SECONDS = 0.7;
+
 export type DodgeBehavior =
   | { kind: "none" }
   | { kind: "perfect" }

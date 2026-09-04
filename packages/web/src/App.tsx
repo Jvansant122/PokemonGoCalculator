@@ -238,11 +238,15 @@ export function App() {
         <h2>Known caveats</h2>
         <p className="caveats">
           The opening-burst numbers above only hold for the window configured above, before a real boss would start
-          randomly throwing charged moves — Phase 5 models that with a distribution instead of a point estimate. Both
-          forms can still die mid-animation during their own charged move if the boss's next hit lands during that
-          window. Many real Flying-type raid targets are dual-typed, so an Electric attacker isn't automatically the
-          best choice against them. And the mega boost multiplier is load-bearing: at 1.1x instead of 1.3x, which
-          candidate wins the crossover chart can flip — see the sensitivity panel.
+          randomly throwing charged moves — the sustained phase models that with a distribution instead of a point
+          estimate. Any boss hit — fast or charged — that lands while a candidate is mid-animation on its own charged
+          move deals guaranteed full damage: you can't throw a new dodge while locked into your own cast, and a
+          dodge's reduction window (roughly 0.7s) couldn't cover a multi-second animation even if you could. That's
+          also why a raid boss's charged move works differently from what "dodging it" might suggest — the damage
+          lands all at once at the moment it fires, not on a windup you can react to mid-swing. Many real Flying-type
+          raid targets are dual-typed, so an Electric attacker isn't automatically the best choice against them. And
+          the mega boost multiplier is load-bearing: at 1.1x instead of 1.3x, which candidate wins the crossover chart
+          can flip — see the sensitivity panel.
         </p>
       </section>
     </div>
