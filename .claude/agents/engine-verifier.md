@@ -50,3 +50,9 @@ When an anchor test fails, check these in order before looking anywhere else:
     SUGGESTED FIX: <description only — do not apply it>
 
 If everything passes, say so in one line and stop. Do not summarize the suite.
+
+## Handoff
+
+You never apply your own suggested fix — that's `engine-developer`'s job (it implements engine
+changes and writes/updates tests as part of the same change, unlike this agent which only
+diagnoses). Report your findings and stop there.

@@ -1,11 +1,21 @@
 ---
 name: project-config-shape
-description: The shape of this repo's Claude Code config as of the 2026-09-05 audit — which agents/skills/hooks exist, what each covers, and sizes.
+description: The shape of this repo's Claude Code config as of the 2026-09-05 six-agent audit — which agents/skills/hooks exist, what each covers, and sizes.
 metadata:
   type: project
 ---
 
-Four project agents in `.claude/agents/`, no routing overlap between them:
+**Update (2026-09-05, later same day):** split from 4 to 6 agents — `engine-developer` and
+`web-developer` added, `site-builder` narrowed to build/deploy, CLAUDE.md rewritten around an
+overseer/router role. Full audit of the split: [[six-agent-split]]. Current sizes: CLAUDE.md
+6,772 bytes (~1,693 tokens, down from the 17,803/~4,450 tokens measured below); agent files —
+`data-sync.md` 5,253B, `engine-developer.md` 14,044B, `engine-verifier.md` 2,854B,
+`meta-architect.md` 6,791B, `site-builder.md` 2,884B, `web-developer.md` 6,043B; description-field
+sum 2,276 chars (~569 tokens) across all 6. The section below is the pre-split (4-agent) snapshot,
+kept for history.
+
+Four project agents in `.claude/agents/`, no routing overlap between them (pre-split, 2026-09-05
+morning):
 - `data-sync` — fetches raw pogoapi.net/ScrapedDuck data into `data/raw/`. Never touches
   hypothetical species (those are hand-authored in `packages/engine/src/fixtures/scenarioA.ts`,
   registered via `registerHypothetical`, not fetched — this section was fixed 2026-09-04, see

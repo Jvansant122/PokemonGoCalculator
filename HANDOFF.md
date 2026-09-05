@@ -3,11 +3,30 @@
 Last updated: 2026-09-05. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-05, later session: moveset selection, dodge-feasibility gating, new metrics, chart death markers
+## 2026-09-05, latest session: Claude Code config restructured around specialized subagents
 
-Not yet committed — working tree has these changes pending, ask before pushing (see the
-`update .md files` — this HANDOFF entry is written proactively so a fresh session isn't lost if
-this one ends first). Full test suite (53, up from 50) and both packages' type-checks pass; the
+Went from 4 to 6 agents and rewrote `CLAUDE.md` from ~272 lines to ~110 at the user's request —
+CLAUDE.md now reads as instructions for an **overseer/project-designer** role (product vision,
+standing decisions, routing) rather than containing all the deep mechanical "how to implement X"
+content itself. New: `.claude/agents/engine-developer.md` (absorbed the old "Architecture
+(Phase 1-5)" and "Fixtures" sections — implements `packages/engine`, writes its own tests) and
+`.claude/agents/web-developer.md` (absorbed `site-builder`'s old UI-feature charter — implements
+`packages/web` UI). `site-builder` was narrowed to build/deploy only. `engine-verifier` and
+`data-sync` each got a one-line addition pointing at `engine-developer` for anything they
+shouldn't be deciding themselves (a fix vs. a diagnosis; a schema change vs. a fetch/normalize
+job). Both new agents got `memory: project` with seeded-empty `MEMORY.md` files, matching
+`meta-architect`'s existing pattern. **Agent definitions load once at session start — this
+restructuring needs a session restart/resume before the new/edited agents are actually usable.**
+A `meta-architect` validation pass was launched on this restructuring itself (routing overlap
+between engine-developer/engine-verifier and web-developer/site-builder specifically, whether
+CLAUDE.md's new routing table has enough signal, real context-cost numbers, and a spot-check that
+no real technical content got garbled in the move) — check whether it landed and read its actual
+findings before assuming this pass is clean.
+
+## 2026-09-05, moveset selection, dodge-feasibility gating, new metrics, chart death markers
+
+Committed and pushed (`cd8e04b`), deploy succeeded. Full test suite (53, up from 50) and both
+packages' type-checks pass; the
 whole feature was also exercised live in the Browser pane, not just via tests.
 
 - **Moveset pickers**: `packages/web/src/MoveSelect.tsx` (new) — a plain `<select>` per fast/

@@ -1,9 +1,16 @@
 ---
 name: data-sync-normalize-gap
-description: data-sync.md's fetch section never instructs the agent to run `npm run sync-data`; it reads as if the agent hand-normalizes into data/normalized/ itself, duplicating scripts/sync-data.ts's canonical transform. Flagged 2026-09-05, not fixed (review scope, no edit requested).
+description: data-sync.md's fetch section never instructs the agent to run `npm run sync-data`; it reads as if the agent hand-normalizes into data/normalized/ itself, duplicating scripts/sync-data.ts's canonical transform. Flagged 2026-09-05, RESOLVED same day in the 6-agent split audit.
 metadata:
   type: project
 ---
+
+**RESOLVED (2026-09-05, later same day):** `data-sync.md` now has a "## Normalize" section
+matching the proposed fix almost verbatim: "Do not hand-write the normalized output yourself...
+run `npm run sync-data` from the repo root and relay its own `SYNCED`/`CHANGED`/`WARNINGS`
+output... rather than computing `data/normalized/` contents by hand." Confirmed by direct read
+during the agent-split audit. No further action needed.
+
 
 `data-sync.md`'s "Source" section ends: "Fetch sequentially... Cache raw responses under
 `data/raw/`... **and write normalized output to `data/normalized/`**." It never mentions running

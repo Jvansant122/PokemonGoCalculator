@@ -1,9 +1,18 @@
 ---
 name: engine-verifier-hook-overlap
-description: .claude/settings.json's new PostToolUse test hook (added 2026-09-05) mechanically guarantees what engine-verifier.md's description asks for reactively ("use proactively after any change to stat/damage/energy/breakpoint code"). Flagged 2026-09-05, retarget proposed, not applied (review scope).
+description: .claude/settings.json's new PostToolUse test hook (added 2026-09-05) mechanically guarantees what engine-verifier.md's description asks for reactively ("use proactively after any change to stat/damage/energy/breakpoint code"). Flagged 2026-09-05, RESOLVED same day in the 6-agent split audit.
 metadata:
   type: project
 ---
+
+**RESOLVED (2026-09-05, later same day):** `engine-verifier.md`'s description was retargeted
+almost exactly as recommended below — it now opens "Diagnoses combat-engine test failures... the
+PostToolUse hook already reruns the engine suite automatically... use this agent instead for
+changes applied via Bash..., for edits under packages/engine/test..., or to turn a hook-reported
+raw vitest failure into an expected/actual/likely-cause diagnosis," and the body gained an
+explicit "## Handoff" section naming `engine-developer` as the one who applies fixes. Confirmed
+by direct read during the agent-split audit. No further action needed.
+
 
 The hook reruns `npm run test:engine` on every `Edit`/`Write` under `packages/engine/src/**/*.ts`
 and surfaces failures via stderr + exit 2. This is strictly the same trigger condition

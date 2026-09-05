@@ -37,6 +37,26 @@ there's exactly one implementation of that transform. After caching the raw resp
 `npm run sync-data` from the repo root and relay its own `SYNCED`/`CHANGED`/`WARNINGS` output
 (see "Output format" below) rather than computing `data/normalized/` contents by hand.
 
+## Species images
+
+`SpeciesDefinition.imageUrl?` points at the PokeAPI sprites mirror on GitHub
+(`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{id}.png`). Real
+Normal-form species use the national-dex id already in hand — no extra request. Real mega/primal
+species need one extra PokeAPI lookup each by name-slug (`fetchMegaSpriteUrls` in
+`scripts/sync-data.ts`, cached to `data/raw/mega_sprite_urls.json`), since a mega form has its
+own internal PokeAPI id not derivable from the dex number. **Surprisingly, PokeAPI has real
+sprite data even for this project's unreleased/hypothetical fixtures**
+(`raichu-mega-x`/`raichu-mega-y`/`skarmory-mega`/`kyogre-primal` all resolve) — resolve those the
+same way and hand them to `engine-developer` to set on the fixtures in `scenarioA.ts` (the engine
+itself has no I/O, so it can't fetch these; you resolve, it stores). **Watch for id collisions with the hand-authored hypothetical fixtures**: a real synced species'
+natural id can collide with one of `engine-developer`'s fixture ids (e.g. real Primal Kyogre's
+natural id `kyogre-primal` collides with the hypothetical raid-boss fixture already registered
+under that same id — see "Hypothetical species" below) — rename the real one to disambiguate
+(that's where `kyogre-primal-attacker` comes from) rather than silently overwriting or dropping
+either. When you then resolve that renamed entry's sprite, look it up by the *natural*
+pre-collision name (`kyogre-primal`), not the renamed one (`kyogre-primal-attacker`) — PokeAPI
+has never heard of the renamed id and the lookup will just fail silently.
+
 ## Known gap: raid bosses
 
 pogoapi.net does **not** publish a current raid-boss list. Do not invent one and do not
@@ -66,7 +86,15 @@ You never create or fetch these. Speculative/unreleased forms (Mega Raichu X/Y, 
 Mega Skarmory) are hand-authored directly in `packages/engine/src/fixtures/scenarioA.ts` and
 registered via `SpeciesRegistry.registerHypothetical`, which flags them `isHypothetical: true`;
 `packages/web/src/registry.ts` merges them with your synced data at app startup. There is no
-`data/custom/` override mechanism — don't invent one.
+`data/custom/` override mechanism — don't invent one. Authoring or editing these fixtures is
+`engine-developer`'s job, not yours.
+
+## When the schema itself needs to change
+
+If a sync reveals a field this project's `SpeciesDefinition`/`FastMove`/`ChargedMove` types don't
+capture yet, that's a schema decision for `engine-developer`, not something to work around here
+(e.g. by stuffing extra data into an existing field, or inventing a parallel normalized file).
+Report what the raw data has and let that agent decide how — or whether — to model it.
 
 ## Rules
 

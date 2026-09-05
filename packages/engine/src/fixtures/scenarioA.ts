@@ -32,6 +32,36 @@ export const WILD_CHARGE: ChargedMove = {
 };
 
 /**
+ * The rest of real Raichu's actual Pokémon GO movepool (from
+ * `data/normalized/species.json`, i.e. `current_pokemon_moves.json` via
+ * `scripts/sync-data.ts` — not hand-guessed), appended after each mega form's
+ * own spec-tuned default above so the moveset picker has real alternatives to
+ * choose from. Mirrors how a real mega evolution keeps its base form's full
+ * moveset in-game (e.g. Mega Charizard X/Y both still learn everything
+ * Charizard does). Ids match the real move ids exactly (kept as strings, same
+ * as every other synced move) — these are genuinely different data points
+ * from STATIC_SHOCK/WILD_CHARGE above, not renamed duplicates, so two
+ * differently-tuned "Wild Charge" entries showing different numbers in the
+ * picker is expected, not a bug: one is this spec's hand-tuned pinned-test
+ * move, the other is the real in-game move.
+ */
+export const VOLT_SWITCH: FastMove = { id: "250", name: "Volt Switch", type: "electric", power: 13, energyGain: 20, durationSeconds: 1.5 };
+export const SPARK: FastMove = { id: "206", name: "Spark", type: "electric", power: 4, energyGain: 6, durationSeconds: 0.5 };
+export const CHARM: FastMove = { id: "320", name: "Charm", type: "fairy", power: 20, energyGain: 11, durationSeconds: 1.5 };
+export const THUNDER_SHOCK: FastMove = { id: "205", name: "Thunder Shock", type: "electric", power: 4, energyGain: 7, durationSeconds: 0.5 };
+
+export const BRICK_BREAK: ChargedMove = { id: "123", name: "Brick Break", type: "fighting", power: 40, energyCost: 33, durationSeconds: 1.5, vulnerableWindowSeconds: 1.5 };
+export const THUNDER_PUNCH: ChargedMove = { id: "77", name: "Thunder Punch", type: "electric", power: 50, energyCost: 33, durationSeconds: 2, vulnerableWindowSeconds: 2 };
+export const RAICHU_REAL_WILD_CHARGE: ChargedMove = { id: "251", name: "Wild Charge", type: "electric", power: 90, energyCost: 50, durationSeconds: 2.5, vulnerableWindowSeconds: 2.5 };
+export const SKULL_BASH: ChargedMove = { id: "302", name: "Skull Bash", type: "normal", power: 130, energyCost: 100, durationSeconds: 3, vulnerableWindowSeconds: 3 };
+export const TRAILBLAZE: ChargedMove = { id: "392", name: "Trailblaze", type: "grass", power: 65, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 };
+export const RAICHU_SURF: ChargedMove = { id: "284", name: "Surf", type: "water", power: 60, energyCost: 50, durationSeconds: 1.5, vulnerableWindowSeconds: 1.5 };
+export const THUNDER: ChargedMove = { id: "78", name: "Thunder", type: "electric", power: 100, energyCost: 100, durationSeconds: 2.5, vulnerableWindowSeconds: 2.5 };
+
+const RAICHU_REAL_FAST_MOVES = [VOLT_SWITCH, SPARK, CHARM, THUNDER_SHOCK];
+const RAICHU_REAL_CHARGED_MOVES = [BRICK_BREAK, THUNDER_PUNCH, RAICHU_REAL_WILD_CHARGE, SKULL_BASH, TRAILBLAZE, RAICHU_SURF, THUNDER];
+
+/**
  * X carries a secondary Steel typing (mirroring how Mega Charizard X/Y split
  * into Fire/Dragon vs pure Fire in the live game). Water is neutral against
  * both Electric and Steel, so this doesn't touch a single Scenario A number —
@@ -53,8 +83,8 @@ export const MEGA_RAICHU_X: SpeciesDefinition = {
   baseAttack: 383,
   baseDefense: 150,
   baseStamina: 156,
-  fastMoves: [STATIC_SHOCK],
-  chargedMoves: [WILD_CHARGE],
+  fastMoves: [STATIC_SHOCK, ...RAICHU_REAL_FAST_MOVES],
+  chargedMoves: [WILD_CHARGE, ...RAICHU_REAL_CHARGED_MOVES],
   boost: { multiplier: 1.3, boostedType: "electric" },
   isHypothetical: true,
   imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10304.png",
@@ -67,8 +97,8 @@ export const MEGA_RAICHU_Y: SpeciesDefinition = {
   baseAttack: 449,
   baseDefense: 150,
   baseStamina: 156,
-  fastMoves: [STATIC_SHOCK],
-  chargedMoves: [WILD_CHARGE],
+  fastMoves: [STATIC_SHOCK, ...RAICHU_REAL_FAST_MOVES],
+  chargedMoves: [WILD_CHARGE, ...RAICHU_REAL_CHARGED_MOVES],
   boost: { multiplier: 1.3, boostedType: "electric" },
   isHypothetical: true,
   imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10305.png",
