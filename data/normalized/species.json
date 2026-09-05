@@ -33328,8 +33328,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/421.png"
   },
   {
-    "id": "shellos-east_sea",
-    "name": "Shellos (East_sea)",
+    "id": "shellos-west_sea",
+    "name": "Shellos (West_sea)",
     "types": [
       "water"
     ],
@@ -33393,8 +33393,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/422.png"
   },
   {
-    "id": "gastrodon-east_sea",
-    "name": "Gastrodon (East_sea)",
+    "id": "gastrodon-west_sea",
+    "name": "Gastrodon (West_sea)",
     "types": [
       "water",
       "ground"
@@ -43192,10 +43192,10 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/554.png"
   },
   {
-    "id": "darmanitan-galarian_standard",
-    "name": "Darmanitan (Galarian_standard)",
+    "id": "darmanitan-standard",
+    "name": "Darmanitan (Standard)",
     "types": [
-      "ice"
+      "fire"
     ],
     "baseAttack": 263,
     "baseDefense": 114,
@@ -43212,14 +43212,24 @@
         "vulnerableWindowSeconds": 0.5
       },
       {
-        "id": "327",
-        "name": "Ice Fang",
-        "type": "ice",
-        "power": 12,
-        "energyGain": 20,
+        "id": "240",
+        "name": "Fire Fang",
+        "type": "fire",
+        "power": 13,
+        "energyGain": 9,
         "energyCost": 0,
-        "durationSeconds": 1.5,
-        "vulnerableWindowSeconds": 1.5
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "346",
+        "name": "Incinerate",
+        "type": "fire",
+        "power": 32,
+        "energyGain": 22,
+        "energyCost": 0,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
       }
     ],
     "chargedMoves": [
@@ -43234,34 +43244,34 @@
         "vulnerableWindowSeconds": 4
       },
       {
-        "id": "254",
-        "name": "Avalanche",
-        "type": "ice",
-        "power": 85,
+        "id": "247",
+        "name": "Focus Blast",
+        "type": "fighting",
+        "power": 140,
         "energyGain": 0,
-        "energyCost": 50,
-        "durationSeconds": 2.5,
-        "vulnerableWindowSeconds": 2.5
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
       },
       {
-        "id": "310",
-        "name": "Super Power",
-        "type": "fighting",
-        "power": 85,
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
         "energyGain": 0,
         "energyCost": 50,
         "durationSeconds": 3,
         "vulnerableWindowSeconds": 3
       },
       {
-        "id": "33",
-        "name": "Ice Punch",
-        "type": "ice",
-        "power": 50,
+        "id": "64",
+        "name": "Rock Slide",
+        "type": "rock",
+        "power": 75,
         "energyGain": 0,
-        "energyCost": 33,
-        "durationSeconds": 2,
-        "vulnerableWindowSeconds": 2
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/555.png"
@@ -45303,8 +45313,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/584.png"
   },
   {
-    "id": "deerling-autumn",
-    "name": "Deerling (Autumn)",
+    "id": "deerling-spring",
+    "name": "Deerling (Spring)",
     "types": [
       "normal",
       "grass"
@@ -45379,8 +45389,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/585.png"
   },
   {
-    "id": "sawsbuck-autumn",
-    "name": "Sawsbuck (Autumn)",
+    "id": "sawsbuck-spring",
+    "name": "Sawsbuck (Spring)",
     "types": [
       "normal",
       "grass"
@@ -51614,8 +51624,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/668.png"
   },
   {
-    "id": "flabebe-blue",
-    "name": "Flabebe (Blue)",
+    "id": "flabebe-red",
+    "name": "Flabebe (Red)",
     "types": [
       "fairy"
     ],
@@ -51679,8 +51689,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/669.png"
   },
   {
-    "id": "floette-blue",
-    "name": "Floette (Blue)",
+    "id": "floette-red",
+    "name": "Floette (Red)",
     "types": [
       "fairy"
     ],
@@ -51744,8 +51754,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/670.png"
   },
   {
-    "id": "florges-blue",
-    "name": "Florges (Blue)",
+    "id": "florges-red",
+    "name": "Florges (Red)",
     "types": [
       "fairy"
     ],
@@ -52467,14 +52477,14 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/680.png"
   },
   {
-    "id": "aegislash-blade",
-    "name": "Aegislash (Blade)",
+    "id": "aegislash-shield",
+    "name": "Aegislash (Shield)",
     "types": [
       "steel",
       "ghost"
     ],
-    "baseAttack": 272,
-    "baseDefense": 97,
+    "baseAttack": 97,
+    "baseDefense": 272,
     "baseStamina": 155,
     "fastMoves": [
       {
@@ -55346,15 +55356,15 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/717.png"
   },
   {
-    "id": "zygarde-complete",
-    "name": "Zygarde (Complete)",
+    "id": "zygarde-fifty_percent",
+    "name": "Zygarde (Fifty_percent)",
     "types": [
       "dragon",
       "ground"
     ],
-    "baseAttack": 184,
-    "baseDefense": 207,
-    "baseStamina": 389,
+    "baseAttack": 203,
+    "baseDefense": 232,
+    "baseStamina": 239,
     "fastMoves": [
       {
         "id": "253",
@@ -57419,13 +57429,13 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/744.png"
   },
   {
-    "id": "lycanroc-dusk",
-    "name": "Lycanroc (Dusk)",
+    "id": "lycanroc-midday",
+    "name": "Lycanroc (Midday)",
     "types": [
       "rock"
     ],
-    "baseAttack": 234,
-    "baseDefense": 139,
+    "baseAttack": 231,
+    "baseDefense": 140,
     "baseStamina": 181,
     "fastMoves": [
       {
@@ -57437,16 +57447,6 @@
         "energyCost": 0,
         "durationSeconds": 0.5,
         "vulnerableWindowSeconds": 0.5
-      },
-      {
-        "id": "243",
-        "name": "Counter",
-        "type": "fighting",
-        "power": 13,
-        "energyGain": 9,
-        "energyCost": 0,
-        "durationSeconds": 1,
-        "vulnerableWindowSeconds": 1
       },
       {
         "id": "227",
@@ -57471,14 +57471,14 @@
         "vulnerableWindowSeconds": 2.5
       },
       {
-        "id": "74",
-        "name": "Iron Head",
-        "type": "steel",
-        "power": 60,
+        "id": "46",
+        "name": "Drill Run",
+        "type": "ground",
+        "power": 85,
         "energyGain": 0,
         "energyCost": 50,
-        "durationSeconds": 2,
-        "vulnerableWindowSeconds": 2
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
       },
       {
         "id": "279",
@@ -57504,13 +57504,13 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/745.png"
   },
   {
-    "id": "wishiwashi-school",
-    "name": "Wishiwashi (School)",
+    "id": "wishiwashi-solo",
+    "name": "Wishiwashi (Solo)",
     "types": [
       "water"
     ],
-    "baseAttack": 255,
-    "baseDefense": 242,
+    "baseAttack": 46,
+    "baseDefense": 43,
     "baseStamina": 128,
     "fastMoves": [
       {
@@ -59842,8 +59842,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/777.png"
   },
   {
-    "id": "mimikyu-busted",
-    "name": "Mimikyu (Busted)",
+    "id": "mimikyu-disguised",
+    "name": "Mimikyu (Disguised)",
     "types": [
       "ghost",
       "fairy"
@@ -64979,8 +64979,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/853.png"
   },
   {
-    "id": "sinistea-antique",
-    "name": "Sinistea (Antique)",
+    "id": "sinistea-phony",
+    "name": "Sinistea (Phony)",
     "types": [
       "ghost"
     ],
@@ -65044,8 +65044,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/854.png"
   },
   {
-    "id": "polteageist-antique",
-    "name": "Polteageist (Antique)",
+    "id": "polteageist-phony",
+    "name": "Polteageist (Phony)",
     "types": [
       "ghost"
     ],
@@ -67328,14 +67328,13 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/887.png"
   },
   {
-    "id": "zacian-crowned_sword",
-    "name": "Zacian (Crowned_sword)",
+    "id": "zacian-hero",
+    "name": "Zacian (Hero)",
     "types": [
-      "fairy",
-      "steel"
+      "fairy"
     ],
-    "baseAttack": 332,
-    "baseDefense": 240,
+    "baseAttack": 254,
+    "baseDefense": 236,
     "baseStamina": 192,
     "fastMoves": [
       {
@@ -67349,11 +67348,31 @@
         "vulnerableWindowSeconds": 0.5
       },
       {
-        "id": "255",
-        "name": "Air Slash",
-        "type": "flying",
-        "power": 12,
-        "energyGain": 8,
+        "id": "278",
+        "name": "Snarl",
+        "type": "dark",
+        "power": 11,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "219",
+        "name": "Quick Attack",
+        "type": "normal",
+        "power": 10,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "240",
+        "name": "Fire Fang",
+        "type": "fire",
+        "power": 13,
+        "energyGain": 9,
         "energyCost": 0,
         "durationSeconds": 1,
         "vulnerableWindowSeconds": 1
@@ -67371,6 +67390,26 @@
         "vulnerableWindowSeconds": 3
       },
       {
+        "id": "74",
+        "name": "Iron Head",
+        "type": "steel",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "251",
+        "name": "Wild Charge",
+        "type": "electric",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
         "id": "245",
         "name": "Close Combat",
         "type": "fighting",
@@ -67379,29 +67418,18 @@
         "energyCost": 100,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
-      },
-      {
-        "id": "321",
-        "name": "Giga Impact",
-        "type": "normal",
-        "power": 200,
-        "energyGain": 0,
-        "energyCost": 100,
-        "durationSeconds": 4.5,
-        "vulnerableWindowSeconds": 4.5
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/888.png"
   },
   {
-    "id": "zamazenta-crowned_shield",
-    "name": "Zamazenta (Crowned_shield)",
+    "id": "zamazenta-hero",
+    "name": "Zamazenta (Hero)",
     "types": [
-      "fighting",
-      "steel"
+      "fighting"
     ],
-    "baseAttack": 250,
-    "baseDefense": 292,
+    "baseAttack": 254,
+    "baseDefense": 236,
     "baseStamina": 192,
     "fastMoves": [
       {
@@ -67413,6 +67441,26 @@
         "energyCost": 0,
         "durationSeconds": 0.5,
         "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "278",
+        "name": "Snarl",
+        "type": "dark",
+        "power": 11,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "219",
+        "name": "Quick Attack",
+        "type": "normal",
+        "power": 10,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
       },
       {
         "id": "327",
@@ -67437,6 +67485,26 @@
         "vulnerableWindowSeconds": 4
       },
       {
+        "id": "74",
+        "name": "Iron Head",
+        "type": "steel",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "279",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
         "id": "245",
         "name": "Close Combat",
         "type": "fighting",
@@ -67445,16 +67513,6 @@
         "energyCost": 100,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
-      },
-      {
-        "id": "321",
-        "name": "Giga Impact",
-        "type": "normal",
-        "power": 200,
-        "energyGain": 0,
-        "energyCost": 100,
-        "durationSeconds": 4.5,
-        "vulnerableWindowSeconds": 4.5
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/889.png"
@@ -72791,13 +72849,13 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/963.png"
   },
   {
-    "id": "palafin-hero",
-    "name": "Palafin (Hero)",
+    "id": "palafin-zero",
+    "name": "Palafin (Zero)",
     "types": [
       "water"
     ],
-    "baseAttack": 322,
-    "baseDefense": 196,
+    "baseAttack": 143,
+    "baseDefense": 144,
     "baseStamina": 225,
     "fastMoves": [
       {
@@ -74142,8 +74200,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/981.png"
   },
   {
-    "id": "dudunsparce-three",
-    "name": "Dudunsparce (Three)",
+    "id": "dudunsparce-two",
+    "name": "Dudunsparce (Two)",
     "types": [
       "normal"
     ],
@@ -75720,8 +75778,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1011.png"
   },
   {
-    "id": "poltchageist-artisan",
-    "name": "Poltchageist (Artisan)",
+    "id": "poltchageist-counterfeit",
+    "name": "Poltchageist (Counterfeit)",
     "types": [
       "grass",
       "ghost"
@@ -75786,8 +75844,8 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1012.png"
   },
   {
-    "id": "sinistcha-masterpiece",
-    "name": "Sinistcha (Masterpiece)",
+    "id": "sinistcha-unremarkable",
+    "name": "Sinistcha (Unremarkable)",
     "types": [
       "grass",
       "ghost"

@@ -301,12 +301,95 @@ for (const m of rawChargedMoves) {
 }
 
 /**
+ * Per-species overrides for the "first-listed form" fallback (see
+ * defaultFormByPokemonId below), keyed by pokemon_id. The generic fallback is
+ * just "whichever form pokemon_stats.json happens to list first" (effectively
+ * alphabetical, since pogoapi's forms come in that order) — that's right for
+ * some species by luck (e.g. Giratina -> Altered, Keldeo -> Ordinary) but
+ * demonstrably wrong for others whose real in-game default form doesn't sort
+ * first. Audited 2026-09-05 against all 59 fallback-form species (real
+ * in-game default forme per Bulbapedia/GamePress/PoGo release notes, cross-
+ * checked against actual per-form stats in pokemon_stats.json); every entry
+ * below is a confirmed mismatch, not a guess. Two sub-categories:
+ *
+ * - Real stat/type impact if left un-overridden (the important ones):
+ *   Zygarde (previously known-wrong: fell back to "Complete", a 389-stamina
+ *   outlier vs the real default "Fifty_percent"'s 239), Darmanitan (fell back
+ *   to the Ice-type Galarian_standard instead of the original Fire-type
+ *   Standard — same base stats as it happens, but wrong type entirely),
+ *   Aegislash (fell back to Blade Forme's 272/97/155 instead of Shield
+ *   Forme's 97/272/155 — Blade is a temporary in-battle-only stance per
+ *   Bulbapedia, never the resting form), Lycanroc (Dusk instead of the
+ *   standard-evolution Midday), Wishiwashi (fell back to School Form's
+ *   255/242/128 instead of Solo Form's tiny 46/43/128 — School is a
+ *   conditional in-battle transformation, never the resting form), Zacian /
+ *   Zamazenta (fell back to the restricted, Iron-Head-gated Crowned Sword/
+ *   Shield formes instead of the standard, transferable Hero of Many Battles
+ *   form), Palafin (fell back to Hero Form's 322/196/225 instead of Zero
+ *   Form's 143/144/225 — Hero is a battle-only transformation per Bulbapedia,
+ *   the caught/stored form is always Zero).
+ * - Cosmetic-only mismatches (identical stats/type across forms, confirmed via
+ *   pokemon_stats.json — fixed anyway since it's a one-line change and the
+ *   picked form does still surface in SpeciesDefinition.name): Shellos /
+ *   Gastrodon (West_sea, not East_sea, is Bulbapedia's default-displayed
+ *   form), Deerling / Sawsbuck (Spring, the only wild-encounterable form in
+ *   recent games, not Autumn), Flabébé / Floette / Florges (Red, Bulbapedia's
+ *   default flower color, not Blue), Mimikyu (Disguised, its permanent
+ *   resting form, not the battle-only Busted), Sinistea / Polteageist
+ *   (Phony, the common form — Antique is an intentionally-rare variant, not
+ *   Antique), Poltchageist / Sinistcha (Counterfeit / Unremarkable, their
+ *   respective common forms, not the rare Artisan / Masterpiece), Dudunsparce
+ *   (Two-Segment, the common ~99% form, not the rare Three-Segment).
+ *
+ * Explicitly NOT overridden despite also having 2+ candidate forms, because
+ * there is no single correct "real default" to fall back to (both forms are
+ * independently, equally released/obtainable in the live game, per a
+ * Bulbapedia/GO-focused source check) — left as whatever the generic
+ * fallback happens to pick: Urshifu (Single Strike vs Rapid Strike — both
+ * real, separately evolved/caught forms), Indeedee (Male vs Female — both
+ * real, separately caught, with genuinely different stat spreads), Basculin
+ * (Red- vs Blue-Striped — version-exclusive counterparts, Bulbapedia treats
+ * neither as primary). Also not touched: species where every candidate form
+ * has identical stats/type AND no single form is clearly the conventional
+ * default either (Unown, Spinda, Scatterbug/Spewpa/Vivillon, Furfrou, Minior,
+ * Squawkabilly, Tatsugiri, Toxtricity, Maushold — already picked its correct
+ * common "Family_of_four") — per this audit's instructions, not worth
+ * overthinking a cosmetic-only pick with no real default.
+ */
+const FORM_OVERRIDES: Record<number, string> = {
+  422: "West_sea", // Shellos
+  423: "West_sea", // Gastrodon
+  555: "Standard", // Darmanitan
+  585: "Spring", // Deerling
+  586: "Spring", // Sawsbuck
+  669: "Red", // Flabébé
+  670: "Red", // Floette
+  671: "Red", // Florges
+  681: "Shield", // Aegislash
+  718: "Fifty_percent", // Zygarde
+  745: "Midday", // Lycanroc
+  746: "Solo", // Wishiwashi
+  778: "Disguised", // Mimikyu
+  854: "Phony", // Sinistea
+  855: "Phony", // Polteageist
+  888: "Hero", // Zacian
+  889: "Hero", // Zamazenta
+  964: "Zero", // Palafin
+  982: "Two", // Dudunsparce
+  1012: "Counterfeit", // Poltchageist
+  1013: "Unremarkable", // Sinistcha
+};
+
+/**
  * Determines the ONE form each pokemon_id normalizes to this pass: "Normal"
  * if pokemon_stats.json has a row so labeled for that id, else that species'
  * first-listed form in the raw file (see module docstring's "Fallback-form
- * species" note for why this is a reasonable default and its known limits).
- * Computed once from pokemon_stats.json (the species list's source of truth)
- * and then reused to select the matching row out of pokemon_types.json and
+ * species" note for why this is a reasonable default and its known limits) —
+ * unless FORM_OVERRIDES above names a specific form for that pokemon_id, in
+ * which case the override always wins (checked against the id's actual rows
+ * so a typo'd override form can't silently select nothing). Computed once
+ * from pokemon_stats.json (the species list's source of truth) and then
+ * reused to select the matching row out of pokemon_types.json and
  * current_pokemon_moves.json too, so all three stay keyed to the same form
  * per species rather than each independently guessing "Normal".
  */
@@ -317,6 +400,16 @@ for (const s of rawStats) {
   }
   if (s.form === "Normal") {
     defaultFormByPokemonId.set(s.pokemon_id, "Normal"); // "Normal" always wins if present anywhere
+  }
+}
+const formOverrideMismatches: { pokemon_id: number; wanted: string }[] = [];
+for (const [idStr, wantedForm] of Object.entries(FORM_OVERRIDES)) {
+  const id = Number(idStr);
+  const hasMatchingRow = rawStats.some((s) => s.pokemon_id === id && s.form === wantedForm);
+  if (hasMatchingRow) {
+    defaultFormByPokemonId.set(id, wantedForm);
+  } else {
+    formOverrideMismatches.push({ pokemon_id: id, wanted: wantedForm });
   }
 }
 const fallbackFormPokemonIds = new Set(
@@ -828,7 +921,12 @@ console.log(`CHANGED (activeRaids.json): ${raidDiffs.length > 0 ? raidDiffs.join
 console.log(`AFFECTS SCENARIOS: none (no saved scenarios reference normalized species yet; scenarioA.ts fixtures untouched)`);
 console.log(`WARNINGS:`);
 console.log(`  - Scope limitation: only one form per species (form === "Normal", or a documented fallback — see next line) was normalized from pokemon_stats.json (${normalStats.length} candidates out of ${rawStats.length} total rows spanning 273 distinct forms), plus all ${rawMegaPokemon.length} mega_pokemon.json entries. Other regional/costume/event forms are still out of scope this pass.`);
-console.log(`  - Fallback-form species (no row labeled "Normal" in pokemon_stats.json; ${fallbackFormPokemonIds.size} of ${defaultFormByPokemonId.size} distinct pokemon_id values): normalized under their first-listed form instead of being silently dropped (previous behavior — see task notes). Spot-checked correct against real in-game default forme (Giratina -> Altered, Tornadus/Thundurus/Landorus/Enamorus -> Incarnate, Keldeo -> Ordinary, Meloetta -> Aria) but NOT verified for all ${fallbackFormPokemonIds.size}: ${[...fallbackFormPokemonIds].map((id) => `${rawStats.find((s) => s.pokemon_id === id)?.pokemon_name} (${defaultFormByPokemonId.get(id)})`).join(", ")}`);
+console.log(`  - Fallback-form species (no row labeled "Normal" in pokemon_stats.json; ${fallbackFormPokemonIds.size} of ${defaultFormByPokemonId.size} distinct pokemon_id values): normalized under their first-listed form, or a FORM_OVERRIDES entry when the first-listed form was confirmed wrong (see below). Full audit completed 2026-09-05 against all 59 species named in the previous sync's report (Bulbapedia/GamePress/PoGo-release-status cross-check, not just a spot-check): ${[...fallbackFormPokemonIds].map((id) => `${rawStats.find((s) => s.pokemon_id === id)?.pokemon_name} (${defaultFormByPokemonId.get(id)})`).join(", ")}`);
+console.log(`  - FORM_OVERRIDES applied (${Object.keys(FORM_OVERRIDES).length} species, see scripts/sync-data.ts's FORM_OVERRIDES doc comment for the full per-species reasoning): Shellos/Gastrodon -> West_sea, Darmanitan -> Standard, Deerling/Sawsbuck -> Spring, Flabébé/Floette/Florges -> Red, Aegislash -> Shield, Zygarde -> Fifty_percent, Lycanroc -> Midday, Wishiwashi -> Solo, Mimikyu -> Disguised, Sinistea/Polteageist -> Phony, Zacian/Zamazenta -> Hero, Palafin -> Zero, Dudunsparce -> Two, Poltchageist -> Counterfeit, Sinistcha -> Unremarkable.`);
+console.log(`  - Deliberately NOT overridden (multiple real, independently-released forms with no single correct "default" per a Bulbapedia/GO-focused check): Urshifu (Single Strike vs Rapid Strike), Indeedee (Male vs Female — stats genuinely differ, no canonical default), Basculin (Red- vs Blue-Striped). Also left alone: species where every candidate form has identical stats/type and no clearly-conventional default exists either (Unown, Spinda, Scatterbug/Spewpa/Vivillon, Furfrou, Minior, Squawkabilly, Tatsugiri, Toxtricity, Maushold, Koraidon, Miraidon, and the single-form-only Galarian-native species: Obstagoon, Perrserker, Sirfetch'd, Mr. Rime, Runerigus) — this pass's fallback pick for all of these was confirmed correct or inconsequential.`);
+if (formOverrideMismatches.length > 0) {
+  console.log(`  - VALIDATION: FORM_OVERRIDES named a form pokemon_stats.json doesn't actually have a row for (override skipped, generic fallback used instead — check for a typo or an upstream form-name rename): ${formOverrideMismatches.map((m) => `pokemon_id ${m.pokemon_id} -> "${m.wanted}"`).join(", ")}`);
+}
 console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/moveset data: ${skippedSpecies.map((s) => `${s.pokemon_name} (${s.reason})`).join(", ") || "none"}`);
 console.log(`  - Unresolved move names referenced by current_pokemon_moves but absent from fast_moves/charged_moves.json (likely retired/legacy moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
