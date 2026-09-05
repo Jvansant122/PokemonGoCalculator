@@ -85,7 +85,9 @@ describe("Scenario A: Mega Raichu X vs Y vs Primal Kyogre (level 35, no dodging)
         attackStat: xStats.attack,
         fastMove: STATIC_SHOCK,
         chargedMove: WILD_CHARGE,
-        damageOut: { stab: true, typeEffectiveness: electricVsBoss, megaBoostMultiplier: MEGA_RAICHU_X.boost!.multiplier },
+        // Static Shock and Wild Charge are both Electric, so the same type-effectiveness applies to both.
+        fastDamageOut: { stab: true, typeEffectiveness: electricVsBoss, megaBoostMultiplier: MEGA_RAICHU_X.boost!.multiplier },
+        chargedDamageOut: { stab: true, typeEffectiveness: electricVsBoss, megaBoostMultiplier: MEGA_RAICHU_X.boost!.multiplier },
       },
       {
         attackStat: boss.attack,
@@ -102,7 +104,8 @@ describe("Scenario A: Mega Raichu X vs Y vs Primal Kyogre (level 35, no dodging)
         attackStat: yStats.attack,
         fastMove: STATIC_SHOCK,
         chargedMove: WILD_CHARGE,
-        damageOut: { stab: true, typeEffectiveness: electricVsBoss, megaBoostMultiplier: MEGA_RAICHU_Y.boost!.multiplier },
+        fastDamageOut: { stab: true, typeEffectiveness: electricVsBoss, megaBoostMultiplier: MEGA_RAICHU_Y.boost!.multiplier },
+        chargedDamageOut: { stab: true, typeEffectiveness: electricVsBoss, megaBoostMultiplier: MEGA_RAICHU_Y.boost!.multiplier },
       },
       {
         attackStat: boss.attack,

@@ -9,11 +9,13 @@ const sampleScenario: Scenario = {
   dodgeModel: { kind: "none" },
   partySize: 4,
   teammateDps: 26.5,
-  teammateTypeMatches: true,
-  phase: "opening-burst",
+  matchingTeammateCount: 4,
   bossChargedMoveFrequencySeconds: 15,
   bossStartsPrimed: false,
   bossStartingEnergyFraction: 0,
+  dodgeFastAttacks: false,
+  holdChargedMoveUntilSafe: false,
+  minFightLengthSeconds: 0,
 };
 
 describe("scenario serialization", () => {
@@ -35,14 +37,14 @@ describe("scenario serialization", () => {
     expect(parseScenarioFromUrl("https://pogo-analyzer.example/compare")).toBeNull();
   });
 
-  it("round-trips a non-default teammateTypeMatches rather than silently reverting to true", () => {
-    // Regression guard: this field was previously missing from Scenario
-    // entirely, so a shared link always restored the default (true) no
-    // matter what the sharer had selected — silently changing which
-    // candidate the crossover chart favored.
-    const offType: Scenario = { ...sampleScenario, teammateTypeMatches: false };
-    expect(decodeScenario(encodeScenario(offType)).teammateTypeMatches).toBe(false);
-    expect(parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", offType))!.teammateTypeMatches).toBe(false);
+  it("round-trips a non-default matchingTeammateCount rather than silently reverting to the full party", () => {
+    // Regression guard: the boolean predecessor of this field was previously
+    // missing from Scenario entirely, so a shared link always restored the
+    // default no matter what the sharer had selected — silently changing
+    // which candidate the chart favored.
+    const partialMatch: Scenario = { ...sampleScenario, matchingTeammateCount: 1 };
+    expect(decodeScenario(encodeScenario(partialMatch)).matchingTeammateCount).toBe(1);
+    expect(parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", partialMatch))!.matchingTeammateCount).toBe(1);
   });
 
   it("round-trips bossChargedMoveFrequencySeconds/bossStartsPrimed/bossStartingEnergyFraction rather than reverting to defaults", () => {
@@ -56,5 +58,18 @@ describe("scenario serialization", () => {
     expect(decoded.bossChargedMoveFrequencySeconds).toBe(9);
     expect(decoded.bossStartsPrimed).toBe(true);
     expect(decoded.bossStartingEnergyFraction).toBe(0.75);
+  });
+
+  it("round-trips dodgeFastAttacks/holdChargedMoveUntilSafe/minFightLengthSeconds rather than reverting to defaults", () => {
+    const custom: Scenario = {
+      ...sampleScenario,
+      dodgeFastAttacks: true,
+      holdChargedMoveUntilSafe: true,
+      minFightLengthSeconds: 45,
+    };
+    const decoded = decodeScenario(encodeScenario(custom));
+    expect(decoded.dodgeFastAttacks).toBe(true);
+    expect(decoded.holdChargedMoveUntilSafe).toBe(true);
+    expect(decoded.minFightLengthSeconds).toBe(45);
   });
 });

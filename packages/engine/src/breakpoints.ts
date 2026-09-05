@@ -66,11 +66,32 @@ export const DODGE_DAMAGE_MULTIPLIER = 0.25;
  */
 export const DODGE_WINDOW_SECONDS = 0.7;
 
+/**
+ * Throwing a dodge — successful or not — costs this many seconds of your own
+ * attack cycle: it's a distinct input that interrupts whatever you were about
+ * to do, not a free reflex. Applied once per dodge *attempt* (see combat.ts /
+ * simulate.ts), pushing the attacker's own next fast-move timing back by this
+ * much, which is why dodging every fast attack is usually a bad trade — it
+ * measurably lowers your own damage and energy-gain rate — even though it's
+ * "free" in the sense that no resource is consumed.
+ */
+export const DODGE_COST_SECONDS = 0.5;
+
+/**
+ * Governs how well the attacker dodges the boss's CHARGED attacks
+ * specifically — not fast attacks, which are a separate boolean
+ * (`dodgeFastAttacks`) wherever this is consumed (combat.ts/simulate.ts).
+ * Splitting these was a deliberate choice: dodging every fast attack is
+ * rarely worth its 0.5s cost (DODGE_COST_SECONDS), but dodging a boss's
+ * charged attacks — the big, infrequent hits — usually is, so they're
+ * different real decisions a player makes, not one dial.
+ */
 export type DodgeBehavior =
   | { kind: "none" }
   | { kind: "perfect" }
   | { kind: "percentage-missed"; missedFraction: number };
 
+/** hitIndex must count only the hit type this DodgeBehavior applies to (charged hits) — see the type doc above. */
 export function dodgeMultiplierForHit(dodge: DodgeBehavior, hitIndex: number): number {
   switch (dodge.kind) {
     case "none":

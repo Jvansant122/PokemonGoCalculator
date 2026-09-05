@@ -1,4 +1,4 @@
-import type { DamageTrajectoryPoint } from "@pogo-analyzer/engine";
+import { convertUptimeToTeamDamage, type DamageTrajectoryPoint } from "@pogo-analyzer/engine";
 
 export interface DamageOverTimeSeries {
   name: string;
@@ -13,14 +13,16 @@ interface Props {
   y: DamageOverTimeSeries;
   teammateDps: number;
   partySize: number;
-  typeMatches: { x: boolean; y: boolean };
+  /** How many of partySize match the lead candidate's boosted type — see convertUptimeToTeamDamage (uptime.ts). The rest still get OFF_TYPE_MEGA_BOOST_MULTIPLIER, never zero. */
+  matchingTeammateCount: number;
   maxSeconds: number;
 }
 
 const WIDTH = 640;
-const HEIGHT = 260;
-const PAD = { top: 16, right: 16, bottom: 28, left: 56 };
+const HEIGHT = 280;
+const PAD = { top: 16, right: 16, bottom: 36, left: 64 };
 const SAMPLE_COUNT = 200;
+const AXIS_TICKS = 5;
 
 function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
   let value = trajectory[0]!.cumulativeDamage;
@@ -31,10 +33,33 @@ function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
   return value;
 }
 
-function totalAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, typeMatches: boolean): number {
-  const boostFactor = typeMatches ? series.boostMultiplier : 1;
-  const teamContribution = teammateDps * partySize * boostFactor * Math.min(t, series.secondsSurvivedCutoff);
-  return ownDamageAt(series.ownDamageTrajectory, t) + teamContribution;
+function teamContributionAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
+  return convertUptimeToTeamDamage({
+    secondsSurvived: Math.min(t, series.secondsSurvivedCutoff),
+    boostMultiplier: series.boostMultiplier,
+    teammateCount: partySize,
+    matchingTeammateCount,
+    teammateDps,
+  });
+}
+
+function totalAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
+  return ownDamageAt(series.ownDamageTrajectory, t) + teamContributionAt(series, t, teammateDps, partySize, matchingTeammateCount);
+}
+
+/** Chooses a "nice" step (1/2/5 x a power of 10) for axis ticks, similar to most charting libraries' default tick spacing. */
+function niceStep(range: number, targetTicks: number): number {
+  if (range <= 0) return 1;
+  const rawStep = range / targetTicks;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const normalized = rawStep / magnitude;
+  const niceNormalized = normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
+  return niceNormalized * magnitude;
+}
+
+function formatTick(value: number): string {
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}k`;
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
 }
 
 /**
@@ -46,12 +71,12 @@ function totalAt(series: DamageOverTimeSeries, t: number, teammateDps: number, p
  * line keeps climbing — which is what produces a real crossing point when
  * survivability differs enough to outweigh a raw damage lead.
  */
-export function DamageOverTimeChart({ x, y, teammateDps, partySize, typeMatches, maxSeconds }: Props) {
+export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeammateCount, maxSeconds }: Props) {
   const times = Array.from({ length: SAMPLE_COUNT }, (_, i) => (i / (SAMPLE_COUNT - 1)) * maxSeconds);
   const totals = times.map((t) => ({
     t,
-    x: totalAt(x, t, teammateDps, partySize, typeMatches.x),
-    y: totalAt(y, t, teammateDps, partySize, typeMatches.y),
+    x: totalAt(x, t, teammateDps, partySize, matchingTeammateCount),
+    y: totalAt(y, t, teammateDps, partySize, matchingTeammateCount),
   }));
 
   const maxValue = Math.max(...totals.flatMap((v) => [v.x, v.y]), 1);
@@ -62,6 +87,14 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, typeMatches,
   const yScale = (value: number) => PAD.top + plotHeight - (value / maxValue) * plotHeight;
 
   const linePath = (values: number[]) => values.map((v, i) => `${i === 0 ? "M" : "L"} ${xScale(times[i]!)} ${yScale(v)}`).join(" ");
+
+  // Tick values at "nice" round-number intervals, not just the two endpoints
+  // — lets a reader interpolate an approximate damage value at a specific
+  // time without guessing between only 0 and the max.
+  const xStep = niceStep(maxSeconds, AXIS_TICKS);
+  const xTicks = Array.from({ length: Math.floor(maxSeconds / xStep) + 1 }, (_, i) => i * xStep).filter((t) => t <= maxSeconds + 1e-9);
+  const yStep = niceStep(maxValue, AXIS_TICKS);
+  const yTicks = Array.from({ length: Math.floor(maxValue / yStep) + 1 }, (_, i) => i * yStep).filter((v) => v <= maxValue + 1e-9);
 
   // Scan the sampled series for a genuine sign flip in (x - y) — both deltas
   // non-zero and opposite — linearly interpolating the crossing time between
@@ -89,19 +122,20 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, typeMatches,
 
   const finalLeader = totals[totals.length - 1]!.x >= totals[totals.length - 1]!.y ? x.name : y.name;
 
+  // Final tally: how much of each candidate's total came from its own
+  // damage versus the team's boosted contribution — the ratio the chart's
+  // shape represents, made explicit as numbers alongside it.
+  const finalOwnX = ownDamageAt(x.ownDamageTrajectory, maxSeconds);
+  const finalTeamX = teamContributionAt(x, maxSeconds, teammateDps, partySize, matchingTeammateCount);
+  const finalOwnY = ownDamageAt(y.ownDamageTrajectory, maxSeconds);
+  const finalTeamY = teamContributionAt(y, maxSeconds, teammateDps, partySize, matchingTeammateCount);
+  const pct = (own: number, team: number) => (own + team > 0 ? Math.round((own / (own + team)) * 100) : 0);
+
   return (
     <div>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="img" aria-label="Own damage plus attributable team damage over time">
-        {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-          <line
-            key={f}
-            x1={PAD.left}
-            x2={WIDTH - PAD.right}
-            y1={PAD.top + plotHeight * (1 - f)}
-            y2={PAD.top + plotHeight * (1 - f)}
-            stroke="var(--border)"
-            strokeWidth={1}
-          />
+        {yTicks.map((v) => (
+          <line key={`gy${v}`} x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(v)} y2={yScale(v)} stroke="var(--border)" strokeWidth={1} />
         ))}
         <path d={linePath(totals.map((v) => v.x))} fill="none" stroke="var(--accent-x)" strokeWidth={2.5} />
         <path d={linePath(totals.map((v) => v.y))} fill="none" stroke="var(--accent-y)" strokeWidth={2.5} />
@@ -115,12 +149,22 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, typeMatches,
           </>
         )}
 
-        <text x={PAD.left} y={HEIGHT - 6} fontSize={11} fill="var(--muted)">
-          0s
-        </text>
-        <text x={WIDTH - PAD.right} y={HEIGHT - 6} fontSize={11} fill="var(--muted)" textAnchor="end">
-          {maxSeconds.toFixed(1)}s
-        </text>
+        {/* Y-axis tick labels (damage scale). */}
+        {yTicks.map((v) => (
+          <text key={`yl${v}`} x={PAD.left - 8} y={yScale(v)} fontSize={10} fill="var(--muted)" textAnchor="end" dominantBaseline="middle">
+            {formatTick(v)}
+          </text>
+        ))}
+
+        {/* X-axis tick labels (seconds) + gridline ticks. */}
+        {xTicks.map((t) => (
+          <g key={`x${t}`}>
+            <line x1={xScale(t)} x2={xScale(t)} y1={PAD.top} y2={PAD.top + plotHeight} stroke="var(--border)" strokeWidth={1} opacity={0.5} />
+            <text x={xScale(t)} y={HEIGHT - PAD.bottom + 16} fontSize={10} fill="var(--muted)" textAnchor="middle">
+              {formatTick(t)}s
+            </text>
+          </g>
+        ))}
       </svg>
       <div style={{ display: "flex", gap: 16, fontSize: "0.85rem", marginTop: 4 }}>
         <span style={{ color: "var(--accent-x)" }}>■ {x.name}</span>
@@ -129,14 +173,24 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, typeMatches,
       {crossing ? (
         <p className="crossover-note">
           Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window (party
-          size {partySize}, {teammateDps} DPS/teammate).
+          size {partySize}, {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
         </p>
       ) : (
         <p className="crossover-note">
           No crossing in this window under these assumptions — {finalLeader} leads throughout (party size {partySize},{" "}
-          {teammateDps} DPS/teammate).
+          {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
         </p>
       )}
+      <div className="damage-tally">
+        <div>
+          <strong style={{ color: "var(--accent-x)" }}>{x.name}</strong>: own {Math.round(finalOwnX)} + team {Math.round(finalTeamX)} ={" "}
+          {Math.round(finalOwnX + finalTeamX)} total ({pct(finalOwnX, finalTeamX)}% own / {100 - pct(finalOwnX, finalTeamX)}% team)
+        </div>
+        <div>
+          <strong style={{ color: "var(--accent-y)" }}>{y.name}</strong>: own {Math.round(finalOwnY)} + team {Math.round(finalTeamY)} ={" "}
+          {Math.round(finalOwnY + finalTeamY)} total ({pct(finalOwnY, finalTeamY)}% own / {100 - pct(finalOwnY, finalTeamY)}% team)
+        </div>
+      </div>
     </div>
   );
 }

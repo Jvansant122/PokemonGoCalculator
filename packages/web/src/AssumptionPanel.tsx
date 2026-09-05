@@ -1,5 +1,4 @@
 import type { DodgeBehavior } from "@pogo-analyzer/engine";
-import type { CombatPhase } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 
 export interface Assumptions {
@@ -10,12 +9,19 @@ export interface Assumptions {
   ivAttack: number;
   ivDefense: number;
   ivStamina: number;
+  /** Governs dodging the boss's CHARGED attacks only. */
   dodge: DodgeBehavior;
+  /** Whether the candidate also attempts to dodge the boss's fast attacks — a separate yes/no from dodge, since dodging every fast attack costs 0.5s per attempt and usually isn't worth it. */
+  dodgeFastAttacks: boolean;
+  /** Hold the charged move for a safer moment (right after dodging a boss charged hit, or when energy caps) instead of firing immediately. */
+  holdChargedMoveUntilSafe: boolean;
+  /** Extends the damage-over-time chart's window beyond the auto-computed natural minimum (never below it) — 0 means no override. */
+  minFightLengthSeconds: number;
   bossChargedMoveFrequencySeconds: number;
-  phase: CombatPhase;
   partySize: number;
   teammateDps: number;
-  teammateTypeMatches: boolean;
+  /** How many of partySize match the lead candidate's boosted type — see convertUptimeToTeamDamage. The rest still get a smaller, non-zero boost, never none. */
+  matchingTeammateCount: number;
   /** Whether the boss starts the fight already partway charged (see bossStartingEnergyFraction). */
   bossStartsPrimed: boolean;
   /** Fraction (0-1) of the boss's first charged move's energy cost it starts with, when bossStartsPrimed is true. */
@@ -35,14 +41,32 @@ interface Props {
    * resolved boss SpeciesDefinition lives — this panel only displays it.
    */
   bossReadySeconds: number | null;
+  /** 100 - the selected candidates' charged-move energy cost (MAX_ENERGY - energyCost), for the "energy buffer" display next to holdChargedMoveUntilSafe. Computed in App.tsx from the resolved candidates. */
+  energyBuffers: { name: string; buffer: number }[];
+  /** Auto-computed natural minimum for the chart window (before any minFightLengthSeconds override) — shown so the user knows what they're extending past. */
+  naturalFightLengthSeconds: number | null;
 }
 
 /**
  * Always-visible assumption panel (Phase 4, point 9). Every conclusion this
  * tool produces is conditional on these — nothing is rendered as a single
  * ranked number without this panel attached above it.
+ *
+ * There is no "combat phase" selector here on purpose: the fight is one
+ * continuous simulation, and whether the boss has thrown a charged move yet
+ * is a computed fact (see "Boss ready for its first charged move" below),
+ * not a mode the user picks.
  */
-export function AssumptionPanel({ value, onChange, candidateOptions, targetOptions, unmatchedRaids, bossReadySeconds }: Props) {
+export function AssumptionPanel({
+  value,
+  onChange,
+  candidateOptions,
+  targetOptions,
+  unmatchedRaids,
+  bossReadySeconds,
+  energyBuffers,
+  naturalFightLengthSeconds,
+}: Props) {
   function set<K extends keyof Assumptions>(key: K, next: Assumptions[K]) {
     onChange({ ...value, [key]: next });
   }
@@ -128,7 +152,7 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
         </div>
 
         <div className="field">
-          <label htmlFor="dodge">Dodging</label>
+          <label htmlFor="dodge">Dodge boss's charged attacks</label>
           <select
             id="dodge"
             value={value.dodge.kind}
@@ -148,7 +172,7 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
 
         {value.dodge.kind === "percentage-missed" && (
           <div className="field">
-            <label htmlFor="missedFraction">Fraction of hits NOT dodged</label>
+            <label htmlFor="missedFraction">Fraction of charged hits NOT dodged</label>
             <input
               id="missedFraction"
               type="number"
@@ -162,10 +186,15 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
         )}
 
         <div className="field">
-          <label htmlFor="phase">Combat phase</label>
-          <select id="phase" value={value.phase} onChange={(e) => set("phase", e.target.value as CombatPhase)}>
-            <option value="opening-burst">Opening burst (boss uses only its fast move)</option>
-            <option value="sustained">Sustained (boss's charged moves are randomized — reports a distribution)</option>
+          <label htmlFor="dodgeFastAttacks">Also dodge boss's fast attacks?</label>
+          <select
+            id="dodgeFastAttacks"
+            value={value.dodgeFastAttacks ? "yes" : "no"}
+            onChange={(e) => set("dodgeFastAttacks", e.target.value === "yes")}
+            title="Dodging every fast attack costs 0.5s of your own attack cycle each time (see DODGE_COST_SECONDS) — usually not worth it, but can matter for a glass cannon. A separate yes/no from charged-attack dodging above, since these are different real decisions."
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
           </select>
         </div>
 
@@ -204,7 +233,7 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
               step={5}
               value={Math.round(value.bossStartingEnergyFraction * 100)}
               onChange={(e) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, Number(e.target.value) / 100)))}
-              title="100% means the boss can fire immediately — there's no fast-move-only opening burst left to model; switch to Sustained for that case."
+              title="100% means the boss can fire immediately."
             />
           </div>
         )}
@@ -217,13 +246,27 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
             min={1}
             value={value.bossChargedMoveFrequencySeconds}
             onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
-            disabled={value.phase !== "sustained"}
-            title={
-              value.phase !== "sustained"
-                ? "Only used in the sustained phase — the opening burst assumes the boss hasn't used a charged move yet."
-                : "Mean seconds between the boss's charged moves (randomized +/-40% per run)."
-            }
+            title="Mean seconds between the boss's charged moves once it's ready to use them (randomized +/-40% per run)."
           />
+        </div>
+
+        <div className="field">
+          <label htmlFor="holdChargedMove">Hold charged move for a safer moment?</label>
+          <select
+            id="holdChargedMove"
+            value={value.holdChargedMoveUntilSafe ? "yes" : "no"}
+            onChange={(e) => set("holdChargedMoveUntilSafe", e.target.value === "yes")}
+            title="Instead of firing the instant energy allows, wait until right after successfully dodging one of the boss's charged attacks (or until energy caps at 100, whichever comes first). Trades some DPS for avoiding your undodgeable cast window overlapping the boss's next hit."
+          >
+            <option value="no">No — fire as soon as ready</option>
+            <option value="yes">Yes — wait for a safe window</option>
+          </select>
+          {value.holdChargedMoveUntilSafe && energyBuffers.length > 0 && (
+            <p className="species-picker-hint">
+              Energy buffer (100 minus the move's cost — how much can be banked before more is wasted):{" "}
+              {energyBuffers.map((b) => `${b.name} ${b.buffer}`).join(", ")}
+            </p>
+          )}
         </div>
 
         <div className="field">
@@ -234,7 +277,10 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
             min={1}
             max={20}
             value={value.partySize}
-            onChange={(e) => set("partySize", Number(e.target.value))}
+            onChange={(e) => {
+              const partySize = Number(e.target.value);
+              onChange({ ...value, partySize, matchingTeammateCount: Math.min(value.matchingTeammateCount, partySize) });
+            }}
           />
         </div>
         <div className="field">
@@ -249,15 +295,36 @@ export function AssumptionPanel({ value, onChange, candidateOptions, targetOptio
           />
         </div>
         <div className="field">
-          <label htmlFor="teammateType">Teammates' attack type matches boost?</label>
-          <select
-            id="teammateType"
-            value={value.teammateTypeMatches ? "yes" : "no"}
-            onChange={(e) => set("teammateTypeMatches", e.target.value === "yes")}
-          >
-            <option value="yes">Yes (gets the mega boost)</option>
-            <option value="no">No (off-type party)</option>
-          </select>
+          <label htmlFor="matchingTeammateCount">Teammates matching boost type (of {value.partySize})</label>
+          <input
+            id="matchingTeammateCount"
+            type="range"
+            min={0}
+            max={value.partySize}
+            step={1}
+            value={value.matchingTeammateCount}
+            onChange={(e) => set("matchingTeammateCount", Number(e.target.value))}
+            title="How many of your party's highest-DPS teammates share the lead candidate's boosted type and so get the full mega-boost multiplier — the rest still get a smaller, non-zero boost (real teams are rarely all-or-nothing on type)."
+          />
+          <span className="species-picker-hint">
+            {value.matchingTeammateCount} matching / {value.partySize - value.matchingTeammateCount} off-type
+          </span>
+        </div>
+
+        <div className="field">
+          <label htmlFor="minFightLength">Extend simulated window to at least (s)</label>
+          <input
+            id="minFightLength"
+            type="number"
+            min={0}
+            step={1}
+            value={value.minFightLengthSeconds}
+            onChange={(e) => set("minFightLengthSeconds", Math.max(0, Number(e.target.value)))}
+            title="The chart's window is auto-computed from how long each candidate actually survives — this can only stretch it further out (e.g. to see a longer horizon), never shrink it below that real outcome."
+          />
+          {naturalFightLengthSeconds !== null && (
+            <span className="species-picker-hint">Natural minimum for this scenario: ~{naturalFightLengthSeconds.toFixed(1)}s</span>
+          )}
         </div>
       </div>
     </section>

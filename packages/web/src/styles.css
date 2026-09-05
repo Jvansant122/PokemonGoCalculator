@@ -261,6 +261,15 @@ p.species-picker-hint {
   border: 1px solid #ff6b6b;
 }
 
+.damage-tally {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .computed-value {
   margin: 0;
   padding: 6px 8px;

@@ -23,7 +23,8 @@ describe("Scenario B: Mega Raichu X vs Y vs Mega Skarmory (dodging, tank -> team
       boss: MEGA_SKARMORY,
       level: SCENARIO_A_LEVEL,
       ivs: SCENARIO_A_PERFECT_IVS,
-      dodge: { kind: "perfect" },
+      dodge: { kind: "none" },
+      dodgeFastAttacks: true,
       openingBurstSeconds: 20,
     });
 
@@ -36,11 +37,12 @@ describe("Scenario B: Mega Raichu X vs Y vs Mega Skarmory (dodging, tank -> team
       boss: MEGA_SKARMORY,
       level: SCENARIO_A_LEVEL,
       ivs: SCENARIO_A_PERFECT_IVS,
-      dodge: { kind: "perfect" },
+      dodge: { kind: "none" },
+      dodgeFastAttacks: true,
       openingBurstSeconds: 20,
     });
 
-    expect(y!.ownDamage).toBeGreaterThan(x!.ownDamage);
+    expect(y!.ownChargedDamage).toBeGreaterThan(x!.ownChargedDamage);
 
     // A lower teammate DPS than the spec's own worked example (26.5) is used
     // here deliberately: at 26.5 DPS, X's extended uptime is worth so much per
@@ -48,9 +50,11 @@ describe("Scenario B: Mega Raichu X vs Y vs Mega Skarmory (dodging, tank -> team
     // — i.e. X wins outright, itself a legitimate, sensitivity-panel-visible
     // finding (see App.tsx's default scenario). A slower party is what makes
     // the crossover land inside the plotted 1-20 range for this assertion.
+    // ownTotalDamage (charged+fast combined) feeds the crossover math, not
+    // charged-only — that's the true total DPS output being compared.
     const crossover = findCrossoverPartySize(
-      { id: "X", secondsSurvived: x!.secondsSurvived, boostMultiplier: x!.boostMultiplier, boostedType: x!.boostedType, ownDamage: x!.ownDamage },
-      { id: "Y", secondsSurvived: y!.secondsSurvived, boostMultiplier: y!.boostMultiplier, boostedType: y!.boostedType, ownDamage: y!.ownDamage },
+      { id: "X", secondsSurvived: x!.secondsSurvived, boostMultiplier: x!.boostMultiplier, boostedType: x!.boostedType, ownDamage: x!.ownTotalDamage },
+      { id: "Y", secondsSurvived: y!.secondsSurvived, boostMultiplier: y!.boostMultiplier, boostedType: y!.boostedType, ownDamage: y!.ownTotalDamage },
       5,
       { a: true, b: true },
     );

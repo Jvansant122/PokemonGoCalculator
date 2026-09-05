@@ -1,26 +1,43 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { IVSpread } from "./types.js";
 
-export type CombatPhase = "opening-burst" | "sustained";
-
 /**
  * A scenario is the complete, shareable description of one comparison: which
- * candidates, against what, at what level/IVs, under what dodge/phase
- * assumptions, feeding how large and fast a party. Every field here is one of
- * the assumptions Phase 4's panel must always show alongside any conclusion.
+ * candidates, against what, at what level/IVs, under what dodge assumptions,
+ * feeding how large and fast a party. Every field here is one of the
+ * assumptions Phase 4's panel must always show alongside any conclusion.
+ *
+ * There is deliberately no user-selectable "combat phase" (opening-burst vs
+ * sustained) — the fight is one continuous simulation, and whether the boss
+ * has thrown a charged move yet is a computed fact (see
+ * bossChargedMoveReadySeconds in combat.ts), not a mode the user picks. An
+ * earlier version exposed that as a toggle; it was removed because "does the
+ * boss have a charged move ready" isn't a strategic choice a player makes.
  */
 export interface Scenario {
   candidates: string[];
   target: string;
   level: number;
   ivs: IVSpread;
+  /** Governs dodging the boss's CHARGED attacks only. */
   dodgeModel: DodgeBehavior;
+  /** Whether the candidate also attempts to dodge the boss's fast attacks — a separate yes/no from dodgeModel, since dodging every fast attack costs DODGE_COST_SECONDS and usually isn't worth it. */
+  dodgeFastAttacks: boolean;
+  /** Hold the charged move for a safer moment (right after dodging a boss charged hit, or when energy caps) instead of firing immediately. */
+  holdChargedMoveUntilSafe: boolean;
+  /** Extends the damage-over-time chart's window beyond the auto-computed natural minimum (never below it) — 0 means no override. */
+  minFightLengthSeconds: number;
   partySize: number;
   teammateDps: number;
-  /** Whether the party's attacking type matches the lead candidate's boost type — see convertUptimeToTeamDamage. */
-  teammateTypeMatches: boolean;
-  phase: CombatPhase;
-  /** Mean seconds between the boss's charged moves once the sustained phase begins. */
+  /**
+   * How many of partySize's teammates share the lead candidate's boosted
+   * type and so get the full mega-boost multiplier — the rest still get
+   * OFF_TYPE_MEGA_BOOST_MULTIPLIER (never zero; see uptime.ts). Real teams
+   * are rarely all-or-nothing on type, so this is a count, not a single
+   * yes/no for the whole party. 0 <= matchingTeammateCount <= partySize.
+   */
+  matchingTeammateCount: number;
+  /** Mean seconds between the boss's charged moves once it starts using them. */
   bossChargedMoveFrequencySeconds: number;
   /** Whether the boss starts the fight already partway charged (see bossStartingEnergyFraction). */
   bossStartsPrimed: boolean;

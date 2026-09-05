@@ -1,8 +1,8 @@
 import { bossChargedMoveReadySeconds } from "./combat.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
-import { dodgeMultiplierForHit, type DodgeBehavior } from "./breakpoints.js";
+import { DODGE_COST_SECONDS, DODGE_DAMAGE_MULTIPLIER, dodgeMultiplierForHit, type DodgeBehavior } from "./breakpoints.js";
 import { calculateDamage, type DamageInputs } from "./damage.js";
-import { energyFromDamageTaken } from "./energy.js";
+import { energyFromDamageTaken, MAX_ENERGY } from "./energy.js";
 import type { ChargedMove, FastMove } from "./types.js";
 
 /**
@@ -47,7 +47,24 @@ export interface StepwiseAttacker {
   attackStat: number;
   fastMove: FastMove;
   chargedMove: ChargedMove;
-  damageOut: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+  /** Damage modifiers for the attacker's OWN FAST move — see combat.ts's AttackerProfile.fastDamageOut for why this is separate from chargedDamageOut (STAB/type-effectiveness depend on the move's own type). */
+  fastDamageOut: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+  /** Damage modifiers for the attacker's OWN CHARGED move. */
+  chargedDamageOut: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+  /**
+   * When true, don't fire the charged move the instant energy allows it —
+   * hold it (energy capped at MAX_ENERGY while waiting) until either the
+   * attacker just successfully dodged one of the boss's CHARGED hits (the
+   * safe-window trigger: your cast is least likely to overlap the boss's
+   * next one right after you've just avoided the last one) or energy hits
+   * MAX_ENERGY (forced, so further fast-move energy gain isn't wasted).
+   * With no dodging configured, the safe-window trigger never fires, so this
+   * degrades to "hold until the energy cap forces it" — still a real,
+   * intentional behavior. Only meaningful when the boss has a charged move
+   * to dodge in the first place (sustained phase); defaults to false
+   * (today's fire-immediately behavior).
+   */
+  holdChargedMoveUntilSafe?: boolean;
 }
 
 export interface StepwiseBoss {
@@ -82,11 +99,13 @@ export interface StepwiseRunResult {
   survivedFullWindow: boolean;
   chargedAttacksLanded: number;
   totalChargedDamage: number;
+  /** Damage the attacker's own fast move dealt to the boss over the run. */
+  totalFastMoveDamage: number;
   totalDamageTaken: number;
   /** True if the attacker fainted while mid-animation on its own charged move — that attack never landed. */
   diedDuringOwnChargedMoveAnimation: boolean;
   bossChargedHitsTaken: number;
-  /** Same shape/semantics as OpeningBurstResult.ownDamageTrajectory (combat.ts). */
+  /** Combined fast+charged cumulative own damage over time — see OpeningBurstResult.ownDamageTrajectory (combat.ts) for the exact shape/semantics. */
   ownDamageTrajectory: DamageTrajectoryPoint[];
 }
 
@@ -109,7 +128,10 @@ function jitteredInterval(mean: number, rng: () => number): number {
 export interface StepwiseSimulationParams {
   attacker: StepwiseAttacker;
   boss: StepwiseBoss;
+  /** Governs dodging the boss's CHARGED attacks only. */
   dodge?: DodgeBehavior;
+  /** Whether the attacker also attempts to dodge the boss's fast attacks — a plain boolean (not a percentage), since dodging every fast attack is a yes/no decision, not a skill dial. Costs DODGE_COST_SECONDS per attempt, same as a charged-attack dodge attempt. Defaults to false. */
+  dodgeFastAttacks?: boolean;
   tickSeconds?: number;
   maxSeconds?: number;
   seed?: number;
@@ -118,6 +140,7 @@ export interface StepwiseSimulationParams {
 export function simulateStepwiseBattle(params: StepwiseSimulationParams): StepwiseRunResult {
   const { attacker, boss } = params;
   const dodge = params.dodge ?? { kind: "none" };
+  const dodgeFastAttacks = params.dodgeFastAttacks ?? false;
   const tick = params.tickSeconds ?? DEFAULT_TICK_SECONDS;
   const maxSeconds = params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS;
   const rng = mulberry32(params.seed ?? 1);
@@ -127,8 +150,9 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   let totalDamageTaken = 0;
   let chargedAttacksLanded = 0;
   let totalChargedDamage = 0;
+  let totalFastMoveDamage = 0;
   let bossChargedHitsTaken = 0;
-  let bossHitIndex = 0;
+  let chargedHitIndex = 0;
   let faintedAtSeconds: number | null = null;
   let diedDuringOwnChargedMoveAnimation = false;
   const ownDamageTrajectory: DamageTrajectoryPoint[] = [{ atSeconds: 0, cumulativeDamage: 0 }];
@@ -171,16 +195,34 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       nextBossFastMoveAt = roundedT + boss.fastMove.durationSeconds;
     }
 
+    // Set within the block below when this tick's hit was a charged hit the
+    // attacker successfully dodged — the "safe window" trigger for
+    // holdChargedMoveUntilSafe, checked further down in this same tick.
+    let justDodgedChargedHit = false;
+
     if (bossHitDamage !== null) {
-      bossHitIndex += 1;
-      if (isBossChargedHit) bossChargedHitsTaken += 1;
+      if (isBossChargedHit) {
+        bossChargedHitsTaken += 1;
+        chargedHitIndex += 1;
+      }
       // Locked into your own charged-move animation, you cannot input a new
       // dodge — a dodge's damage-reduction window (~0.7s, see
       // DODGE_WINDOW_SECONDS) cannot cover a multi-second cast anyway. Any
       // hit landing in this window is guaranteed to land at full damage,
-      // regardless of the configured dodge behavior.
+      // regardless of the configured dodge behavior, and no dodge is even
+      // attempted (so it costs no time either — see DODGE_COST_SECONDS below).
       const isMidOwnAnimation = attackerAnimationEndsAt !== null && roundedT < attackerAnimationEndsAt - EPS;
-      const dodgeMultiplier = isMidOwnAnimation ? 1 : dodgeMultiplierForHit(dodge, bossHitIndex);
+      // `dodge` (DodgeBehavior) governs charged hits only; `dodgeFastAttacks`
+      // is a separate plain boolean for fast hits — see the type docs above.
+      const attemptingDodge = !isMidOwnAnimation && (isBossChargedHit ? dodge.kind !== "none" : dodgeFastAttacks);
+      const dodgeMultiplier = isMidOwnAnimation
+        ? 1
+        : isBossChargedHit
+          ? dodgeMultiplierForHit(dodge, chargedHitIndex)
+          : dodgeFastAttacks
+            ? DODGE_DAMAGE_MULTIPLIER
+            : 1;
+      justDodgedChargedHit = isBossChargedHit && dodgeMultiplier === DODGE_DAMAGE_MULTIPLIER;
       const damage = Math.floor(bossHitDamage * dodgeMultiplier);
       totalDamageTaken += damage;
       hp -= damage;
@@ -189,7 +231,12 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
         diedDuringOwnChargedMoveAnimation = attackerAnimationEndsAt !== null && roundedT < attackerAnimationEndsAt - EPS;
         break;
       }
-      energy += energyFromDamageTaken(damage);
+      energy = Math.min(energy + energyFromDamageTaken(damage), MAX_ENERGY);
+      // Dodging is a distinct input that interrupts your own attack cycle —
+      // every attempt (hit or miss) costs DODGE_COST_SECONDS, pushing your
+      // own next fast move later. No attempt (and so no cost) happens while
+      // mid-own-animation, since attemptingDodge is already false there.
+      if (attemptingDodge) nextAttackerFastMoveAt += DODGE_COST_SECONDS;
     }
 
     // Attacker's own charged-move animation completing.
@@ -198,24 +245,44 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
         power: attacker.chargedMove.power,
         attackerAttackStat: attacker.attackStat,
         defenderDefenseStat: boss.defenseStat,
-        ...attacker.damageOut,
+        ...attacker.chargedDamageOut,
       });
       totalChargedDamage += damage;
       chargedAttacksLanded += 1;
       attackerAnimationEndsAt = null;
-      ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalChargedDamage });
+      ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalFastMoveDamage + totalChargedDamage });
     }
 
     // Attacker's own fast move — locked out while mid-charged-move-animation.
+    // Energy is capped at MAX_ENERGY (the real game's per-Pokémon stored-energy
+    // cap) — a no-op for the default fire-immediately behavior below (energy
+    // is reset to 0 well before it could approach 100), but meaningful once
+    // holdChargedMoveUntilSafe lets energy accumulate while waiting. The fast
+    // move also deals damage to the boss, not just energy — tracked
+    // separately (totalFastMoveDamage) and folded into the combined trajectory.
     if (attackerAnimationEndsAt === null && roundedT >= nextAttackerFastMoveAt - EPS) {
-      energy += attacker.fastMove.energyGain;
+      energy = Math.min(energy + attacker.fastMove.energyGain, MAX_ENERGY);
       nextAttackerFastMoveAt = roundedT + attacker.fastMove.durationSeconds;
+      const fastDamage = calculateDamage({
+        power: attacker.fastMove.power,
+        attackerAttackStat: attacker.attackStat,
+        defenderDefenseStat: boss.defenseStat,
+        ...attacker.fastDamageOut,
+      });
+      totalFastMoveDamage += fastDamage;
+      ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalFastMoveDamage + totalChargedDamage });
     }
 
-    // Start a new charged-move animation as soon as energy allows.
+    // Fire the charged move as soon as energy allows — UNLESS holding for a
+    // safer moment: then wait for either the safe-window trigger (just
+    // dodged one of the boss's charged hits) or being forced by hitting the
+    // energy cap (see StepwiseAttacker.holdChargedMoveUntilSafe).
     if (attackerAnimationEndsAt === null && energy >= attacker.chargedMove.energyCost) {
-      energy = 0;
-      attackerAnimationEndsAt = roundedT + attacker.chargedMove.durationSeconds;
+      const shouldFireNow = !attacker.holdChargedMoveUntilSafe || justDodgedChargedHit || energy >= MAX_ENERGY;
+      if (shouldFireNow) {
+        energy = 0;
+        attackerAnimationEndsAt = roundedT + attacker.chargedMove.durationSeconds;
+      }
     }
   }
 
@@ -230,6 +297,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     survivedFullWindow: faintedAtSeconds === null,
     chargedAttacksLanded,
     totalChargedDamage,
+    totalFastMoveDamage,
     totalDamageTaken,
     diedDuringOwnChargedMoveAnimation,
     bossChargedHitsTaken,
@@ -239,10 +307,14 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
 
 export interface DistributionSummary {
   iterations: number;
+  /** Combined fast+charged damage per run (was charged-only before fast-move damage was tracked) — the true total DPS output, not just charged attacks. */
   meanTotalDamage: number;
   medianTotalDamage: number;
   p10TotalDamage: number;
   p90TotalDamage: number;
+  /** Breakdown alongside the combined totals above, for displaying how much of the total came from each move type. */
+  meanChargedDamage: number;
+  meanFastMoveDamage: number;
   meanSecondsSurvived: number;
   fractionSurvivedFullWindow: number;
   fractionDiedDuringOwnAnimation: number;
@@ -276,7 +348,7 @@ export function runStepwiseDistribution(
     runs.push(simulateStepwiseBattle({ ...params, seed: baseSeed + i * 7919 }));
   }
 
-  const damages = runs.map((r) => r.totalChargedDamage).sort((a, b) => a - b);
+  const damages = runs.map((r) => r.totalChargedDamage + r.totalFastMoveDamage).sort((a, b) => a - b);
   const survivalSeconds = runs.map((r) => r.faintedAtSeconds ?? (params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS));
 
   return {
@@ -285,6 +357,8 @@ export function runStepwiseDistribution(
     medianTotalDamage: percentile(damages, 0.5),
     p10TotalDamage: percentile(damages, 0.1),
     p90TotalDamage: percentile(damages, 0.9),
+    meanChargedDamage: runs.reduce((sum, r) => sum + r.totalChargedDamage, 0) / iterations,
+    meanFastMoveDamage: runs.reduce((sum, r) => sum + r.totalFastMoveDamage, 0) / iterations,
     meanSecondsSurvived: survivalSeconds.reduce((sum, s) => sum + s, 0) / iterations,
     fractionSurvivedFullWindow: runs.filter((r) => r.survivedFullWindow).length / iterations,
     fractionDiedDuringOwnAnimation: runs.filter((r) => r.diedDuringOwnChargedMoveAnimation).length / iterations,

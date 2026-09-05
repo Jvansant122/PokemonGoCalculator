@@ -11,9 +11,9 @@ export interface SensitivityCheck {
   distanceLabel: string;
 }
 
-function winnerOf(x: CandidateResult, y: CandidateResult, partySize: number, teammateDps: number, matchX: boolean, matchY: boolean, boostX: number, boostY: number): "X" | "Y" {
-  const totalX = x.ownDamage + convertUptimeToTeamDamage({ secondsSurvived: x.secondsSurvived, boostMultiplier: boostX, teammateCount: partySize, teammateDps, typeMatches: matchX });
-  const totalY = y.ownDamage + convertUptimeToTeamDamage({ secondsSurvived: y.secondsSurvived, boostMultiplier: boostY, teammateCount: partySize, teammateDps, typeMatches: matchY });
+function winnerOf(x: CandidateResult, y: CandidateResult, partySize: number, teammateDps: number, matchingTeammateCount: number, boostX: number, boostY: number): "X" | "Y" {
+  const totalX = x.ownTotalDamage + convertUptimeToTeamDamage({ secondsSurvived: x.secondsSurvived, boostMultiplier: boostX, teammateCount: partySize, matchingTeammateCount, teammateDps });
+  const totalY = y.ownTotalDamage + convertUptimeToTeamDamage({ secondsSurvived: y.secondsSurvived, boostMultiplier: boostY, teammateCount: partySize, matchingTeammateCount, teammateDps });
   return totalX >= totalY ? "X" : "Y";
 }
 
@@ -30,7 +30,7 @@ export function computeSensitivity(
   const ivs = { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina };
   const base = runComparison({ candidates, boss, level: a.level, ivs, dodge: a.dodge });
   const [x, y] = base as [CandidateResult, CandidateResult];
-  const currentWinner = winnerOf(x, y, a.partySize, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, x.boostMultiplier, y.boostMultiplier);
+  const currentWinner = winnerOf(x, y, a.partySize, a.teammateDps, a.matchingTeammateCount, x.boostMultiplier, y.boostMultiplier);
 
   const checks: SensitivityCheck[] = [];
 
@@ -38,7 +38,7 @@ export function computeSensitivity(
   {
     let crossing: number | null = null;
     for (let n = 1; n <= 20; n++) {
-      const w = winnerOf(x, y, n, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, x.boostMultiplier, y.boostMultiplier);
+      const w = winnerOf(x, y, n, a.teammateDps, a.matchingTeammateCount, x.boostMultiplier, y.boostMultiplier);
       if (w !== currentWinner) {
         crossing = n;
         break;
@@ -53,16 +53,23 @@ export function computeSensitivity(
     });
   }
 
-  // 2. Teammate type match: binary switch.
+  // 2. Matching teammate count: scan the full 0..partySize range for the nearest flip.
   {
-    const flippedWinner = winnerOf(x, y, a.partySize, a.teammateDps, !a.teammateTypeMatches, !a.teammateTypeMatches, x.boostMultiplier, y.boostMultiplier);
-    const flips = flippedWinner !== currentWinner;
+    let nearest: number | null = null;
+    for (let delta = 1; delta <= a.partySize; delta++) {
+      const candidates2 = [a.matchingTeammateCount - delta, a.matchingTeammateCount + delta].filter((n) => n >= 0 && n <= a.partySize);
+      const flipped = candidates2.find((n) => winnerOf(x, y, a.partySize, a.teammateDps, n, x.boostMultiplier, y.boostMultiplier) !== currentWinner);
+      if (flipped !== undefined) {
+        nearest = delta;
+        break;
+      }
+    }
     checks.push({
-      label: "Teammates' attack type matches boost",
-      currentValue: a.teammateTypeMatches ? "yes" : "no",
-      flips,
-      distance: flips ? 0 : Infinity,
-      distanceLabel: flips ? "flips if switched" : "no flip from switching",
+      label: "Matching teammates (of party)",
+      currentValue: `${a.matchingTeammateCount}/${a.partySize}`,
+      flips: nearest !== null,
+      distance: nearest ?? Infinity,
+      distanceLabel: nearest === null ? `no flip across 0-${a.partySize} matching` : `flips within ${nearest} teammate(s)`,
     });
   }
 
@@ -70,7 +77,7 @@ export function computeSensitivity(
   {
     let flipAt: number | null = null;
     for (let m = x.boostMultiplier; m >= 1.0; m -= 0.02) {
-      const w = winnerOf(x, y, a.partySize, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, m, m);
+      const w = winnerOf(x, y, a.partySize, a.teammateDps, a.matchingTeammateCount, m, m);
       if (w !== currentWinner) {
         flipAt = Math.round(m * 100) / 100;
         break;
@@ -90,7 +97,7 @@ export function computeSensitivity(
     const flippedDodge: DodgeBehavior = a.dodge.kind === "none" ? { kind: "perfect" } : { kind: "none" };
     const flippedResult = runComparison({ candidates, boss, level: a.level, ivs, dodge: flippedDodge });
     const [fx, fy] = flippedResult as [CandidateResult, CandidateResult];
-    const flippedWinner = winnerOf(fx, fy, a.partySize, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, fx.boostMultiplier, fy.boostMultiplier);
+    const flippedWinner = winnerOf(fx, fy, a.partySize, a.teammateDps, a.matchingTeammateCount, fx.boostMultiplier, fy.boostMultiplier);
     const flips = flippedWinner !== currentWinner;
     checks.push({
       label: "Dodging",
@@ -114,7 +121,7 @@ export function computeSensitivity(
           continue;
         }
         const [lx, ly] = result as [CandidateResult, CandidateResult];
-        const w = winnerOf(lx, ly, a.partySize, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, lx.boostMultiplier, ly.boostMultiplier);
+        const w = winnerOf(lx, ly, a.partySize, a.teammateDps, a.matchingTeammateCount, lx.boostMultiplier, ly.boostMultiplier);
         if (w !== currentWinner) {
           nearest = delta;
           break;

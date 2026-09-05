@@ -4,8 +4,17 @@ Build spec: `C:\Users\Jack\Downloads\pogo-analyzer-spec.md` (or ask the user for
 
 A tool comparing hypothetical Pokémon GO mega forms, built around one thesis: **survivability
 counted as team DPS**, not raw damage. Two mega forms rarely have a single "winner" — the
-ranking flips depending on party size, dodge behavior, and combat phase. The product's headline
-output is *where that ranking flips*, not which name is on top.
+ranking flips depending on party size, dodge behavior, and team composition. The product's
+headline output is *where that ranking flips*, not which name is on top.
+
+There is no user-selectable "combat phase" (opening-burst vs sustained) in the web UI — every
+fight is one continuous simulation (`runSustainedComparison`), and whether the boss has thrown a
+charged move yet is a computed fact (`bossChargedMoveReadySeconds`), not a mode to pick. An
+earlier version exposed that as a toggle; it was removed on request ("should be insinuated in
+calculations based on energy... not a tab toggle-able by user input"). The deterministic
+opening-burst-only engine path (`combat.ts`'s `simulateOpeningBurst`, `comparison.ts`'s
+`runComparison`) still exists and is still what the pinned Scenario A acceptance numbers are
+tested against — it's just not wired into the live web UI anymore.
 
 ## Repo layout
 
@@ -80,12 +89,36 @@ existing credentials.
 - **Breakpoints** (`breakpoints.ts`, Phase 2): `findFastMoveBreakpoints` (damage breakpoint
   table) and `timeToFaint`/`timeToFaintTable` (survivability, with a `DodgeBehavior` model).
   `DODGE_WINDOW_SECONDS = 0.7` documents that a dodge is a timed action, not a standing shield.
+  `DodgeBehavior` (`none`/`perfect`/`percentage-missed`) governs dodging the boss's **CHARGED**
+  attacks only — dodging fast attacks is a separate plain boolean (`dodgeFastAttacks`, no
+  percentage-missed variant) wherever `DodgeBehavior` is consumed, since "dodge every fast
+  attack" is a yes/no decision, not a skill dial. **`DODGE_COST_SECONDS = 0.5`**: every dodge
+  *attempt* (hit or miss, either kind) costs this much of the attacker's own attack cycle,
+  pushing its next fast move later — dodging is not free, and dodging fast attacks especially
+  is usually not worth the DPS loss. No attempt (and no cost) happens while mid-own-animation.
 - **Uptime/crossover** (`uptime.ts`, Phase 3): `convertUptimeToTeamDamage` (default mega boost
   `1.3` — **load-bearing**, at `1.1` a real conclusion in this project has flipped) and
-  `findCrossoverPartySize`.
-- **Comparison** (`comparison.ts`): `runComparison` (opening-burst, single point estimate) and
-  `runSustainedComparison` (Phase 5, returns a distribution). Single code path shared by tests
-  and the web UI so "what the tool concludes" can't drift between the two.
+  `findCrossoverPartySize`. The mega/primal boost is **not all-or-nothing by type**: every
+  teammate gets at least `OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1` regardless of type match; only
+  teammates matching the boosted type get the full `boostMultiplier`. An earlier version gave
+  off-type teammates `1` (no boost at all) — a real bug, fixed. `matchingTeammateCount` (an
+  absolute count, 0..`teammateCount`) replaced a single party-wide `typeMatches: boolean`, since
+  real teams are rarely all-or-nothing on type. `findCrossoverPartySize` takes a *fraction*
+  instead (it sweeps party size, where an absolute count doesn't scale sensibly).
+- **Comparison** (`comparison.ts`): `runComparison` (opening-burst, single point estimate,
+  **not used by the live web UI**, only tests) and `runSustainedComparison` (Phase 5, returns a
+  distribution — the only path the web UI drives). Both take `dodgeFastAttacks?: boolean`
+  alongside `dodge`; `runSustainedComparison` also takes `holdChargedMoveUntilSafe?: boolean`
+  (see below). Each candidate's own fast move ALSO deals damage to the boss now, tracked as
+  `ownFastMoveDamage`/`totalFastMoveDamage` alongside the existing charged-only
+  `ownChargedDamage`/`totalChargedDamage` — `ownTotalDamage` (charged+fast combined) is what
+  feeds `uptime.ts`'s crossover/team-contribution math and the damage-over-time chart, not
+  charged-only. **Fast and charged moves get their own `fastDamageOut`/`chargedDamageOut`** (STAB
+  + type-effectiveness computed per-move-type) — an earlier version shared one `damageOut` built
+  from the fast move's type for both, invisible in every fixture because Scenario A's fast and
+  charged moves happen to both be Electric, but wrong for any species whose two moves differ in
+  type (very common on real species). Single code path shared by tests and the web UI so "what
+  the tool concludes" can't drift between the two.
 - **Stepwise simulator** (`simulate.ts`, Phase 5): 100ms-tick simulator. Boss charged-move timing
   is randomized (`chargedMoveMeanIntervalSeconds` ± 40% jitter via a seeded mulberry32 PRNG, so
   runs are reproducible per-seed) — `runStepwiseDistribution` runs many seeds and reports a
@@ -101,6 +134,12 @@ existing credentials.
   re-thrown mid-cast, and its ~0.7s window couldn't cover a multi-second animation anyway. Do
   not "fix" this by letting dodge reduce damage in that window; it was deliberately corrected
   from an earlier bug (see git history / HANDOFF.md).
+  `StepwiseAttacker.holdChargedMoveUntilSafe` (default false): instead of firing the instant
+  energy allows, hold it (energy capped at `MAX_ENERGY = 100`, see `energy.ts`, while waiting)
+  until either the attacker just successfully dodged one of the boss's **charged** hits (the
+  safe-window trigger — least likely for your cast to overlap the boss's next hit right after
+  you've just avoided the last one) or energy hits the cap (forced, so further fast-move energy
+  gain isn't wasted). With no dodging configured, only the cap-forced path ever fires it.
 - **GameMaster data loader** (`gamemaster.ts`): accepts pogoapi.net-shaped JSON
   (`pokemon_id`/`pokemon_name`/`base_attack`/`base_defense`/`base_stamina`/`form`) via
   `fromGameMaster`, plus a `SpeciesRegistry` that merges real and user-defined hypothetical
@@ -113,12 +152,14 @@ existing credentials.
   `scripts/sync-data.ts`, not silently worked around). `packages/web/src/registry.ts` merges
   this with the hand-defined hypothetical fixtures at app startup.
 - **Scenarios** (`scenario.ts`): the full input set (`candidates`, `target`, `level`, `ivs`,
-  `dodgeModel`, `partySize`, `teammateDps`, `teammateTypeMatches`, `phase`,
-  `bossChargedMoveFrequencySeconds`, `bossStartsPrimed`, `bossStartingEnergyFraction`)
-  serializes to a base64url string in the URL. If you add a new user-facing assumption to the
-  web UI, **you must add it to the `Scenario` interface too** — a missing field silently
-  reverts to a default on a shared link instead of erroring (this exact bug happened twice now:
-  once with `teammateTypeMatches`, once with `bossChargedMoveFrequencySeconds`).
+  `dodgeModel`, `dodgeFastAttacks`, `holdChargedMoveUntilSafe`, `minFightLengthSeconds`,
+  `partySize`, `teammateDps`, `matchingTeammateCount`, `bossChargedMoveFrequencySeconds`,
+  `bossStartsPrimed`, `bossStartingEnergyFraction`) serializes to a base64url string in the URL.
+  No `phase` field — see the combat-phase note at the top of this file. If you add a new
+  user-facing assumption to the web UI, **you must add it to the `Scenario` interface too** — a
+  missing field silently reverts to a default on a shared link instead of erroring (this exact
+  bug happened more than once: `teammateTypeMatches`'s successor `matchingTeammateCount`, and
+  `bossChargedMoveFrequencySeconds`).
 
 ## Fixtures (`fixtures/scenarioA.ts`)
 
