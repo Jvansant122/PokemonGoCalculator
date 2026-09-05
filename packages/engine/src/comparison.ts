@@ -5,7 +5,8 @@ import { shadowAdjustedBaseStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "./raidBoss.js";
 import { DEFAULT_STEPWISE_MAX_SECONDS, runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
-import type { IVSpread, SpeciesDefinition } from "./types.js";
+import type { ChargedMove, IVSpread, SpeciesDefinition } from "./types.js";
+import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
 
 /**
  * Boss effective attack/defense stats, applying shadow.ts's Shadow
@@ -67,6 +68,13 @@ export interface ComparisonInputs {
    * earlier trainer's mega left partway charged. Defaults to 0.
    */
   bossStartingEnergy?: number;
+  /**
+   * Active weather condition, applied per-move (by that move's own type) to
+   * both the candidate's and the boss's damage output independently — see
+   * weather.ts's isWeatherBoosted. Defaults to "none" (today's behavior: no
+   * weather modeled), matching Scenario's default.
+   */
+  weather?: WeatherCondition;
 }
 
 export interface CandidateResult {
@@ -95,7 +103,7 @@ export interface CandidateResult {
  * conclude" can never drift between the two.
  */
 export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
-  const { candidates, boss, level, ivs, dodge, dodgeFastAttacks = false, bossStartingEnergy = 0 } = inputs;
+  const { candidates, boss, level, ivs, dodge, dodgeFastAttacks = false, bossStartingEnergy = 0, weather = "none" } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
@@ -131,11 +139,13 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
           stab: species.types.includes(fastMove.type),
           typeEffectiveness: candidateFastVsBoss,
           megaBoostMultiplier: species.boost?.multiplier ?? 1,
+          weatherBoosted: isWeatherBoosted(fastMove.type, weather),
         },
         chargedDamageOut: {
           stab: species.types.includes(chargedMove.type),
           typeEffectiveness: candidateChargedVsBoss,
           megaBoostMultiplier: species.boost?.multiplier ?? 1,
+          weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
         },
       },
       {
@@ -145,6 +155,7 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
         damageOut: {
           stab: boss.types.includes(bossFastMove.type),
           typeEffectiveness: bossVsCandidate,
+          weatherBoosted: isWeatherBoosted(bossFastMove.type, weather),
         },
       },
       openingBurstSeconds,
@@ -204,6 +215,8 @@ export interface SustainedComparisonInputs {
   bossStartingEnergy?: number;
   maxSeconds?: number;
   iterations?: number;
+  /** See ComparisonInputs.weather. Defaults to "none". */
+  weather?: WeatherCondition;
 }
 
 export interface SustainedCandidateResult extends DistributionSummary {
@@ -230,6 +243,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     bossStartingEnergy = 0,
     maxSeconds = DEFAULT_STEPWISE_MAX_SECONDS,
     iterations = 200,
+    weather = "none",
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
@@ -260,11 +274,13 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
             stab: species.types.includes(fastMove.type),
             typeEffectiveness: candidateFastVsBoss,
             megaBoostMultiplier: species.boost?.multiplier ?? 1,
+            weatherBoosted: isWeatherBoosted(fastMove.type, weather),
           },
           chargedDamageOut: {
             stab: species.types.includes(chargedMove.type),
             typeEffectiveness: candidateChargedVsBoss,
             megaBoostMultiplier: species.boost?.multiplier ?? 1,
+            weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
           },
           holdChargedMoveUntilSafe,
         },
@@ -275,10 +291,15 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
           damageOut: {
             stab: boss.types.includes(bossFastMove.type),
             typeEffectiveness: bossVsCandidate,
+            weatherBoosted: isWeatherBoosted(bossFastMove.type, weather),
           },
           chargedMove: bossChargedMove,
           chargedMoveDamageOut: bossChargedMove
-            ? { stab: boss.types.includes(bossChargedMove.type), typeEffectiveness: bossChargedVsCandidate }
+            ? {
+                stab: boss.types.includes(bossChargedMove.type),
+                typeEffectiveness: bossChargedVsCandidate,
+                weatherBoosted: isWeatherBoosted(bossChargedMove.type, weather),
+              }
             : undefined,
           chargedMoveMeanIntervalSeconds: bossChargedMoveMeanIntervalSeconds,
           chargedMoveWarmupSeconds: bossChargedMoveWarmupSeconds,
@@ -293,4 +314,37 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
 
     return { id: species.id, name: species.name, ...distribution };
   });
+}
+
+export interface BossChargedMoveVariantResult {
+  chargedMoveId: string;
+  chargedMoveName: string;
+  results: SustainedCandidateResult[];
+}
+
+/**
+ * Runs runSustainedComparison once per each of the boss's known charged
+ * moves (already present on SpeciesDefinition.chargedMoves — no new sourcing
+ * needed), so a caller can show whether the ranking between two candidates
+ * depends on which charged-move variant the boss instance happens to have
+ * rolled. A real raid boss instance is locked to ONE fixed charged move for
+ * its whole lifetime, but different instances of "the same" boss (different
+ * eggs/gyms) can roll different charged moves from its known movepool — a
+ * player deciding which mega to bring can't know in advance which variant
+ * they'll actually face.
+ *
+ * Scoped to charged moves only, per the originating proposal — this does NOT
+ * also sweep the boss's fast moves. `inputs.bossChargedMoveId` is ignored if
+ * supplied (each swept entry provides its own); every other input (dodge,
+ * party assumptions passed through by the caller, weather, etc.) is held
+ * fixed across the sweep so only the boss's moveset varies.
+ */
+export function compareAcrossBossChargedMoves(
+  inputs: Omit<SustainedComparisonInputs, "bossChargedMoveId">,
+): BossChargedMoveVariantResult[] {
+  return inputs.boss.chargedMoves.map((chargedMove: ChargedMove) => ({
+    chargedMoveId: chargedMove.id,
+    chargedMoveName: chargedMove.name,
+    results: runSustainedComparison({ ...inputs, bossChargedMoveId: chargedMove.id }),
+  }));
 }

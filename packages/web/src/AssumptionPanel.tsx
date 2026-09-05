@@ -1,6 +1,32 @@
-import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
+import { WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+
+/**
+ * Human-readable labels for the select below, built from weather.ts's own
+ * WEATHER_BOOSTED_TYPES map (now re-exported from @pogo-analyzer/engine's
+ * index) rather than a second hand-typed copy — the engine's mapping is the
+ * one source of truth for which types each condition boosts.
+ */
+const WEATHER_LABELS: Record<WeatherCondition, string> = {
+  none: "None",
+  sunny: "Sunny/Clear",
+  rainy: "Rain",
+  windy: "Windy",
+  cloudy: "Cloudy",
+  fog: "Fog",
+  snow: "Snow",
+  partly_cloudy: "Partly Cloudy",
+};
+const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
+  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
+).map((value) => {
+  const boosted = WEATHER_BOOSTED_TYPES[value];
+  return {
+    value,
+    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
+  };
+});
 
 export interface Assumptions {
   candidateAId: string;
@@ -34,6 +60,14 @@ export interface Assumptions {
   bossStartsPrimed: boolean;
   /** Fraction (0-1) of the boss's first charged move's energy cost it starts with, when bossStartsPrimed is true. */
   bossStartingEnergyFraction: number;
+  /**
+   * Active weather condition — boosts whichever move type it favors (see
+   * WEATHER_OPTIONS above / weather.ts's WEATHER_BOOSTED_TYPES) by 1.2x, for
+   * BOTH the candidate's and the boss's own moves independently, checked
+   * against each move's own type. "none" (the default) models no weather, the
+   * pre-existing implicit behavior.
+   */
+  weather: WeatherCondition;
 }
 
 interface Props {
@@ -326,6 +360,22 @@ export function AssumptionPanel({
             />
           </div>
         )}
+
+        <div className="field">
+          <label htmlFor="weather">Weather</label>
+          <select
+            id="weather"
+            value={value.weather}
+            onChange={(e) => set("weather", e.target.value as WeatherCondition)}
+            title="Boosts damage 1.2x for moves whose type matches the active weather — applies independently to the candidate's and the boss's own moves, checked per move's own type."
+          >
+            {WEATHER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <div className="field">
           <label htmlFor="bossFreq">Boss charged-move mean frequency (s)</label>

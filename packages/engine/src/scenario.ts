@@ -1,5 +1,6 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { IVSpread } from "./types.js";
+import type { WeatherCondition } from "./weather.js";
 
 /**
  * A scenario is the complete, shareable description of one comparison: which
@@ -51,6 +52,15 @@ export interface Scenario {
   bossStartsPrimed: boolean;
   /** Fraction (0-1) of the boss's first charged move's energy cost it starts with, when bossStartsPrimed is true. */
   bossStartingEnergyFraction: number;
+  /**
+   * The active weather condition, applied per-move (checked against that
+   * move's own type, not either combatant's species type) to BOTH the
+   * candidate's and the boss's damage output independently — see weather.ts's
+   * isWeatherBoosted. Defaults to "none" (today's implicit behavior: no
+   * weather modeled) so a scenario URL encoded before this field existed
+   * still decodes to the same result it always gave.
+   */
+  weather: WeatherCondition;
 }
 
 function toBase64Url(bytes: Uint8Array): string {

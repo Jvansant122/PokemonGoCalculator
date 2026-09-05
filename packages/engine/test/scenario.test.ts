@@ -20,6 +20,7 @@ const sampleScenario: Scenario = {
   dodgeFastAttacks: false,
   holdChargedMoveUntilSafe: false,
   minFightLengthSeconds: 0,
+  weather: "none",
 };
 
 describe("scenario serialization", () => {
@@ -93,5 +94,12 @@ describe("scenario serialization", () => {
     expect(decoded.candidateChargedMoveIds).toEqual([null, "wild-charge"]);
     expect(decoded.bossFastMoveId).toBe("waterfall");
     expect(decoded.bossChargedMoveId).toBe("hydro-pump");
+  });
+
+  it("round-trips a non-default weather condition rather than silently reverting to none", () => {
+    // Regression guard, same shape as the others above.
+    const rainy: Scenario = { ...sampleScenario, weather: "rainy" };
+    expect(decodeScenario(encodeScenario(rainy)).weather).toBe("rainy");
+    expect(parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", rainy))!.weather).toBe("rainy");
   });
 });

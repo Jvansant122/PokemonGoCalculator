@@ -144,6 +144,7 @@ export function computeSensitivity(
       holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
       bossChargedMoveMeanIntervalSeconds: overrides.bossChargedMoveMeanIntervalSeconds ?? a.bossChargedMoveFrequencySeconds,
       iterations: SENSITIVITY_ITERATIONS,
+      weather: a.weather,
       ...moveSelections,
     });
     return [

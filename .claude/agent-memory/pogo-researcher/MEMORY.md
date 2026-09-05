@@ -14,3 +14,9 @@
 - [Proposal: DPS/TDO community vocabulary labels](proposal_dps_tdo_vocabulary.md) — proposed 2026-09-05 (UI pass), pending overseer decision
 - [Proposal: result-card own/team share bar](proposal_result_card_share_bar.md) — proposed 2026-09-05 (UI pass), pending overseer decision
 - [Fact: DPS/TDO/eDPS community vocabulary confirmed](fact_dps_tdo_vocabulary.md) — [community-consensus], researched 2026-09-05
+- [Fact: weatherBoosted/bestBuddy are dead inputs](fact_weather_bestbuddy_dead_inputs.md) — damage.ts models both, no call site or Scenario field ever uses them, confirmed 2026-09-05
+- [Fact: weather boost mechanic details](fact_weather_boost_mechanic.md) — 1.2x dmg + "+5 effective levels", type-per-weather map, applies both sides in raids [community-consensus]
+- [Fact: friendship/raid scope nuance](fact_friendship_raid_scope_nuance.md) — Best Buddy CP Boost vs PvP-only friendship attack multiplier are different mechanics, don't conflate
+- [Proposal: weather as Scenario assumption](proposal_weather_scenario_assumption.md) — proposed 2026-09-05 (open-ended pass), pending; new Scenario field, flags round-trip
+- [Proposal: boss moveset-variant comparison](proposal_boss_moveset_variant_comparison.md) — proposed 2026-09-05 (open-ended pass), pending; discrete axis, not a sensitivity.ts row
+- [Proposal: Field Survey ranked table across real species](proposal_field_survey_ranked_table.md) — proposed 2026-09-05 (open-ended pass), pending; biggest scope, touches Scenario tuple shape, flags Teambuilding-Analyzer adjacency

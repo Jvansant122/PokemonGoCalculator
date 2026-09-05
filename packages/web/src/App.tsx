@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   bossChargedMoveReadySeconds,
   buildScenarioUrl,
+  compareAcrossBossChargedMoves,
   convertUptimeToTeamDamage,
   parseScenarioFromUrl,
   runSustainedComparison,
@@ -9,6 +10,7 @@ import {
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
 import { AssumptionPanel, type Assumptions } from "./AssumptionPanel.js";
+import { BossMovesetSweep } from "./BossMovesetSweep.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { SensitivityView } from "./SensitivityView.js";
@@ -46,6 +48,7 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
   matchingTeammateCount: 4,
   bossStartsPrimed: false,
   bossStartingEnergyFraction: 0.5,
+  weather: "none",
 };
 
 function assumptionsToScenario(a: Assumptions): Scenario {
@@ -68,6 +71,7 @@ function assumptionsToScenario(a: Assumptions): Scenario {
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
     bossStartsPrimed: a.bossStartsPrimed,
     bossStartingEnergyFraction: a.bossStartingEnergyFraction,
+    weather: a.weather,
   };
 }
 
@@ -100,6 +104,9 @@ function scenarioToAssumptions(s: Scenario): Assumptions {
     matchingTeammateCount: s.matchingTeammateCount ?? Math.min(DEFAULT_ASSUMPTIONS.matchingTeammateCount, s.partySize),
     bossStartsPrimed: s.bossStartsPrimed ?? DEFAULT_ASSUMPTIONS.bossStartsPrimed,
     bossStartingEnergyFraction: s.bossStartingEnergyFraction ?? DEFAULT_ASSUMPTIONS.bossStartingEnergyFraction,
+    // `??` guards a scenario URL encoded before this field existed rather than
+    // surfacing `undefined` into the weather <select> above.
+    weather: s.weather ?? "none",
   };
 }
 
@@ -224,6 +231,7 @@ export function App() {
           holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
           bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
           bossStartingEnergy,
+          weather: assumptions.weather,
         }),
         error: null as string | null,
       };
@@ -246,6 +254,7 @@ export function App() {
     assumptions.holdChargedMoveUntilSafe,
     assumptions.bossChargedMoveFrequencySeconds,
     bossStartingEnergy,
+    assumptions.weather,
   ]);
 
   // The chart's window is auto-computed from the longer-mean-surviving
@@ -269,6 +278,52 @@ export function App() {
       return [];
     }
   }, [species.candidates, species.boss, assumptions]);
+
+  // Only meaningful when the boss actually has 2+ known charged moves — a
+  // real raid boss instance is locked to whichever one it rolled for its
+  // whole lifetime, so this shows whether the ranking between the two
+  // candidates depends on that roll. A single-charged-move boss has nothing
+  // to sweep, so this stays null (BossMovesetSweep is never rendered) rather
+  // than showing a pointless one-row table.
+  const bossMovesetSweep = useMemo(() => {
+    if (!species.candidates || !species.boss) return null;
+    if (species.boss.chargedMoves.length < 2) return null;
+    try {
+      return compareAcrossBossChargedMoves({
+        candidates: species.candidates,
+        candidateFastMoveIds: [assumptions.candidateAFastMoveId, assumptions.candidateBFastMoveId],
+        candidateChargedMoveIds: [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId],
+        boss: species.boss,
+        bossFastMoveId: assumptions.bossFastMoveId,
+        level: assumptions.level,
+        ivs,
+        dodge: assumptions.dodge,
+        dodgeFastAttacks: assumptions.dodgeFastAttacks,
+        holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
+        bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
+        bossStartingEnergy,
+        weather: assumptions.weather,
+      });
+    } catch {
+      return null;
+    }
+  }, [
+    species.candidates,
+    species.boss,
+    assumptions.candidateAFastMoveId,
+    assumptions.candidateAChargedMoveId,
+    assumptions.candidateBFastMoveId,
+    assumptions.candidateBChargedMoveId,
+    assumptions.bossFastMoveId,
+    assumptions.level,
+    ivs,
+    assumptions.dodge,
+    assumptions.dodgeFastAttacks,
+    assumptions.holdChargedMoveUntilSafe,
+    assumptions.bossChargedMoveFrequencySeconds,
+    bossStartingEnergy,
+    assumptions.weather,
+  ]);
 
   function handleShare() {
     const url = buildScenarioUrl(window.location.href.split("?")[0]!, assumptionsToScenario(assumptions));
@@ -508,6 +563,36 @@ export function App() {
           </section>
 
           <SensitivityView checks={sensitivity} />
+
+          {bossMovesetSweep && bossMovesetSweep.length > 1 && species.candidates && (
+            <section className="panel">
+              <h2>Does the winner depend on the boss's charged-move roll?</h2>
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                {boss!.name} knows {bossMovesetSweep.length} charged moves — a real raid instance is locked to
+                whichever ONE of them it rolled for its whole lifetime, so a player choosing which mega to bring can't
+                know in advance which variant they'll actually face. Every row below re-runs the full comparison above
+                holding every other assumption fixed, varying only the boss's charged move.
+              </p>
+              <BossMovesetSweep
+                variants={bossMovesetSweep}
+                candidateMeta={[
+                  {
+                    name: results.candidates[0]!.name,
+                    boostMultiplier: species.candidates[0].boost?.multiplier ?? 1,
+                    persistsThroughFaint: species.candidates[0].boost?.persistsThroughFaint ?? false,
+                  },
+                  {
+                    name: results.candidates[1]!.name,
+                    boostMultiplier: species.candidates[1].boost?.multiplier ?? 1,
+                    persistsThroughFaint: species.candidates[1].boost?.persistsThroughFaint ?? false,
+                  },
+                ]}
+                partySize={assumptions.partySize}
+                teammateDps={assumptions.teammateDps}
+                matchingTeammateCount={assumptions.matchingTeammateCount}
+              />
+            </section>
+          )}
         </>
       )}
 

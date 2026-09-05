@@ -299,6 +299,109 @@ describe("runComparison", () => {
     expect(fastDamageVsShadow).toBeGreaterThan(fastDamageVsNormal);
   });
 
+  it("applies the weather boost per-move (by that move's own type), independently to the candidate's fast/charged moves", () => {
+    // Attacker's fast move is Water (boosted by rainy), charged move is Fire
+    // (NOT boosted by rainy) — isolates that the boost is checked per-move,
+    // not once for the whole species/fight.
+    const fastMove = { id: "wf", name: "Water Fast", type: "water" as const, power: 10, energyGain: 20, durationSeconds: 1 };
+    const chargedMove = { id: "fc", name: "Fire Charged", type: "fire" as const, power: 100, energyCost: 40, durationSeconds: 2, vulnerableWindowSeconds: 2 };
+    const attacker: SpeciesDefinition = {
+      id: "weather-test-attacker",
+      name: "Weather Attacker",
+      types: ["water"],
+      baseAttack: 300,
+      baseDefense: 200,
+      baseStamina: 400,
+      fastMoves: [fastMove],
+      chargedMoves: [chargedMove],
+    };
+    const bossFastMove = { id: "bf", name: "Boss Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 100 };
+    const boss: SpeciesDefinition = {
+      id: "weather-test-boss",
+      name: "Weather Boss",
+      types: ["normal"],
+      baseAttack: 100,
+      baseDefense: 200,
+      baseStamina: 30000,
+      fastMoves: [bossFastMove],
+      chargedMoves: [],
+    };
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+
+    const noWeather = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" } });
+    const rainy = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" }, weather: "rainy" });
+    const sunny = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" }, weather: "sunny" });
+
+    expect(noWeather[0]!.ownFastMoveDamage).toBeGreaterThan(0);
+    expect(noWeather[0]!.ownChargedDamage).toBeGreaterThan(0);
+
+    // Rainy boosts Water (fast move) but not Fire (charged move).
+    expect(rainy[0]!.ownFastMoveDamage).toBeGreaterThan(noWeather[0]!.ownFastMoveDamage);
+    expect(rainy[0]!.ownChargedDamage).toBe(noWeather[0]!.ownChargedDamage);
+
+    // Sunny boosts Ground/Fire/Grass — Fire (the charged move) is one of
+    // those, Water (the fast move) is not, so this is the mirror image of
+    // the rainy case above: confirms the mapping is consulted per-move-type
+    // for each weather condition, not just "any weather boosts everything".
+    expect(sunny[0]!.ownChargedDamage).toBeGreaterThan(noWeather[0]!.ownChargedDamage);
+    expect(sunny[0]!.ownFastMoveDamage).toBe(noWeather[0]!.ownFastMoveDamage);
+
+    // Cross-check against the raw formula: rainy's fast-move-per-hit damage
+    // should match calculateDamage with weatherBoosted:true explicitly.
+    const attackerStats = effectiveStatsAtLevel(attacker, ivs, level);
+    const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+    const expectedBoostedFastDamage = calculateDamage({
+      power: fastMove.power,
+      attackerAttackStat: attackerStats.attack,
+      defenderDefenseStat: bossDefenseStat,
+      stab: true,
+      weatherBoosted: true,
+    });
+    expect(rainy[0]!.ownFastMoveDamage % expectedBoostedFastDamage).toBe(0);
+  });
+
+  it("applies the weather boost to the BOSS's own move too, independently of the candidate's moves", () => {
+    // Boss's fast move is Electric (boosted by rainy); candidate is pure
+    // Normal (neither of its moves is boosted by rainy) — isolates that the
+    // boss's own damage output also responds to weather, not just the
+    // candidate's.
+    const attacker: SpeciesDefinition = {
+      id: "weather-boss-test-attacker",
+      name: "Attacker",
+      types: ["normal"],
+      baseAttack: 300,
+      baseDefense: 200,
+      // Deliberately low so the candidate actually faints inside the fixed
+      // opening-burst window from fast attacks alone (same technique as the
+      // Shadow-boss test above).
+      baseStamina: 50,
+      fastMoves: [{ id: "af", name: "Attacker Fast", type: "normal", power: 10, energyGain: 10, durationSeconds: 1 }],
+      chargedMoves: [{ id: "ac", name: "Attacker Charged", type: "normal", power: 80, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    const bossFastMove = { id: "bf", name: "Boss Fast", type: "electric" as const, power: 10, energyGain: 0, durationSeconds: 1.5 };
+    const boss: SpeciesDefinition = {
+      id: "weather-boss-test-boss",
+      name: "Boss",
+      types: ["electric"],
+      baseAttack: 150,
+      baseDefense: 150,
+      baseStamina: 20000,
+      fastMoves: [bossFastMove],
+      chargedMoves: [],
+    };
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+
+    const [noWeather] = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" } });
+    const [rainy] = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" }, weather: "rainy" });
+
+    // Same fast-attack cadence/energy economics on both sides regardless of
+    // weather, so a strictly shorter survival time under rainy is itself
+    // proof the boss's Electric fast move now hits harder.
+    expect(rainy!.secondsSurvived).toBeLessThan(noWeather!.secondsSurvived);
+  });
+
   it("throws when a boss species is flagged both isShadow and carries a mega/primal boost", () => {
     const impossibleBoss: SpeciesDefinition = {
       id: "impossible-shadow-mega-boss",
