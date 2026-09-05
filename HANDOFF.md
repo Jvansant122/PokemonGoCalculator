@@ -3,132 +3,108 @@
 Last updated: 2026-09-04, end of session. Read `CLAUDE.md` first for durable project
 architecture/conventions — this file is the point-in-time "what's done, what's next."
 
-## Status: dodge overhaul, fast-move damage tracking, combat-phase toggle removed
+## Status: generalized, rebuilt the combat model, added images, fixed a real data bug
 
-- **All 50 engine tests pass** (`npm run test:engine`), up from 43 at the start of this session.
+Four commits landed and deployed this session, in order: `9af7ef0` (real-data generalization +
+damage-over-time chart), `c4c3d12` (dodge/energy model overhaul), `8607734` (species images),
+`8e607b9` (Mega Skarmory data-bug fix). Working tree is clean — `git status` has nothing pending.
+
+- **All 50 engine tests pass** (`npm run test:engine`), up from 35 at the start of the session.
 - Type-check clean in both packages; `npm run build --workspace=packages/web` succeeds.
-- Verified live in the Browser pane: default scenario, the off-type 10%-boost fix (team damage
-  dropped from 1378→1166 at 0 matching teammates, not to the old ~1060 "no boost" value),
-  `holdChargedMoveUntilSafe`'s energy-buffer display, chart axis labels.
-- Two commits' worth of work happened this session (real-data generalization + damage-over-time
-  chart from earlier in the day, then this dodge/combat-model overhaul) — check `git log`/`git
-  status` for exactly what's pushed vs. still local when picking this up.
+- Every change was verified live in the Browser pane, not just via tests — see specifics below.
 
-## What changed this session (second half — the dodge/combat-model overhaul)
+## What changed, in order
 
-Prompted by a long sequence of user feedback about dodge mechanics, fast-move damage, team-boost
-math, and the combat-phase toggle. In rough order:
+### 1. Real data + damage-over-time chart (`9af7ef0`)
+Generalized the tool beyond its 3 hardcoded fixture species: `scripts/sync-data.ts` now pulls
+1012 real species from pogoapi.net (964 Normal-form + 48 real mega/primal attackers) plus the
+current 12 active raid bosses from a live community feed, into `data/normalized/`. The headline
+chart was redesigned from "team contribution vs party size" to "own damage + attributable team
+damage vs time" (`DamageOverTimeChart.tsx`), and opening-burst/warmup timing became derived from
+a boss's own energy economy (`bossChargedMoveReadySeconds`) instead of user-typed numbers.
 
-1. **Dodge split into charged-only + a separate fast-attack toggle.** `DodgeBehavior`
-   (none/perfect/percentage-missed) now governs the boss's **charged** attacks only.
-   `dodgeFastAttacks: boolean` (no percentage variant) is separate. Real consequence: the
-   opening-burst deterministic model (`combat.ts`) has no boss charged move at all, so `dodge`
-   is now a no-op there — `dodgeFastAttacks` is what extends survival in that phase. Updated
-   `scenarioB.test.ts`/`comparison.test.ts` accordingly (documented, not a regression).
-2. **Dodging costs `DODGE_COST_SECONDS = 0.5`** per attempt (hit or miss), pushing the
-   attacker's own next fast move later. `combat.ts`'s `simulateOpeningBurst` was rewritten from
-   a precomputed-and-sorted event array to a 2-pointer merge (boss schedule stays static, only
-   the attacker's shifts) — verified behavior-preserving for the default (no dodge) path against
-   every existing pinned test before adding anything new.
-3. **`holdChargedMoveUntilSafe`**: hold the charged move (energy capped at `MAX_ENERGY=100`)
-   until either a dodged boss charged hit (safe-window trigger) or the energy cap forces it.
-   Sustained-phase only (opening burst has no boss charged move to dodge). UI shows each
-   candidate's "energy buffer" (100 − move cost) next to the toggle.
-4. **Real bug found and fixed while adding fast-move damage tracking**: the attacker's fast move
-   never dealt any damage to the boss at all in either combat model — only its energy gain was
-   tracked. Added `ownFastMoveDamage`/`totalFastMoveDamage` throughout. **Also found a second,
-   pre-existing bug in the same area**: the charged move's damage was computed using the FAST
-   move's STAB/type-effectiveness, not its own — invisible in every fixture because Scenario A's
-   fast and charged moves are both Electric, but wrong for real species with differing move
-   types (now common after last session's data-layer generalization). Fixed by splitting
-   `damageOut` into `fastDamageOut`/`chargedDamageOut` everywhere. `ownDamageTrajectory` is now
-   the **combined** fast+charged cumulative total, not charged-only.
-5. **Off-type mega-boost bug fixed**: `convertUptimeToTeamDamage` gave off-type teammates a `1x`
-   multiplier (no boost at all). Real mechanic: every teammate gets at least
-   `OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1`, only type-matching teammates get the full
-   `boostMultiplier`. Replaced the single party-wide `teammateTypeMatches: boolean` with
-   `matchingTeammateCount: number` (a slider, 0..partySize) since real teams are rarely
-   all-or-nothing on type.
-6. **Combat-phase toggle removed entirely.** Per explicit, repeated user request: "opening
-   burst" isn't a mode a player picks, it's a computed fact about the boss's own energy economy.
-   The web UI now always runs `runSustainedComparison` (one continuous simulation); the
-   deterministic `runComparison`/`simulateOpeningBurst` path still exists and still backs the
-   pinned Scenario A acceptance numbers via tests, it's just not wired into the live UI anymore.
-7. **Fight-length control, extend-only.** `minFightLengthSeconds` lets the user stretch the
-   chart's window past the auto-computed natural minimum — never below it (preserves the
-   zero-output-bug fix from last session).
-8. **Result cards now show the full breakdown**: mean charged damage, mean fast-move damage,
-   mean own total (combined), median/p10-p90 of the combined total, AND a separate "team damage
-   from this candidate's boost" figure — resolving the "why does median damage show 0" question
-   (answer: it was charged-only, and glass cannons dying mid-cast land 0 charged damage but still
-   deal real fast-move damage, now visible).
-9. **Chart gets real axis tick labels** (both x and y, "nice" round-number intervals) instead of
-   just the two endpoints, plus a final own/team damage tally printed below it.
+### 2. Dodge/energy model overhaul (`c4c3d12`)
+Driven by a long sequence of detailed user feedback (including a literal spreadsheet showing a
+fast/charge/combined-damage/avg-DPS model). In one pass:
 
-## Also this session: species images
+- **`DodgeBehavior` now governs the boss's charged attacks only.** A separate
+  `dodgeFastAttacks: boolean` (no percentage variant) covers fast attacks. Real consequence: the
+  deterministic opening-burst model (`combat.ts`) has no boss charged move at all, so `dodge` is
+  a no-op there — `dodgeFastAttacks` is what extends survival in that phase.
+- **Dodging costs `DODGE_COST_SECONDS = 0.5`** per attempt (hit or miss), pushing the attacker's
+  own next fast move later. `simulateOpeningBurst` was rewritten from a precomputed-and-sorted
+  event array to a 2-pointer merge to support this — verified behavior-preserving for the
+  default (no-dodge) path against every pinned test before adding anything new.
+- **`holdChargedMoveUntilSafe`**: hold the charged move (energy capped at `MAX_ENERGY=100`) until
+  a dodged boss charged hit or the energy cap forces it. UI shows each candidate's energy buffer.
+- **Two real bugs found while adding fast-move damage tracking**: (a) the attacker's fast move
+  never dealt any damage to the boss at all — only its energy gain was modeled; (b) the charged
+  move's damage was computed using the FAST move's STAB/type-effectiveness, not its own —
+  invisible in every fixture because Scenario A's two moves are both Electric, but wrong for real
+  species with differing move types. Fixed by splitting `fastDamageOut`/`chargedDamageOut`
+  everywhere; `ownDamageTrajectory` is now the combined fast+charged total.
+- **Off-type mega-boost bug fixed**: off-type teammates got `1x` (no boost); the real mechanic is
+  a flat `OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1` for everyone, full `boostMultiplier` only for
+  type-matching teammates. `matchingTeammateCount` (a slider) replaced the old all-or-nothing
+  `teammateTypeMatches: boolean`.
+- **Combat-phase toggle removed entirely**, per explicit repeated request: "opening burst" isn't
+  a mode to pick, it's a computed fact. The UI now always runs `runSustainedComparison` (one
+  continuous simulation); the deterministic path still exists and backs the pinned tests, just
+  isn't wired into the live UI.
+- **Extend-only fight-length control** (`minFightLengthSeconds`), explicit charged/fast/total/
+  team damage breakdown in the result cards (resolved a "why does median damage show 0" question
+  — it was charged-only, and glass cannons dying mid-cast land 0 charged damage but still deal
+  real fast-move damage), and real axis tick labels on the chart.
 
-Added `imageUrl?: string` to `SpeciesDefinition` and wired sprites (PokeAPI's GitHub sprites
-mirror) into the header, species pickers, result cards, and chart legend. Real Normal-form
-species use their national dex id directly (free, no extra request); the 48 real mega/primal
-species and the 4 hypothetical fixtures needed a per-species PokeAPI name lookup (cached to
-`data/raw/mega_sprite_urls.json`) since mega forms have their own internal PokeAPI id. Genuinely
-surprising finding: PokeAPI has real sprite data for the hypothetical fixtures too
-(`raichu-mega-x`, `raichu-mega-y`, `skarmory-mega`, `kyogre-primal`) even though those forms
-aren't released content — all 48/48 mega lookups resolved after fixing one id-collision edge
-case (`kyogre-primal` was renamed to `kyogre-primal-attacker` to avoid colliding with the
-existing boss-mode fixture id; the sprite lookup needs the pre-rename name since that's what
-PokeAPI actually knows).
+### 3. Species images (`8607734`)
+Added `imageUrl?: string` to `SpeciesDefinition`, sourced from the PokeAPI sprites mirror on
+GitHub. Real Normal-form species use their national dex id directly (free); the 48 real
+mega/primal species needed one PokeAPI name-lookup each (cached to
+`data/raw/mega_sprite_urls.json`). Genuinely surprising finding: PokeAPI has real sprite data
+even for the hypothetical fixtures (`raichu-mega-x`/`raichu-mega-y`/`skarmory-mega`/
+`kyogre-primal`) despite those forms being unreleased — all 48/48 mega lookups resolved after
+fixing one id-collision edge case (`kyogre-primal-attacker`'s sprite needs the pre-rename name).
+Wired into the species pickers, page header, result cards, and chart legend.
 
-## Also this session: fixed a real data bug (Mega Skarmory dealing absurd damage)
-
-User noticed Mega Skarmory killing candidates implausibly fast and asked why. Root cause:
-`MEGA_SKARMORY.baseAttack` was `2000` in `scenarioA.ts` — an 8x outlier against every other
-boss-mode fixture (`PRIMAL_KYOGRE.baseAttack` is `250`), and since raid bosses in this engine
-treat `baseAttack` as their effective attack stat directly (no CPM/IV scaling, see `raidBoss.ts`),
-`2000` meant Skarmory hit roughly 8x harder than any realistic boss. Almost certainly a
-CP-vs-base-attack-stat mix-up from when this hypothetical fixture was hand-authored. Fixed to
-`250` (matching Kyogre's scale); verified live (Raichu X/Y survival against Skarmory went from
-~6.6s/4.4s to a much more realistic ~37.6s/28.6s in sustained mode). Also re-derived
-`scenarioB.test.ts`'s window length (180s, was a fixed 20s that no longer produced a real death)
-and crossover teammate-DPS value (1, was 5) empirically against the corrected boss stat — both
-tests' *premises* (X survives longer; a crossover exists at low teammate DPS) still hold, just
-at different numbers.
-
-Also audited for other data issues while in there — all clean, nothing else found: no
-duplicate/zero/negative stats across the 1012 synced real species, no duplicate species ids, no
-empty movesets, no charged move with `vulnerableWindowSeconds > durationSeconds`, no synced mega
-species with a `boost.multiplier` other than the intended `1.3`, and the 12 active-raid-to-species
-matches all resolve to the right species by name. The rest of the hand-authored `scenarioA.ts`
-fixture (Raichu X/Y stats, all move powers/costs/durations) checked out fine on manual review —
-Skarmory's `baseAttack` was the one outlier.
+### 4. Mega Skarmory data bug fixed (`8e607b9`)
+User noticed Mega Skarmory dealing implausibly large damage and asked why. Root cause:
+`MEGA_SKARMORY.baseAttack` was `2000` — an 8x outlier against every other boss-mode fixture
+(`PRIMAL_KYOGRE.baseAttack` is `250`), and since raid bosses in this engine treat `baseAttack` as
+their literal effective attack stat (no CPM/IV scaling), `2000` meant ~8x any realistic boss's
+damage. Almost certainly a CP-vs-base-attack-stat mix-up from hand-authoring. Fixed to `250`;
+verified live (Raichu X/Y survival against Skarmory went from ~6.6s/4.4s to ~37.6s/28.6s).
+Re-derived `scenarioB.test.ts`'s window (180s) and crossover teammate-DPS (1) empirically against
+the corrected stat — the tests' actual claims are unchanged, just at different numbers. Audited
+the rest of the hand-authored fixture and the full 1012-species synced dataset for similar
+issues (duplicate/zero/negative stats, duplicate ids, empty movesets, vulnerable-window
+mismatches, off-spec boost multipliers, raid-to-species matching) — nothing else found.
 
 ## Not yet done / candidates for next session
 
 1. Mobile-width visual check still hasn't been done (only desktop verified, this session and last).
-2. Bundle size is ~1.07MB now (species.json + the growing engine surface) — still just a build
+2. Bundle size is ~1.16MB now (species.json + the growing engine surface) — still just a build
    warning, not an error, but worth revisiting if it keeps growing.
-3. The "Teambuilding Analyzer" idea (multi-trainer mega staggering across a raid) from last
-   session is still explicitly out of scope for this tool — unchanged.
-4. Regional/costume forms and real Shadow-form stat multipliers are still not modeled in the
-   data layer (unchanged from last session).
+3. The "Teambuilding Analyzer" idea (multi-trainer mega staggering across a raid, since the mega
+   boost doesn't stack) is explicitly out of scope for this tool — a separate future project.
+4. Regional/costume forms and real Shadow-form stat multipliers are still not modeled in the data
+   layer (only Normal-form + mega/primal are synced; Shadow raids use a documented approximation).
 
 ## Preferences / gotchas for whoever picks this up
 
-- This user gives extremely precise, mechanically-literal feedback (exact formulas, specific
-  numbers from their own spreadsheets) — implement close to literally rather than
-  simplifying/interpreting loosely. See the memory file on this if picking up mid-thread.
-- When a user-visible number looks wrong ("why does X show 0"), check whether the underlying
-  metric's *definition* is narrower than what's displayed (e.g. "damage" meaning "charged-move
-  damage only") before assuming a calculation bug — but also actually verify, since this session
-  also found two real bugs (missing fast-move damage; charged move using the fast move's
-  type-effectiveness) hiding under exactly that kind of "is this intentional" question.
-- Whenever changing `DodgeBehavior`/dodge semantics, re-run the FULL test suite immediately —
-  this session's dodge-charged/fast split broke 4 existing tests in ways that were each
-  individually easy to misdiagnose (some were real consequences of the redesign, one was a
-  genuine test-authoring bug about how `chargedMoveWarmupSeconds` + `chargedMoveMeanIntervalSeconds`
-  combine — read `combat.ts`'s and `simulate.ts`'s comments carefully before hand-deriving
-  expected timings in a new test).
-- Custom agents are back in use (data-sync, site-builder, engine-verifier, meta-architect) per
-  last session — this session's engine work was done directly (not delegated) given how
-  interdependent and correctness-sensitive the changes were; that was a deliberate choice, not a
-  reversal of the "use agents" preference.
+- This user gives extremely precise, mechanically-literal feedback — exact formulas, specific
+  numbers, and once a literal spreadsheet. Implement close to literally rather than
+  simplifying/interpreting loosely; they've usually already thought through the edge cases. See
+  the memory file on this if picking up mid-thread.
+- When a user-visible number looks wrong ("why does X show 0", "why is X so high"), check whether
+  the underlying metric's *definition* is narrower than what's displayed, or whether a hand-typed
+  data value is the actual culprit — but always verify with real numbers before concluding either
+  way. This session found three real bugs exactly this way (missing fast-move damage; charged
+  move using the fast move's type-effectiveness; Mega Skarmory's 8x-outlier attack stat).
+- Whenever changing `DodgeBehavior`/dodge semantics or a hand-authored fixture stat, re-run the
+  FULL test suite immediately and expect some existing tests' *setup* (not their claims) to need
+  re-deriving — this session hit that twice (the dodge charged/fast split, and the Skarmory fix)
+  and each time the fix was to empirically re-derive new window/threshold values, not to weaken
+  the assertions.
+- Custom agents are back in use (data-sync, site-builder, engine-verifier, meta-architect) — this
+  session's engine work was done directly rather than delegated, given how interdependent and
+  correctness-sensitive the changes were; that was a deliberate per-task choice, not a reversal.
