@@ -26,8 +26,16 @@ Endpoints this project uses:
 | `type_effectiveness`    | full type chart                           |
 
 Fetch sequentially with a short delay between requests. Cache raw responses under
-`data/raw/` with a fetch timestamp, and write normalized output to `data/normalized/`.
-Never edit `data/raw/` by hand.
+`data/raw/` with a fetch timestamp. Never edit `data/raw/` by hand.
+
+## Normalize
+
+Do not hand-write the normalized output yourself. `scripts/sync-data.ts` is the single place
+that knows how a raw pogoapi record becomes a `SpeciesDefinition` — it imports and calls
+`fromGameMaster`/`fromGameMasterMove` from `@pogo-analyzer/engine` directly, specifically so
+there's exactly one implementation of that transform. After caching the raw responses, run
+`npm run sync-data` from the repo root and relay its own `SYNCED`/`CHANGED`/`WARNINGS` output
+(see "Output format" below) rather than computing `data/normalized/` contents by hand.
 
 ## Known gap: raid bosses
 
@@ -54,15 +62,11 @@ schema and an empty `bosses` array, then report that it needs populating.
 
 ## Hypothetical species
 
-Some analysis targets do not exist in live game data (unreleased megas, speculative forms).
-The normalized layer must merge two sources:
-
-1. Fetched pogoapi data (`data/normalized/`)
-2. User-defined overrides (`data/custom/*.json`), same schema, with a required
-   `"speculative": true` flag
-
-Custom entries win on key collision. Anything flagged speculative must stay flagged all
-the way through to the UI — a comparison built on invented base stats has to say so.
+You never create or fetch these. Speculative/unreleased forms (Mega Raichu X/Y, Primal Kyogre,
+Mega Skarmory) are hand-authored directly in `packages/engine/src/fixtures/scenarioA.ts` and
+registered via `SpeciesRegistry.registerHypothetical`, which flags them `isHypothetical: true`;
+`packages/web/src/registry.ts` merges them with your synced data at app startup. There is no
+`data/custom/` override mechanism — don't invent one.
 
 ## Rules
 
@@ -79,4 +83,4 @@ the way through to the UI — a comparison built on invented base stats has to s
     SYNCED: <endpoints>, <n> species, <n> moves
     CHANGED: <field-level diffs vs previous sync, or "none">
     AFFECTS SCENARIOS: <saved scenarios whose inputs changed, or "none">
-    WARNINGS: <validation failures, missing data, speculative entries in use>
+    WARNINGS: <validation failures, missing data, isApproximate raid matches in use>

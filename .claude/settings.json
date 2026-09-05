@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "export PATH=\"/c/Program Files/nodejs:$PATH\"; cd \"/c/Users/Jack/Documents/PokemonGoCalculator\" && node -e 'let data=\"\";process.stdin.on(\"data\",c=>data+=c);process.stdin.on(\"end\",()=>{let input;try{input=JSON.parse(data);}catch(e){process.exit(0);}const fp=(input.tool_input&&input.tool_input.file_path)||\"\";const bs=String.fromCharCode(92);const norm=fp.split(bs).join(\"/\");if(!(norm.indexOf(\"packages/engine/src/\")!==-1&&norm.slice(-3)===\".ts\")){process.exit(0);}const cp=require(\"child_process\");try{cp.execSync(\"npm run test:engine\",{encoding:\"utf8\",stdio:\"pipe\"});process.exit(0);}catch(e){const out=(e.stdout||\"\")+(e.stderr||\"\");process.stderr.write(\"packages/engine/src edit broke npm run test:engine (edited: \"+fp+\"):\"+String.fromCharCode(10)+String.fromCharCode(10)+out+String.fromCharCode(10));process.exit(2);}});'",
+            "timeout": 60,
+            "statusMessage": "Running engine test suite after packages/engine/src edit..."
+          }
+        ]
+      }
+    ]
+  }
+}

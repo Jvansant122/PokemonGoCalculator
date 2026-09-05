@@ -1,6 +1,6 @@
 ---
 name: engine-verifier
-description: Runs the combat engine test suite and reports only failures with likely causes. Use proactively after any change to stat, damage, energy, or breakpoint code.
+description: Diagnoses combat-engine test failures with likely root causes. .claude/settings.json's PostToolUse hook already reruns the engine suite automatically after Edit/Write to packages/engine/src and surfaces raw failures inline — use this agent instead for changes applied via Bash (patches, git checkout, merges) that the hook never sees, for edits under packages/engine/test that the hook doesn't watch, or to turn a hook-reported raw vitest failure into an expected/actual/likely-cause diagnosis.
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit
 model: sonnet

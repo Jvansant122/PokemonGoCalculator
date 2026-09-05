@@ -24,6 +24,7 @@ const HEIGHT = 280;
 const PAD = { top: 16, right: 16, bottom: 36, left: 64 };
 const SAMPLE_COUNT = 200;
 const AXIS_TICKS = 5;
+const EPS = 1e-9;
 
 function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
   let value = trajectory[0]!.cumulativeDamage;
@@ -89,6 +90,38 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
 
   const linePath = (values: number[]) => values.map((v, i) => `${i === 0 ? "M" : "L"} ${xScale(times[i]!)} ${yScale(v)}`).join(" ");
 
+  // Splits a series' sampled total-damage line into a solid segment up to its
+  // death point and a dashed segment past it — a candidate that dies before
+  // the chart's own window ends keeps a flat but visibly "no longer active"
+  // tail (the underlying value doesn't change, ownDamageAt/teamContributionAt
+  // already hold it flat; only the stroke changes here). A candidate that
+  // survives the whole displayed window gets no marker and no dashing at all
+  // — this one rule already covers "the window got stretched past this
+  // candidate's death because the other one outlived it" automatically,
+  // since that candidate's own death time is unaffected by the other's.
+  function buildSeriesPath(series: DamageOverTimeSeries, sampledValues: number[]) {
+    const diedAtSeconds = series.secondsSurvivedCutoff < maxSeconds - EPS ? series.secondsSurvivedCutoff : null;
+    if (diedAtSeconds === null) {
+      return { solidPath: linePath(sampledValues), dashedPath: null as string | null, deathPoint: null as { t: number; v: number } | null };
+    }
+    const deathValue = totalAt(series, diedAtSeconds, teammateDps, partySize, matchingTeammateCount);
+    const toPath = (points: { t: number; v: number }[]) =>
+      points.map((p, i) => `${i === 0 ? "M" : "L"} ${xScale(p.t)} ${yScale(p.v)}`).join(" ");
+    const solidPoints = times
+      .map((t, i) => ({ t, v: sampledValues[i]! }))
+      .filter((p) => p.t <= diedAtSeconds);
+    solidPoints.push({ t: diedAtSeconds, v: deathValue });
+    const dashedPoints = [{ t: diedAtSeconds, v: deathValue }, ...times.map((t, i) => ({ t, v: sampledValues[i]! })).filter((p) => p.t > diedAtSeconds)];
+    return {
+      solidPath: toPath(solidPoints),
+      dashedPath: dashedPoints.length > 1 ? toPath(dashedPoints) : null,
+      deathPoint: { t: diedAtSeconds, v: deathValue },
+    };
+  }
+
+  const xPath = buildSeriesPath(x, totals.map((v) => v.x));
+  const yPath = buildSeriesPath(y, totals.map((v) => v.y));
+
   // Tick values at "nice" round-number intervals, not just the two endpoints
   // — lets a reader interpolate an approximate damage value at a specific
   // time without guessing between only 0 and the max.
@@ -138,8 +171,27 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
         {yTicks.map((v) => (
           <line key={`gy${v}`} x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(v)} y2={yScale(v)} stroke="var(--border)" strokeWidth={1} />
         ))}
-        <path d={linePath(totals.map((v) => v.x))} fill="none" stroke="var(--accent-x)" strokeWidth={2.5} />
-        <path d={linePath(totals.map((v) => v.y))} fill="none" stroke="var(--accent-y)" strokeWidth={2.5} />
+        <path d={xPath.solidPath} fill="none" stroke="var(--accent-x)" strokeWidth={2.5} />
+        {xPath.dashedPath && <path d={xPath.dashedPath} fill="none" stroke="var(--accent-x)" strokeWidth={2.5} strokeDasharray="6 4" />}
+        <path d={yPath.solidPath} fill="none" stroke="var(--accent-y)" strokeWidth={2.5} />
+        {yPath.dashedPath && <path d={yPath.dashedPath} fill="none" stroke="var(--accent-y)" strokeWidth={2.5} strokeDasharray="6 4" />}
+
+        {xPath.deathPoint && (
+          <g>
+            <circle cx={xScale(xPath.deathPoint.t)} cy={yScale(xPath.deathPoint.v)} r={5} fill="var(--bg)" stroke="var(--accent-x)" strokeWidth={2} />
+            <text x={xScale(xPath.deathPoint.t) + 8} y={yScale(xPath.deathPoint.v) - 8} fontSize={10} fill="var(--accent-x)">
+              {x.name} died ~{xPath.deathPoint.t.toFixed(1)}s
+            </text>
+          </g>
+        )}
+        {yPath.deathPoint && (
+          <g>
+            <circle cx={xScale(yPath.deathPoint.t)} cy={yScale(yPath.deathPoint.v)} r={5} fill="var(--bg)" stroke="var(--accent-y)" strokeWidth={2} />
+            <text x={xScale(yPath.deathPoint.t) + 8} y={yScale(yPath.deathPoint.v) + 14} fontSize={10} fill="var(--accent-y)">
+              {y.name} died ~{yPath.deathPoint.t.toFixed(1)}s
+            </text>
+          </g>
+        )}
 
         {crossing && (
           <>

@@ -256,4 +256,60 @@ describe("simulateStepwiseBattle", () => {
       expect(landedAt?.atSeconds).toBe(5);
     });
   });
+
+  describe("ChargedMove.perfectlyDodgeable", () => {
+    it("forces full (undodged) damage regardless of DodgeBehavior when the boss's charged move is flagged not perfectly dodgeable", () => {
+      // Both the attacker's own fast/charged moves are set up to never fire
+      // within the 3s window (long duration / effectively unreachable energy
+      // cost), so the only thing landing is boss charged hits — isolating
+      // exactly what dodgeMultiplierForHit's new third argument changes, with
+      // no other noise in totalDamageTaken. The two runs share the same seed
+      // and identical boss schedule (only `perfectlyDodgeable` differs), so
+      // they land the exact same number of hits N — full damage (6/hit) vs.
+      // perfectly-dodged (1/hit) means undodgeable's total must be exactly
+      // 6x dodgeable's, whatever N turns out to be.
+      const attacker = {
+        hp: 100000,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 100, durationSeconds: 10 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 1, vulnerableWindowSeconds: 1 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const bossChargedMove = {
+        id: "boss-charged",
+        name: "Boss Charged",
+        type: "normal" as const,
+        power: 10,
+        energyCost: 1,
+        durationSeconds: 100,
+        vulnerableWindowSeconds: 100,
+      };
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 100 },
+        damageOut: { stab: false },
+        chargedMove: bossChargedMove,
+        chargedMoveDamageOut: { stab: false },
+        chargedMoveMeanIntervalSeconds: 0.5,
+        chargedMoveWarmupSeconds: 1,
+      };
+
+      // Full damage: floor(0.5*10*(100/100))+1 = 6. Perfect dodge quarters it: floor(6*0.25) = 1.
+      const dodgeable = simulateStepwiseBattle({ attacker, boss, dodge: { kind: "perfect" }, maxSeconds: 3, seed: 1 });
+      const undodgeable = simulateStepwiseBattle({
+        attacker,
+        boss: { ...boss, chargedMove: { ...bossChargedMove, perfectlyDodgeable: false } },
+        dodge: { kind: "perfect" },
+        maxSeconds: 3,
+        seed: 1,
+      });
+
+      expect(dodgeable.bossChargedHitsTaken).toBeGreaterThan(0);
+      expect(undodgeable.bossChargedHitsTaken).toBe(dodgeable.bossChargedHitsTaken);
+      expect(undodgeable.totalDamageTaken).toBe(dodgeable.totalDamageTaken * 6);
+    });
+  });
 });

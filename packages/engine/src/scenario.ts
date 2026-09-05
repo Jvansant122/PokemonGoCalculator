@@ -16,7 +16,15 @@ import type { IVSpread } from "./types.js";
  */
 export interface Scenario {
   candidates: string[];
+  /** Per-candidate fast-move selection, matched by index to `candidates`. null means "use that species' first fast move" (today's implicit default). */
+  candidateFastMoveIds: [string | null, string | null];
+  /** Per-candidate charged-move selection — see candidateFastMoveIds. */
+  candidateChargedMoveIds: [string | null, string | null];
   target: string;
+  /** Boss fast-move selection. null means "use the boss's first fast move" (today's implicit default). */
+  bossFastMoveId: string | null;
+  /** Boss charged-move selection. null means "use the boss's first charged move" (today's implicit default). */
+  bossChargedMoveId: string | null;
   level: number;
   ivs: IVSpread;
   /** Governs dodging the boss's CHARGED attacks only. */

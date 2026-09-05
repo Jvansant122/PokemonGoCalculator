@@ -1,10 +1,18 @@
-import type { DodgeBehavior } from "@pogo-analyzer/engine";
+import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
+import { MoveSelect } from "./MoveSelect.js";
 
 export interface Assumptions {
   candidateAId: string;
   candidateBId: string;
   targetId: string;
+  /** null = use that candidate's/the boss's first fast/charged move (today's implicit default) — see the add-scenario-assumption skill for why these mirror Scenario's fields exactly. */
+  candidateAFastMoveId: string | null;
+  candidateAChargedMoveId: string | null;
+  candidateBFastMoveId: string | null;
+  candidateBChargedMoveId: string | null;
+  bossFastMoveId: string | null;
+  bossChargedMoveId: string | null;
   level: number;
   ivAttack: number;
   ivDefense: number;
@@ -34,6 +42,9 @@ interface Props {
   candidateOptions: SpeciesPickerOption[];
   targetOptions: SpeciesPickerOption[];
   unmatchedRaids: { raidName: string; tier: string }[];
+  /** Resolved species for the two candidates/boss, so this panel can read their movepools for the MoveSelect controls below — null while a selection doesn't resolve (e.g. a stale scenario id). */
+  candidateSpecies: [SpeciesDefinition | null, SpeciesDefinition | null];
+  bossSpecies: SpeciesDefinition | null;
   /**
    * Physically-derived "boss ready for its first charged move" time for the
    * currently-selected target (see bossChargedMoveReadySeconds), or null if
@@ -63,6 +74,8 @@ export function AssumptionPanel({
   candidateOptions,
   targetOptions,
   unmatchedRaids,
+  candidateSpecies,
+  bossSpecies,
   bossReadySeconds,
   energyBuffers,
   naturalFightLengthSeconds,
@@ -71,36 +84,112 @@ export function AssumptionPanel({
     onChange({ ...value, [key]: next });
   }
 
+  const selectedBossChargedMove = bossSpecies
+    ? (bossSpecies.chargedMoves.find((m) => m.id === value.bossChargedMoveId) ?? bossSpecies.chargedMoves[0])
+    : undefined;
+  const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
+
   return (
     <section className="panel">
       <h2>Assumptions</h2>
       <div className="assumption-grid">
-        <SpeciesPicker
-          idPrefix="candidate-a"
-          label="Candidate A"
-          options={candidateOptions}
-          value={value.candidateAId}
-          onChange={(id) => set("candidateAId", id)}
-        />
-        <SpeciesPicker
-          idPrefix="candidate-b"
-          label="Candidate B"
-          options={candidateOptions}
-          value={value.candidateBId}
-          onChange={(id) => set("candidateBId", id)}
-        />
+        <div>
+          <SpeciesPicker
+            idPrefix="candidate-a"
+            label="Candidate A"
+            options={candidateOptions}
+            value={value.candidateAId}
+            onChange={(id) =>
+              // A previously-picked move id almost certainly doesn't exist on
+              // the new species, so reset both back to "use first move" in
+              // the same update rather than leaving a stale/invalid id.
+              onChange({ ...value, candidateAId: id, candidateAFastMoveId: null, candidateAChargedMoveId: null })
+            }
+          />
+          {candidateSpecies[0] && (
+            <>
+              <MoveSelect
+                idPrefix="candidate-a-fast"
+                label="Candidate A fast move"
+                moves={candidateSpecies[0].fastMoves}
+                kind="fast"
+                value={value.candidateAFastMoveId}
+                onChange={(id) => set("candidateAFastMoveId", id)}
+              />
+              <MoveSelect
+                idPrefix="candidate-a-charged"
+                label="Candidate A charged move"
+                moves={candidateSpecies[0].chargedMoves}
+                kind="charged"
+                value={value.candidateAChargedMoveId}
+                onChange={(id) => set("candidateAChargedMoveId", id)}
+              />
+            </>
+          )}
+        </div>
+        <div>
+          <SpeciesPicker
+            idPrefix="candidate-b"
+            label="Candidate B"
+            options={candidateOptions}
+            value={value.candidateBId}
+            onChange={(id) =>
+              onChange({ ...value, candidateBId: id, candidateBFastMoveId: null, candidateBChargedMoveId: null })
+            }
+          />
+          {candidateSpecies[1] && (
+            <>
+              <MoveSelect
+                idPrefix="candidate-b-fast"
+                label="Candidate B fast move"
+                moves={candidateSpecies[1].fastMoves}
+                kind="fast"
+                value={value.candidateBFastMoveId}
+                onChange={(id) => set("candidateBFastMoveId", id)}
+              />
+              <MoveSelect
+                idPrefix="candidate-b-charged"
+                label="Candidate B charged move"
+                moves={candidateSpecies[1].chargedMoves}
+                kind="charged"
+                value={value.candidateBChargedMoveId}
+                onChange={(id) => set("candidateBChargedMoveId", id)}
+              />
+            </>
+          )}
+        </div>
         <div>
           <SpeciesPicker
             idPrefix="target"
             label="Raid target"
             options={targetOptions}
             value={value.targetId}
-            onChange={(id) => set("targetId", id)}
+            onChange={(id) => onChange({ ...value, targetId: id, bossFastMoveId: null, bossChargedMoveId: null })}
           />
           {unmatchedRaids.length > 0 && (
             <p className="species-picker-hint" title="These raids are currently active but have no usable stat data yet.">
               Also active, no data yet: {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
             </p>
+          )}
+          {bossSpecies && (
+            <>
+              <MoveSelect
+                idPrefix="boss-fast"
+                label="Boss fast move"
+                moves={bossSpecies.fastMoves}
+                kind="fast"
+                value={value.bossFastMoveId}
+                onChange={(id) => set("bossFastMoveId", id)}
+              />
+              <MoveSelect
+                idPrefix="boss-charged"
+                label="Boss charged move"
+                moves={bossSpecies.chargedMoves}
+                kind="charged"
+                value={value.bossChargedMoveId}
+                onChange={(id) => set("bossChargedMoveId", id)}
+              />
+            </>
           )}
         </div>
 
@@ -261,10 +350,19 @@ export function AssumptionPanel({
             <option value="no">No — fire as soon as ready</option>
             <option value="yes">Yes — wait for a safe window</option>
           </select>
-          {value.holdChargedMoveUntilSafe && energyBuffers.length > 0 && (
+          {value.holdChargedMoveUntilSafe && (
             <p className="species-picker-hint">
-              Energy buffer (100 minus the move's cost — how much can be banked before more is wasted):{" "}
-              {energyBuffers.map((b) => `${b.name} ${b.buffer}`).join(", ")}
+              {value.dodge.kind !== "perfect"
+                ? `This is meant to be used with "Dodge boss's charged attacks" set to Perfect — with dodging set to "${value.dodge.kind}", the safe-window trigger will rarely or never fire, so this degrades to just waiting for the energy cap.`
+                : bossChargedMoveIsUndodgeable
+                  ? "The boss's selected charged move is flagged as not reliably perfectly-dodgeable, so the safe-window trigger won't fire against it — this degrades to just waiting for the energy cap."
+                  : "Safe-window trigger active: will fire right after a dodged boss charged hit, or when energy caps, whichever comes first."}
+              {energyBuffers.length > 0 && (
+                <>
+                  {" "}Energy buffer (100 minus the move's cost — how much can be banked before more is wasted):{" "}
+                  {energyBuffers.map((b) => `${b.name} ${b.buffer}`).join(", ")}
+                </>
+              )}
             </p>
           )}
         </div>

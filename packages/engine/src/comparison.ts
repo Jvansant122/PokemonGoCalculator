@@ -6,9 +6,28 @@ import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "./raidBoss.js";
 import { DEFAULT_STEPWISE_MAX_SECONDS, runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
 import type { IVSpread, SpeciesDefinition } from "./types.js";
 
+/**
+ * Resolves a move selection by id against a species' available moves, falling
+ * back to the first move when the id is omitted, null, or doesn't match —
+ * i.e. today's implicit "always use moves[0]" behavior. Shared by both
+ * runComparison and runSustainedComparison so a candidate/boss move choice
+ * means the same thing in either path.
+ */
+function resolveMove<T extends { id: string }>(moves: T[], id: string | null | undefined): T | undefined {
+  return (id ? moves.find((m) => m.id === id) : undefined) ?? moves[0];
+}
+
 export interface ComparisonInputs {
   candidates: SpeciesDefinition[];
+  /** Per-candidate fast-move selection, matched by index to `candidates`. Omit or use null for a given index to default to that species' first fast move (today's behavior). */
+  candidateFastMoveIds?: (string | null)[];
+  /** Per-candidate charged-move selection — see candidateFastMoveIds. */
+  candidateChargedMoveIds?: (string | null)[];
   boss: SpeciesDefinition;
+  /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
+  bossFastMoveId?: string | null;
+  /** Boss charged-move selection. Omit/null defaults to the boss's first charged move (today's behavior). */
+  bossChargedMoveId?: string | null;
   level: number;
   ivs: IVSpread;
   /** Governs dodging the boss's CHARGED attacks only — inert during the opening burst, since the boss never throws one there. */
@@ -60,17 +79,17 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
   const { candidates, boss, level, ivs, dodge, dodgeFastAttacks = false, bossStartingEnergy = 0 } = inputs;
   const bossAttackStat = Math.floor((boss.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
   const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
-  const bossFastMove = boss.fastMoves[0];
+  const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
-  const bossChargedMove = boss.chargedMoves[0];
+  const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
   const openingBurstSeconds =
     inputs.openingBurstSeconds ??
     (bossChargedMove ? bossChargedMoveReadySeconds(bossFastMove, bossChargedMove, bossStartingEnergy) : 20);
 
-  return candidates.map((species) => {
+  return candidates.map((species, i) => {
     const stats = effectiveStatsAtLevel(species, ivs, level);
-    const fastMove = species.fastMoves[0];
-    const chargedMove = species.chargedMoves[0];
+    const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
+    const chargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
     if (!fastMove || !chargedMove) {
       throw new Error(`Candidate ${species.id} needs at least one fast move and one charged move.`);
     }
@@ -132,7 +151,15 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
 
 export interface SustainedComparisonInputs {
   candidates: SpeciesDefinition[];
+  /** Per-candidate fast-move selection, matched by index to `candidates`. Omit or use null for a given index to default to that species' first fast move (today's behavior). */
+  candidateFastMoveIds?: (string | null)[];
+  /** Per-candidate charged-move selection — see candidateFastMoveIds. */
+  candidateChargedMoveIds?: (string | null)[];
   boss: SpeciesDefinition;
+  /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
+  bossFastMoveId?: string | null;
+  /** Boss charged-move selection. Omit/null defaults to the boss's first charged move (today's behavior) — also determines which move's `perfectlyDodgeable` flag applies. */
+  bossChargedMoveId?: string | null;
   level: number;
   ivs: IVSpread;
   /** Governs dodging the boss's CHARGED attacks only. */
@@ -187,14 +214,14 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
   } = inputs;
   const bossAttackStat = Math.floor((boss.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
   const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
-  const bossFastMove = boss.fastMoves[0];
-  const bossChargedMove = boss.chargedMoves[0];
+  const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
+  const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
 
-  return candidates.map((species) => {
+  return candidates.map((species, i) => {
     const stats = effectiveStatsAtLevel(species, ivs, level);
-    const fastMove = species.fastMoves[0];
-    const chargedMove = species.chargedMoves[0];
+    const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
+    const chargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
     if (!fastMove || !chargedMove) {
       throw new Error(`Candidate ${species.id} needs at least one fast move and one charged move.`);
     }

@@ -96,12 +96,19 @@ existing credentials.
   *attempt* (hit or miss, either kind) costs this much of the attacker's own attack cycle,
   pushing its next fast move later — dodging is not free, and dodging fast attacks especially
   is usually not worth the DPS loss. No attempt (and no cost) happens while mid-own-animation.
+  `dodgeMultiplierForHit` also takes an optional `moveIsDodgeable` (default `true`) — forced to
+  `1` regardless of `DodgeBehavior.kind` when `false`, sourced from the boss's selected charged
+  move's `ChargedMove.perfectlyDodgeable`. That field is undefined/`true` on every real synced
+  move (pogoapi.net has no frame-level "damage window" timing at all, so there's no data basis to
+  mark any of them `false`) — only ever hand-set `false` on a specific fixture once actually
+  identified as undodgeable, same as `vulnerableWindowSeconds`. `holdChargedMoveUntilSafe`'s
+  safe-window trigger already degrades gracefully to "wait for the energy cap" when the currently
+  selected dodge/move combination can't produce a dodged charged hit — no separate logic needed.
 - **Uptime/crossover** (`uptime.ts`, Phase 3): `convertUptimeToTeamDamage` (default mega boost
   `1.3` — **load-bearing**, at `1.1` a real conclusion in this project has flipped) and
   `findCrossoverPartySize`. The mega/primal boost is **not all-or-nothing by type**: every
   teammate gets at least `OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1` regardless of type match; only
-  teammates matching the boosted type get the full `boostMultiplier`. An earlier version gave
-  off-type teammates `1` (no boost at all) — a real bug, fixed. `matchingTeammateCount` (an
+  teammates matching the boosted type get the full `boostMultiplier`. `matchingTeammateCount` (an
   absolute count, 0..`teammateCount`) replaced a single party-wide `typeMatches: boolean`, since
   real teams are rarely all-or-nothing on type. `findCrossoverPartySize` takes a *fraction*
   instead (it sweeps party size, where an absolute count doesn't scale sensibly).
@@ -118,7 +125,13 @@ existing credentials.
   from the fast move's type for both, invisible in every fixture because Scenario A's fast and
   charged moves happen to both be Electric, but wrong for any species whose two moves differ in
   type (very common on real species). Single code path shared by tests and the web UI so "what
-  the tool concludes" can't drift between the two.
+  the tool concludes" can't drift between the two. Both entry points also take optional
+  per-candidate `candidateFastMoveIds`/`candidateChargedMoveIds` (matched by index to
+  `candidates`) and `bossFastMoveId`/`bossChargedMoveId`, resolved via a shared `resolveMove`
+  helper that falls back to `moves[0]` when a selection is omitted/`null`/unmatched — i.e. every
+  species' full learnable movepool (`SpeciesDefinition.fastMoves`/`.chargedMoves`, already synced
+  from `current_pokemon_moves.json`) was always present, just never exposed as a choice until the
+  web UI's `MoveSelect` pickers were added.
 - **Stepwise simulator** (`simulate.ts`, Phase 5): 100ms-tick simulator. Boss charged-move timing
   is randomized (`chargedMoveMeanIntervalSeconds` ± 40% jitter via a seeded mulberry32 PRNG, so
   runs are reproducible per-seed) — `runStepwiseDistribution` runs many seeds and reports a
@@ -160,18 +173,17 @@ existing credentials.
   species.json` (1000+ real species, including 48 real mega/primal attackers from
   `mega_pokemon.json` — **every one of those must have `boost` set explicitly**, since
   `comparison.ts` only applies the mega multiplier when `species.boost` is present; the fallback
-  is 1, not `DEFAULT_MEGA_BOOST_MULTIPLIER` — this bit the first sync pass and was fixed in
-  `scripts/sync-data.ts`, not silently worked around). `packages/web/src/registry.ts` merges
+  is 1, not `DEFAULT_MEGA_BOOST_MULTIPLIER`). `packages/web/src/registry.ts` merges
   this with the hand-defined hypothetical fixtures at app startup.
-- **Scenarios** (`scenario.ts`): the full input set (`candidates`, `target`, `level`, `ivs`,
+- **Scenarios** (`scenario.ts`): the full input set (`candidates`, `candidateFastMoveIds`,
+  `candidateChargedMoveIds`, `target`, `bossFastMoveId`, `bossChargedMoveId`, `level`, `ivs`,
   `dodgeModel`, `dodgeFastAttacks`, `holdChargedMoveUntilSafe`, `minFightLengthSeconds`,
   `partySize`, `teammateDps`, `matchingTeammateCount`, `bossChargedMoveFrequencySeconds`,
   `bossStartsPrimed`, `bossStartingEnergyFraction`) serializes to a base64url string in the URL.
   No `phase` field — see the combat-phase note at the top of this file. If you add a new
   user-facing assumption to the web UI, **you must add it to the `Scenario` interface too** — a
-  missing field silently reverts to a default on a shared link instead of erroring (this exact
-  bug happened more than once: `teammateTypeMatches`'s successor `matchingTeammateCount`, and
-  `bossChargedMoveFrequencySeconds`).
+  missing field silently reverts to a default on a shared link instead of erroring — this exact
+  bug has recurred more than once already as fields got added or renamed.
 
 ## Fixtures (`fixtures/scenarioA.ts`)
 
@@ -193,15 +205,14 @@ driven survivability edge against Flying attackers (Mega Skarmory, Scenario B), 
 produces an actual crossover in the damage-over-time chart at some assumption combinations (not
 all — the sensitivity panel reports "no flip" when the current inputs are far from one).
 
-`MEGA_SKARMORY.baseAttack` was `2000` until a user caught it from oddly-fast Scenario B deaths —
-an 8x outlier against Primal Kyogre's `250` (raid bosses use `baseAttack` as their effective
-attack stat directly, see raidBoss.ts, so this wasn't "a base stat that gets scaled down," it
-was literally an effective attack ~8x any real boss). Fixed to `250`, matching Kyogre's scale.
-`scenarioB.test.ts`'s window/teammate-DPS values were re-derived empirically after the fix
-(neither candidate died within the old fixed 20s test window anymore against a realistic boss).
-**When hand-authoring or reviewing a hypothetical boss fixture, sanity-check its `baseAttack`
-against `PRIMAL_KYOGRE`'s `250`** — nothing else in this project's boss-mode fixtures should be
-an order of magnitude off from that.
+Raid bosses use `baseAttack` as their literal effective attack stat (no CPM/IV scaling, see
+`raidBoss.ts`) — a hand-authored value here isn't "a base stat that gets scaled down," it's the
+number the boss actually hits with. **When hand-authoring or reviewing a hypothetical boss
+fixture, sanity-check its `baseAttack` against `PRIMAL_KYOGRE`'s `250`** — nothing else in this
+project's boss-mode fixtures should be an order of magnitude off from that (see HANDOFF.md / git
+history for the incident that made this a rule). Unlike Scenario A, `scenarioB.test.ts`'s
+window/teammate-DPS thresholds aren't spec-pinned — they're derived empirically against the
+current fixture stats, so expect to re-derive them again if a boss-mode fixture stat changes.
 
 These 4 species are no longer the *only* candidates/targets — see "Data layer" below. They stay
 as-is and remain the default scenario on first load; the web UI's species pickers draw from a
@@ -229,9 +240,21 @@ with the hand-defined hypothetical fixtures; `packages/engine` itself stays pure
 `meta-architect`, `site-builder`) the user added mid-project. **The user has re-enabled using
 them** (reversing an earlier "don't use them" from a prior session) — route matching work
 through them when it fits their charter (e.g. `data-sync` for anything touching `data/` or
-`scripts/sync-data.ts`, `site-builder` for `packages/web` UI work, `engine-verifier` to check
-`packages/engine` after a change). They require a session restart/resume to pick up newly-added
-or edited `.md` files (agent definitions load once at session start, not live).
+`scripts/sync-data.ts`, `site-builder` for `packages/web` UI work, `engine-verifier` for a
+human-readable diagnosis of a test failure, whether hook-reported or from a Bash-applied change).
+They require a session restart/resume to pick up newly-added or edited `.md` files (agent
+definitions load once at session start, not live).
+
+## Skills and hooks
+
+`.claude/skills/` has two project-specific skills: `verify-and-ship` (the test → typecheck →
+build → commit → push → watch-deploy sequence run after every commit) and
+`add-scenario-assumption` (the checklist for wiring a new UI setting through `Scenario`/
+`Assumptions`/`App.tsx`/tests without missing one — see the "Scenarios" section above for why
+that's a repeat offender). `.claude/settings.json` has one hook: a `PostToolUse` on `Edit|Write`
+that reruns `npm run test:engine` automatically whenever the edited file is under
+`packages/engine/src/**/*.ts`, surfacing a failure straight into the conversation instead of
+relying on remembering to run it.
 
 ## For session continuity
 

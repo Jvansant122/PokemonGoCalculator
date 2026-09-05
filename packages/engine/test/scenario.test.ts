@@ -3,7 +3,11 @@ import { buildScenarioUrl, decodeScenario, encodeScenario, parseScenarioFromUrl,
 
 const sampleScenario: Scenario = {
   candidates: ["raichu-mega-x", "raichu-mega-y"],
+  candidateFastMoveIds: [null, null],
+  candidateChargedMoveIds: [null, null],
   target: "kyogre-primal",
+  bossFastMoveId: null,
+  bossChargedMoveId: null,
   level: 35,
   ivs: { attack: 15, defense: 15, stamina: 15 },
   dodgeModel: { kind: "none" },
@@ -71,5 +75,23 @@ describe("scenario serialization", () => {
     expect(decoded.dodgeFastAttacks).toBe(true);
     expect(decoded.holdChargedMoveUntilSafe).toBe(true);
     expect(decoded.minFightLengthSeconds).toBe(45);
+  });
+
+  it("round-trips non-default candidate/boss move selections rather than reverting to each species' first move", () => {
+    // Regression guard, same shape as the others above: a moveset choice is
+    // exactly the kind of field that's silently reverted on a shared link if
+    // it's ever missing from Scenario.
+    const customMoves: Scenario = {
+      ...sampleScenario,
+      candidateFastMoveIds: ["thunder-shock", null],
+      candidateChargedMoveIds: [null, "wild-charge"],
+      bossFastMoveId: "waterfall",
+      bossChargedMoveId: "hydro-pump",
+    };
+    const decoded = decodeScenario(encodeScenario(customMoves));
+    expect(decoded.candidateFastMoveIds).toEqual(["thunder-shock", null]);
+    expect(decoded.candidateChargedMoveIds).toEqual([null, "wild-charge"]);
+    expect(decoded.bossFastMoveId).toBe("waterfall");
+    expect(decoded.bossChargedMoveId).toBe("hydro-pump");
   });
 });

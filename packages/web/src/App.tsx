@@ -25,6 +25,12 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
   candidateAId: DEFAULT_CANDIDATE_A_ID,
   candidateBId: DEFAULT_CANDIDATE_B_ID,
   targetId: DEFAULT_TARGET_ID,
+  candidateAFastMoveId: null,
+  candidateAChargedMoveId: null,
+  candidateBFastMoveId: null,
+  candidateBChargedMoveId: null,
+  bossFastMoveId: null,
+  bossChargedMoveId: null,
   level: 35,
   ivAttack: 15,
   ivDefense: 15,
@@ -44,7 +50,11 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
 function assumptionsToScenario(a: Assumptions): Scenario {
   return {
     candidates: [a.candidateAId, a.candidateBId],
+    candidateFastMoveIds: [a.candidateAFastMoveId, a.candidateBFastMoveId],
+    candidateChargedMoveIds: [a.candidateAChargedMoveId, a.candidateBChargedMoveId],
     target: a.targetId,
+    bossFastMoveId: a.bossFastMoveId,
+    bossChargedMoveId: a.bossChargedMoveId,
     level: a.level,
     ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
     dodgeModel: a.dodge,
@@ -65,6 +75,14 @@ function scenarioToAssumptions(s: Scenario): Assumptions {
     candidateAId: s.candidates[0] ?? DEFAULT_CANDIDATE_A_ID,
     candidateBId: s.candidates[1] ?? DEFAULT_CANDIDATE_B_ID,
     targetId: s.target,
+    // `??` guards a scenario URL encoded before these fields existed rather
+    // than surfacing `undefined` into a controlled input (see the block below).
+    candidateAFastMoveId: s.candidateFastMoveIds?.[0] ?? DEFAULT_ASSUMPTIONS.candidateAFastMoveId,
+    candidateAChargedMoveId: s.candidateChargedMoveIds?.[0] ?? DEFAULT_ASSUMPTIONS.candidateAChargedMoveId,
+    candidateBFastMoveId: s.candidateFastMoveIds?.[1] ?? DEFAULT_ASSUMPTIONS.candidateBFastMoveId,
+    candidateBChargedMoveId: s.candidateChargedMoveIds?.[1] ?? DEFAULT_ASSUMPTIONS.candidateBChargedMoveId,
+    bossFastMoveId: s.bossFastMoveId ?? DEFAULT_ASSUMPTIONS.bossFastMoveId,
+    bossChargedMoveId: s.bossChargedMoveId ?? DEFAULT_ASSUMPTIONS.bossChargedMoveId,
     level: s.level,
     ivAttack: s.ivs.attack,
     ivDefense: s.ivs.defense,
@@ -127,24 +145,36 @@ export function App() {
   // "starts primed" toggle is on) — feeds the comparison call below, and the
   // displayed "boss ready at ~Xs" line, from the single source of truth
   // (bossChargedMoveReadySeconds) rather than multiple places reimplementing it.
+  // The selected boss/candidate charged moves, resolved the same way the
+  // engine's resolveMove does (id match, else the species' first move) — used
+  // by the three derived values below so they agree with what actually feeds
+  // runSustainedComparison, not always index 0.
+  const selectedBossChargedMove = useMemo(() => {
+    if (!species.boss) return undefined;
+    return species.boss.chargedMoves.find((m) => m.id === assumptions.bossChargedMoveId) ?? species.boss.chargedMoves[0];
+  }, [species.boss, assumptions.bossChargedMoveId]);
+
   const bossStartingEnergy = useMemo(() => {
     if (!assumptions.bossStartsPrimed || !species.boss) return 0;
-    const cost = species.boss.chargedMoves[0]?.energyCost ?? 0;
+    const cost = selectedBossChargedMove?.energyCost ?? 0;
     return assumptions.bossStartingEnergyFraction * cost;
-  }, [assumptions.bossStartsPrimed, assumptions.bossStartingEnergyFraction, species.boss]);
+  }, [assumptions.bossStartsPrimed, assumptions.bossStartingEnergyFraction, species.boss, selectedBossChargedMove]);
 
   const bossReadySeconds = useMemo(() => {
     if (!species.boss) return null;
-    const fastMove = species.boss.fastMoves[0];
-    const chargedMove = species.boss.chargedMoves[0];
-    if (!fastMove || !chargedMove) return null;
-    return bossChargedMoveReadySeconds(fastMove, chargedMove, bossStartingEnergy);
-  }, [species.boss, bossStartingEnergy]);
+    const fastMove = species.boss.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? species.boss.fastMoves[0];
+    if (!fastMove || !selectedBossChargedMove) return null;
+    return bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, bossStartingEnergy);
+  }, [species.boss, assumptions.bossFastMoveId, selectedBossChargedMove, bossStartingEnergy]);
 
   const energyBuffers = useMemo(() => {
     if (!species.candidates) return [];
-    return species.candidates.map((c) => ({ name: c.name, buffer: MAX_ENERGY - (c.chargedMoves[0]?.energyCost ?? MAX_ENERGY) }));
-  }, [species.candidates]);
+    const chargedMoveIds = [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId];
+    return species.candidates.map((c, i) => {
+      const chargedMove = c.chargedMoves.find((m) => m.id === chargedMoveIds[i]) ?? c.chargedMoves[0];
+      return { name: c.name, buffer: MAX_ENERGY - (chargedMove?.energyCost ?? MAX_ENERGY) };
+    });
+  }, [species.candidates, assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId]);
 
   // There is no user-selectable "combat phase" — the fight is one continuous
   // simulation (runSustainedComparison), which already naturally starts with
@@ -156,7 +186,11 @@ export function App() {
       return {
         candidates: runSustainedComparison({
           candidates: species.candidates,
+          candidateFastMoveIds: [assumptions.candidateAFastMoveId, assumptions.candidateBFastMoveId],
+          candidateChargedMoveIds: [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId],
           boss: species.boss,
+          bossFastMoveId: assumptions.bossFastMoveId,
+          bossChargedMoveId: assumptions.bossChargedMoveId,
           level: assumptions.level,
           ivs,
           dodge: assumptions.dodge,
@@ -173,6 +207,12 @@ export function App() {
   }, [
     species.candidates,
     species.boss,
+    assumptions.candidateAFastMoveId,
+    assumptions.candidateAChargedMoveId,
+    assumptions.candidateBFastMoveId,
+    assumptions.candidateBChargedMoveId,
+    assumptions.bossFastMoveId,
+    assumptions.bossChargedMoveId,
     assumptions.level,
     ivs,
     assumptions.dodge,
@@ -249,6 +289,8 @@ export function App() {
         candidateOptions={candidateOptions}
         targetOptions={targetOptions}
         unmatchedRaids={unmatchedRaids}
+        candidateSpecies={species.candidates ?? [null, null]}
+        bossSpecies={species.boss}
         bossReadySeconds={bossReadySeconds}
         energyBuffers={energyBuffers}
         naturalFightLengthSeconds={naturalFightLengthSeconds}
@@ -282,6 +324,8 @@ export function App() {
                   matchingTeammateCount: assumptions.matchingTeammateCount,
                   teammateDps: assumptions.teammateDps,
                 });
+                const ownDps = c.meanSecondsSurvived > 0 ? c.meanTotalDamage / c.meanSecondsSurvived : null;
+                const ownPlusTeam = c.meanTotalDamage + teamContribution;
                 return (
                   <div key={c.id} className={`result-card ${i === 0 ? "x" : "y"}`}>
                     <h3>
@@ -305,13 +349,47 @@ export function App() {
                       <dd>
                         {c.medianTotalDamage.toFixed(0)} ({c.p10TotalDamage.toFixed(0)} - {c.p90TotalDamage.toFixed(0)})
                       </dd>
+                      <dt>Own damage per second</dt>
+                      <dd>{ownDps === null ? "-" : ownDps.toFixed(1)}</dd>
                       <dt>Team damage from this candidate's boost</dt>
                       <dd>{teamContribution.toFixed(0)}</dd>
+                      <dt>Own + team damage from boost</dt>
+                      <dd>{ownPlusTeam.toFixed(0)}</dd>
                     </dl>
                   </div>
                 );
               })}
             </div>
+            {results.candidates.length === 2 && (() => {
+              const [a, b] = results.candidates;
+              const teamA = convertUptimeToTeamDamage({
+                secondsSurvived: a!.meanSecondsSurvived,
+                boostMultiplier: species.candidates?.[0]?.boost?.multiplier ?? 1,
+                teammateCount: assumptions.partySize,
+                matchingTeammateCount: assumptions.matchingTeammateCount,
+                teammateDps: assumptions.teammateDps,
+              });
+              const teamB = convertUptimeToTeamDamage({
+                secondsSurvived: b!.meanSecondsSurvived,
+                boostMultiplier: species.candidates?.[1]?.boost?.multiplier ?? 1,
+                teammateCount: assumptions.partySize,
+                matchingTeammateCount: assumptions.matchingTeammateCount,
+                teammateDps: assumptions.teammateDps,
+              });
+              const dpsA = a!.meanSecondsSurvived > 0 ? a!.meanTotalDamage / a!.meanSecondsSurvived : 0;
+              const dpsB = b!.meanSecondsSurvived > 0 ? b!.meanTotalDamage / b!.meanSecondsSurvived : 0;
+              const ratioSentence = (label: string, valueA: number, valueB: number) => {
+                if (valueA <= 0 || valueB <= 0) return `${label} ratio: not comparable (one side is zero).`;
+                const [leaderName, ratio] =
+                  valueA >= valueB ? [a!.name, valueA / valueB] : [b!.name, valueB / valueA];
+                return `${label} ratio: ${leaderName} outputs ${ratio.toFixed(2)}x the other's.`;
+              };
+              return (
+                <p className="caveats" style={{ marginTop: 12 }}>
+                  {ratioSentence("Own DPS", dpsA, dpsB)} {ratioSentence("Own + team damage", a!.meanTotalDamage + teamA, b!.meanTotalDamage + teamB)}
+                </p>
+              );
+            })()}
           </section>
 
           <section className="panel">
@@ -327,14 +405,19 @@ export function App() {
               x={{
                 name: results.candidates[0]!.name,
                 ownDamageTrajectory: results.candidates[0]!.representativeRun.ownDamageTrajectory,
-                secondsSurvivedCutoff: results.candidates[0]!.meanSecondsSurvived,
+                // The exact death time of the specific run being charted
+                // (representativeRun), not the mean across all 200 runs —
+                // that trajectory belongs to one run, so its cutoff should
+                // too. null (survived the whole simulated window) becomes
+                // the chart's own window length, i.e. no marker/dashing.
+                secondsSurvivedCutoff: results.candidates[0]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
                 boostMultiplier: species.candidates![0].boost?.multiplier ?? 1,
                 imageUrl: species.candidates![0].imageUrl,
               }}
               y={{
                 name: results.candidates[1]!.name,
                 ownDamageTrajectory: results.candidates[1]!.representativeRun.ownDamageTrajectory,
-                secondsSurvivedCutoff: results.candidates[1]!.meanSecondsSurvived,
+                secondsSurvivedCutoff: results.candidates[1]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
                 boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
                 imageUrl: species.candidates![1].imageUrl,
               }}

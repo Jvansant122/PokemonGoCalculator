@@ -177,4 +177,56 @@ describe("runComparison", () => {
     expect(result!.ownFastMoveDamage).toBeGreaterThan(0);
     expect(result!.ownFastMoveDamage % expectedFastDamagePerHit).toBe(0);
   });
+
+  it("resolves an explicitly selected candidate/boss move by id instead of always defaulting to index 0", () => {
+    // Two fast moves and two charged moves per side, same energy economics
+    // (energyGain/energyCost/durationSeconds) but different power — isolates
+    // the effect of *which move* was picked from any timing difference, since
+    // hit counts should land identically regardless of which move is selected.
+    const fastLow = { id: "fast-low", name: "Fast Low", type: "normal" as const, power: 5, energyGain: 10, durationSeconds: 1 };
+    const fastHigh = { id: "fast-high", name: "Fast High", type: "normal" as const, power: 15, energyGain: 10, durationSeconds: 1 };
+    const chargedLow = { id: "charged-low", name: "Charged Low", type: "normal" as const, power: 50, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 };
+    const chargedHigh = { id: "charged-high", name: "Charged High", type: "normal" as const, power: 90, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 };
+    const multiMoveAttacker: SpeciesDefinition = {
+      id: "multi-move-attacker",
+      name: "Multi Move Attacker",
+      types: ["normal"],
+      baseAttack: 300,
+      baseDefense: 200,
+      baseStamina: 200,
+      fastMoves: [fastLow, fastHigh],
+      chargedMoves: [chargedLow, chargedHigh],
+    };
+    const boss: SpeciesDefinition = {
+      id: "test-boss",
+      name: "Test Boss",
+      types: ["normal"],
+      baseAttack: 50,
+      baseDefense: 200,
+      baseStamina: 30000,
+      fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 100 }],
+      chargedMoves: [],
+    };
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+
+    const [withDefaults] = runComparison({ candidates: [multiMoveAttacker], boss, level, ivs, dodge: { kind: "none" } });
+    const [withSelected] = runComparison({
+      candidates: [multiMoveAttacker],
+      candidateFastMoveIds: ["fast-high"],
+      candidateChargedMoveIds: ["charged-high"],
+      boss,
+      level,
+      ivs,
+      dodge: { kind: "none" },
+    });
+
+    expect(withDefaults!.chargedAttacksLanded).toBeGreaterThan(0);
+    expect(withSelected!.chargedAttacksLanded).toBe(withDefaults!.chargedAttacksLanded);
+    // Same hit counts on both sides (verified above), so a higher-power move
+    // selection must show up as strictly more damage, not just different
+    // damage — proving resolveMove actually picked the requested move.
+    expect(withSelected!.ownFastMoveDamage).toBeGreaterThan(withDefaults!.ownFastMoveDamage);
+    expect(withSelected!.ownChargedDamage).toBeGreaterThan(withDefaults!.ownChargedDamage);
+  });
 });

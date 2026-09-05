@@ -218,7 +218,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       const dodgeMultiplier = isMidOwnAnimation
         ? 1
         : isBossChargedHit
-          ? dodgeMultiplierForHit(dodge, chargedHitIndex)
+          ? dodgeMultiplierForHit(dodge, chargedHitIndex, boss.chargedMove?.perfectlyDodgeable ?? true)
           : dodgeFastAttacks
             ? DODGE_DAMAGE_MULTIPLIER
             : 1;

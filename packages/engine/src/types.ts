@@ -34,6 +34,18 @@ export interface ChargedMove {
    * Used to model the "died mid-animation" failure mode from the source analysis.
    */
   vulnerableWindowSeconds: number;
+  /**
+   * Whether an opponent can reliably perfectly-dodge THIS move landing on
+   * them. Undefined/omitted means true (dodgeable) — this is the honest
+   * default because pogoapi.net (this project's data source) has no
+   * frame-level "damage window" timing for any move, so there's no real data
+   * basis to mark any of the 1000+ synced moves false. Only ever hand-set to
+   * false on a specific move once actually identified as undodgeable in
+   * practice, the same way vulnerableWindowSeconds and fixture base stats are
+   * hand-authored elsewhere in this project. See breakpoints.ts's
+   * dodgeMultiplierForHit for where this is consumed.
+   */
+  perfectlyDodgeable?: boolean;
 }
 
 export interface SpeciesDefinition {

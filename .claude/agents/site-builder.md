@@ -44,8 +44,9 @@ These are not cosmetic; they are the point of the product:
   result without its conditions is a wrong result.
 - **Show the crossover, not a winner.** The primary visualization is contribution vs party
   size for both candidates, with the flip point marked.
-- **Speculative data is labeled.** Any species carrying `"speculative": true` from the data
-  layer must render with a visible marker wherever it appears.
+- **Speculative/approximate data is labeled.** Any species carrying `isHypothetical: true`, or a
+  raid entry carrying `isApproximate: true`, must render with a visible marker wherever it
+  appears (see `SpeciesPicker.tsx`'s existing badge handling).
 - **Scenarios serialize to the URL.** The full input set encodes into a shareable link and
   restores exactly on load. Test round-tripping.
 

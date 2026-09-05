@@ -91,8 +91,15 @@ export type DodgeBehavior =
   | { kind: "perfect" }
   | { kind: "percentage-missed"; missedFraction: number };
 
-/** hitIndex must count only the hit type this DodgeBehavior applies to (charged hits) — see the type doc above. */
-export function dodgeMultiplierForHit(dodge: DodgeBehavior, hitIndex: number): number {
+/**
+ * hitIndex must count only the hit type this DodgeBehavior applies to (charged
+ * hits) — see the type doc above. moveIsDodgeable defaults to true; pass
+ * false (from the boss's ChargedMove.perfectlyDodgeable) to force full
+ * damage regardless of dodge.kind — an undodgeable move ignores the dodge
+ * setting entirely, same as "none".
+ */
+export function dodgeMultiplierForHit(dodge: DodgeBehavior, hitIndex: number, moveIsDodgeable = true): number {
+  if (!moveIsDodgeable) return 1;
   switch (dodge.kind) {
     case "none":
       return 1;
