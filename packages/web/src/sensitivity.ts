@@ -9,6 +9,21 @@ export interface SensitivityCheck {
   /** Smaller = closer to a flip. Infinity means no flip was found in the search range. */
   distance: number;
   distanceLabel: string;
+  /**
+   * Numeric scan bounds and values backing SensitivityView's per-row flip-bar
+   * visualization (a small inline-SVG number line) — kept separate from the
+   * pre-formatted strings above since those mix units (DPS, seconds, %,
+   * levels, a raw multiplier) that can't be plotted on a shared axis without
+   * the raw numbers. rangeMin/rangeMax are the bounds of whichever scan this
+   * check actually ran (not a fixed universal range), currentNumericValue is
+   * currentValue's numeric form on that same axis, and flipNumericValue is
+   * the absolute (not delta) value the flip was found at, or null when no
+   * flip was found within the scanned range.
+   */
+  rangeMin: number;
+  rangeMax: number;
+  currentNumericValue: number;
+  flipNumericValue: number | null;
 }
 
 /**
@@ -166,12 +181,17 @@ export function computeSensitivity(
       flips: crossing !== null,
       distance: crossing === null ? Infinity : Math.abs(crossing - a.partySize),
       distanceLabel: crossing === null ? "no flip found in 1-20" : `flips at party size ${crossing}`,
+      rangeMin: 1,
+      rangeMax: 20,
+      currentNumericValue: a.partySize,
+      flipNumericValue: crossing,
     });
   }
 
   // 2. Matching teammate count: scan the full 0..partySize range for the nearest flip.
   {
     let nearest: number | null = null;
+    let flipValue: number | null = null;
     for (let delta = 1; delta <= a.partySize; delta++) {
       const candidates2 = [a.matchingTeammateCount - delta, a.matchingTeammateCount + delta].filter((n) => n >= 0 && n <= a.partySize);
       const flipped = candidates2.find(
@@ -179,6 +199,7 @@ export function computeSensitivity(
       );
       if (flipped !== undefined) {
         nearest = delta;
+        flipValue = flipped;
         break;
       }
     }
@@ -188,6 +209,10 @@ export function computeSensitivity(
       flips: nearest !== null,
       distance: nearest ?? Infinity,
       distanceLabel: nearest === null ? `no flip across 0-${a.partySize} matching` : `flips within ${nearest} teammate(s)`,
+      rangeMin: 0,
+      rangeMax: a.partySize,
+      currentNumericValue: a.matchingTeammateCount,
+      flipNumericValue: flipValue,
     });
   }
 
@@ -207,6 +232,10 @@ export function computeSensitivity(
       flips: flipAt !== null,
       distance: flipAt === null ? Infinity : Math.abs(boostMultipliers[0] - flipAt),
       distanceLabel: flipAt === null ? "no flip down to 1.0x" : `flips at ${flipAt}x`,
+      rangeMin: 1.0,
+      rangeMax: boostMultipliers[0],
+      currentNumericValue: boostMultipliers[0],
+      flipNumericValue: flipAt,
     });
   }
 
@@ -246,12 +275,17 @@ export function computeSensitivity(
         flipAtFraction === null
           ? "no flip across 0-100% dodge accuracy"
           : `flips at ~${((1 - flipAtFraction) * 100).toFixed(0)}% dodge accuracy`,
+      rangeMin: 0,
+      rangeMax: 100,
+      currentNumericValue: currentAccuracyPct,
+      flipNumericValue: flipAtFraction === null ? null : (1 - flipAtFraction) * 100,
     });
   }
 
   // 5. Level: scan nearby levels for the nearest flip.
   {
     let nearest: number | null = null;
+    let flipValue: number | null = null;
     for (let delta = 0.5; delta <= 10; delta += 0.5) {
       for (const candidateLevel of [a.level - delta, a.level + delta]) {
         if (candidateLevel < 1 || candidateLevel > 40) continue;
@@ -265,6 +299,7 @@ export function computeSensitivity(
         const w = winnerOf(lx, ly, a.partySize, a.teammateDps, a.matchingTeammateCount, boostMultipliers[0], boostMultipliers[1]);
         if (w !== currentWinner) {
           nearest = delta;
+          flipValue = candidateLevel;
           break;
         }
       }
@@ -276,6 +311,10 @@ export function computeSensitivity(
       flips: nearest !== null,
       distance: nearest ?? Infinity,
       distanceLabel: nearest === null ? "no flip within +/-10 levels" : `flips within ${nearest} level(s)`,
+      rangeMin: Math.max(1, a.level - 10),
+      rangeMax: Math.min(40, a.level + 10),
+      currentNumericValue: a.level,
+      flipNumericValue: flipValue,
     });
   }
 
@@ -305,6 +344,10 @@ export function computeSensitivity(
       flips: flipAt !== null,
       distance: flipAt === null ? Infinity : Math.abs(flipAt - a.teammateDps),
       distanceLabel: flipAt === null ? `no flip within +/-${maxScan.toFixed(0)} DPS` : `flips at ~${flipAt.toFixed(1)} DPS`,
+      rangeMin: Math.max(0, a.teammateDps - maxScan),
+      rangeMax: a.teammateDps + maxScan,
+      currentNumericValue: a.teammateDps,
+      flipNumericValue: flipAt,
     });
   }
 
@@ -339,6 +382,10 @@ export function computeSensitivity(
       flips: flipAt !== null,
       distance: flipAt === null ? Infinity : Math.abs(flipAt - current),
       distanceLabel: flipAt === null ? `no flip within ${minBound}-${maxBound}s` : `flips at ~${flipAt}s between casts`,
+      rangeMin: minBound,
+      rangeMax: maxBound,
+      currentNumericValue: current,
+      flipNumericValue: flipAt,
     });
   }
 

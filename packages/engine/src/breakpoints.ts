@@ -53,16 +53,29 @@ export function findFastMoveBreakpoints(params: {
 export const DODGE_DAMAGE_MULTIPLIER = 0.25;
 
 /**
- * A dodge's damage-reduction window lasts roughly this long from the swipe.
+ * The rough duration of a dodge's damage-reduction window in the real game.
  * It is not a standing shield: a player has to re-dodge before each incoming
  * hit, which is only feasible against attacks with a slower cadence than
  * this window — and is not feasible at all while locked into your own
- * charged-move animation (multiple seconds long, no input accepted). See
- * simulate.ts's stepwise battle model, which enforces that a boss hit
- * landing during the attacker's own cast is never reduced by dodging,
- * regardless of which DodgeBehavior is configured — "perfect" dodge here
- * means perfectly timed against everything a dodge window CAN cover, not
- * invulnerability.
+ * charged-move animation (multiple seconds long, no input accepted).
+ *
+ * IMPORTANT: this constant is consumed ONLY as prose justification elsewhere
+ * in this codebase (e.g. simulate.ts's comment on why a boss hit landing
+ * mid-own-charged-move-animation always deals full damage) — no function in
+ * this package reads this value computationally. That is a deliberate
+ * modeling choice, not an oversight: dodging the boss's CHARGED attacks is
+ * resolved as an instantaneous per-hit outcome (see dodgeMultiplierForHit
+ * below, keyed only by hit index and DodgeBehavior), not as a timed
+ * reaction window checked against how much advance warning a specific
+ * attack actually gives before landing. Actually gating dodge feasibility on
+ * this window would require tracking a windup/telegraph phase separate from
+ * a hit's landing time — data pogoapi.net doesn't expose at all (the same
+ * "no frame-level timing data exists" reasoning behind
+ * ChargedMove.perfectlyDodgeable only ever being hand-set, never derived).
+ * Kept as a named constant rather than inlining 0.7s into every comment that
+ * cites it, so there's one place to update if this figure (or the modeling
+ * decision above) is ever revisited — not because anything computes with it
+ * today.
  */
 export const DODGE_WINDOW_SECONDS = 0.7;
 

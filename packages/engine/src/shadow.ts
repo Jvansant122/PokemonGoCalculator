@@ -5,15 +5,16 @@ import type { SpeciesDefinition } from "./types.js";
  * [community-consensus], NOT Niantic-published — GamePress-adjacent guides,
  * Fandom's wiki, and datamine-derived community sources converge on
  * approximately these values since the Shadow rework (Feb 2021), but no
- * primary/official source has ever surfaced. Some sources render the defense
- * multiplier as the fraction 5/6 (~0.8333) rather than the flat decimal 0.83
- * used here — the two are close enough that this project's fixtures don't
- * currently depend on which one is "more correct"; revisit if a primary
- * source ever turns up (same discipline this project already applies to
- * hand-authored fixture stats after the Mega Skarmory baseAttack incident).
+ * primary/official source has ever surfaced. Defense is the fraction 5/6
+ * (~0.8333) rather than the flat decimal 0.83 some sources use — picked
+ * deliberately after a cross-check against an external raid-DPS
+ * calculator's own published methodology used exactly this fraction;
+ * revisit if a primary source ever turns up (same discipline this project
+ * already applies to hand-authored fixture stats after the Mega Skarmory
+ * baseAttack incident).
  */
 export const SHADOW_ATTACK_MULTIPLIER = 1.2;
-export const SHADOW_DEFENSE_MULTIPLIER = 0.83;
+export const SHADOW_DEFENSE_MULTIPLIER = 5 / 6;
 
 /**
  * Applies the Shadow Attack/Defense multipliers to a species' RAW base

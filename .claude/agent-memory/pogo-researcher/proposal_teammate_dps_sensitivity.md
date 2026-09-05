@@ -1,12 +1,16 @@
 ---
 name: proposal-teammate-dps-sensitivity
-description: Proposed web feature — sensitivity check (and optional crossover finder) sweeping teammateDps, the one core Scenario field currently absent from computeSensitivity; status as of 2026-09-05 is proposed, not yet routed/built
+description: Sensitivity check sweeping teammateDps in computeSensitivity — status BUILT, confirmed 2026-09-05 by reading sensitivity.ts (check #6 "Average teammate DPS")
 metadata:
   type: project
 ---
 
-Proposed 2026-09-05 (second ideation pass by this agent). Not yet built, rejected, or routed —
-status: **proposed, pending overseer decision**.
+Proposed 2026-09-05 (second ideation pass by this agent). **Status: BUILT** — confirmed 2026-09-05
+(third pass) by reading `packages/web/src/sensitivity.ts` directly: check #6 "Average teammate
+DPS" scans `teammateDps` up/down exactly as described below and is live in `SensitivityView`.
+`findCrossoverTeammateDps` was not added engine-side (the web-only scan-in-place approach was used
+instead, same as the party-size check) — see [[finding-crossover-party-size-unwired]], still
+accurate as of 2026-09-05.
 
 **What it would show:** `packages/web/src/sensitivity.ts`'s `computeSensitivity` currently checks
 five axes (party size, matching-teammate count, mega boost multiplier, dodge none<->perfect,

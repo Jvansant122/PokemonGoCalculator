@@ -1,12 +1,14 @@
 ---
 name: proposal-boss-cadence-sensitivity
-description: Proposed web feature — sensitivity check sweeping bossChargedMoveFrequencySeconds (boss attack cadence/raid difficulty), currently absent from computeSensitivity despite being a live Scenario field; status as of 2026-09-05 is proposed, not yet routed/built
+description: Sensitivity check sweeping bossChargedMoveFrequencySeconds (boss cadence/raid difficulty) — status BUILT, confirmed 2026-09-05 by reading sensitivity.ts (check #7 "Boss charged-move cadence")
 metadata:
   type: project
 ---
 
-Proposed 2026-09-05 (second ideation pass by this agent). Not yet built, rejected, or routed —
-status: **proposed, pending overseer decision**.
+Proposed 2026-09-05 (second ideation pass by this agent). **Status: BUILT** — confirmed 2026-09-05
+(third pass) by reading `packages/web/src/sensitivity.ts` directly: check #7 "Boss charged-move
+cadence" scans `bossChargedMoveMeanIntervalSeconds` up/down exactly as described below and is live
+in `SensitivityView`.
 
 **What it would show:** `Scenario.bossChargedMoveFrequencySeconds` (mean seconds between the
 boss's charged moves once it starts using them) is a live, user-set assumption already threaded

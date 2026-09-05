@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { simulateOpeningBurst } from "../src/combat.js";
-import { runStepwiseDistribution, simulateStepwiseBattle } from "../src/simulate.js";
+import { isTickAlignedDuration, runStepwiseDistribution, simulateStepwiseBattle } from "../src/simulate.js";
 import { typeEffectiveness } from "../src/typeChart.js";
 import {
   MEGA_RAICHU_X,
@@ -310,6 +310,140 @@ describe("simulateStepwiseBattle", () => {
       expect(dodgeable.bossChargedHitsTaken).toBeGreaterThan(0);
       expect(undodgeable.bossChargedHitsTaken).toBe(dodgeable.bossChargedHitsTaken);
       expect(undodgeable.totalDamageTaken).toBe(dodgeable.totalDamageTaken * 6);
+    });
+  });
+
+  describe("damageTakenTrajectory", () => {
+    it("accumulates a point per boss hit (post-dodge-multiplier), starts at {0,0}, and matches totalDamageTaken at its final point", () => {
+      // Same dodgeAttacker/dodgeBoss setup as the dodge-during-own-animation
+      // test above: t=1 dodged (damage 1), t=2/3/4 undodged (damage 6 each,
+      // inside the delayed cast window) — a known, hand-checked per-hit
+      // sequence to assert the trajectory against directly, not just the total.
+      const dodgeAttacker = {
+        hp: 100000,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 100, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 10, energyCost: 100, durationSeconds: 3, vulnerableWindowSeconds: 3 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const dodgeBoss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 10, energyGain: 0, durationSeconds: 1 },
+        damageOut: { stab: false },
+      };
+
+      const result = simulateStepwiseBattle({
+        attacker: dodgeAttacker,
+        boss: dodgeBoss,
+        dodgeFastAttacks: true,
+        maxSeconds: 4,
+      });
+
+      expect(result.damageTakenTrajectory).toEqual([
+        { atSeconds: 0, cumulativeDamage: 0 },
+        { atSeconds: 1, cumulativeDamage: 1 },
+        { atSeconds: 2, cumulativeDamage: 7 },
+        { atSeconds: 3, cumulativeDamage: 13 },
+        { atSeconds: 4, cumulativeDamage: 19 },
+      ]);
+      const lastPoint = result.damageTakenTrajectory[result.damageTakenTrajectory.length - 1]!;
+      expect(lastPoint.cumulativeDamage).toBe(result.totalDamageTaken);
+    });
+
+    it("pads a final point out to the run's actual end time, mirroring ownDamageTrajectory's tail-padding", () => {
+      // Reuses the module's first scenario (attacker vs bossNoChargedMove),
+      // which faints at exactly t=10.0 with the last boss hit landing on
+      // that same tick — so the trajectory's last real point is already at
+      // t=10 and no extra padding point is needed; this pins that the array
+      // ends exactly at faintedAtSeconds either way (whether via a real hit
+      // or the padding branch), matching ownDamageTrajectory's behavior.
+      const stepwise = simulateStepwiseBattle({ attacker, boss: bossNoChargedMove });
+      const lastPoint = stepwise.damageTakenTrajectory[stepwise.damageTakenTrajectory.length - 1]!;
+      expect(lastPoint.atSeconds).toBe(stepwise.faintedAtSeconds);
+      expect(lastPoint.cumulativeDamage).toBe(stepwise.totalDamageTaken);
+      expect(stepwise.damageTakenTrajectory[0]).toEqual({ atSeconds: 0, cumulativeDamage: 0 });
+    });
+
+    it("is present on runStepwiseDistribution's representativeRun, alongside ownDamageTrajectory", () => {
+      const distribution = runStepwiseDistribution({ attacker, boss: bossNoChargedMove }, 5);
+      expect(distribution.representativeRun.damageTakenTrajectory.length).toBeGreaterThan(1);
+      expect(distribution.representativeRun.damageTakenTrajectory[0]).toEqual({ atSeconds: 0, cumulativeDamage: 0 });
+    });
+  });
+
+  describe("tick-alignment validation", () => {
+    it("isTickAlignedDuration accepts every real move duration (multiples of 0.1s) and rejects a non-multiple", () => {
+      expect(isTickAlignedDuration(3.5, 0.1)).toBe(true);
+      expect(isTickAlignedDuration(1, 0.1)).toBe(true);
+      expect(isTickAlignedDuration(2.2, 0.1)).toBe(true);
+      // The exact case a naive `durationSeconds % tickSeconds === 0` check
+      // would get wrong: 3.5 / 0.1 is not exactly 35 in IEEE 754 floating
+      // point, so this must be checked in milliseconds, not raw division.
+      expect(3.5 % 0.1).not.toBe(0);
+      expect(isTickAlignedDuration(0.35, 0.1)).toBe(false);
+    });
+
+    it("throws when a move's durationSeconds isn't an exact multiple of the tick, instead of silently quantizing it", () => {
+      const attacker = {
+        hp: 1000,
+        defenseStat: 100,
+        attackStat: 100,
+        // 0.35s doesn't divide evenly into a 0.1s tick.
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 10, durationSeconds: 0.35 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 10, energyCost: 9999, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 1 },
+        damageOut: { stab: false },
+      };
+
+      expect(() => simulateStepwiseBattle({ attacker, boss, maxSeconds: 2 })).toThrow(/durationSeconds=0.35/);
+    });
+  });
+
+  describe("same-tick tie between the attacker's own charged-move animation completing and a fatal boss hit", () => {
+    it("credits the charged attack landing before applying the fatal boss hit, rather than silently discarding it", () => {
+      // attacker fires its own fast move at t=1 (energyGain=100 >= chargedMove
+      // energyCost=100), immediately starting its 2s cast — which completes
+      // (attackerAnimationEndsAt) at exactly t=3. The boss's 1s-cadence fast
+      // move deals a fixed 6 damage/hit (floor(0.5*10*(100/100))+1), landing
+      // at t=1,2,3 — hp=18 means the THIRD hit, at t=3, is exactly fatal, the
+      // same tick the attacker's own cast finishes. isMidOwnAnimation already
+      // uses a strict `<` (so a hit landing exactly at attackerAnimationEndsAt
+      // is treated as "no longer mid-animation"), which only makes sense if
+      // the cast is considered complete by this tick — so the charged attack
+      // must be credited even though the attacker faints on the very same tick.
+      const attacker = {
+        hp: 18,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 1, energyGain: 100, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 50, energyCost: 100, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 10, energyGain: 0, durationSeconds: 1 },
+        damageOut: { stab: false },
+      };
+
+      const result = simulateStepwiseBattle({ attacker, boss, dodge: { kind: "none" }, maxSeconds: 5 });
+
+      expect(result.faintedAtSeconds).toBe(3);
+      expect(result.chargedAttacksLanded).toBe(1);
+      expect(result.totalChargedDamage).toBeGreaterThan(0);
+      // The landing wasn't mid-animation (the cast finished on this exact
+      // tick) — it just happened to coincide with the fatal hit.
+      expect(result.diedDuringOwnChargedMoveAnimation).toBe(false);
     });
   });
 });

@@ -10,6 +10,7 @@ import {
 } from "@pogo-analyzer/engine";
 import { AssumptionPanel, type Assumptions } from "./AssumptionPanel.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
+import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { computeSensitivity } from "./sensitivity.js";
 import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
@@ -106,6 +107,31 @@ function initialAssumptions(): Assumptions {
   if (typeof window === "undefined") return DEFAULT_ASSUMPTIONS;
   const fromUrl = parseScenarioFromUrl(window.location.href);
   return fromUrl ? scenarioToAssumptions(fromUrl) : DEFAULT_ASSUMPTIONS;
+}
+
+/**
+ * Small two-segment stacked bar echoing the own/team damage split already
+ * shown as raw numbers in the result card's dl (and, in more detail, in
+ * DamageOverTimeChart's damage-tally line below) — presentation only, no new
+ * calculation, reusing whatever own/team totals the caller already computed
+ * via convertUptimeToTeamDamage. Colored with the same x/y accent pair the
+ * chart and result-card borders already use so it reads as "this candidate's
+ * bar", not a third unrelated color scheme.
+ */
+function OwnTeamShareBar({ own, team, accent }: { own: number; team: number; accent: "x" | "y" }) {
+  const total = own + team;
+  const ownPct = total > 0 ? (own / total) * 100 : 0;
+  const teamPct = 100 - ownPct;
+  return (
+    <div
+      className="share-bar"
+      role="img"
+      aria-label={`${ownPct.toFixed(0)}% own damage, ${teamPct.toFixed(0)}% team damage`}
+    >
+      <div className={`share-bar-own share-bar-${accent}`} style={{ width: `${ownPct}%` }} />
+      <div className="share-bar-team" style={{ width: `${teamPct}%` }} />
+    </div>
+  );
 }
 
 /** Resolves a species id from the registry, surfacing a lookup failure as a normal error result rather than a crash — a stale/shared URL can reference an id that no longer exists after a future data resync. */
@@ -352,13 +378,13 @@ export function App() {
                       <dd>{c.meanChargedDamage.toFixed(0)}</dd>
                       <dt>Mean fast-move damage</dt>
                       <dd>{c.meanFastMoveDamage.toFixed(0)}</dd>
-                      <dt>Mean own total (charged+fast)</dt>
+                      <dt>Mean own total (charged+fast) — TDO</dt>
                       <dd>{c.meanTotalDamage.toFixed(0)}</dd>
                       <dt>Own total median / p10-p90</dt>
                       <dd>
                         {c.medianTotalDamage.toFixed(0)} ({c.p10TotalDamage.toFixed(0)} - {c.p90TotalDamage.toFixed(0)})
                       </dd>
-                      <dt>Own damage per second</dt>
+                      <dt>Own damage per second — DPS</dt>
                       <dd>{ownDps === null ? "-" : ownDps.toFixed(1)}</dd>
                       <dt>Team damage from this candidate's boost</dt>
                       <dd>
@@ -372,6 +398,7 @@ export function App() {
                       <dt>Own + team damage from boost</dt>
                       <dd>{ownPlusTeam.toFixed(0)}</dd>
                     </dl>
+                    <OwnTeamShareBar own={c.meanTotalDamage} team={teamContribution} accent={i === 0 ? "x" : "y"} />
                     {persistsThroughFaint && (
                       <p className="caveats" style={{ marginTop: 8, fontSize: "0.78rem" }}>
                         Real-game exception: this species' boost keeps buffing the team for the rest of the fight (~
@@ -450,6 +477,28 @@ export function App() {
                 boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
                 persistsThroughFaint: species.candidates![1].boost?.persistsThroughFaint,
                 imageUrl: species.candidates![1].imageUrl,
+              }}
+              teammateDps={assumptions.teammateDps}
+              partySize={assumptions.partySize}
+              matchingTeammateCount={assumptions.matchingTeammateCount}
+              maxSeconds={chartMaxSeconds}
+            />
+            <DamageOverTimeTable
+              x={{
+                name: results.candidates[0]!.name,
+                ownDamageTrajectory: results.candidates[0]!.representativeRun.ownDamageTrajectory,
+                damageTakenTrajectory: results.candidates[0]!.representativeRun.damageTakenTrajectory,
+                secondsSurvivedCutoff: results.candidates[0]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
+                boostMultiplier: species.candidates![0].boost?.multiplier ?? 1,
+                persistsThroughFaint: species.candidates![0].boost?.persistsThroughFaint,
+              }}
+              y={{
+                name: results.candidates[1]!.name,
+                ownDamageTrajectory: results.candidates[1]!.representativeRun.ownDamageTrajectory,
+                damageTakenTrajectory: results.candidates[1]!.representativeRun.damageTakenTrajectory,
+                secondsSurvivedCutoff: results.candidates[1]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
+                boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
+                persistsThroughFaint: species.candidates![1].boost?.persistsThroughFaint,
               }}
               teammateDps={assumptions.teammateDps}
               partySize={assumptions.partySize}

@@ -23,9 +23,57 @@ import type { ChargedMove, FastMove } from "./types.js";
  * Boss charged moves are modeled as landing all at once at their fire time
  * (a "fast damage window"), the same as boss fast moves — there is no
  * separate windup phase to dodge around.
+ *
+ * Tick-quantization assumption: every event (fast-move cadence, charged-move
+ * cast duration) is scheduled by repeatedly adding a move's durationSeconds
+ * to the tick it last fired on, then rounding to the nearest tick boundary —
+ * so this whole model implicitly assumes every real move's durationSeconds
+ * is an exact multiple of the tick (checked as of 2026-09-05 against all 77
+ * fast + 240 charged moves in data/raw/{fast,charged}_moves.json — zero
+ * violations). If that ever stopped holding (e.g. a future data source with
+ * finer-grained timing introduces a move with, say, a 350ms duration), the
+ * event-scheduling anchored off the actual quantized fire tick would
+ * silently push that move's subsequent fires up to just-under-one-tick later
+ * per cycle than a continuous-time simulation would — a real, per-cycle
+ * bounded drift, not unbounded, but real and silent. assertTickAligned below
+ * turns that into a loud failure instead of a silently-skewed number.
  */
 
 export const DEFAULT_TICK_SECONDS = 0.1;
+
+/**
+ * Whether `durationSeconds` lands exactly on a tick boundary. Checked in
+ * milliseconds (rounding each side to the nearest ms) rather than raw
+ * floating-point division — e.g. 3.5 / 0.1 is not exactly 35 in IEEE 754, so
+ * a naive `% tickSeconds === 0` check would produce false negatives for
+ * ordinary, correctly-aligned real-game durations.
+ */
+export function isTickAlignedDuration(durationSeconds: number, tickSeconds: number): boolean {
+  const tickMs = Math.round(tickSeconds * 1000);
+  if (tickMs <= 0) return true;
+  const durationMs = Math.round(durationSeconds * 1000);
+  return durationMs % tickMs === 0;
+}
+
+/**
+ * Throws if `durationSeconds` isn't an exact multiple of the simulation
+ * tick — see the module doc comment above for why this matters. Every real
+ * synced move currently satisfies this; a violation means either a
+ * hand-authored fixture with a bad duration, or a future data source with
+ * finer-grained timing than this simulator supports (a real gap to close,
+ * not a fixture to silently accept).
+ */
+function assertTickAligned(durationSeconds: number, tickSeconds: number, label: string): void {
+  if (!isTickAlignedDuration(durationSeconds, tickSeconds)) {
+    throw new Error(
+      `${label} has durationSeconds=${durationSeconds}, which is not an exact multiple of the ` +
+        `${tickSeconds}s simulation tick. See simulate.ts's module doc comment: every event's ` +
+        `timing is scheduled by repeatedly adding durationSeconds to the last quantized fire ` +
+        `tick, so a non-tick-aligned duration would silently delay this move's fires by up to ` +
+        `just-under-one-tick per cycle rather than failing loudly.`,
+    );
+  }
+}
 
 /**
  * Generous safety cap on how long a single sustained-phase run simulates, in
@@ -107,6 +155,15 @@ export interface StepwiseRunResult {
   bossChargedHitsTaken: number;
   /** Combined fast+charged cumulative own damage over time — see OpeningBurstResult.ownDamageTrajectory (combat.ts) for the exact shape/semantics. */
   ownDamageTrajectory: DamageTrajectoryPoint[];
+  /**
+   * Cumulative damage the ATTACKER TOOK over time — same shape/semantics as
+   * ownDamageTrajectory (a point at {0, 0}, one point each time a boss hit
+   * — fast or charged, post-dodge-multiplier — actually lands on hp, and a
+   * final point padded out to the run's end time), so a caller can chart or
+   * sample both trajectories at the same set of times and compare them
+   * directly.
+   */
+  damageTakenTrajectory: DamageTrajectoryPoint[];
 }
 
 /** Simple seeded PRNG (mulberry32) so a given seed always reproduces the same run. */
@@ -145,6 +202,13 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   const maxSeconds = params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS;
   const rng = mulberry32(params.seed ?? 1);
 
+  assertTickAligned(attacker.fastMove.durationSeconds, tick, `Attacker fast move "${attacker.fastMove.name}"`);
+  assertTickAligned(attacker.chargedMove.durationSeconds, tick, `Attacker charged move "${attacker.chargedMove.name}"`);
+  assertTickAligned(boss.fastMove.durationSeconds, tick, `Boss fast move "${boss.fastMove.name}"`);
+  if (boss.chargedMove) {
+    assertTickAligned(boss.chargedMove.durationSeconds, tick, `Boss charged move "${boss.chargedMove.name}"`);
+  }
+
   let hp = attacker.hp;
   let energy = 0;
   let totalDamageTaken = 0;
@@ -156,6 +220,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   let faintedAtSeconds: number | null = null;
   let diedDuringOwnChargedMoveAnimation = false;
   const ownDamageTrajectory: DamageTrajectoryPoint[] = [{ atSeconds: 0, cumulativeDamage: 0 }];
+  const damageTakenTrajectory: DamageTrajectoryPoint[] = [{ atSeconds: 0, cumulativeDamage: 0 }];
 
   let nextAttackerFastMoveAt = attacker.fastMove.durationSeconds;
   let nextBossFastMoveAt = boss.fastMove.durationSeconds;
@@ -172,6 +237,32 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   const EPS = 1e-9;
   for (let t = tick; t <= maxSeconds + EPS; t += tick) {
     const roundedT = Math.round(t * 1000) / 1000;
+
+    // Attacker's own charged-move animation completing — resolved BEFORE the
+    // boss's hit below, deliberately, for a same-tick-tie reason: the boss-hit
+    // block's own isMidOwnAnimation check already uses a strict `<` against
+    // attackerAnimationEndsAt, meaning a hit landing on the EXACT tick the
+    // animation ends is already treated as "no longer mid-animation" (full
+    // dodge rules apply, not the forced-full-damage window). That convention
+    // only makes sense if the cast is considered to have finished BY this
+    // tick — so the landing must be credited before a same-tick boss hit is
+    // resolved, otherwise a fatal same-tick hit would silently discard an
+    // attack the rest of the model already treats as having gone off. This
+    // was a real bug (not a deliberate tie-break) caught by exercising the
+    // exact-tie case in a test — see simulate.test.ts's
+    // "same-tick tie" describe block.
+    if (attackerAnimationEndsAt !== null && roundedT >= attackerAnimationEndsAt - EPS) {
+      const damage = calculateDamage({
+        power: attacker.chargedMove.power,
+        attackerAttackStat: attacker.attackStat,
+        defenderDefenseStat: boss.defenseStat,
+        ...attacker.chargedDamageOut,
+      });
+      totalChargedDamage += damage;
+      chargedAttacksLanded += 1;
+      attackerAnimationEndsAt = null;
+      ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalFastMoveDamage + totalChargedDamage });
+    }
 
     // Boss charged move takes priority over its fast move in the same tick.
     let bossHitDamage: number | null = null;
@@ -211,6 +302,10 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       // hit landing in this window is guaranteed to land at full damage,
       // regardless of the configured dodge behavior, and no dodge is even
       // attempted (so it costs no time either — see DODGE_COST_SECONDS below).
+      // By this point attackerAnimationEndsAt has already been nulled above
+      // if the cast finished on this exact tick, so isMidOwnAnimation is
+      // correctly false for a same-tick tie (matching the strict `<` this
+      // always used, even before the reorder above).
       const isMidOwnAnimation = attackerAnimationEndsAt !== null && roundedT < attackerAnimationEndsAt - EPS;
       // `dodge` (DodgeBehavior) governs charged hits only; `dodgeFastAttacks`
       // is a separate plain boolean for fast hits — see the type docs above.
@@ -226,9 +321,18 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       const damage = Math.floor(bossHitDamage * dodgeMultiplier);
       totalDamageTaken += damage;
       hp -= damage;
+      damageTakenTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalDamageTaken });
       if (hp <= 0) {
         faintedAtSeconds = roundedT;
         diedDuringOwnChargedMoveAnimation = attackerAnimationEndsAt !== null && roundedT < attackerAnimationEndsAt - EPS;
+        // Everything else that could also be scheduled on this exact tick
+        // (the attacker's own fast move firing, or starting a new charged
+        // cast further down this loop body) is discarded by this break —
+        // "boss wins the tie" for those specifically, a deliberate,
+        // arbitrary-but-chosen convention (there's no finer-grained signal
+        // to break the tie by, unlike the charged-move-landing case handled
+        // above) matching combat.ts's simulateOpeningBurst, which documents
+        // the same choice for its own event merge.
         break;
       }
       energy = Math.min(energy + energyFromDamageTaken(damage), MAX_ENERGY);
@@ -237,20 +341,6 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       // own next fast move later. No attempt (and so no cost) happens while
       // mid-own-animation, since attemptingDodge is already false there.
       if (attemptingDodge) nextAttackerFastMoveAt += DODGE_COST_SECONDS;
-    }
-
-    // Attacker's own charged-move animation completing.
-    if (attackerAnimationEndsAt !== null && roundedT >= attackerAnimationEndsAt - EPS) {
-      const damage = calculateDamage({
-        power: attacker.chargedMove.power,
-        attackerAttackStat: attacker.attackStat,
-        defenderDefenseStat: boss.defenseStat,
-        ...attacker.chargedDamageOut,
-      });
-      totalChargedDamage += damage;
-      chargedAttacksLanded += 1;
-      attackerAnimationEndsAt = null;
-      ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalFastMoveDamage + totalChargedDamage });
     }
 
     // Attacker's own fast move — locked out while mid-charged-move-animation.
@@ -291,6 +381,10 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   if (lastDamagePoint.atSeconds < endSeconds) {
     ownDamageTrajectory.push({ atSeconds: endSeconds, cumulativeDamage: lastDamagePoint.cumulativeDamage });
   }
+  const lastDamageTakenPoint = damageTakenTrajectory[damageTakenTrajectory.length - 1]!;
+  if (lastDamageTakenPoint.atSeconds < endSeconds) {
+    damageTakenTrajectory.push({ atSeconds: endSeconds, cumulativeDamage: lastDamageTakenPoint.cumulativeDamage });
+  }
 
   return {
     faintedAtSeconds,
@@ -302,6 +396,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     diedDuringOwnChargedMoveAnimation,
     bossChargedHitsTaken,
     ownDamageTrajectory,
+    damageTakenTrajectory,
   };
 }
 

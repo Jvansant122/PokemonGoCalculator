@@ -3,6 +3,14 @@ import { convertUptimeToTeamDamage, type DamageTrajectoryPoint } from "@pogo-ana
 export interface DamageOverTimeSeries {
   name: string;
   ownDamageTrajectory: DamageTrajectoryPoint[];
+  /**
+   * Cumulative damage this candidate TOOK over time — same event-driven
+   * shape/semantics as ownDamageTrajectory (see simulate.ts's
+   * StepwiseRunResult.damageTakenTrajectory). Optional only so any future
+   * caller that doesn't have it yet (there is none today) doesn't break;
+   * DamageOverTimeTable is the only consumer of this field so far.
+   */
+  damageTakenTrajectory?: DamageTrajectoryPoint[];
   /** Point past which this candidate's team-boost contribution stops accruing (its faint time, mean or exact) — unless persistsThroughFaint overrides that below. */
   secondsSurvivedCutoff: number;
   boostMultiplier: number;
@@ -34,7 +42,14 @@ const SAMPLE_COUNT = 200;
 const AXIS_TICKS = 5;
 const EPS = 1e-9;
 
-function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
+/**
+ * Step-function sample of ANY cumulative event-driven trajectory (own damage
+ * or damage taken — both share the same {atSeconds, cumulativeDamage} shape)
+ * at a given time t: cumulative value stays flat between events, so "value at
+ * t" is the last point at or before t. Exported so DamageOverTimeTable.tsx
+ * reuses this exact interpolation instead of writing a second copy of it.
+ */
+export function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
   let value = trajectory[0]!.cumulativeDamage;
   for (const point of trajectory) {
     if (point.atSeconds > t) break;
@@ -43,7 +58,7 @@ function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
   return value;
 }
 
-function teamContributionAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
+export function teamContributionAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
   // fightDurationSeconds: t itself — since secondsSurvived below is already
   // capped at t, passing fightDurationSeconds: t means
   // max(fightDurationSeconds, secondsSurvived) === t exactly, so a
@@ -62,7 +77,7 @@ function teamContributionAt(series: DamageOverTimeSeries, t: number, teammateDps
   });
 }
 
-function totalAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
+export function totalAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
   return ownDamageAt(series.ownDamageTrajectory, t) + teamContributionAt(series, t, teammateDps, partySize, matchingTeammateCount);
 }
 

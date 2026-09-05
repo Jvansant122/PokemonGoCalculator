@@ -27,7 +27,14 @@ list given at the start of the conversation before assuming a preview tool exist
    copy it briefly into the relevant package's `src/` dir (so relative imports work) and run it
    with `node --experimental-strip-types` (Node 24 supports this) — then delete it and confirm via
    `git status` that no trace remains. This is a legitimate way to numerically prove a formula's
-   behavior when you can't click through the actual chart.
+   behavior when you can't click through the actual chart. `npx tsx` also works for this and
+   handles TS-source imports directly; either way, use a **relative** import path
+   (`../engine/src/index.ts`), not an absolute `C:/...` one — Node's ESM loader throws
+   `ERR_UNSUPPORTED_ESM_URL_SCHEME` on an absolute Windows path. The pinned Scenario A fixtures
+   (`MEGA_RAICHU_X`/`MEGA_RAICHU_Y`/`PRIMAL_KYOGRE`/`SCENARIO_A_LEVEL`/`SCENARIO_A_PERFECT_IVS`,
+   exported from `packages/engine/src/fixtures/scenarioA.ts`) are the exact default scenario
+   `App.tsx` loads on a fresh page — using them in the scratch script makes its output directly
+   comparable to what a user actually sees, not just an arbitrary check.
 
 Always kill the background `vite preview` process before finishing (find it via
 `Get-NetTCPConnection -LocalPort <port>` in PowerShell) — don't leave it running.
