@@ -179,6 +179,42 @@ h1 {
   position: relative;
 }
 
+.species-picker-input-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.species-picker-input-row input {
+  flex: 1;
+  width: 100%;
+}
+
+.species-picker-input-row .species-icon {
+  position: absolute;
+  left: 6px;
+  pointer-events: none;
+}
+
+.species-picker-input-row input {
+  padding-left: 34px;
+}
+
+.species-icon {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex-shrink: 0;
+  image-rendering: pixelated;
+  vertical-align: middle;
+}
+
+.species-icon-placeholder {
+  display: inline-block;
+  background: var(--border);
+  border-radius: 4px;
+}
+
 .species-picker-list {
   position: absolute;
   z-index: 20;

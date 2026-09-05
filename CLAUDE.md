@@ -140,6 +140,18 @@ existing credentials.
   safe-window trigger — least likely for your cast to overlap the boss's next hit right after
   you've just avoided the last one) or energy hits the cap (forced, so further fast-move energy
   gain isn't wasted). With no dodging configured, only the cap-forced path ever fires it.
+- **Species images** (`SpeciesDefinition.imageUrl?`, `types.ts`): sprite URLs from the PokeAPI
+  sprites mirror on GitHub. Real Normal-form species use the national-dex id already in hand
+  (`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pokemon_id}.png`,
+  no extra request). Real mega/primal species and the 4 hypothetical fixtures need one PokeAPI
+  lookup each by name-slug (`scripts/sync-data.ts`'s `fetchMegaSpriteUrls`, cached to
+  `data/raw/mega_sprite_urls.json`) since mega forms have their own internal PokeAPI id, not
+  derivable from the dex number — **surprisingly, PokeAPI has real sprite data even for the
+  hypothetical fixtures** (`raichu-mega-x`/`raichu-mega-y`/`skarmory-mega`/`kyogre-primal` all
+  resolve), hand-set on those fixtures in `scenarioA.ts` rather than fetched (the engine has no
+  I/O). When an id gets renamed to dodge a collision (see `kyogre-primal-attacker` below), look
+  the sprite up by the *natural* pre-collision name, not the renamed one — PokeAPI has never
+  heard of the renamed one.
 - **GameMaster data loader** (`gamemaster.ts`): accepts pogoapi.net-shaped JSON
   (`pokemon_id`/`pokemon_name`/`base_attack`/`base_defense`/`base_stamina`/`form`) via
   `fromGameMaster`, plus a `SpeciesRegistry` that merges real and user-defined hypothetical

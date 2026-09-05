@@ -6,6 +6,7 @@ export interface DamageOverTimeSeries {
   /** Point past which this candidate's team-boost contribution stops accruing (its faint time, mean or exact). */
   secondsSurvivedCutoff: number;
   boostMultiplier: number;
+  imageUrl?: string;
 }
 
 interface Props {
@@ -166,9 +167,13 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
           </g>
         ))}
       </svg>
-      <div style={{ display: "flex", gap: 16, fontSize: "0.85rem", marginTop: 4 }}>
-        <span style={{ color: "var(--accent-x)" }}>■ {x.name}</span>
-        <span style={{ color: "var(--accent-y)" }}>■ {y.name}</span>
+      <div style={{ display: "flex", gap: 16, fontSize: "0.85rem", marginTop: 4, alignItems: "center" }}>
+        <span style={{ color: "var(--accent-x)" }}>
+          ■ {x.imageUrl && <img src={x.imageUrl} alt="" className="species-icon" />} {x.name}
+        </span>
+        <span style={{ color: "var(--accent-y)" }}>
+          ■ {y.imageUrl && <img src={y.imageUrl} alt="" className="species-icon" />} {y.name}
+        </span>
       </div>
       {crossing ? (
         <p className="crossover-note">

@@ -217,12 +217,30 @@ export function App() {
     return s.isHypothetical ? `${s.name} (hypothetical)` : s.name;
   }
 
+  function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
+    return s.imageUrl ? <img src={s.imageUrl} alt="" className="species-icon" /> : null;
+  }
+
   return (
     <div className="app">
       <h1>Pokémon GO Scenario Comparator</h1>
       <p className="subtitle">
-        {species.candidates ? `${speciesLabel(species.candidates[0])} vs ${speciesLabel(species.candidates[1])}` : "Pick two candidates"}{" "}
-        vs {boss ? speciesLabel(boss) : "a target"} — survivability counted as team DPS, not just raw damage.
+        {species.candidates ? (
+          <>
+            <SpeciesIcon s={species.candidates[0]} /> {speciesLabel(species.candidates[0])} vs{" "}
+            <SpeciesIcon s={species.candidates[1]} /> {speciesLabel(species.candidates[1])}
+          </>
+        ) : (
+          "Pick two candidates"
+        )}{" "}
+        vs {boss ? (
+          <>
+            <SpeciesIcon s={boss} /> {speciesLabel(boss)}
+          </>
+        ) : (
+          "a target"
+        )}{" "}
+        — survivability counted as team DPS, not just raw damage.
       </p>
 
       <AssumptionPanel
@@ -267,7 +285,7 @@ export function App() {
                 return (
                   <div key={c.id} className={`result-card ${i === 0 ? "x" : "y"}`}>
                     <h3>
-                      {c.name}
+                      {species.candidates?.[i] && <SpeciesIcon s={species.candidates[i]} />} {c.name}
                       {species.candidates?.[i]?.isHypothetical && <span className="badge badge-hypothetical">hypothetical</span>}
                     </h3>
                     <dl>
@@ -311,12 +329,14 @@ export function App() {
                 ownDamageTrajectory: results.candidates[0]!.representativeRun.ownDamageTrajectory,
                 secondsSurvivedCutoff: results.candidates[0]!.meanSecondsSurvived,
                 boostMultiplier: species.candidates![0].boost?.multiplier ?? 1,
+                imageUrl: species.candidates![0].imageUrl,
               }}
               y={{
                 name: results.candidates[1]!.name,
                 ownDamageTrajectory: results.candidates[1]!.representativeRun.ownDamageTrajectory,
                 secondsSurvivedCutoff: results.candidates[1]!.meanSecondsSurvived,
                 boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
+                imageUrl: species.candidates![1].imageUrl,
               }}
               teammateDps={assumptions.teammateDps}
               partySize={assumptions.partySize}

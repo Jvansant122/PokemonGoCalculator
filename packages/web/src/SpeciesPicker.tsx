@@ -4,6 +4,7 @@ export interface SpeciesPickerOption {
   id: string;
   label: string;
   badge?: "hypothetical" | "approximate";
+  imageUrl?: string;
 }
 
 interface Props {
@@ -53,27 +54,30 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange }: Pro
   return (
     <div className="field species-picker">
       <label htmlFor={inputId}>{label}</label>
-      <input
-        id={inputId}
-        type="text"
-        role="combobox"
-        aria-expanded={open}
-        aria-controls={listId}
-        aria-autocomplete="list"
-        autoComplete="off"
-        value={query}
-        onFocus={() => setOpen(true)}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onBlur={() => {
-          // Deferred so a mousedown on an option below still registers as a click
-          // before the list unmounts.
-          setTimeout(() => setOpen(false), 150);
-        }}
-        placeholder="Search by name..."
-      />
+      <div className="species-picker-input-row">
+        {selected?.imageUrl && <img src={selected.imageUrl} alt="" className="species-icon" />}
+        <input
+          id={inputId}
+          type="text"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          autoComplete="off"
+          value={query}
+          onFocus={() => setOpen(true)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onBlur={() => {
+            // Deferred so a mousedown on an option below still registers as a click
+            // before the list unmounts.
+            setTimeout(() => setOpen(false), 150);
+          }}
+          placeholder="Search by name..."
+        />
+      </div>
       {!selected && value && <p className="species-picker-warning">Unknown species id "{value}" in this scenario — pick a replacement.</p>}
       {open && (
         <ul id={listId} role="listbox" className="species-picker-list">
@@ -81,6 +85,11 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange }: Pro
           {filtered.map((option, i) => (
             <li key={`${idPrefix}-${option.id}-${i}`} role="option" aria-selected={option.id === value}>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => selectOption(option)}>
+                {option.imageUrl ? (
+                  <img src={option.imageUrl} alt="" className="species-icon" loading="lazy" />
+                ) : (
+                  <span className="species-icon species-icon-placeholder" aria-hidden="true" />
+                )}
                 {option.label}
                 {option.badge && <span className={`badge badge-${option.badge}`}>{option.badge}</span>}
               </button>

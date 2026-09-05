@@ -56,6 +56,13 @@ export interface SpeciesDefinition {
    * dump — hypothetical mega forms, custom raid bosses, etc.
    */
   isHypothetical?: boolean;
+  /**
+   * A sprite/icon URL for this species, if one was resolved (see
+   * scripts/sync-data.ts for real species; hand-set on the hypothetical
+   * fixtures). Not fetched by the engine itself (no I/O here) — this is
+   * plain data set by whoever constructs the SpeciesDefinition.
+   */
+  imageUrl?: string;
 }
 
 export interface Combatant {

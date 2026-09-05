@@ -41,6 +41,11 @@ export const WILD_CHARGE: ChargedMove = {
  * difference, not a raw stat difference, exactly as the source analysis
  * describes ("Flying-type moves, which Electric resists").
  */
+// Image URLs verified live this session: pokeapi.co unexpectedly has sprite
+// data for these under exactly these slugs (raichu-mega-x id 10304,
+// raichu-mega-y id 10305) even though the forms are hypothetical/unreleased
+// — see HANDOFF.md. Hand-set (not fetched — the engine has no I/O) rather
+// than re-deriving on every load.
 export const MEGA_RAICHU_X: SpeciesDefinition = {
   id: "raichu-mega-x",
   name: "Mega Raichu X",
@@ -52,6 +57,7 @@ export const MEGA_RAICHU_X: SpeciesDefinition = {
   chargedMoves: [WILD_CHARGE],
   boost: { multiplier: 1.3, boostedType: "electric" },
   isHypothetical: true,
+  imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10304.png",
 };
 
 export const MEGA_RAICHU_Y: SpeciesDefinition = {
@@ -65,6 +71,7 @@ export const MEGA_RAICHU_Y: SpeciesDefinition = {
   chargedMoves: [WILD_CHARGE],
   boost: { multiplier: 1.3, boostedType: "electric" },
   isHypothetical: true,
+  imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10305.png",
 };
 
 export const WATERFALL: FastMove = {
@@ -101,6 +108,7 @@ export const PRIMAL_KYOGRE: SpeciesDefinition = {
   baseStamina: 15000,
   fastMoves: [WATERFALL],
   chargedMoves: [HYDRO_PUMP],
+  imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10077.png",
 };
 
 export const SKY_ATTACK: FastMove = {
@@ -138,6 +146,7 @@ export const MEGA_SKARMORY: SpeciesDefinition = {
   baseStamina: 12000,
   fastMoves: [SKY_ATTACK],
   chargedMoves: [BRAVE_BIRD],
+  imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png",
 };
 
 export const SCENARIO_A_LEVEL = 35;

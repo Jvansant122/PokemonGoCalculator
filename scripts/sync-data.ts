@@ -211,6 +211,55 @@ async function fetchAndCacheMegaPokemon(): Promise<RawMegaPokemonEntry[]> {
   return JSON.parse(text) as RawMegaPokemonEntry[];
 }
 
+/**
+ * National-dex sprite from the PokeAPI sprites mirror on GitHub — no API call
+ * needed, just the dex id we already have from pokemon_stats.json.
+ */
+function spriteUrlForDexId(pokemonId: number): string {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
+}
+
+const MEGA_SPRITE_CACHE_PATH = join(RAW_DIR, "mega_sprite_urls.json");
+
+/**
+ * Mega/primal forms each have their own internal PokeAPI id (not derivable
+ * from the national dex number), so unlike spriteUrlForDexId this needs one
+ * PokeAPI request per species — looked up by name, and this project's own
+ * generated ids (e.g. "venusaur-mega", "charizard-mega-x") happen to match
+ * PokeAPI's slug convention exactly (confirmed live for several, including —
+ * surprisingly — the hypothetical fixtures: pokeapi.co has real sprite data
+ * for "raichu-mega-x"/"raichu-mega-y"/"skarmory-mega" even though those
+ * forms aren't released, see HANDOFF.md). Results are cached to
+ * data/raw/mega_sprite_urls.json so a re-sync doesn't re-fetch 48 sprites
+ * every time; a lookup that 404s or errors just leaves that species without
+ * an image rather than failing the whole sync.
+ */
+async function fetchMegaSpriteUrls(speciesIds: string[]): Promise<Record<string, string>> {
+  let cache: Record<string, string> = {};
+  if (existsSync(MEGA_SPRITE_CACHE_PATH)) {
+    try {
+      cache = JSON.parse(readFileSync(MEGA_SPRITE_CACHE_PATH, "utf-8"));
+    } catch {
+      cache = {};
+    }
+  }
+  const missing = speciesIds.filter((id) => !cache[id]);
+  for (const id of missing) {
+    try {
+      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
+      if (res.ok) {
+        const json = (await res.json()) as { sprites?: { front_default?: string | null } };
+        if (json.sprites?.front_default) cache[id] = json.sprites.front_default;
+      }
+    } catch {
+      // Best-effort — a missing sprite just means no image for that species, not a sync failure.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  writeFileSync(MEGA_SPRITE_CACHE_PATH, JSON.stringify(cache, null, 2));
+  return cache;
+}
+
 // ---------------------------------------------------------------------------
 // Load raw data
 // ---------------------------------------------------------------------------
@@ -320,6 +369,11 @@ for (const stat of normalStats) {
     resolvedFast,
     resolvedCharged,
   );
+  // National-dex sprite, keyed by the pokemon_id we already have — no extra
+  // network call needed for the 964 Normal-form species (unlike the 48 mega
+  // entries below, which need a per-species PokeAPI lookup for their own
+  // distinct internal ID).
+  definition.imageUrl = spriteUrlForDexId(stat.pokemon_id);
 
   species.push(definition);
 }
@@ -459,6 +513,19 @@ for (const m of rawMegaPokemon) {
   reservedSpeciesIds.add(finalId);
 
   megaSpecies.push(definition);
+}
+
+// Look up sprites by the NATURAL id (PokeAPI's real slug, e.g. "kyogre-primal")
+// rather than the possibly-renamed `finalId` used to avoid a collision with an
+// existing hypothetical fixture (e.g. "kyogre-primal-attacker") — the rename
+// is purely an internal disambiguation, PokeAPI has never heard of it.
+const collisionRenames = new Map(megaIdCollisions.map((c) => [c.usedId, c.wouldBeId]));
+const spriteLookupIds = megaSpecies.map((m) => collisionRenames.get(m.id) ?? m.id);
+const megaSpriteUrls = await fetchMegaSpriteUrls(spriteLookupIds);
+for (const m of megaSpecies) {
+  const lookupId = collisionRenames.get(m.id) ?? m.id;
+  const url = megaSpriteUrls[lookupId];
+  if (url) m.imageUrl = url;
 }
 
 species.push(...megaSpecies);
@@ -670,6 +737,8 @@ console.log(`  - Speculative/hypothetical species in use for raid matching: Mega
 console.log(`  - mega_pokemon.json entries are REAL data (not flagged speculative) but model an ATTACKER (standard level/IV/CPM pipeline), not a raid boss — do not confuse the new "${reservedSpeciesIds.has("kyogre-primal-attacker") ? "kyogre-primal-attacker" : "kyogre-primal"}" species entry with the pre-existing hand-tuned boss-mode PRIMAL_KYOGRE fixture (id "kyogre-primal") in packages/engine/src/fixtures/scenarioA.ts — both now coexist under different ids by design.`);
 console.log(`  - Mega/primal species id collisions resolved by appending "-attacker": ${megaIdCollisions.length > 0 ? megaIdCollisions.map((c) => `${c.megaName} (${c.wouldBeId} -> ${c.usedId})`).join(", ") : "none"}`);
 console.log(`  - mega_pokemon.json has no per-species boosted-type data, so each of the ${megaSpecies.length} mega/primal entries gets boost = { multiplier: DEFAULT_MEGA_BOOST_MULTIPLIER (1.3), boostedType: <its primary listed type> } — comparison.ts only applies a mega boost when \`species.boost\` is explicitly set (its fallback is 1, not 1.3), so this was required, not cosmetic.`);
+const megaSpeciesWithoutImage = megaSpecies.filter((m) => !m.imageUrl).map((m) => m.name);
+console.log(`  - Mega/primal species image lookups (PokeAPI, cached to data/raw/mega_sprite_urls.json): ${megaSpecies.length - megaSpeciesWithoutImage.length}/${megaSpecies.length} resolved${megaSpeciesWithoutImage.length > 0 ? `; no image found for: ${megaSpeciesWithoutImage.join(", ")}` : ""}. All 964 Normal-form species get a dex-id sprite URL with no extra request.`);
 if (validationErrors.length > 0) {
   console.log(`  - VALIDATION ERRORS: ${validationErrors.join("; ")}`);
 }

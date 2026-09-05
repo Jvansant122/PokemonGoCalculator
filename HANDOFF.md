@@ -65,6 +65,20 @@ math, and the combat-phase toggle. In rough order:
 9. **Chart gets real axis tick labels** (both x and y, "nice" round-number intervals) instead of
    just the two endpoints, plus a final own/team damage tally printed below it.
 
+## Also this session: species images
+
+Added `imageUrl?: string` to `SpeciesDefinition` and wired sprites (PokeAPI's GitHub sprites
+mirror) into the header, species pickers, result cards, and chart legend. Real Normal-form
+species use their national dex id directly (free, no extra request); the 48 real mega/primal
+species and the 4 hypothetical fixtures needed a per-species PokeAPI name lookup (cached to
+`data/raw/mega_sprite_urls.json`) since mega forms have their own internal PokeAPI id. Genuinely
+surprising finding: PokeAPI has real sprite data for the hypothetical fixtures too
+(`raichu-mega-x`, `raichu-mega-y`, `skarmory-mega`, `kyogre-primal`) even though those forms
+aren't released content — all 48/48 mega lookups resolved after fixing one id-collision edge
+case (`kyogre-primal` was renamed to `kyogre-primal-attacker` to avoid colliding with the
+existing boss-mode fixture id; the sprite lookup needs the pre-rename name since that's what
+PokeAPI actually knows).
+
 ## Not yet done / candidates for next session
 
 1. Mobile-width visual check still hasn't been done (only desktop verified, this session and last).

@@ -51,13 +51,14 @@ export interface SpeciesOption {
   id: string;
   name: string;
   isHypothetical?: boolean;
+  imageUrl?: string;
 }
 
 /** All ~1016 registered species, for a generic searchable picker. */
 export function allSpeciesOptions(): SpeciesOption[] {
   return speciesRegistry
     .all()
-    .map((s) => ({ id: s.id, name: s.name, isHypothetical: s.isHypothetical }))
+    .map((s) => ({ id: s.id, name: s.name, isHypothetical: s.isHypothetical, imageUrl: s.imageUrl }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -66,6 +67,7 @@ export interface RaidBossOption {
   raidName: string;
   tier: string;
   isApproximate: boolean;
+  imageUrl?: string;
 }
 
 /**
@@ -77,7 +79,13 @@ export interface RaidBossOption {
 export function activeRaidBossOptions(): RaidBossOption[] {
   return RAW_ACTIVE_RAIDS.filter(
     (r): r is RawActiveRaidEntry & { speciesId: string } => r.speciesId !== null && speciesRegistry.has(r.speciesId),
-  ).map((r) => ({ id: r.speciesId, raidName: r.raidName, tier: r.tier, isApproximate: r.isApproximate }));
+  ).map((r) => ({
+    id: r.speciesId,
+    raidName: r.raidName,
+    tier: r.tier,
+    isApproximate: r.isApproximate,
+    imageUrl: speciesRegistry.get(r.speciesId).imageUrl,
+  }));
 }
 
 /** Active raid entries with no usable stat data yet — shown disabled, never selectable. */
@@ -92,6 +100,7 @@ export interface TargetPickerOption {
   id: string;
   label: string;
   badge?: "hypothetical" | "approximate";
+  imageUrl?: string;
 }
 
 /**
@@ -106,11 +115,13 @@ export function targetPickerOptions(): TargetPickerOption[] {
     id: r.id,
     label: `${r.raidName} — ${r.tier}`,
     badge: r.isApproximate ? "approximate" : undefined,
+    imageUrl: r.imageUrl,
   }));
   const speciesOptions: TargetPickerOption[] = allSpeciesOptions().map((s) => ({
     id: s.id,
     label: s.name,
     badge: s.isHypothetical ? "hypothetical" : undefined,
+    imageUrl: s.imageUrl,
   }));
   return [...raidOptions, ...speciesOptions];
 }
@@ -120,5 +131,6 @@ export function candidatePickerOptions(): TargetPickerOption[] {
     id: s.id,
     label: s.name,
     badge: s.isHypothetical ? "hypothetical" : undefined,
+    imageUrl: s.imageUrl,
   }));
 }
