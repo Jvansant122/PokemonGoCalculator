@@ -1,9 +1,17 @@
 ---
 name: web-developer-tool-mismatch
-description: web-developer.md's body instructs using preview_start/read_console_messages tools ("Before you call a UI change done") that its own tools: frontmatter (Read, Write, Edit, Bash, Grep, Glob) doesn't grant. Flagged 2026-09-05, not fixed (review scope).
+description: RESOLVED — web-developer.md's "Before you call a UI change done" section no longer names preview_start/read_console_messages; it now says "if you have a browser-preview tool available... if you don't... say plainly which level of verification you actually did." Already this way in commit d1305f6.
 metadata:
   type: project
 ---
+
+**RESOLVED, contrary to the original flag below.** Checked 2026-09-05 (overseer session): current
+`web-developer.md` reads "if you have a browser-preview tool available, use it against the dev
+server... if you don't, at minimum serve the production build locally... don't assume a browser
+tool is available just because it'd be useful; check what you actually have" — no bare
+`preview_start`/`read_console_messages` tool name appears anywhere in the file, and `git log`
+shows no edit to it after `d1305f6`. The mismatch described below never existed in the committed
+state this audit reviewed; treat this as a false positive, not a real gap to re-fix.
 
 `web-developer.md`'s "Before you call a UI change done" section says: "The dev server
 (`preview_start` with the `web` launch config, never raw `npm run dev` via Bash)... No new

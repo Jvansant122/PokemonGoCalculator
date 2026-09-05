@@ -3,7 +3,107 @@
 Last updated: 2026-09-05. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-05, latest session: Claude Code config restructured around specialized subagents
+## 2026-09-05, same session continued: two ideation passes routed and landed, sensitivity panel rebuilt
+
+- **First ideation pass** (2 proposals) landed via `engine-developer` + follow-up `data-sync`/
+  `web-developer` tasks: `SpeciesDefinition.boost.persistsThroughFaint` (Primal Groudon/Kyogre,
+  Mega Rayquaza — real-game exception where the mega/primal team boost outlives the boosting
+  Pokémon's own fainting) and real Shadow attack/defense multipliers (`shadow.ts`,
+  `SHADOW_ATTACK_MULTIPLIER = 1.2` / `SHADOW_DEFENSE_MULTIPLIER = 0.83`, mutually exclusive with
+  the mega/primal `boost` field — enforced by throwing, not silently allowed). Both fully wired
+  into the UI (a "persists past faint" badge + explanatory sentence, a Shadow species badge
+  reusing the existing `isHypothetical`/`isApproximate` pattern) and **verified live in the browser
+  this session** — selecting the `PRIMAL_KYOGRE` fixture as a candidate against Mega Raichu Y shows
+  the badge, the explanatory sentence, and a real crossover marker on the chart (~2.3s in) despite
+  Raichu surviving ~10s longer in isolation — a clean live demonstration of the product's own
+  thesis. `data-sync` also synthesized 8 real Shadow raid-boss species (e.g.
+  `giratina-altered-shadow`) from the ScrapedDuck feed instead of the previous blunt
+  "strip prefix, approximate with unboosted base stats" behavior; spot-checked to apply the
+  multiplier exactly once (no double-application with `stats.ts`'s single-floor invariant).
+- **Numbers cross-checked against an external source**: formula, STAB/type-effectiveness/weather/
+  mega-boost constants, and Mewtwo's real move data (Psycho Cut, Psystrike) all independently
+  confirmed correct and current against a public raid-DPS calculator's own written methodology.
+  One small real discrepancy found and **not yet resolved**: that source's Shadow defense penalty
+  is 5/6≈0.8333 vs this project's `0.83` — worth a quick decision (tighten to match, or keep `0.83`
+  as the deliberately-chosen value; both are defensible, it's not officially pinned either way).
+- **Second ideation pass** (3 more proposals) uncovered a real architectural gap while being
+  routed: `packages/web/src/sensitivity.ts` was running on the engine's *deterministic*
+  `runComparison` path, where boss-charged-move dodging is documented as inert and boss cadence
+  isn't a modeled concept at all — meaning the pre-existing "Dodging" sensitivity check had almost
+  certainly always silently reported "no flip," regardless of the real scenario, and 2 of the 3 new
+  proposals were flatly impossible to implement against that path. Fixed by switching
+  `sensitivity.ts` to the same stepwise `runSustainedComparison` path the live result cards
+  actually use (at a reduced `SENSITIVITY_ITERATIONS = 25` instead of the display path's 200, an
+  explicit documented precision-for-speed tradeoff). The panel now has 7 checks total: the
+  original 5 (now running on the correct model) plus **Average teammate DPS** and **Boss
+  charged-move cadence** (new), and the old binary "Dodging" check was replaced with a continuous
+  **Dodge accuracy (boss charged attacks)** scan. **This task was interrupted mid-run by the user
+  (an unrelated request was cancelled) before it could self-verify or report back** — the overseer
+  independently re-verified after the fact: 67/67 engine tests, clean `packages/web` typecheck,
+  clean production build, and all three new checks confirmed rendering correctly live in the
+  browser with no console errors. The implementation is complete and correct despite the
+  interrupted report.
+- A related finding, **not applied on purpose**: `uptime.ts`'s `findCrossoverPartySize` (the
+  engine's own dedicated party-size crossover function, literally described in its own doc comment
+  as "the headline output of Phase 3") still has zero call sites in `packages/web` —
+  `sensitivity.ts`'s party-size check keeps its own local scan instead, with a code comment
+  explaining why swapping to that function isn't obviously correct (it anchors to wherever the
+  sweep's own leader first changes from party size 1, not to the specific configured party size's
+  actual current winner — usually the same, not guaranteed). Worth a closer look someday, not
+  blocking.
+- **Explicitly deferred**: researching "charged-move animation lockout" (the user asked, then
+  cancelled it mid-request to conserve session budget) — not investigated at all this session.
+- Working tree is still uncommitted as of this writing — `verify-and-ship` is being run now to
+  land everything above in one push.
+
+## 2026-09-05, push guardrail, raid-data accuracy pass, new `pogo-researcher` agent
+
+Working tree is **not** clean — several things below are uncommitted, ask before pushing (this
+session did not commit or push anything itself).
+
+- **Push guardrail added**: `.claude/settings.json` now has `"permissions": {"ask":
+  ["Bash(git push:*)"]}` alongside the existing test hook — any `git push`, from any agent or the
+  main thread, now prompts for confirmation. Closes an item `meta-architect` had flagged twice
+  without applying (project-wide permissions change, needed the user's sign-off — got it this
+  session). Two other `meta-architect` findings from the prior session's audit
+  (`sprite-mechanism-dropped`, `web-developer-tool-mismatch`) turned out to be false positives —
+  both fixes were already present in `d1305f6` itself, `git log` confirmed no edits since; the
+  memory files were corrected rather than re-fixing something that wasn't broken.
+- **Raid data was stale, and re-syncing surfaced a real, bigger-than-expected bug.** `data-sync`
+  found the cached `data/raw/raids.json` reflecting a rotation that no longer exists (Mega Raichu
+  X/Y, Mega Latias/Latios — not real current raids); re-fetched live from ScrapedDuck and
+  re-synced. While spot-checking the result, it found Shadow Giratina (Altered) resolving to
+  `speciesId: null` — not an approximate-match problem, Giratina was **entirely absent** from
+  `data/normalized/species.json`. Root cause (found by a follow-up `data-sync` task): `scripts/
+  sync-data.ts` only ever picked a species' form literally labeled `"Normal"` out of
+  `pokemon_stats.json`; any species without one was silently dropped, no warning. **This affected
+  59 species**, not just Giratina (Unown, Spinda, Zygarde, Tornadus/Thundurus/Landorus, Aegislash,
+  Zacian/Zamazenta, Koraidon/Miraidon, and more — full list in the agent's task output). Fixed:
+  added a per-species `defaultFormByPokemonId` fallback (prefers `"Normal"`, else that species'
+  first-listed form), reused consistently across the stats/types/moves lookups so a fallback
+  species doesn't get its stats and moveset picked by mismatched logic. **Caveat, not fully
+  verified**: "first-listed form" is a heuristic, spot-checked correct for Giratina/Tornadus/
+  Thundurus/Landorus/Enamorus/Keldeo/Meloetta but *not* checked for all 59 — flagged example:
+  Zygarde's first-listed row is `"Complete"`, not its real in-game default `"Fifty_percent"`. Worth
+  a closer pass before trusting every one of the 59 at a glance. Still-open, upstream-only gaps
+  (nothing to fix code-side): Mega Mewtwo X and Armored Mewtwo have no matching data source at all
+  in pogoapi.net; Mega Victreebel falls back to unboosted base-Victreebel stats under the existing
+  documented `isApproximate: true` convention (working as designed, just a materially weaker
+  approximation than the Shadow-variant case that convention was written for).
+- **New subagent**: `.claude/agents/pogo-researcher.md`, at the user's explicit request — real
+  Pokémon GO mechanics/content/meta research plus comparator feature ideas grounded in the
+  survivability-as-team-DPS thesis, never implements. `CLAUDE.md`'s routing table updated (six
+  agents → seven). A `meta-architect` sanity pass on this specific addition was launched the same
+  session — check whether it landed and read its findings before assuming the addition is clean
+  (routing overlap with `data-sync`/`engine-developer` and tool-grant justification were the two
+  things asked about).
+- **Files touched, uncommitted as of this writing**: `.claude/settings.json`,
+  `.claude/agent-memory/meta-architect/*.md` (3 files corrected), `.claude/agents/
+  pogo-researcher.md` (new), `.claude/agent-memory/pogo-researcher/MEMORY.md` (new), `CLAUDE.md`,
+  `HANDOFF.md` (this file), `data/raw/raids.json`, `data/raw/_meta.json`, `scripts/sync-data.ts`,
+  `data/normalized/species.json`, `data/normalized/activeRaids.json`.
+
+## 2026-09-05, config restructured around specialized subagents (prior session)
 
 Went from 4 to 6 agents and rewrote `CLAUDE.md` from ~272 lines to ~110 at the user's request —
 CLAUDE.md now reads as instructions for an **overseer/project-designer** role (product vision,
@@ -20,8 +120,17 @@ restructuring needs a session restart/resume before the new/edited agents are ac
 A `meta-architect` validation pass was launched on this restructuring itself (routing overlap
 between engine-developer/engine-verifier and web-developer/site-builder specifically, whether
 CLAUDE.md's new routing table has enough signal, real context-cost numbers, and a spot-check that
-no real technical content got garbled in the move) — check whether it landed and read its actual
-findings before assuming this pass is clean.
+no real technical content got garbled in the move). **Checked 2026-09-05 (overseer session):** it
+landed clean — routing has no overlap, CLAUDE.md cut ~62%. It flagged two findings as "not fixed,"
+but both turned out to be false positives: `data-sync.md`'s sprite section and
+`web-developer.md`'s tool-availability hedging were already present in `d1305f6` itself; `git log`
+confirms neither file was edited after that commit. Both memory files
+(`.claude/agent-memory/meta-architect/sprite-mechanism-dropped.md` and
+`.claude/agent-memory/meta-architect/web-developer-tool-mismatch.md`) were corrected to say so.
+One real, still-open item from that audit: `site-builder-push-guardrail.md` — no `settings.json`
+permission rule or hook stops an accidental `git push`, only `site-builder.md`'s prose. Deliberately
+not applied twice now without the user's explicit sign-off (it'd be a project-wide permissions
+change, not scoped to one agent) — raise it next time push/deploy comes up.
 
 ## 2026-09-05, moveset selection, dodge-feasibility gating, new metrics, chart death markers
 

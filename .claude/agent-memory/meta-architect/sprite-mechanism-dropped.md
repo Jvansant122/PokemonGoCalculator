@@ -1,9 +1,17 @@
 ---
 name: sprite-mechanism-dropped
-description: The mega/hypothetical sprite-fetching mechanism (fetchMegaSpriteUrls, data/raw/mega_sprite_urls.json cache, kyogre-primal-attacker rename-lookup gotcha) is live in scripts/sync-data.ts and scenarioA.ts but is absent from every agent body and CLAUDE.md after the 2026-09-05 six-agent split. Flagged, not fixed (review scope).
+description: RESOLVED — data-sync.md's "## Species images" section and engine-developer.md's module-map entry both carry the fetchMegaSpriteUrls/mega_sprite_urls.json/kyogre-primal-attacker rename-lookup gotcha as of commit d1305f6 itself. Originally flagged as a gap in the same commit; the flag was stale by the time it was recorded.
 metadata:
   type: project
 ---
+
+**RESOLVED, contrary to the original flag below.** Checked 2026-09-05 (overseer session): both
+`data-sync.md` ("## Species images" section) and `engine-developer.md` (module map, `types.ts`/
+`gamemaster.ts` entry, plus the Fixtures section) already carry this content, including the
+rename-collision gotcha, and `git log` shows no edit to either file after `d1305f6` — the content
+was there in the commit this audit reviewed. The gap noted below never actually existed in the
+committed state; treat this as a false positive from the audit pass, not a real regression to
+re-fix.
 
 The pre-split CLAUDE.md had a "Species images" section describing: real Normal-form species get
 a dex-id sprite URL with no extra request; real mega/primal species and the 4 hypothetical

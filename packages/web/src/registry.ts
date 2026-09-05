@@ -51,6 +51,8 @@ export interface SpeciesOption {
   id: string;
   name: string;
   isHypothetical?: boolean;
+  /** See SpeciesDefinition.isShadow — no real synced species carries this yet (data-sync's follow-up), but the picker badge is wired ahead of that data landing. */
+  isShadow?: boolean;
   imageUrl?: string;
 }
 
@@ -58,7 +60,7 @@ export interface SpeciesOption {
 export function allSpeciesOptions(): SpeciesOption[] {
   return speciesRegistry
     .all()
-    .map((s) => ({ id: s.id, name: s.name, isHypothetical: s.isHypothetical, imageUrl: s.imageUrl }))
+    .map((s) => ({ id: s.id, name: s.name, isHypothetical: s.isHypothetical, isShadow: s.isShadow, imageUrl: s.imageUrl }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -99,7 +101,7 @@ export function unmatchedActiveRaids(): { raidName: string; tier: string }[] {
 export interface TargetPickerOption {
   id: string;
   label: string;
-  badge?: "hypothetical" | "approximate";
+  badge?: "hypothetical" | "approximate" | "shadow";
   imageUrl?: string;
 }
 
@@ -109,18 +111,23 @@ export interface TargetPickerOption {
  * every other registered species below (reachable by search) — this is how
  * this project's own hypothetical bosses (Primal Kyogre, Mega Skarmory) stay
  * selectable even though they will never appear in a live raid feed.
+ *
+ * Badge priority when more than one could apply: approximate/hypothetical
+ * beats shadow, since those two are mutually exclusive with each other and
+ * both take priority as "this data itself is speculative", a stronger claim
+ * than "this is a mechanically-different but otherwise solid stat line".
  */
 export function targetPickerOptions(): TargetPickerOption[] {
   const raidOptions: TargetPickerOption[] = activeRaidBossOptions().map((r) => ({
     id: r.id,
     label: `${r.raidName} — ${r.tier}`,
-    badge: r.isApproximate ? "approximate" : undefined,
+    badge: r.isApproximate ? "approximate" : speciesRegistry.get(r.id).isShadow ? "shadow" : undefined,
     imageUrl: r.imageUrl,
   }));
   const speciesOptions: TargetPickerOption[] = allSpeciesOptions().map((s) => ({
     id: s.id,
     label: s.name,
-    badge: s.isHypothetical ? "hypothetical" : undefined,
+    badge: s.isHypothetical ? "hypothetical" : s.isShadow ? "shadow" : undefined,
     imageUrl: s.imageUrl,
   }));
   return [...raidOptions, ...speciesOptions];
@@ -130,7 +137,7 @@ export function candidatePickerOptions(): TargetPickerOption[] {
   return allSpeciesOptions().map((s) => ({
     id: s.id,
     label: s.name,
-    badge: s.isHypothetical ? "hypothetical" : undefined,
+    badge: s.isHypothetical ? "hypothetical" : s.isShadow ? "shadow" : undefined,
     imageUrl: s.imageUrl,
   }));
 }

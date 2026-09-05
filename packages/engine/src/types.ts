@@ -62,12 +62,37 @@ export interface SpeciesDefinition {
     multiplier: number;
     /** The type whose damage output (attacker or teammates) receives the boost. */
     boostedType: PokemonType;
+    /**
+     * Whether this boost keeps applying to teammates for the rest of the
+     * fight even after this Pokémon has fainted, as long as it's still in
+     * the raid party (not swapped out) — true for Primal Groudon/Kyogre and
+     * Mega Rayquaza specifically; every other standard mega's boost ends the
+     * instant it faints. [community-consensus] (Bulbapedia, citing a March
+     * 2023 Reddit crowd-test — not an official Niantic statement). Defaults
+     * to false/undefined, matching every standard mega's real behavior.
+     * Consumed by uptime.ts's convertUptimeToTeamDamage, which uses this to
+     * decide whether the boost's team-damage window is capped at
+     * secondsSurvived (false) or extends to the full fight duration (true).
+     */
+    persistsThroughFaint?: boolean;
   };
   /**
    * Marks data the user supplied directly rather than sourced from a GameMaster
    * dump — hypothetical mega forms, custom raid bosses, etc.
    */
   isHypothetical?: boolean;
+  /**
+   * Marks this species as its Shadow form — applies shadow.ts's
+   * SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER to its raw base stats
+   * (see stats.ts's effectiveStatsAtLevel). [community-consensus], not
+   * Niantic-published — see shadow.ts for sourcing detail. Mutually
+   * exclusive with `boost`: a Shadow Pokémon cannot Mega Evolve in the real
+   * game without being Purified first, so a species carrying both is treated
+   * as invalid data (shadow.ts's shadowAdjustedBaseStats throws rather than
+   * silently combining them). Defaults to false/undefined (today's
+   * behavior: no Shadow modeling).
+   */
+  isShadow?: boolean;
   /**
    * A sprite/icon URL for this species, if one was resolved (see
    * scripts/sync-data.ts for real species; hand-set on the hypothetical

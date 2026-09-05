@@ -12,9 +12,26 @@
  * path" philosophy and packages/engine/src/gamemaster.ts.
  *
  * Scope (documented limitation, see completion report / WARNINGS output):
- * this pass only normalizes `form === "Normal"` entries. Regional forms,
- * costumes, and event forms (Alola, Galarian, Fall_2019, etc.) are out of
- * scope for now — pokemon_stats.json alone carries 273 distinct form values.
+ * this pass only normalizes ONE form per species — `"Normal"` where a species
+ * has one, else a documented fallback (see defaultFormByPokemonId below).
+ * Regional forms, costumes, and event forms (Alola, Galarian, Fall_2019, etc.)
+ * are out of scope for now — pokemon_stats.json alone carries 273 distinct
+ * form values.
+ *
+ * Fallback-form species (confirmed via a 2026-09-05 audit, 59 of 1024 distinct
+ * pokemon_id values in pokemon_stats.json): species like Giratina that have NO
+ * row labeled "Normal" at all were previously silently dropped from
+ * species.json entirely (not skipped-with-reason, just absent — a real bug,
+ * since e.g. Giratina is a common raid boss). See defaultFormByPokemonId for
+ * the fix: when a species has no "Normal" row, its first-listed form in
+ * pokemon_stats.json is used instead. This happens to match the real in-game
+ * default forme for every spot-checked case (Giratina -> Altered, Tornadus/
+ * Thundurus/Landorus/Enamorus -> Incarnate, Keldeo -> Ordinary, Meloetta ->
+ * Aria) but is a heuristic, not a per-species lookup table — it is NOT
+ * guaranteed correct for every one of the 59 (e.g. Zygarde's first-listed row
+ * is "Complete", not its actual in-game default "Fifty_percent"/50% Forme).
+ * Species picked up this way are logged separately in the WARNINGS output so
+ * a future pass can special-case any that turn out wrong.
  *
  * Fetching: `pokemon_stats`/`pokemon_types`/`fast_moves`/`charged_moves`/
  * `current_pokemon_moves`/`cp_multiplier`/the ScrapedDuck raids feed are
@@ -283,21 +300,45 @@ for (const m of rawChargedMoves) {
   chargedMoveByName.set(m.name, fromGameMasterMove(toRawGameMasterMove(m)));
 }
 
+/**
+ * Determines the ONE form each pokemon_id normalizes to this pass: "Normal"
+ * if pokemon_stats.json has a row so labeled for that id, else that species'
+ * first-listed form in the raw file (see module docstring's "Fallback-form
+ * species" note for why this is a reasonable default and its known limits).
+ * Computed once from pokemon_stats.json (the species list's source of truth)
+ * and then reused to select the matching row out of pokemon_types.json and
+ * current_pokemon_moves.json too, so all three stay keyed to the same form
+ * per species rather than each independently guessing "Normal".
+ */
+const defaultFormByPokemonId = new Map<number, string>();
+for (const s of rawStats) {
+  if (!defaultFormByPokemonId.has(s.pokemon_id)) {
+    defaultFormByPokemonId.set(s.pokemon_id, s.form); // first-listed form, provisional
+  }
+  if (s.form === "Normal") {
+    defaultFormByPokemonId.set(s.pokemon_id, "Normal"); // "Normal" always wins if present anywhere
+  }
+}
+const fallbackFormPokemonIds = new Set(
+  [...defaultFormByPokemonId.entries()].filter(([, form]) => form !== "Normal").map(([id]) => id),
+);
+
 const typesByPokemonId = new Map<number, RawPokemonTypesEntry>();
 for (const t of rawTypes) {
-  if (t.form === "Normal") typesByPokemonId.set(t.pokemon_id, t);
+  if (t.form === defaultFormByPokemonId.get(t.pokemon_id)) typesByPokemonId.set(t.pokemon_id, t);
 }
 
 const movesByPokemonId = new Map<number, RawCurrentMovesEntry>();
 for (const c of rawCurrentMoves) {
-  if (c.form === "Normal") movesByPokemonId.set(c.pokemon_id, c);
+  if (c.form === defaultFormByPokemonId.get(c.pokemon_id)) movesByPokemonId.set(c.pokemon_id, c);
 }
 
 // ---------------------------------------------------------------------------
-// Build normalized species list (Normal form only)
+// Build normalized species list (one form per species — "Normal", or the
+// documented fallback above)
 // ---------------------------------------------------------------------------
 
-const normalStats = rawStats.filter((s) => s.form === "Normal");
+const normalStats = rawStats.filter((s) => s.form === defaultFormByPokemonId.get(s.pokemon_id));
 
 const species: SpeciesDefinition[] = [];
 const skippedSpecies: { pokemon_id: number; pokemon_name: string; reason: string }[] = [];
@@ -370,9 +411,9 @@ for (const stat of normalStats) {
     resolvedCharged,
   );
   // National-dex sprite, keyed by the pokemon_id we already have — no extra
-  // network call needed for the 964 Normal-form species (unlike the 48 mega
-  // entries below, which need a per-species PokeAPI lookup for their own
-  // distinct internal ID).
+  // network call needed for any of the Normal-form-or-fallback-form species
+  // handled here (unlike the 48 mega entries below, which need a per-species
+  // PokeAPI lookup for their own distinct internal ID).
   definition.imageUrl = spriteUrlForDexId(stat.pokemon_id);
 
   species.push(definition);
@@ -554,6 +595,46 @@ function findByExactName(name: string, pool: { id: string; name: string }[]): st
 const megaSpeciesLookupPool = megaSpecies.map((s) => ({ id: s.id, name: s.name }));
 const speciesLookupPool = species.map((s) => ({ id: s.id, name: s.name }));
 const hypotheticalLookupPool = HYPOTHETICAL_FIXTURES.map((s) => ({ id: s.id, name: s.name }));
+const speciesById = new Map(species.map((s) => [s.id, s]));
+
+/**
+ * "Shadow " raid entries used to just point speciesId at the unboosted base
+ * species and get flagged isApproximate: true (this project didn't model the
+ * real Shadow atk/def multiplier). Now that shadow.ts's
+ * shadowAdjustedBaseStats/SpeciesDefinition.isShadow exist (engine-developer,
+ * 2026-09-05), a Shadow raid entry gets its OWN distinct SpeciesDefinition —
+ * same pattern as a mega/primal getting its own id separate from its base
+ * form — with raw base stats copied unmultiplied from the base species (the
+ * engine applies SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER at
+ * effective-stat time; pre-multiplying here would double-apply once combined
+ * with the engine's own shadowAdjustedBaseStats). Cached per base species id
+ * so e.g. two "Shadow Slowpoke" raid tiers don't synthesize two entries.
+ */
+const shadowSpeciesByBaseId = new Map<string, SpeciesDefinition>();
+
+function shadowVariantIdFor(baseId: string): string {
+  return `${baseId}-shadow`;
+}
+
+function getOrCreateShadowVariant(baseSpecies: SpeciesDefinition): SpeciesDefinition {
+  const existing = shadowSpeciesByBaseId.get(baseSpecies.id);
+  if (existing) return existing;
+  const shadowId = shadowVariantIdFor(baseSpecies.id);
+  const shadow: SpeciesDefinition = {
+    ...baseSpecies,
+    id: shadowId,
+    name: `Shadow ${baseSpecies.name}`,
+    isShadow: true,
+    // Shadow and mega/primal boost are mutually exclusive in the real game
+    // (shadow.ts's shadowAdjustedBaseStats throws if both are set) — the base
+    // species this is derived from is never itself a mega/primal form (a
+    // "Shadow Mega X" raid doesn't exist), but strip boost defensively rather
+    // than trust that invariant silently.
+    boost: undefined,
+  };
+  shadowSpeciesByBaseId.set(baseSpecies.id, shadow);
+  return shadow;
+}
 
 const activeRaids: ActiveRaidEntry[] = [];
 let unmatchedRaidCount = 0;
@@ -591,6 +672,19 @@ for (const raid of rawRaids) {
             const baseName = raid.name.slice(prefix.length);
             const baseMatch = findByExactName(baseName, speciesLookupPool);
             if (baseMatch) {
+              if (prefix === "Shadow ") {
+                // Real, not approximate: synthesize (or reuse) a distinct
+                // Shadow-variant SpeciesDefinition with isShadow: true rather
+                // than standing in the unboosted base species — see
+                // getOrCreateShadowVariant above.
+                const baseSpecies = speciesById.get(baseMatch);
+                if (baseSpecies) {
+                  const shadowVariant = getOrCreateShadowVariant(baseSpecies);
+                  speciesId = shadowVariant.id;
+                  isApproximate = false;
+                  break;
+                }
+              }
               speciesId = baseMatch;
               isApproximate = true;
               break;
@@ -610,6 +704,11 @@ for (const raid of rawRaids) {
     isApproximate,
   });
 }
+
+// Fold synthesized Shadow-variant species into the output list, now that raid
+// matching (the only thing that triggers synthesizing one) has finished.
+const shadowSpecies = [...shadowSpeciesByBaseId.values()];
+species.push(...shadowSpecies);
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -723,22 +822,24 @@ writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
 const raidsWithNullSpecies = activeRaids.filter((r) => r.speciesId === null).length;
 const raidsApproximate = activeRaids.filter((r) => r.isApproximate).length;
 
-console.log(`SYNCED: pokemon_stats, pokemon_types, fast_moves, charged_moves, current_pokemon_moves, cp_multiplier, mega_pokemon, scrapedduck-raids (${species.length} species [${species.length - megaSpecies.length} Normal-form + ${megaSpecies.length} mega/primal], ${fastMoveByName.size + chargedMoveByName.size} moves)`);
+console.log(`SYNCED: pokemon_stats, pokemon_types, fast_moves, charged_moves, current_pokemon_moves, cp_multiplier, mega_pokemon, scrapedduck-raids (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length} single-form (Normal, or fallback — see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (synthesized for Shadow raid matches, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} moves)`);
 console.log(`CHANGED (species.json): ${speciesDiffs.length > 0 ? speciesDiffs.join("; ") : "none"}`);
 console.log(`CHANGED (activeRaids.json): ${raidDiffs.length > 0 ? raidDiffs.join("; ") : "none"}`);
 console.log(`AFFECTS SCENARIOS: none (no saved scenarios reference normalized species yet; scenarioA.ts fixtures untouched)`);
 console.log(`WARNINGS:`);
-console.log(`  - Scope limitation: only form === "Normal" entries were normalized from pokemon_stats.json (${normalStats.length} candidates out of ${rawStats.length} total rows spanning 273 distinct forms), plus all ${rawMegaPokemon.length} mega_pokemon.json entries. Other regional/costume/event forms are still out of scope this pass.`);
+console.log(`  - Scope limitation: only one form per species (form === "Normal", or a documented fallback — see next line) was normalized from pokemon_stats.json (${normalStats.length} candidates out of ${rawStats.length} total rows spanning 273 distinct forms), plus all ${rawMegaPokemon.length} mega_pokemon.json entries. Other regional/costume/event forms are still out of scope this pass.`);
+console.log(`  - Fallback-form species (no row labeled "Normal" in pokemon_stats.json; ${fallbackFormPokemonIds.size} of ${defaultFormByPokemonId.size} distinct pokemon_id values): normalized under their first-listed form instead of being silently dropped (previous behavior — see task notes). Spot-checked correct against real in-game default forme (Giratina -> Altered, Tornadus/Thundurus/Landorus/Enamorus -> Incarnate, Keldeo -> Ordinary, Meloetta -> Aria) but NOT verified for all ${fallbackFormPokemonIds.size}: ${[...fallbackFormPokemonIds].map((id) => `${rawStats.find((s) => s.pokemon_id === id)?.pokemon_name} (${defaultFormByPokemonId.get(id)})`).join(", ")}`);
 console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/moveset data: ${skippedSpecies.map((s) => `${s.pokemon_name} (${s.reason})`).join(", ") || "none"}`);
 console.log(`  - Unresolved move names referenced by current_pokemon_moves but absent from fast_moves/charged_moves.json (likely retired/legacy moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
-console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a Shadow/regional/mega variant, since this project doesn't model the real Shadow atk/def multiplier or lack real mega data for that species): ${raidsApproximate}`);
+console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);
+console.log(`  - Shadow raid entries (${shadowSpecies.length} distinct species synthesized: ${shadowSpecies.map((s) => s.name).join(", ") || "none"}): now real, not approximate, matches — each gets its own SpeciesDefinition (id "<base>-shadow") with isShadow: true and unmultiplied base stats copied from the real base species; the engine's shadowAdjustedBaseStats (packages/engine/src/shadow.ts) applies SHADOW_ATTACK_MULTIPLIER (1.2)/SHADOW_DEFENSE_MULTIPLIER (0.83) at effective-stat time. Previously these were flagged isApproximate: true against the unboosted base species.`);
 console.log(`  - Speculative/hypothetical species in use for raid matching: Mega Raichu X, Mega Raichu Y, Mega Skarmory (all isHypothetical/no real stat source) — flagged speciesId points at hand-defined fixtures, not fetched data. (Primal Kyogre's raid-boss fixture from scenarioA.ts is not used for any current raid match, but stays registered as a boss-mode hypothetical alongside the new real attacker-mode entry.)`);
 console.log(`  - mega_pokemon.json entries are REAL data (not flagged speculative) but model an ATTACKER (standard level/IV/CPM pipeline), not a raid boss — do not confuse the new "${reservedSpeciesIds.has("kyogre-primal-attacker") ? "kyogre-primal-attacker" : "kyogre-primal"}" species entry with the pre-existing hand-tuned boss-mode PRIMAL_KYOGRE fixture (id "kyogre-primal") in packages/engine/src/fixtures/scenarioA.ts — both now coexist under different ids by design.`);
 console.log(`  - Mega/primal species id collisions resolved by appending "-attacker": ${megaIdCollisions.length > 0 ? megaIdCollisions.map((c) => `${c.megaName} (${c.wouldBeId} -> ${c.usedId})`).join(", ") : "none"}`);
 console.log(`  - mega_pokemon.json has no per-species boosted-type data, so each of the ${megaSpecies.length} mega/primal entries gets boost = { multiplier: DEFAULT_MEGA_BOOST_MULTIPLIER (1.3), boostedType: <its primary listed type> } — comparison.ts only applies a mega boost when \`species.boost\` is explicitly set (its fallback is 1, not 1.3), so this was required, not cosmetic.`);
 const megaSpeciesWithoutImage = megaSpecies.filter((m) => !m.imageUrl).map((m) => m.name);
-console.log(`  - Mega/primal species image lookups (PokeAPI, cached to data/raw/mega_sprite_urls.json): ${megaSpecies.length - megaSpeciesWithoutImage.length}/${megaSpecies.length} resolved${megaSpeciesWithoutImage.length > 0 ? `; no image found for: ${megaSpeciesWithoutImage.join(", ")}` : ""}. All 964 Normal-form species get a dex-id sprite URL with no extra request.`);
+console.log(`  - Mega/primal species image lookups (PokeAPI, cached to data/raw/mega_sprite_urls.json): ${megaSpecies.length - megaSpeciesWithoutImage.length}/${megaSpecies.length} resolved${megaSpeciesWithoutImage.length > 0 ? `; no image found for: ${megaSpeciesWithoutImage.join(", ")}` : ""}. All Normal-form-or-fallback-form species get a dex-id sprite URL with no extra request.`);
 if (validationErrors.length > 0) {
   console.log(`  - VALIDATION ERRORS: ${validationErrors.join("; ")}`);
 }

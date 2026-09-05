@@ -317,12 +317,20 @@ export function App() {
                 // boost over its own mean survival — a separate number from
                 // its own damage output, per the assumptions panel's party
                 // size / matching-teammate-count / teammate DPS.
+                const persistsThroughFaint = species.candidates?.[i]?.boost?.persistsThroughFaint ?? false;
                 const teamContribution = convertUptimeToTeamDamage({
                   secondsSurvived: c.meanSecondsSurvived,
                   boostMultiplier: species.candidates?.[i]?.boost?.multiplier ?? 1,
                   teammateCount: assumptions.partySize,
                   matchingTeammateCount: assumptions.matchingTeammateCount,
                   teammateDps: assumptions.teammateDps,
+                  // See SpeciesDefinition.boost.persistsThroughFaint (Primal
+                  // Groudon/Kyogre, Mega Rayquaza) — for those, the boost's
+                  // team-damage window is the full displayed fight window
+                  // (chartMaxSeconds), not just this candidate's own mean
+                  // survival time.
+                  persistsThroughFaint,
+                  fightDurationSeconds: chartMaxSeconds,
                 });
                 const ownDps = c.meanSecondsSurvived > 0 ? c.meanTotalDamage / c.meanSecondsSurvived : null;
                 const ownPlusTeam = c.meanTotalDamage + teamContribution;
@@ -331,6 +339,7 @@ export function App() {
                     <h3>
                       {species.candidates?.[i] && <SpeciesIcon s={species.candidates[i]} />} {c.name}
                       {species.candidates?.[i]?.isHypothetical && <span className="badge badge-hypothetical">hypothetical</span>}
+                      {species.candidates?.[i]?.isShadow && <span className="badge badge-shadow">shadow</span>}
                     </h3>
                     <dl>
                       <dt>Mean survival</dt>
@@ -352,10 +361,25 @@ export function App() {
                       <dt>Own damage per second</dt>
                       <dd>{ownDps === null ? "-" : ownDps.toFixed(1)}</dd>
                       <dt>Team damage from this candidate's boost</dt>
-                      <dd>{teamContribution.toFixed(0)}</dd>
+                      <dd>
+                        {teamContribution.toFixed(0)}
+                        {persistsThroughFaint && (
+                          <span className="badge badge-persists" style={{ marginLeft: 6 }}>
+                            persists past faint
+                          </span>
+                        )}
+                      </dd>
                       <dt>Own + team damage from boost</dt>
                       <dd>{ownPlusTeam.toFixed(0)}</dd>
                     </dl>
+                    {persistsThroughFaint && (
+                      <p className="caveats" style={{ marginTop: 8, fontSize: "0.78rem" }}>
+                        Real-game exception: this species' boost keeps buffing the team for the rest of the fight (~
+                        {chartMaxSeconds.toFixed(1)}s here) even after it faints, unlike every standard mega/primal —
+                        so "team damage" above already reflects the full fight window, not just its {c.meanSecondsSurvived.toFixed(1)}s
+                        mean survival.
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -368,6 +392,8 @@ export function App() {
                 teammateCount: assumptions.partySize,
                 matchingTeammateCount: assumptions.matchingTeammateCount,
                 teammateDps: assumptions.teammateDps,
+                persistsThroughFaint: species.candidates?.[0]?.boost?.persistsThroughFaint,
+                fightDurationSeconds: chartMaxSeconds,
               });
               const teamB = convertUptimeToTeamDamage({
                 secondsSurvived: b!.meanSecondsSurvived,
@@ -375,6 +401,8 @@ export function App() {
                 teammateCount: assumptions.partySize,
                 matchingTeammateCount: assumptions.matchingTeammateCount,
                 teammateDps: assumptions.teammateDps,
+                persistsThroughFaint: species.candidates?.[1]?.boost?.persistsThroughFaint,
+                fightDurationSeconds: chartMaxSeconds,
               });
               const dpsA = a!.meanSecondsSurvived > 0 ? a!.meanTotalDamage / a!.meanSecondsSurvived : 0;
               const dpsB = b!.meanSecondsSurvived > 0 ? b!.meanTotalDamage / b!.meanSecondsSurvived : 0;
@@ -412,6 +440,7 @@ export function App() {
                 // the chart's own window length, i.e. no marker/dashing.
                 secondsSurvivedCutoff: results.candidates[0]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
                 boostMultiplier: species.candidates![0].boost?.multiplier ?? 1,
+                persistsThroughFaint: species.candidates![0].boost?.persistsThroughFaint,
                 imageUrl: species.candidates![0].imageUrl,
               }}
               y={{
@@ -419,6 +448,7 @@ export function App() {
                 ownDamageTrajectory: results.candidates[1]!.representativeRun.ownDamageTrajectory,
                 secondsSurvivedCutoff: results.candidates[1]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
                 boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
+                persistsThroughFaint: species.candidates![1].boost?.persistsThroughFaint,
                 imageUrl: species.candidates![1].imageUrl,
               }}
               teammateDps={assumptions.teammateDps}

@@ -35,6 +35,10 @@ The handful of product-level calls that must survive no matter which agent touch
   the `add-scenario-assumption` skill whenever a new setting is added.
 - **The hypothetical fixtures back pinned acceptance tests.** Don't approve or make a casual
   change to their stats — `engine-developer` owns the mechanics of why and how to verify one.
+- **A "Teambuilding Analyzer" (multi-trainer mega staggering across a raid, since the mega boost
+  doesn't stack) is out of scope for this tool** — a separate future project, not a feature to fold
+  in here. Explicitly ruled out once already; if reproposed (most likely by `pogo-researcher`
+  during ideation), flag it rather than building toward it.
 
 ## Repo layout
 
@@ -72,7 +76,7 @@ existing credentials.
 
 ## Subagents and routing
 
-`.claude/agents/` has six project-specific subagents. Agent definitions load once at session
+`.claude/agents/` has seven project-specific subagents. Agent definitions load once at session
 start, not live — a session restart/resume is needed to pick up a newly-added or edited `.md`
 file. Route by what the request actually needs, not by habit:
 
@@ -93,6 +97,9 @@ file. Route by what the request actually needs, not by habit:
 - **`meta-architect`** — audits and improves this Claude Code setup itself (agent definitions,
   this file, skills, hooks, settings) — a different axis from all of the above, which build the
   product. Use it after adding or editing agents/skills, or when delegation starts misfiring.
+- **`pogo-researcher`** — real Pokémon GO game mechanics/content/meta questions, and feature or
+  metric ideas for the comparator. Never implements — proposes only, and must flag anything that
+  would touch a standing decision above rather than quietly routing around it.
 
 ## Skills and hooks
 

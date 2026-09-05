@@ -1,9 +1,14 @@
 ---
 name: site-builder-push-guardrail
-description: site-builder.md's "stop and ask before git push/deploy" rule is prompt-only, with no settings.json permission rule or hook backing it. Flagged in the 2026-09-04 audit, deliberately not fixed without the user's sign-off.
+description: RESOLVED 2026-09-05 — user signed off; .claude/settings.json now has "permissions": {"ask": ["Bash(git push:*)"]} backing site-builder.md's prose rule with an actual enforced prompt.
 metadata:
   type: project
 ---
+
+**RESOLVED.** The user explicitly approved adding the guardrail (2026-09-05, overseer session).
+`.claude/settings.json` now has a top-level `"permissions": {"ask": ["Bash(git push:*)"]}` block
+alongside the existing `hooks` key — any `git push` now prompts for confirmation regardless of
+which agent (or the main thread) issues it, closing the gap described below.
 
 `site-builder.md` says to get explicit confirmation before `git push` to any remote, creating/
 changing repo visibility, enabling Pages, or any deploying workflow run — this is a public site,

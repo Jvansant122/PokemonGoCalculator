@@ -32,6 +32,23 @@ export interface UptimeConversionInputs {
    */
   matchingTeammateCount: number;
   teammateDps: number;
+  /**
+   * See SpeciesDefinition.boost.persistsThroughFaint — true only for Primal
+   * Groudon/Kyogre and Mega Rayquaza (per current community-consensus
+   * evidence). When true AND fightDurationSeconds is supplied, the boost's
+   * team-damage window extends past secondsSurvived to the full fight
+   * duration instead of stopping the instant this candidate faints.
+   * Defaults to false, matching every standard mega and today's behavior for
+   * every existing caller that doesn't pass this.
+   */
+  persistsThroughFaint?: boolean;
+  /**
+   * Total fight duration in seconds — only consulted when
+   * persistsThroughFaint is true; ignored otherwise. Omitting this (or
+   * persistsThroughFaint) falls back to secondsSurvived exactly as before,
+   * so no existing caller needs to change.
+   */
+  fightDurationSeconds?: number;
 }
 
 /**
@@ -39,14 +56,24 @@ export interface UptimeConversionInputs {
  * contributed during that window, split by how many teammates share its
  * boosted type (full boostMultiplier) versus don't (still
  * OFF_TYPE_MEGA_BOOST_MULTIPLIER, never zero).
+ *
+ * The boost's own time window is normally capped at secondsSurvived (the
+ * boost stops the instant the boosting Pokémon faints) — except for a
+ * species flagged persistsThroughFaint, whose boost keeps running for the
+ * rest of the fight (fightDurationSeconds) regardless of when it personally
+ * faints. See SpeciesDefinition.boost.persistsThroughFaint.
  */
 export function convertUptimeToTeamDamage(inputs: UptimeConversionInputs): number {
-  const { secondsSurvived, boostMultiplier, teammateCount, teammateDps } = inputs;
-  if (secondsSurvived <= 0 || teammateCount <= 0) return 0;
+  const { secondsSurvived, boostMultiplier, teammateCount, teammateDps, persistsThroughFaint, fightDurationSeconds } = inputs;
+  const boostWindowSeconds =
+    persistsThroughFaint && fightDurationSeconds != null
+      ? Math.max(fightDurationSeconds, secondsSurvived)
+      : secondsSurvived;
+  if (boostWindowSeconds <= 0 || teammateCount <= 0) return 0;
   const matching = Math.min(Math.max(inputs.matchingTeammateCount, 0), teammateCount);
   const nonMatching = teammateCount - matching;
   const perSecondDamage = matching * teammateDps * boostMultiplier + nonMatching * teammateDps * OFF_TYPE_MEGA_BOOST_MULTIPLIER;
-  return secondsSurvived * perSecondDamage;
+  return boostWindowSeconds * perSecondDamage;
 }
 
 export interface Candidate {
@@ -56,6 +83,8 @@ export interface Candidate {
   boostedType: PokemonType;
   /** This candidate's own raw damage contribution, independent of teammates. */
   ownDamage: number;
+  /** See UptimeConversionInputs.persistsThroughFaint. Defaults to false when omitted. */
+  persistsThroughFaint?: boolean;
 }
 
 export interface CrossoverPoint {
@@ -76,6 +105,11 @@ export interface CrossoverPoint {
  * doesn't scale sensibly across different party sizes — e.g. "3 teammates
  * match" means something different at party size 4 versus party size 20.
  * Round to the nearest whole teammate at each swept size.
+ *
+ * fightDurationSeconds is shared across both candidates (the same raid
+ * encounter's total length) — only consulted for whichever candidate(s) are
+ * flagged persistsThroughFaint; ignored for the rest. Omitting it preserves
+ * today's behavior (every candidate's boost window caps at secondsSurvived).
  */
 export function findCrossoverPartySize(
   a: Candidate,
@@ -83,6 +117,7 @@ export function findCrossoverPartySize(
   teammateDps: number,
   matchingFraction: { a: number; b: number },
   partySizeRange: number[] = Array.from({ length: 20 }, (_, i) => i + 1),
+  fightDurationSeconds?: number,
 ): CrossoverPoint {
   const totalFor = (c: Candidate, fraction: number, partySize: number) =>
     c.ownDamage +
@@ -92,6 +127,8 @@ export function findCrossoverPartySize(
       teammateCount: partySize,
       matchingTeammateCount: Math.round(partySize * fraction),
       teammateDps,
+      persistsThroughFaint: c.persistsThroughFaint,
+      fightDurationSeconds,
     });
 
   let previousLeader: string | null = null;

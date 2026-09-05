@@ -6,6 +6,7 @@ export * from "./damage.js";
 export * from "./energy.js";
 export * from "./combat.js";
 export * from "./raidBoss.js";
+export * from "./shadow.js";
 export * from "./gamemaster.js";
 export * from "./breakpoints.js";
 export * from "./uptime.js";

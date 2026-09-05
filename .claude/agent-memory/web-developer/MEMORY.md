@@ -1,5 +1,4 @@
 # Web-Developer Memory Index
 
-No history yet — this agent was created 2026-09-05, absorbing site-builder's former UI-feature
-charter. Record UI conventions discovered the hard way, real bugs found (e.g. the fast/charged
-move-shape ambiguity documented in this agent's own body), and requests pushed back on and why.
+- [Wiring persistsThroughFaint into the UI](wiring_persists_through_faint.md) — call-site plumbing, the chart's progressive-time formula trick, badge-priority convention
+- [Verifying without a browser tool](verification_without_browser_tool.md) — build/serve/curl/node-check ladder, and a scratch-script technique for proving a formula numerically

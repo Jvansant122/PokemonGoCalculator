@@ -16800,6 +16800,41 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/200.png"
   },
   {
+    "id": "unown-a",
+    "name": "Unown (A)",
+    "types": [
+      "psychic"
+    ],
+    "baseAttack": 136,
+    "baseDefense": 91,
+    "baseStamina": 134,
+    "fastMoves": [
+      {
+        "id": "281",
+        "name": "Hidden Power",
+        "type": "normal",
+        "power": 15,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "133",
+        "name": "Struggle",
+        "type": "normal",
+        "power": 35,
+        "energyGain": 0,
+        "energyCost": 0,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/201.png"
+  },
+  {
     "id": "wobbuffet",
     "name": "Wobbuffet",
     "types": [
@@ -26243,6 +26278,71 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/326.png"
   },
   {
+    "id": "spinda-00",
+    "name": "Spinda (00)",
+    "types": [
+      "normal"
+    ],
+    "baseAttack": 116,
+    "baseDefense": 116,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "203",
+        "name": "Sucker Punch",
+        "type": "dark",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "226",
+        "name": "Psycho Cut",
+        "type": "psychic",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "26",
+        "name": "Dig",
+        "type": "ground",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4.5,
+        "vulnerableWindowSeconds": 4.5
+      },
+      {
+        "id": "63",
+        "name": "Rock Tomb",
+        "type": "rock",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "111",
+        "name": "Icy Wind",
+        "type": "ice",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/327.png"
+  },
+  {
     "id": "trapinch",
     "name": "Trapinch",
     "types": [
@@ -32564,6 +32664,117 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/411.png"
   },
   {
+    "id": "burmy-plant",
+    "name": "Burmy (Plant)",
+    "types": [
+      "bug"
+    ],
+    "baseAttack": 53,
+    "baseDefense": 83,
+    "baseStamina": 120,
+    "fastMoves": [
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "201",
+        "name": "Bug Bite",
+        "type": "bug",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "133",
+        "name": "Struggle",
+        "type": "normal",
+        "power": 35,
+        "energyGain": 0,
+        "energyCost": 0,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/412.png"
+  },
+  {
+    "id": "wormadam-plant",
+    "name": "Wormadam (Plant)",
+    "types": [
+      "bug",
+      "grass"
+    ],
+    "baseAttack": 141,
+    "baseDefense": 180,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "235",
+        "name": "Confusion",
+        "type": "psychic",
+        "power": 19,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "201",
+        "name": "Bug Bite",
+        "type": "bug",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "30",
+        "name": "Psybeam",
+        "type": "psychic",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "49",
+        "name": "Bug Buzz",
+        "type": "bug",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/413.png"
+  },
+  {
     "id": "mothim",
     "name": "Mothim",
     "types": [
@@ -33050,6 +33261,212 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/420.png"
+  },
+  {
+    "id": "cherrim-overcast",
+    "name": "Cherrim (Overcast)",
+    "types": [
+      "grass"
+    ],
+    "baseAttack": 170,
+    "baseDefense": 153,
+    "baseStamina": 172,
+    "fastMoves": [
+      {
+        "id": "215",
+        "name": "Razor Leaf",
+        "type": "grass",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "271",
+        "name": "Bullet Seed",
+        "type": "grass",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "86",
+        "name": "Dazzling Gleam",
+        "type": "fairy",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "116",
+        "name": "Solar Beam",
+        "type": "grass",
+        "power": 180,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 5,
+        "vulnerableWindowSeconds": 5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/421.png"
+  },
+  {
+    "id": "shellos-east_sea",
+    "name": "Shellos (East_sea)",
+    "types": [
+      "water"
+    ],
+    "baseAttack": 103,
+    "baseDefense": 105,
+    "baseStamina": 183,
+    "fastMoves": [
+      {
+        "id": "233",
+        "name": "Mud Slap",
+        "type": "ground",
+        "power": 19,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "281",
+        "name": "Hidden Power",
+        "type": "normal",
+        "power": 15,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "105",
+        "name": "Water Pulse",
+        "type": "water",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "96",
+        "name": "Mud Bomb",
+        "type": "ground",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "131",
+        "name": "Body Slam",
+        "type": "normal",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/422.png"
+  },
+  {
+    "id": "gastrodon-east_sea",
+    "name": "Gastrodon (East_sea)",
+    "types": [
+      "water",
+      "ground"
+    ],
+    "baseAttack": 169,
+    "baseDefense": 143,
+    "baseStamina": 244,
+    "fastMoves": [
+      {
+        "id": "233",
+        "name": "Mud Slap",
+        "type": "ground",
+        "power": 19,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "281",
+        "name": "Hidden Power",
+        "type": "normal",
+        "power": 15,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "105",
+        "name": "Water Pulse",
+        "type": "water",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "304",
+        "name": "Earth Power",
+        "type": "ground",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "131",
+        "name": "Body Slam",
+        "type": "normal",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "31",
+        "name": "Earthquake",
+        "type": "ground",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/423.png"
   },
   {
     "id": "ambipom",
@@ -38012,6 +38429,82 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/486.png"
   },
   {
+    "id": "giratina-altered",
+    "name": "Giratina (Altered)",
+    "types": [
+      "ghost",
+      "dragon"
+    ],
+    "baseAttack": 187,
+    "baseDefense": 225,
+    "baseStamina": 284,
+    "fastMoves": [
+      {
+        "id": "204",
+        "name": "Dragon Breath",
+        "type": "dragon",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "213",
+        "name": "Shadow Claw",
+        "type": "ghost",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "83",
+        "name": "Dragon Claw",
+        "type": "dragon",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "62",
+        "name": "Ancient Power",
+        "type": "rock",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "66",
+        "name": "Shadow Sneak",
+        "type": "ghost",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "371",
+        "name": "Shadow Force",
+        "type": "ghost",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/487.png"
+  },
+  {
     "id": "cresselia",
     "name": "Cresselia",
     "types": [
@@ -38290,6 +38783,81 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/491.png"
+  },
+  {
+    "id": "shaymin-land",
+    "name": "Shaymin (Land)",
+    "types": [
+      "grass"
+    ],
+    "baseAttack": 210,
+    "baseDefense": 210,
+    "baseStamina": 225,
+    "fastMoves": [
+      {
+        "id": "281",
+        "name": "Hidden Power",
+        "type": "normal",
+        "power": 15,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "234",
+        "name": "Zen Headbutt",
+        "type": "psychic",
+        "power": 11,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "272",
+        "name": "Grass Knot",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "116",
+        "name": "Solar Beam",
+        "type": "grass",
+        "power": 180,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 5,
+        "vulnerableWindowSeconds": 5
+      },
+      {
+        "id": "369",
+        "name": "Seed Flare",
+        "type": "grass",
+        "power": 115,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/492.png"
   },
   {
     "id": "arceus",
@@ -42286,6 +42854,71 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/549.png"
   },
   {
+    "id": "basculin-blue_striped",
+    "name": "Basculin (Blue_striped)",
+    "types": [
+      "water"
+    ],
+    "baseAttack": 189,
+    "baseDefense": 129,
+    "baseStamina": 172,
+    "fastMoves": [
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "230",
+        "name": "Water Gun",
+        "type": "water",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "57",
+        "name": "Aqua Jet",
+        "type": "water",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "58",
+        "name": "Aqua Tail",
+        "type": "water",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "316",
+        "name": "Muddy Water",
+        "type": "water",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/550.png"
+  },
+  {
     "id": "sandile",
     "name": "Sandile",
     "types": [
@@ -42557,6 +43190,81 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/554.png"
+  },
+  {
+    "id": "darmanitan-galarian_standard",
+    "name": "Darmanitan (Galarian_standard)",
+    "types": [
+      "ice"
+    ],
+    "baseAttack": 263,
+    "baseDefense": 114,
+    "baseStamina": 233,
+    "fastMoves": [
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "327",
+        "name": "Ice Fang",
+        "type": "ice",
+        "power": 12,
+        "energyGain": 20,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "270",
+        "name": "Overheat",
+        "type": "fire",
+        "power": 160,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "254",
+        "name": "Avalanche",
+        "type": "ice",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "310",
+        "name": "Super Power",
+        "type": "fighting",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "33",
+        "name": "Ice Punch",
+        "type": "ice",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/555.png"
   },
   {
     "id": "maractus",
@@ -44593,6 +45301,168 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/584.png"
+  },
+  {
+    "id": "deerling-autumn",
+    "name": "Deerling (Autumn)",
+    "types": [
+      "normal",
+      "grass"
+    ],
+    "baseAttack": 115,
+    "baseDefense": 100,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "282",
+        "name": "Take Down",
+        "type": "normal",
+        "power": 7,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "59",
+        "name": "Seed Bomb",
+        "type": "grass",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "251",
+        "name": "Wild Charge",
+        "type": "electric",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "392",
+        "name": "Trailblaze",
+        "type": "grass",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/585.png"
+  },
+  {
+    "id": "sawsbuck-autumn",
+    "name": "Sawsbuck (Autumn)",
+    "types": [
+      "normal",
+      "grass"
+    ],
+    "baseAttack": 198,
+    "baseDefense": 146,
+    "baseStamina": 190,
+    "fastMoves": [
+      {
+        "id": "238",
+        "name": "Feint Attack",
+        "type": "dark",
+        "power": 11,
+        "energyGain": 10,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "282",
+        "name": "Take Down",
+        "type": "normal",
+        "power": 7,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "22",
+        "name": "Megahorn",
+        "type": "bug",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "116",
+        "name": "Solar Beam",
+        "type": "grass",
+        "power": 180,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 5,
+        "vulnerableWindowSeconds": 5
+      },
+      {
+        "id": "251",
+        "name": "Wild Charge",
+        "type": "electric",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "392",
+        "name": "Trailblaze",
+        "type": "grass",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/586.png"
   },
   {
     "id": "emolga",
@@ -48576,6 +49446,157 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/640.png"
   },
   {
+    "id": "tornadus-incarnate",
+    "name": "Tornadus (Incarnate)",
+    "types": [
+      "flying"
+    ],
+    "baseAttack": 266,
+    "baseDefense": 164,
+    "baseStamina": 188,
+    "fastMoves": [
+      {
+        "id": "202",
+        "name": "Bite",
+        "type": "dark",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "255",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "272",
+        "name": "Grass Knot",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "16",
+        "name": "Dark Pulse",
+        "type": "dark",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "122",
+        "name": "Hurricane",
+        "type": "flying",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/641.png"
+  },
+  {
+    "id": "thundurus-incarnate",
+    "name": "Thundurus (Incarnate)",
+    "types": [
+      "electric",
+      "flying"
+    ],
+    "baseAttack": 266,
+    "baseDefense": 164,
+    "baseStamina": 188,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "205",
+        "name": "Thunder Shock",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "279",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "78",
+        "name": "Thunder",
+        "type": "electric",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "123",
+        "name": "Brick Break",
+        "type": "fighting",
+        "power": 40,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "77",
+        "name": "Thunder Punch",
+        "type": "electric",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/642.png"
+  },
+  {
     "id": "reshiram",
     "name": "Reshiram",
     "types": [
@@ -48748,6 +49769,82 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/644.png"
   },
   {
+    "id": "landorus-incarnate",
+    "name": "Landorus (Incarnate)",
+    "types": [
+      "ground",
+      "flying"
+    ],
+    "baseAttack": 261,
+    "baseDefense": 182,
+    "baseStamina": 205,
+    "fastMoves": [
+      {
+        "id": "216",
+        "name": "Mud Shot",
+        "type": "ground",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "227",
+        "name": "Rock Throw",
+        "type": "rock",
+        "power": 13,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "304",
+        "name": "Earth Power",
+        "type": "ground",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "64",
+        "name": "Rock Slide",
+        "type": "rock",
+        "power": 75,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "247",
+        "name": "Focus Blast",
+        "type": "fighting",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/645.png"
+  },
+  {
     "id": "kyurem",
     "name": "Kyurem",
     "types": [
@@ -48822,6 +49919,168 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/646.png"
+  },
+  {
+    "id": "keldeo-ordinary",
+    "name": "Keldeo (Ordinary)",
+    "types": [
+      "water",
+      "fighting"
+    ],
+    "baseAttack": 260,
+    "baseDefense": 192,
+    "baseStamina": 209,
+    "fastMoves": [
+      {
+        "id": "224",
+        "name": "Poison Jab",
+        "type": "poison",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "207",
+        "name": "Low Kick",
+        "type": "fighting",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "57",
+        "name": "Aqua Jet",
+        "type": "water",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "107",
+        "name": "Hydro Pump",
+        "type": "water",
+        "power": 135,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "100",
+        "name": "X Scissor",
+        "type": "bug",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "330",
+        "name": "Sacred Sword",
+        "type": "fighting",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/647.png"
+  },
+  {
+    "id": "meloetta-aria",
+    "name": "Meloetta (Aria)",
+    "types": [
+      "normal",
+      "psychic"
+    ],
+    "baseAttack": 250,
+    "baseDefense": 225,
+    "baseStamina": 225,
+    "fastMoves": [
+      {
+        "id": "219",
+        "name": "Quick Attack",
+        "type": "normal",
+        "power": 10,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "235",
+        "name": "Confusion",
+        "type": "psychic",
+        "power": 19,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "60",
+        "name": "Psyshock",
+        "type": "psychic",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "79",
+        "name": "Thunderbolt",
+        "type": "electric",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "86",
+        "name": "Dazzling Gleam",
+        "type": "fairy",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/648.png"
   },
   {
     "id": "genesect",
@@ -50017,6 +51276,162 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/663.png"
   },
   {
+    "id": "scatterbug-archipelago",
+    "name": "Scatterbug (Archipelago)",
+    "types": [
+      "bug"
+    ],
+    "baseAttack": 63,
+    "baseDefense": 63,
+    "baseStamina": 116,
+    "fastMoves": [
+      {
+        "id": "201",
+        "name": "Bug Bite",
+        "type": "bug",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "133",
+        "name": "Struggle",
+        "type": "normal",
+        "power": 35,
+        "energyGain": 0,
+        "energyCost": 0,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/664.png"
+  },
+  {
+    "id": "spewpa-archipelago",
+    "name": "Spewpa (Archipelago)",
+    "types": [
+      "bug"
+    ],
+    "baseAttack": 48,
+    "baseDefense": 89,
+    "baseStamina": 128,
+    "fastMoves": [
+      {
+        "id": "261",
+        "name": "Struggle Bug",
+        "type": "bug",
+        "power": 15,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "133",
+        "name": "Struggle",
+        "type": "normal",
+        "power": 35,
+        "energyGain": 0,
+        "energyCost": 0,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/665.png"
+  },
+  {
+    "id": "vivillon-archipelago",
+    "name": "Vivillon (Archipelago)",
+    "types": [
+      "bug",
+      "flying"
+    ],
+    "baseAttack": 176,
+    "baseDefense": 103,
+    "baseStamina": 190,
+    "fastMoves": [
+      {
+        "id": "345",
+        "name": "Gust",
+        "type": "flying",
+        "power": 25,
+        "energyGain": 20,
+        "energyCost": 0,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "261",
+        "name": "Struggle Bug",
+        "type": "bug",
+        "power": 15,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "49",
+        "name": "Bug Buzz",
+        "type": "bug",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "45",
+        "name": "Aerial Ace",
+        "type": "flying",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "122",
+        "name": "Hurricane",
+        "type": "flying",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/666.png"
+  },
+  {
     "id": "litleo",
     "name": "Litleo",
     "types": [
@@ -50197,6 +51612,251 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/668.png"
+  },
+  {
+    "id": "flabebe-blue",
+    "name": "Flabebe (Blue)",
+    "types": [
+      "fairy"
+    ],
+    "baseAttack": 108,
+    "baseDefense": 120,
+    "baseStamina": 127,
+    "fastMoves": [
+      {
+        "id": "214",
+        "name": "Vine Whip",
+        "type": "grass",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "86",
+        "name": "Dazzling Gleam",
+        "type": "fairy",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "47",
+        "name": "Petal Blizzard",
+        "type": "grass",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/669.png"
+  },
+  {
+    "id": "floette-blue",
+    "name": "Floette (Blue)",
+    "types": [
+      "fairy"
+    ],
+    "baseAttack": 136,
+    "baseDefense": 151,
+    "baseStamina": 144,
+    "fastMoves": [
+      {
+        "id": "214",
+        "name": "Vine Whip",
+        "type": "grass",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "86",
+        "name": "Dazzling Gleam",
+        "type": "fairy",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "47",
+        "name": "Petal Blizzard",
+        "type": "grass",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/670.png"
+  },
+  {
+    "id": "florges-blue",
+    "name": "Florges (Blue)",
+    "types": [
+      "fairy"
+    ],
+    "baseAttack": 212,
+    "baseDefense": 244,
+    "baseStamina": 186,
+    "fastMoves": [
+      {
+        "id": "214",
+        "name": "Vine Whip",
+        "type": "grass",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "221",
+        "name": "Tackle",
+        "type": "normal",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "215",
+        "name": "Razor Leaf",
+        "type": "grass",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "350",
+        "name": "Fairy Wind",
+        "type": "fairy",
+        "power": 9,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "87",
+        "name": "Moonblast",
+        "type": "fairy",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "47",
+        "name": "Petal Blizzard",
+        "type": "grass",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "84",
+        "name": "Disarming Voice",
+        "type": "fairy",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "392",
+        "name": "Trailblaze",
+        "type": "grass",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "488",
+        "name": "Chilling Water",
+        "type": "water",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/671.png"
   },
   {
     "id": "skiddo",
@@ -50490,6 +52150,81 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/675.png"
   },
   {
+    "id": "furfrou-dandy",
+    "name": "Furfrou (Dandy)",
+    "types": [
+      "normal"
+    ],
+    "baseAttack": 164,
+    "baseDefense": 167,
+    "baseStamina": 181,
+    "fastMoves": [
+      {
+        "id": "282",
+        "name": "Take Down",
+        "type": "normal",
+        "power": 7,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "202",
+        "name": "Bite",
+        "type": "dark",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "203",
+        "name": "Sucker Punch",
+        "type": "dark",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "284",
+        "name": "Surf",
+        "type": "water",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "16",
+        "name": "Dark Pulse",
+        "type": "dark",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "272",
+        "name": "Grass Knot",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/676.png"
+  },
+  {
     "id": "espurr",
     "name": "Espurr",
     "types": [
@@ -50730,6 +52465,72 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/680.png"
+  },
+  {
+    "id": "aegislash-blade",
+    "name": "Aegislash (Blade)",
+    "types": [
+      "steel",
+      "ghost"
+    ],
+    "baseAttack": 272,
+    "baseDefense": 97,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "226",
+        "name": "Psycho Cut",
+        "type": "psychic",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "255",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "36",
+        "name": "Flash Cannon",
+        "type": "steel",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "267",
+        "name": "Gyro Ball",
+        "type": "steel",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/681.png"
   },
   {
     "id": "spritzee",
@@ -52880,6 +54681,158 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/709.png"
   },
   {
+    "id": "pumpkaboo-average",
+    "name": "Pumpkaboo (Average)",
+    "types": [
+      "ghost",
+      "grass"
+    ],
+    "baseAttack": 121,
+    "baseDefense": 123,
+    "baseStamina": 135,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "215",
+        "name": "Razor Leaf",
+        "type": "grass",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "272",
+        "name": "Grass Knot",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "66",
+        "name": "Shadow Sneak",
+        "type": "ghost",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "280",
+        "name": "Foul Play",
+        "type": "dark",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/710.png"
+  },
+  {
+    "id": "gourgeist-average",
+    "name": "Gourgeist (Average)",
+    "types": [
+      "ghost",
+      "grass"
+    ],
+    "baseAttack": 175,
+    "baseDefense": 213,
+    "baseStamina": 163,
+    "fastMoves": [
+      {
+        "id": "264",
+        "name": "Hex",
+        "type": "ghost",
+        "power": 8,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "215",
+        "name": "Razor Leaf",
+        "type": "grass",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "59",
+        "name": "Seed Bomb",
+        "type": "grass",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "280",
+        "name": "Foul Play",
+        "type": "dark",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "103",
+        "name": "Fire Blast",
+        "type": "fire",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "376",
+        "name": "Poltergeist",
+        "type": "ghost",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/711.png"
+  },
+  {
     "id": "bergmite",
     "name": "Bergmite",
     "types": [
@@ -53393,6 +55346,102 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/717.png"
   },
   {
+    "id": "zygarde-complete",
+    "name": "Zygarde (Complete)",
+    "types": [
+      "dragon",
+      "ground"
+    ],
+    "baseAttack": 184,
+    "baseDefense": 207,
+    "baseStamina": 389,
+    "fastMoves": [
+      {
+        "id": "253",
+        "name": "Dragon Tail",
+        "type": "dragon",
+        "power": 14,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "202",
+        "name": "Bite",
+        "type": "dark",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "234",
+        "name": "Zen Headbutt",
+        "type": "psychic",
+        "power": 11,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "31",
+        "name": "Earthquake",
+        "type": "ground",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "279",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "95",
+        "name": "Bulldoze",
+        "type": "ground",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/718.png"
+  },
+  {
     "id": "diancie",
     "name": "Diancie",
     "types": [
@@ -53457,6 +55506,72 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/719.png"
+  },
+  {
+    "id": "hoopa-confined",
+    "name": "Hoopa (Confined)",
+    "types": [
+      "psychic",
+      "ghost"
+    ],
+    "baseAttack": 261,
+    "baseDefense": 187,
+    "baseStamina": 173,
+    "fastMoves": [
+      {
+        "id": "235",
+        "name": "Confusion",
+        "type": "psychic",
+        "power": 19,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "30",
+        "name": "Psybeam",
+        "type": "psychic",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/720.png"
   },
   {
     "id": "volcanion",
@@ -55031,6 +57146,72 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/740.png"
   },
   {
+    "id": "oricorio-baile",
+    "name": "Oricorio (Baile)",
+    "types": [
+      "fire",
+      "flying"
+    ],
+    "baseAttack": 196,
+    "baseDefense": 145,
+    "baseStamina": 181,
+    "fastMoves": [
+      {
+        "id": "222",
+        "name": "Pound",
+        "type": "normal",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "255",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "45",
+        "name": "Aerial Ace",
+        "type": "flying",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "121",
+        "name": "Air Cutter",
+        "type": "flying",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "122",
+        "name": "Hurricane",
+        "type": "flying",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/741.png"
+  },
+  {
     "id": "cutiefly",
     "name": "Cutiefly",
     "types": [
@@ -55236,6 +57417,166 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/744.png"
+  },
+  {
+    "id": "lycanroc-dusk",
+    "name": "Lycanroc (Dusk)",
+    "types": [
+      "rock"
+    ],
+    "baseAttack": 234,
+    "baseDefense": 139,
+    "baseStamina": 181,
+    "fastMoves": [
+      {
+        "id": "203",
+        "name": "Sucker Punch",
+        "type": "dark",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "243",
+        "name": "Counter",
+        "type": "fighting",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "227",
+        "name": "Rock Throw",
+        "type": "rock",
+        "power": 13,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "32",
+        "name": "Stone Edge",
+        "type": "rock",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "74",
+        "name": "Iron Head",
+        "type": "steel",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "279",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "392",
+        "name": "Trailblaze",
+        "type": "grass",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/745.png"
+  },
+  {
+    "id": "wishiwashi-school",
+    "name": "Wishiwashi (School)",
+    "types": [
+      "water"
+    ],
+    "baseAttack": 255,
+    "baseDefense": 242,
+    "baseStamina": 128,
+    "fastMoves": [
+      {
+        "id": "230",
+        "name": "Water Gun",
+        "type": "water",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "283",
+        "name": "Waterfall",
+        "type": "water",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "266",
+        "name": "Iron Tail",
+        "type": "steel",
+        "power": 14,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "104",
+        "name": "Brine",
+        "type": "water",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "284",
+        "name": "Surf",
+        "type": "water",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "58",
+        "name": "Aqua Tail",
+        "type": "water",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/746.png"
   },
   {
     "id": "mareanie",
@@ -57198,6 +59539,72 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/773.png"
   },
   {
+    "id": "minior-blue",
+    "name": "Minior (Blue)",
+    "types": [
+      "rock",
+      "flying"
+    ],
+    "baseAttack": 218,
+    "baseDefense": 131,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "368",
+        "name": "Rollout",
+        "type": "rock",
+        "power": 15,
+        "energyGain": 19,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "282",
+        "name": "Take Down",
+        "type": "normal",
+        "power": 7,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "65",
+        "name": "Power Gem",
+        "type": "rock",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "62",
+        "name": "Ancient Power",
+        "type": "rock",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "364",
+        "name": "Acrobatics",
+        "type": "flying",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/774.png"
+  },
+  {
     "id": "komala",
     "name": "Komala",
     "types": [
@@ -57433,6 +59840,72 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/777.png"
+  },
+  {
+    "id": "mimikyu-busted",
+    "name": "Mimikyu (Busted)",
+    "types": [
+      "ghost",
+      "fairy"
+    ],
+    "baseAttack": 177,
+    "baseDefense": 199,
+    "baseStamina": 146,
+    "fastMoves": [
+      {
+        "id": "213",
+        "name": "Shadow Claw",
+        "type": "ghost",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "320",
+        "name": "Charm",
+        "type": "fairy",
+        "power": 20,
+        "energyGain": 11,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "66",
+        "name": "Shadow Sneak",
+        "type": "ghost",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "88",
+        "name": "Play Rough",
+        "type": "fairy",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/778.png"
   },
   {
     "id": "bruxish",
@@ -62148,6 +64621,92 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/848.png"
   },
   {
+    "id": "toxtricity-amped",
+    "name": "Toxtricity (Amped)",
+    "types": [
+      "electric",
+      "poison"
+    ],
+    "baseAttack": 224,
+    "baseDefense": 140,
+    "baseStamina": 181,
+    "fastMoves": [
+      {
+        "id": "225",
+        "name": "Acid",
+        "type": "poison",
+        "power": 11,
+        "energyGain": 10,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "206",
+        "name": "Spark",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "224",
+        "name": "Poison Jab",
+        "type": "poison",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "303",
+        "name": "Acid Spray",
+        "type": "poison",
+        "power": 20,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "35",
+        "name": "Discharge",
+        "type": "electric",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "251",
+        "name": "Wild Charge",
+        "type": "electric",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "319",
+        "name": "Power Up Punch",
+        "type": "fighting",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/849.png"
+  },
+  {
     "id": "sizzlipede",
     "name": "Sizzlipede",
     "types": [
@@ -62418,6 +64977,146 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/853.png"
+  },
+  {
+    "id": "sinistea-antique",
+    "name": "Sinistea (Antique)",
+    "types": [
+      "ghost"
+    ],
+    "baseAttack": 134,
+    "baseDefense": 96,
+    "baseStamina": 120,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "203",
+        "name": "Sucker Punch",
+        "type": "dark",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "16",
+        "name": "Dark Pulse",
+        "type": "dark",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/854.png"
+  },
+  {
+    "id": "polteageist-antique",
+    "name": "Polteageist (Antique)",
+    "types": [
+      "ghost"
+    ],
+    "baseAttack": 248,
+    "baseDefense": 189,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "203",
+        "name": "Sucker Punch",
+        "type": "dark",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "264",
+        "name": "Hex",
+        "type": "ghost",
+        "power": 8,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "16",
+        "name": "Dark Pulse",
+        "type": "dark",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/855.png"
   },
   {
     "id": "hatenna",
@@ -62854,6 +65553,177 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/861.png"
   },
   {
+    "id": "obstagoon-galarian",
+    "name": "Obstagoon (Galarian)",
+    "types": [
+      "dark",
+      "normal"
+    ],
+    "baseAttack": 180,
+    "baseDefense": 194,
+    "baseStamina": 212,
+    "fastMoves": [
+      {
+        "id": "243",
+        "name": "Counter",
+        "type": "fighting",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "212",
+        "name": "Lick",
+        "type": "ghost",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "28",
+        "name": "Cross Chop",
+        "type": "fighting",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "51",
+        "name": "Night Slash",
+        "type": "dark",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "92",
+        "name": "Gunk Shot",
+        "type": "poison",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "370",
+        "name": "Obstruct",
+        "type": "dark",
+        "power": 20,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/862.png"
+  },
+  {
+    "id": "perrserker-galarian",
+    "name": "Perrserker (Galarian)",
+    "types": [
+      "steel"
+    ],
+    "baseAttack": 195,
+    "baseDefense": 162,
+    "baseStamina": 172,
+    "fastMoves": [
+      {
+        "id": "228",
+        "name": "Metal Claw",
+        "type": "steel",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "213",
+        "name": "Shadow Claw",
+        "type": "ghost",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "74",
+        "name": "Iron Head",
+        "type": "steel",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "88",
+        "name": "Play Rough",
+        "type": "fairy",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "280",
+        "name": "Foul Play",
+        "type": "dark",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "392",
+        "name": "Trailblaze",
+        "type": "grass",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/863.png"
+  },
+  {
     "id": "cursola",
     "name": "Cursola",
     "types": [
@@ -62917,6 +65787,253 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/864.png"
+  },
+  {
+    "id": "sirfetch’d-galarian",
+    "name": "Sirfetch’d (Galarian)",
+    "types": [
+      "fighting"
+    ],
+    "baseAttack": 248,
+    "baseDefense": 176,
+    "baseStamina": 158,
+    "fastMoves": [
+      {
+        "id": "243",
+        "name": "Counter",
+        "type": "fighting",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "200",
+        "name": "Fury Cutter",
+        "type": "bug",
+        "power": 4,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "256",
+        "name": "Brave Bird",
+        "type": "flying",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "117",
+        "name": "Leaf Blade",
+        "type": "grass",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "51",
+        "name": "Night Slash",
+        "type": "dark",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/865.png"
+  },
+  {
+    "id": "mr. rime-galarian",
+    "name": "Mr. Rime (Galarian)",
+    "types": [
+      "ice",
+      "psychic"
+    ],
+    "baseAttack": 212,
+    "baseDefense": 179,
+    "baseStamina": 190,
+    "fastMoves": [
+      {
+        "id": "235",
+        "name": "Confusion",
+        "type": "psychic",
+        "power": 19,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "234",
+        "name": "Zen Headbutt",
+        "type": "psychic",
+        "power": 11,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "217",
+        "name": "Ice Shard",
+        "type": "ice",
+        "power": 10,
+        "energyGain": 10,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "30",
+        "name": "Psybeam",
+        "type": "psychic",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "33",
+        "name": "Ice Punch",
+        "type": "ice",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "111",
+        "name": "Icy Wind",
+        "type": "ice",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "391",
+        "name": "Triple Axel",
+        "type": "ice",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/866.png"
+  },
+  {
+    "id": "runerigus-galarian",
+    "name": "Runerigus (Galarian)",
+    "types": [
+      "ground",
+      "ghost"
+    ],
+    "baseAttack": 163,
+    "baseDefense": 237,
+    "baseStamina": 151,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "213",
+        "name": "Shadow Claw",
+        "type": "ghost",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "258",
+        "name": "Sand Tomb",
+        "type": "ground",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "63",
+        "name": "Rock Tomb",
+        "type": "rock",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "367",
+        "name": "Brutal Swing",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/867.png"
   },
   {
     "id": "milcery",
@@ -63354,6 +66471,203 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/874.png"
+  },
+  {
+    "id": "eiscue-ice",
+    "name": "Eiscue (Ice)",
+    "types": [
+      "ice"
+    ],
+    "baseAttack": 148,
+    "baseDefense": 195,
+    "baseStamina": 181,
+    "fastMoves": [
+      {
+        "id": "244",
+        "name": "Powder Snow",
+        "type": "ice",
+        "power": 6,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "111",
+        "name": "Icy Wind",
+        "type": "ice",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "293",
+        "name": "Weather Ball Ice",
+        "type": "ice",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "284",
+        "name": "Surf",
+        "type": "water",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/875.png"
+  },
+  {
+    "id": "indeedee-female",
+    "name": "Indeedee (Female)",
+    "types": [
+      "psychic",
+      "normal"
+    ],
+    "baseAttack": 184,
+    "baseDefense": 184,
+    "baseStamina": 172,
+    "fastMoves": [
+      {
+        "id": "274",
+        "name": "Extrasensory",
+        "type": "psychic",
+        "power": 11,
+        "energyGain": 11,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "30",
+        "name": "Psybeam",
+        "type": "psychic",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/876.png"
+  },
+  {
+    "id": "morpeko-full_belly",
+    "name": "Morpeko (Full_belly)",
+    "types": [
+      "electric",
+      "dark"
+    ],
+    "baseAttack": 192,
+    "baseDefense": 121,
+    "baseStamina": 151,
+    "fastMoves": [
+      {
+        "id": "249",
+        "name": "Charge Beam",
+        "type": "electric",
+        "power": 7,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "202",
+        "name": "Bite",
+        "type": "dark",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "205",
+        "name": "Thunder Shock",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "59",
+        "name": "Seed Bomb",
+        "type": "grass",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "407",
+        "name": "Aura Wheel Electric",
+        "type": "dark",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 45,
+        "durationSeconds": 2.7,
+        "vulnerableWindowSeconds": 2.7
+      },
+      {
+        "id": "353",
+        "name": "Psychic Fangs",
+        "type": "psychic",
+        "power": 25,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/877.png"
   },
   {
     "id": "cufant",
@@ -64014,6 +67328,138 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/887.png"
   },
   {
+    "id": "zacian-crowned_sword",
+    "name": "Zacian (Crowned_sword)",
+    "types": [
+      "fairy",
+      "steel"
+    ],
+    "baseAttack": 332,
+    "baseDefense": 240,
+    "baseStamina": 192,
+    "fastMoves": [
+      {
+        "id": "228",
+        "name": "Metal Claw",
+        "type": "steel",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "255",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "88",
+        "name": "Play Rough",
+        "type": "fairy",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "321",
+        "name": "Giga Impact",
+        "type": "normal",
+        "power": 200,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4.5,
+        "vulnerableWindowSeconds": 4.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/888.png"
+  },
+  {
+    "id": "zamazenta-crowned_shield",
+    "name": "Zamazenta (Crowned_shield)",
+    "types": [
+      "fighting",
+      "steel"
+    ],
+    "baseAttack": 250,
+    "baseDefense": 292,
+    "baseStamina": 192,
+    "fastMoves": [
+      {
+        "id": "228",
+        "name": "Metal Claw",
+        "type": "steel",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "327",
+        "name": "Ice Fang",
+        "type": "ice",
+        "power": 12,
+        "energyGain": 20,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "87",
+        "name": "Moonblast",
+        "type": "fairy",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "321",
+        "name": "Giga Impact",
+        "type": "normal",
+        "power": 200,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4.5,
+        "vulnerableWindowSeconds": 4.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/889.png"
+  },
+  {
     "id": "eternatus",
     "name": "Eternatus",
     "types": [
@@ -64153,6 +67599,92 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/891.png"
+  },
+  {
+    "id": "urshifu-rapid_strike",
+    "name": "Urshifu (Rapid_strike)",
+    "types": [
+      "fighting",
+      "water"
+    ],
+    "baseAttack": 254,
+    "baseDefense": 177,
+    "baseStamina": 225,
+    "fastMoves": [
+      {
+        "id": "241",
+        "name": "Rock Smash",
+        "type": "fighting",
+        "power": 17,
+        "energyGain": 12,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "243",
+        "name": "Counter",
+        "type": "fighting",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "283",
+        "name": "Waterfall",
+        "type": "water",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "123",
+        "name": "Brick Break",
+        "type": "fighting",
+        "power": 40,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "246",
+        "name": "Dynamic Punch",
+        "type": "fighting",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "57",
+        "name": "Aqua Jet",
+        "type": "water",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/892.png"
   },
   {
     "id": "zarude",
@@ -65025,6 +68557,82 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/904.png"
+  },
+  {
+    "id": "enamorus-incarnate",
+    "name": "Enamorus (Incarnate)",
+    "types": [
+      "fairy",
+      "flying"
+    ],
+    "baseAttack": 281,
+    "baseDefense": 162,
+    "baseStamina": 179,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "234",
+        "name": "Zen Headbutt",
+        "type": "psychic",
+        "power": 11,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "350",
+        "name": "Fairy Wind",
+        "type": "fairy",
+        "power": 9,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "86",
+        "name": "Dazzling Gleam",
+        "type": "fairy",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "341",
+        "name": "Fly",
+        "type": "flying",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "272",
+        "name": "Grass Knot",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/905.png"
   },
   {
     "id": "sprigatito",
@@ -66488,6 +70096,81 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/924.png"
   },
   {
+    "id": "maushold-family_of_four",
+    "name": "Maushold (Family_of_four)",
+    "types": [
+      "normal"
+    ],
+    "baseAttack": 159,
+    "baseDefense": 157,
+    "baseStamina": 179,
+    "fastMoves": [
+      {
+        "id": "282",
+        "name": "Take Down",
+        "type": "normal",
+        "power": 7,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "216",
+        "name": "Mud Shot",
+        "type": "ground",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "271",
+        "name": "Bullet Seed",
+        "type": "grass",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "125",
+        "name": "Swift",
+        "type": "normal",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "88",
+        "name": "Play Rough",
+        "type": "fairy",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "279",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/925.png"
+  },
+  {
     "id": "fidough",
     "name": "Fidough",
     "types": [
@@ -66864,6 +70547,72 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/930.png"
+  },
+  {
+    "id": "squawkabilly-blue",
+    "name": "Squawkabilly (Blue)",
+    "types": [
+      "normal",
+      "flying"
+    ],
+    "baseAttack": 185,
+    "baseDefense": 105,
+    "baseStamina": 193,
+    "fastMoves": [
+      {
+        "id": "211",
+        "name": "Peck",
+        "type": "flying",
+        "power": 10,
+        "energyGain": 10,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "255",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "45",
+        "name": "Aerial Ace",
+        "type": "flying",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "256",
+        "name": "Brave Bird",
+        "type": "flying",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "341",
+        "name": "Fly",
+        "type": "flying",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/931.png"
   },
   {
     "id": "nacli",
@@ -69042,6 +72791,101 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/963.png"
   },
   {
+    "id": "palafin-hero",
+    "name": "Palafin (Hero)",
+    "types": [
+      "water"
+    ],
+    "baseAttack": 322,
+    "baseDefense": 196,
+    "baseStamina": 225,
+    "fastMoves": [
+      {
+        "id": "283",
+        "name": "Waterfall",
+        "type": "water",
+        "power": 13,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "320",
+        "name": "Charm",
+        "type": "fairy",
+        "power": 20,
+        "energyGain": 11,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "243",
+        "name": "Counter",
+        "type": "fighting",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "57",
+        "name": "Aqua Jet",
+        "type": "water",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "105",
+        "name": "Water Pulse",
+        "type": "water",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "111",
+        "name": "Icy Wind",
+        "type": "ice",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "314",
+        "name": "Drain Punch",
+        "type": "fighting",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "364",
+        "name": "Acrobatics",
+        "type": "flying",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/964.png"
+  },
+  {
     "id": "varoom",
     "name": "Varoom",
     "types": [
@@ -69944,6 +73788,82 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/977.png"
   },
   {
+    "id": "tatsugiri-curly",
+    "name": "Tatsugiri (Curly)",
+    "types": [
+      "dragon",
+      "water"
+    ],
+    "baseAttack": 226,
+    "baseDefense": 166,
+    "baseStamina": 169,
+    "fastMoves": [
+      {
+        "id": "282",
+        "name": "Take Down",
+        "type": "normal",
+        "power": 7,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "230",
+        "name": "Water Gun",
+        "type": "water",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "284",
+        "name": "Surf",
+        "type": "water",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "107",
+        "name": "Hydro Pump",
+        "type": "water",
+        "power": 135,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "316",
+        "name": "Muddy Water",
+        "type": "water",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/978.png"
+  },
+  {
     "id": "annihilape",
     "name": "Annihilape",
     "types": [
@@ -70220,6 +74140,81 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/981.png"
+  },
+  {
+    "id": "dudunsparce-three",
+    "name": "Dudunsparce (Three)",
+    "types": [
+      "normal"
+    ],
+    "baseAttack": 188,
+    "baseDefense": 150,
+    "baseStamina": 268,
+    "fastMoves": [
+      {
+        "id": "202",
+        "name": "Bite",
+        "type": "dark",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "368",
+        "name": "Rollout",
+        "type": "rock",
+        "power": 15,
+        "energyGain": 19,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "26",
+        "name": "Dig",
+        "type": "ground",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4.5,
+        "vulnerableWindowSeconds": 4.5
+      },
+      {
+        "id": "64",
+        "name": "Rock Slide",
+        "type": "rock",
+        "power": 75,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "46",
+        "name": "Drill Run",
+        "type": "ground",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/982.png"
   },
   {
     "id": "kingambit",
@@ -71425,6 +75420,158 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1006.png"
   },
   {
+    "id": "koraidon-apex",
+    "name": "Koraidon (Apex)",
+    "types": [
+      "fighting",
+      "dragon"
+    ],
+    "baseAttack": 263,
+    "baseDefense": 223,
+    "baseStamina": 205,
+    "fastMoves": [
+      {
+        "id": "241",
+        "name": "Rock Smash",
+        "type": "fighting",
+        "power": 17,
+        "energyGain": 12,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "253",
+        "name": "Dragon Tail",
+        "type": "dragon",
+        "power": 14,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "321",
+        "name": "Giga Impact",
+        "type": "normal",
+        "power": 200,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4.5,
+        "vulnerableWindowSeconds": 4.5
+      },
+      {
+        "id": "83",
+        "name": "Dragon Claw",
+        "type": "dragon",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1007.png"
+  },
+  {
+    "id": "miraidon-ultimate",
+    "name": "Miraidon (Ultimate)",
+    "types": [
+      "electric",
+      "dragon"
+    ],
+    "baseAttack": 263,
+    "baseDefense": 223,
+    "baseStamina": 205,
+    "fastMoves": [
+      {
+        "id": "205",
+        "name": "Thunder Shock",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "204",
+        "name": "Dragon Breath",
+        "type": "dragon",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "82",
+        "name": "Dragon Pulse",
+        "type": "dragon",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "78",
+        "name": "Thunder",
+        "type": "electric",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1008.png"
+  },
+  {
     "id": "walking wake",
     "name": "Walking Wake",
     "types": [
@@ -71571,6 +75718,138 @@
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1011.png"
+  },
+  {
+    "id": "poltchageist-artisan",
+    "name": "Poltchageist (Artisan)",
+    "types": [
+      "grass",
+      "ghost"
+    ],
+    "baseAttack": 134,
+    "baseDefense": 96,
+    "baseStamina": 120,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "357",
+        "name": "Magical Leaf",
+        "type": "grass",
+        "power": 17,
+        "energyGain": 17,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "376",
+        "name": "Poltergeist",
+        "type": "ghost",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1012.png"
+  },
+  {
+    "id": "sinistcha-masterpiece",
+    "name": "Sinistcha (Masterpiece)",
+    "types": [
+      "grass",
+      "ghost"
+    ],
+    "baseAttack": 225,
+    "baseDefense": 191,
+    "baseStamina": 174,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "357",
+        "name": "Magical Leaf",
+        "type": "grass",
+        "power": 17,
+        "energyGain": 17,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "376",
+        "name": "Poltergeist",
+        "type": "ghost",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1013.png"
   },
   {
     "id": "okidogi",
@@ -76922,5 +81201,617 @@
       "boostedType": "rock"
     },
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10075.png"
+  },
+  {
+    "id": "slowpoke-shadow",
+    "name": "Shadow Slowpoke",
+    "types": [
+      "water",
+      "psychic"
+    ],
+    "baseAttack": 109,
+    "baseDefense": 98,
+    "baseStamina": 207,
+    "fastMoves": [
+      {
+        "id": "230",
+        "name": "Water Gun",
+        "type": "water",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "235",
+        "name": "Confusion",
+        "type": "psychic",
+        "power": 19,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "105",
+        "name": "Water Pulse",
+        "type": "water",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "60",
+        "name": "Psyshock",
+        "type": "psychic",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/79.png",
+    "isShadow": true
+  },
+  {
+    "id": "aipom-shadow",
+    "name": "Shadow Aipom",
+    "types": [
+      "normal"
+    ],
+    "baseAttack": 136,
+    "baseDefense": 112,
+    "baseStamina": 146,
+    "fastMoves": [
+      {
+        "id": "220",
+        "name": "Scratch",
+        "type": "normal",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "56",
+        "name": "Low Sweep",
+        "type": "fighting",
+        "power": 40,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "125",
+        "name": "Swift",
+        "type": "normal",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "45",
+        "name": "Aerial Ace",
+        "type": "flying",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/190.png",
+    "isShadow": true
+  },
+  {
+    "id": "croagunk-shadow",
+    "name": "Shadow Croagunk",
+    "types": [
+      "poison",
+      "fighting"
+    ],
+    "baseAttack": 116,
+    "baseDefense": 76,
+    "baseStamina": 134,
+    "fastMoves": [
+      {
+        "id": "236",
+        "name": "Poison Sting",
+        "type": "poison",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "224",
+        "name": "Poison Jab",
+        "type": "poison",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "216",
+        "name": "Mud Shot",
+        "type": "ground",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "123",
+        "name": "Brick Break",
+        "type": "fighting",
+        "power": 40,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "56",
+        "name": "Low Sweep",
+        "type": "fighting",
+        "power": 40,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "90",
+        "name": "Sludge Bomb",
+        "type": "poison",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/453.png",
+    "isShadow": true
+  },
+  {
+    "id": "grubbin-shadow",
+    "name": "Shadow Grubbin",
+    "types": [
+      "bug"
+    ],
+    "baseAttack": 115,
+    "baseDefense": 85,
+    "baseStamina": 132,
+    "fastMoves": [
+      {
+        "id": "201",
+        "name": "Bug Bite",
+        "type": "bug",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "206",
+        "name": "Spark",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "100",
+        "name": "X Scissor",
+        "type": "bug",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "20",
+        "name": "Vice Grip",
+        "type": "normal",
+        "power": 35,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "279",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/736.png",
+    "isShadow": true
+  },
+  {
+    "id": "snorlax-shadow",
+    "name": "Shadow Snorlax",
+    "types": [
+      "normal"
+    ],
+    "baseAttack": 190,
+    "baseDefense": 169,
+    "baseStamina": 330,
+    "fastMoves": [
+      {
+        "id": "234",
+        "name": "Zen Headbutt",
+        "type": "psychic",
+        "power": 11,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "212",
+        "name": "Lick",
+        "type": "ghost",
+        "power": 5,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "287",
+        "name": "Yawn",
+        "type": "normal",
+        "power": 0,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "268",
+        "name": "Heavy Slam",
+        "type": "steel",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "31",
+        "name": "Earthquake",
+        "type": "ground",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "277",
+        "name": "Outrage",
+        "type": "dragon",
+        "power": 110,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "302",
+        "name": "Skull Bash",
+        "type": "normal",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "131",
+        "name": "Body Slam",
+        "type": "normal",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "310",
+        "name": "Super Power",
+        "type": "fighting",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/143.png",
+    "isShadow": true
+  },
+  {
+    "id": "hitmontop-shadow",
+    "name": "Shadow Hitmontop",
+    "types": [
+      "fighting"
+    ],
+    "baseAttack": 173,
+    "baseDefense": 207,
+    "baseStamina": 137,
+    "fastMoves": [
+      {
+        "id": "241",
+        "name": "Rock Smash",
+        "type": "fighting",
+        "power": 17,
+        "energyGain": 12,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "243",
+        "name": "Counter",
+        "type": "fighting",
+        "power": 13,
+        "energyGain": 9,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "245",
+        "name": "Close Combat",
+        "type": "fighting",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "267",
+        "name": "Gyro Ball",
+        "type": "steel",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "32",
+        "name": "Stone Edge",
+        "type": "rock",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "391",
+        "name": "Triple Axel",
+        "type": "ice",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/237.png",
+    "isShadow": true
+  },
+  {
+    "id": "lampent-shadow",
+    "name": "Shadow Lampent",
+    "types": [
+      "ghost",
+      "fire"
+    ],
+    "baseAttack": 169,
+    "baseDefense": 115,
+    "baseStamina": 155,
+    "fastMoves": [
+      {
+        "id": "263",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "209",
+        "name": "Ember",
+        "type": "fire",
+        "power": 10,
+        "energyGain": 10,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "273",
+        "name": "Energy Ball",
+        "type": "grass",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "102",
+        "name": "Flame Burst",
+        "type": "fire",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "42",
+        "name": "Heat Wave",
+        "type": "fire",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/608.png",
+    "isShadow": true
+  },
+  {
+    "id": "giratina-altered-shadow",
+    "name": "Shadow Giratina (Altered)",
+    "types": [
+      "ghost",
+      "dragon"
+    ],
+    "baseAttack": 187,
+    "baseDefense": 225,
+    "baseStamina": 284,
+    "fastMoves": [
+      {
+        "id": "204",
+        "name": "Dragon Breath",
+        "type": "dragon",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "213",
+        "name": "Shadow Claw",
+        "type": "ghost",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "83",
+        "name": "Dragon Claw",
+        "type": "dragon",
+        "power": 45,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "62",
+        "name": "Ancient Power",
+        "type": "rock",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "66",
+        "name": "Shadow Sneak",
+        "type": "ghost",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "371",
+        "name": "Shadow Force",
+        "type": "ghost",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/487.png",
+    "isShadow": true
   }
 ]

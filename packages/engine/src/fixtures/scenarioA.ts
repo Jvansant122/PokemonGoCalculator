@@ -129,6 +129,18 @@ export const HYDRO_PUMP: ChargedMove = {
   vulnerableWindowSeconds: 3.5,
 };
 
+/**
+ * Primal Kyogre also carries a real party-wide Water boost (like a mega's,
+ * same 1.3 multiplier) with persistsThroughFaint: true — per
+ * fact-mega-boost-persists-after-faint ([community-consensus]: Bulbapedia,
+ * citing a March 2023 Reddit crowd-test), Primal Groudon/Kyogre and Mega
+ * Rayquaza specifically keep boosting the team even after fainting, as long
+ * as they're still in the raid party. This field is only consumed when
+ * PRIMAL_KYOGRE is used as a candidate (attacker), not in its usual role as
+ * this fixture file's boss — boss-mode damage calc never reads
+ * SpeciesDefinition.boost at all, so this addition doesn't touch any pinned
+ * Scenario A/B number.
+ */
 export const PRIMAL_KYOGRE: SpeciesDefinition = {
   id: "kyogre-primal",
   name: "Primal Kyogre",
@@ -138,6 +150,7 @@ export const PRIMAL_KYOGRE: SpeciesDefinition = {
   baseStamina: 15000,
   fastMoves: [WATERFALL],
   chargedMoves: [HYDRO_PUMP],
+  boost: { multiplier: 1.3, boostedType: "water", persistsThroughFaint: true },
   imageUrl: "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10077.png",
 };
 

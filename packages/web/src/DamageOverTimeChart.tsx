@@ -3,9 +3,17 @@ import { convertUptimeToTeamDamage, type DamageTrajectoryPoint } from "@pogo-ana
 export interface DamageOverTimeSeries {
   name: string;
   ownDamageTrajectory: DamageTrajectoryPoint[];
-  /** Point past which this candidate's team-boost contribution stops accruing (its faint time, mean or exact). */
+  /** Point past which this candidate's team-boost contribution stops accruing (its faint time, mean or exact) — unless persistsThroughFaint overrides that below. */
   secondsSurvivedCutoff: number;
   boostMultiplier: number;
+  /**
+   * See SpeciesDefinition.boost.persistsThroughFaint — true only for Primal
+   * Groudon/Kyogre and Mega Rayquaza. When set, this candidate's team-boost
+   * contribution keeps accruing past secondsSurvivedCutoff, all the way to
+   * the current sampled time (capped at the chart's own maxSeconds), instead
+   * of flattening the instant the candidate itself dies.
+   */
+  persistsThroughFaint?: boolean;
   imageUrl?: string;
 }
 
@@ -36,12 +44,21 @@ function ownDamageAt(trajectory: DamageTrajectoryPoint[], t: number): number {
 }
 
 function teamContributionAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
+  // fightDurationSeconds: t itself — since secondsSurvived below is already
+  // capped at t, passing fightDurationSeconds: t means
+  // max(fightDurationSeconds, secondsSurvived) === t exactly, so a
+  // persistsThroughFaint candidate's contribution grows continuously with
+  // the sampled time instead of jumping straight to some fixed total; a
+  // non-persisting candidate is unaffected since fightDurationSeconds is
+  // only consulted when persistsThroughFaint is set.
   return convertUptimeToTeamDamage({
     secondsSurvived: Math.min(t, series.secondsSurvivedCutoff),
     boostMultiplier: series.boostMultiplier,
     teammateCount: partySize,
     matchingTeammateCount,
     teammateDps,
+    persistsThroughFaint: series.persistsThroughFaint,
+    fightDurationSeconds: t,
   });
 }
 
@@ -180,7 +197,7 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
           <g>
             <circle cx={xScale(xPath.deathPoint.t)} cy={yScale(xPath.deathPoint.v)} r={5} fill="var(--bg)" stroke="var(--accent-x)" strokeWidth={2} />
             <text x={xScale(xPath.deathPoint.t) + 8} y={yScale(xPath.deathPoint.v) - 8} fontSize={10} fill="var(--accent-x)">
-              {x.name} died ~{xPath.deathPoint.t.toFixed(1)}s
+              {x.name} died ~{xPath.deathPoint.t.toFixed(1)}s{x.persistsThroughFaint ? " (boost persists)" : ""}
             </text>
           </g>
         )}
@@ -188,7 +205,7 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
           <g>
             <circle cx={xScale(yPath.deathPoint.t)} cy={yScale(yPath.deathPoint.v)} r={5} fill="var(--bg)" stroke="var(--accent-y)" strokeWidth={2} />
             <text x={xScale(yPath.deathPoint.t) + 8} y={yScale(yPath.deathPoint.v) + 14} fontSize={10} fill="var(--accent-y)">
-              {y.name} died ~{yPath.deathPoint.t.toFixed(1)}s
+              {y.name} died ~{yPath.deathPoint.t.toFixed(1)}s{y.persistsThroughFaint ? " (boost persists)" : ""}
             </text>
           </g>
         )}

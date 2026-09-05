@@ -1,10 +1,27 @@
 import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajectoryPoint } from "./combat.js";
 import type { DodgeBehavior } from "./breakpoints.js";
-import { effectiveStatsAtLevel } from "./stats.js";
+import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
+import { shadowAdjustedBaseStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "./raidBoss.js";
 import { DEFAULT_STEPWISE_MAX_SECONDS, runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
 import type { IVSpread, SpeciesDefinition } from "./types.js";
+
+/**
+ * Boss effective attack/defense stats, applying shadow.ts's Shadow
+ * multiplier (if the boss species is flagged isShadow) to the raw
+ * baseAttack/baseDefense before the single floor — several real raid bosses
+ * are Shadow, so this can't just be skipped for boss mode. Shares
+ * shadowAdjustedBaseStats with stats.ts's effectiveStatsAtLevel rather than
+ * forking a second Shadow-multiplier code path.
+ */
+function bossEffectiveStats(boss: SpeciesDefinition): { attack: number; defense: number } {
+  const { baseAttack, baseDefense } = shadowAdjustedBaseStats(boss);
+  return {
+    attack: effectiveStat(baseAttack, RAID_BOSS_IVS.attack, RAID_BOSS_CPM),
+    defense: effectiveStat(baseDefense, RAID_BOSS_IVS.defense, RAID_BOSS_CPM),
+  };
+}
 
 /**
  * Resolves a move selection by id against a species' available moves, falling
@@ -65,6 +82,8 @@ export interface CandidateResult {
   ownTotalDamage: number;
   boostMultiplier: number;
   boostedType: SpeciesDefinition["types"][number];
+  /** See SpeciesDefinition.boost.persistsThroughFaint (uptime.ts consumes this). Defaults to false when the species has no boost at all. */
+  persistsThroughFaint: boolean;
   /** Combined fast+charged cumulative damage over time — see combat.ts's OpeningBurstResult.ownDamageTrajectory. */
   ownDamageTrajectory: DamageTrajectoryPoint[];
 }
@@ -77,8 +96,7 @@ export interface CandidateResult {
  */
 export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
   const { candidates, boss, level, ivs, dodge, dodgeFastAttacks = false, bossStartingEnergy = 0 } = inputs;
-  const bossAttackStat = Math.floor((boss.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
-  const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
@@ -144,6 +162,7 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
       ownTotalDamage: result.totalChargedDamage + result.totalFastMoveDamage,
       boostMultiplier: species.boost?.multiplier ?? 1,
       boostedType: species.boost?.boostedType ?? species.types[0],
+      persistsThroughFaint: species.boost?.persistsThroughFaint ?? false,
       ownDamageTrajectory: result.ownDamageTrajectory,
     };
   });
@@ -212,8 +231,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     maxSeconds = DEFAULT_STEPWISE_MAX_SECONDS,
     iterations = 200,
   } = inputs;
-  const bossAttackStat = Math.floor((boss.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
-  const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);

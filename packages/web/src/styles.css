@@ -297,6 +297,18 @@ p.species-picker-hint {
   border: 1px solid #ff6b6b;
 }
 
+.badge-shadow {
+  background: rgba(138, 99, 210, 0.18);
+  color: #b39ddb;
+  border: 1px solid #8a63d2;
+}
+
+.badge-persists {
+  background: rgba(91, 190, 255, 0.15);
+  color: #5bbeff;
+  border: 1px solid #5bbeff;
+}
+
 .damage-tally {
   margin-top: 8px;
   font-size: 0.82rem;

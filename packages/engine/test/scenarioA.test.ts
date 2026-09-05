@@ -126,3 +126,18 @@ describe("Scenario A: Mega Raichu X vs Y vs Primal Kyogre (level 35, no dodging)
     expect(Math.round(delta * 10000) / 100).toBe(16.32);
   });
 });
+
+/**
+ * PRIMAL_KYOGRE's boost.persistsThroughFaint is new fixture metadata, only
+ * consumed if this species is ever used as a candidate (attacker) rather
+ * than in its usual boss role above — boss-mode damage calc never reads
+ * SpeciesDefinition.boost at all, so this can't affect any of the pinned
+ * numbers asserted above.
+ */
+describe("PRIMAL_KYOGRE fixture: boost.persistsThroughFaint", () => {
+  it("is flagged true, matching Primal Kyogre's real-game boost-outlives-fainting behavior", () => {
+    expect(PRIMAL_KYOGRE.boost).toBeDefined();
+    expect(PRIMAL_KYOGRE.boost!.persistsThroughFaint).toBe(true);
+    expect(PRIMAL_KYOGRE.boost!.boostedType).toBe("water");
+  });
+});

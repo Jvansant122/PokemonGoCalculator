@@ -1,4 +1,5 @@
 import { cpmForLevel } from "./cpm.js";
+import { shadowAdjustedBaseStats } from "./shadow.js";
 import type { EffectiveStats, IVSpread, SpeciesDefinition } from "./types.js";
 
 /**
@@ -18,14 +19,20 @@ export function effectiveStat(baseStat: number, iv: number, cpm: number): number
 }
 
 export function effectiveStatsAtLevel(
-  species: Pick<SpeciesDefinition, "baseAttack" | "baseDefense" | "baseStamina">,
+  species: Pick<SpeciesDefinition, "baseAttack" | "baseDefense" | "baseStamina" | "isShadow" | "boost">,
   ivs: IVSpread,
   level: number,
 ): EffectiveStats {
   const cpm = cpmForLevel(level);
+  // Shadow's attack/defense multipliers (if flagged) are applied to the RAW
+  // base stat here, before the single FLOOR() below — never after, since
+  // that would be a second floor on an already-effective stat. See
+  // shadow.ts for the constants, sourcing, and the mega-boost mutual-
+  // exclusion check this also performs.
+  const { baseAttack, baseDefense } = shadowAdjustedBaseStats(species);
   return {
-    attack: effectiveStat(species.baseAttack, ivs.attack, cpm),
-    defense: effectiveStat(species.baseDefense, ivs.defense, cpm),
+    attack: effectiveStat(baseAttack, ivs.attack, cpm),
+    defense: effectiveStat(baseDefense, ivs.defense, cpm),
     stamina: effectiveStat(species.baseStamina, ivs.stamina, cpm),
   };
 }

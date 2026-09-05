@@ -76,6 +76,59 @@ describe("convertUptimeToTeamDamage", () => {
     });
     expect(at11).toBeLessThan(at13);
   });
+
+  it("without persistsThroughFaint, the boost window still caps at secondsSurvived even when fightDurationSeconds is longer (default/standard-mega behavior, unchanged)", () => {
+    const withoutFlag = convertUptimeToTeamDamage({
+      secondsSurvived: 10,
+      boostMultiplier: 1.3,
+      teammateCount: 4,
+      matchingTeammateCount: 4,
+      teammateDps: 26.5,
+      fightDurationSeconds: 180,
+    });
+    const noFightDuration = convertUptimeToTeamDamage({
+      secondsSurvived: 10,
+      boostMultiplier: 1.3,
+      teammateCount: 4,
+      matchingTeammateCount: 4,
+      teammateDps: 26.5,
+    });
+    expect(withoutFlag).toBe(noFightDuration);
+  });
+
+  it("with persistsThroughFaint true, the boost window extends to fightDurationSeconds instead of stopping at secondsSurvived (Primal Groudon/Kyogre, Mega Rayquaza)", () => {
+    const persisting = convertUptimeToTeamDamage({
+      secondsSurvived: 10,
+      boostMultiplier: 1.3,
+      teammateCount: 4,
+      matchingTeammateCount: 4,
+      teammateDps: 26.5,
+      persistsThroughFaint: true,
+      fightDurationSeconds: 180,
+    });
+    // 180 * 4 * 26.5 * 1.3 (the full fight, not just the 10s this candidate survived)
+    expect(persisting).toBeCloseTo(180 * 4 * 26.5 * 1.3, 5);
+  });
+
+  it("persistsThroughFaint never shrinks the window below secondsSurvived even if fightDurationSeconds is somehow shorter", () => {
+    const persisting = convertUptimeToTeamDamage({
+      secondsSurvived: 50,
+      boostMultiplier: 1.3,
+      teammateCount: 4,
+      matchingTeammateCount: 4,
+      teammateDps: 26.5,
+      persistsThroughFaint: true,
+      fightDurationSeconds: 30, // implausible (survived longer than the fight), but shouldn't shrink the window
+    });
+    const notPersisting = convertUptimeToTeamDamage({
+      secondsSurvived: 50,
+      boostMultiplier: 1.3,
+      teammateCount: 4,
+      matchingTeammateCount: 4,
+      teammateDps: 26.5,
+    });
+    expect(persisting).toBe(notPersisting);
+  });
 });
 
 describe("findCrossoverPartySize", () => {
@@ -87,5 +140,31 @@ describe("findCrossoverPartySize", () => {
     expect(crossover.partySize).toBe(4);
     expect(crossover.leaderAtOrAbove).toBe("X");
     expect(crossover.leaderBelow).toBe("Y");
+  });
+
+  it("a persistsThroughFaint candidate can overtake an equally-tanky non-persisting candidate purely from the extended boost window", () => {
+    // Same secondsSurvived and ownDamage on both sides, so with
+    // persistsThroughFaint false on both this would never cross (identical
+    // totals at every party size) — X wins at every size purely because its
+    // boost keeps running for the rest of a much longer fight.
+    const x = {
+      id: "X",
+      secondsSurvived: 10,
+      boostMultiplier: 1.3,
+      boostedType: "water" as const,
+      ownDamage: 200,
+      persistsThroughFaint: true,
+    };
+    const y = { id: "Y", secondsSurvived: 10, boostMultiplier: 1.3, boostedType: "water" as const, ownDamage: 200 };
+
+    const withoutFightDuration = findCrossoverPartySize(x, y, 26.5, { a: 1, b: 1 });
+    expect(withoutFightDuration.partySize).toBeNull(); // identical totals everywhere -> no flip, ties keep the initial null leader
+
+    const fightDurationSeconds = 180;
+    const withFightDuration = findCrossoverPartySize(x, y, 26.5, { a: 1, b: 1 }, undefined, fightDurationSeconds);
+    // X should now lead at every swept party size (>= 1) since its boost
+    // window is 180s instead of 10s — no crossover to find because X never
+    // trails Y once the extended window applies from party size 1 onward.
+    expect(withFightDuration.leaderAtOrAbove ?? withFightDuration.leaderBelow).toBe("X");
   });
 });

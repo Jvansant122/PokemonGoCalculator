@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { runComparison } from "../src/comparison.js";
 import { calculateDamage } from "../src/damage.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
+import { SHADOW_DEFENSE_MULTIPLIER } from "../src/shadow.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "../src/raidBoss.js";
 import type { SpeciesDefinition } from "../src/types.js";
 import {
@@ -228,5 +229,107 @@ describe("runComparison", () => {
     // damage — proving resolveMove actually picked the requested move.
     expect(withSelected!.ownFastMoveDamage).toBeGreaterThan(withDefaults!.ownFastMoveDamage);
     expect(withSelected!.ownChargedDamage).toBeGreaterThan(withDefaults!.ownChargedDamage);
+  });
+
+  it("applies the Shadow attack/defense multiplier to a boss's stats too (several real raid bosses are Shadow)", () => {
+    // Same candidate against two otherwise-identical bosses, one flagged
+    // isShadow — the shadow boss should hit HARDER (higher attack, x1.2) but
+    // also take MORE damage per hit (lower defense, x0.83) — the same
+    // glass-cannon trade a Shadow attacker gets, just from the boss's side.
+    const attacker: SpeciesDefinition = {
+      id: "shadow-boss-test-attacker",
+      name: "Attacker",
+      types: ["normal"],
+      baseAttack: 300,
+      baseDefense: 200,
+      // Deliberately low (a real species' base stamina is never this low) so
+      // the candidate actually faints inside the fixed 20s opening-burst
+      // window (these test bosses have no charged move) instead of the fight
+      // just hitting the window cap unfainted on both sides, which would
+      // make secondsSurvived identical regardless of boss attack stat.
+      baseStamina: 50,
+      fastMoves: [{ id: "af", name: "Attacker Fast", type: "normal", power: 10, energyGain: 10, durationSeconds: 1 }],
+      chargedMoves: [{ id: "ac", name: "Attacker Charged", type: "normal", power: 80, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    const bossFastMove = { id: "bf", name: "Boss Fast", type: "normal" as const, power: 10, energyGain: 0, durationSeconds: 1.5 };
+    const normalBoss: SpeciesDefinition = {
+      id: "normal-boss",
+      name: "Normal Boss",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 150,
+      baseStamina: 20000,
+      fastMoves: [bossFastMove],
+      chargedMoves: [],
+    };
+    const shadowBoss: SpeciesDefinition = { ...normalBoss, id: "shadow-boss", name: "Shadow Boss", isShadow: true };
+
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+    const [vsNormal] = runComparison({ candidates: [attacker], boss: normalBoss, level, ivs, dodge: { kind: "none" } });
+    const [vsShadow] = runComparison({ candidates: [attacker], boss: shadowBoss, level, ivs, dodge: { kind: "none" } });
+
+    // Both bosses land the same number of fast attacks before the candidate's
+    // first fast hit lands (identical timing/energy economics on both sides),
+    // so a strictly-shorter survival time is itself proof the Shadow boss hit
+    // harder per attack — higher boss attack -> candidate survives less time.
+    expect(vsShadow!.secondsSurvived).toBeLessThan(vsNormal!.secondsSurvived);
+
+    // Lower boss DEFENSE (x0.83) -> candidate's own fast-move damage per hit
+    // is actually HIGHER against the Shadow boss. Compare directly against
+    // the shared damage formula rather than back-deriving "per hit" from
+    // totals (fast and charged hits land at different counts, so dividing by
+    // chargedAttacksLanded doesn't isolate fast-move damage).
+    const attackerStats = effectiveStatsAtLevel(attacker, ivs, level);
+    const normalBossDefense = Math.floor((normalBoss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+    const shadowBossDefense = Math.floor((normalBoss.baseDefense * SHADOW_DEFENSE_MULTIPLIER + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+    const fastDamageVsNormal = calculateDamage({
+      power: attacker.fastMoves[0]!.power,
+      attackerAttackStat: attackerStats.attack,
+      defenderDefenseStat: normalBossDefense,
+      stab: true,
+    });
+    const fastDamageVsShadow = calculateDamage({
+      power: attacker.fastMoves[0]!.power,
+      attackerAttackStat: attackerStats.attack,
+      defenderDefenseStat: shadowBossDefense,
+      stab: true,
+    });
+    expect(shadowBossDefense).toBeLessThan(normalBossDefense);
+    expect(fastDamageVsShadow).toBeGreaterThan(fastDamageVsNormal);
+  });
+
+  it("throws when a boss species is flagged both isShadow and carries a mega/primal boost", () => {
+    const impossibleBoss: SpeciesDefinition = {
+      id: "impossible-shadow-mega-boss",
+      name: "Impossible",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 150,
+      baseStamina: 20000,
+      fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 10, energyGain: 0, durationSeconds: 1.5 }],
+      chargedMoves: [],
+      isShadow: true,
+      boost: { multiplier: 1.3, boostedType: "normal" },
+    };
+    const attacker: SpeciesDefinition = {
+      id: "shadow-boss-test-attacker-2",
+      name: "Attacker",
+      types: ["normal"],
+      baseAttack: 300,
+      baseDefense: 200,
+      baseStamina: 200,
+      fastMoves: [{ id: "af", name: "Attacker Fast", type: "normal", power: 10, energyGain: 10, durationSeconds: 1 }],
+      chargedMoves: [{ id: "ac", name: "Attacker Charged", type: "normal", power: 80, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    expect(() =>
+      runComparison({
+        candidates: [attacker],
+        boss: impossibleBoss,
+        level: 40,
+        ivs: { attack: 15, defense: 15, stamina: 15 },
+        dodge: { kind: "none" },
+      }),
+    ).toThrow();
   });
 });

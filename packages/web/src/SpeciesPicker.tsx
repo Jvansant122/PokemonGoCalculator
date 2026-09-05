@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 export interface SpeciesPickerOption {
   id: string;
   label: string;
-  badge?: "hypothetical" | "approximate";
+  badge?: "hypothetical" | "approximate" | "shadow";
   imageUrl?: string;
 }
 
@@ -22,8 +22,9 @@ const MAX_RESULTS = 200;
  * A searchable combobox over the full species registry (~1000+ entries) —
  * a plain input + filtered dropdown, no new UI dependency, per this project's
  * "zero charting/UI libraries beyond React" convention. Any option flagged
- * `isHypothetical`/`isApproximate` upstream renders a visible badge here,
- * since speculative data must stay labeled wherever it appears.
+ * `isHypothetical`/`isApproximate`/`isShadow` upstream renders a visible badge
+ * here, since speculative (or mechanically-different) data must stay labeled
+ * wherever it appears.
  */
 export function SpeciesPicker({ idPrefix, label, options, value, onChange }: Props) {
   const selected = useMemo(() => options.find((o) => o.id === value), [options, value]);
