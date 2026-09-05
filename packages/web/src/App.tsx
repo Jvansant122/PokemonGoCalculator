@@ -34,6 +34,7 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
   candidateBChargedMoveId: null,
   bossFastMoveId: null,
   bossChargedMoveId: null,
+  candidateMegaBoostDisabled: [false, false],
   level: 35,
   ivAttack: 15,
   ivDefense: 15,
@@ -59,6 +60,7 @@ function assumptionsToScenario(a: Assumptions): Scenario {
     target: a.targetId,
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
+    candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
     level: a.level,
     ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
     dodgeModel: a.dodge,
@@ -88,6 +90,9 @@ function scenarioToAssumptions(s: Scenario): Assumptions {
     candidateBChargedMoveId: s.candidateChargedMoveIds?.[1] ?? DEFAULT_ASSUMPTIONS.candidateBChargedMoveId,
     bossFastMoveId: s.bossFastMoveId ?? DEFAULT_ASSUMPTIONS.bossFastMoveId,
     bossChargedMoveId: s.bossChargedMoveId ?? DEFAULT_ASSUMPTIONS.bossChargedMoveId,
+    // `??` guards a scenario URL encoded before this field existed rather than
+    // surfacing `undefined` into the checkboxes above.
+    candidateMegaBoostDisabled: s.candidateMegaBoostDisabled ?? [false, false],
     level: s.level,
     ivAttack: s.ivs.attack,
     ivDefense: s.ivs.defense,
@@ -144,6 +149,20 @@ function OwnTeamShareBar({ own, team, accent }: { own: number; team: number; acc
 /** Resolves a species id from the registry, surfacing a lookup failure as a normal error result rather than a crash — a stale/shared URL can reference an id that no longer exists after a future data resync. */
 function resolveSpecies(id: string): SpeciesDefinition {
   return speciesRegistry.get(id);
+}
+
+/**
+ * Resolves what boost (if any) is actually active for a candidate in the UI,
+ * mirroring the engine's own resolveBoost (comparison.ts) — `disabled` (the
+ * per-candidate candidateMegaBoostDisabled toggle) or a genuinely non-mega
+ * species (no `boost` field at all) both collapse to `undefined`, never `1`.
+ * `undefined` must propagate all the way to convertUptimeToTeamDamage's
+ * boostMultiplier (see uptime.ts) — passing `1` there is NOT equivalent, it
+ * still credits the off-type bonus to a candidate with no boost mechanic.
+ */
+function resolveBoost(species: SpeciesDefinition | null | undefined, disabled: boolean): SpeciesDefinition["boost"] | undefined {
+  if (!species || disabled) return undefined;
+  return species.boost;
 }
 
 export function App() {
@@ -232,6 +251,7 @@ export function App() {
           bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
           bossStartingEnergy,
           weather: assumptions.weather,
+          candidateMegaBoostDisabled: assumptions.candidateMegaBoostDisabled,
         }),
         error: null as string | null,
       };
@@ -255,6 +275,7 @@ export function App() {
     assumptions.bossChargedMoveFrequencySeconds,
     bossStartingEnergy,
     assumptions.weather,
+    assumptions.candidateMegaBoostDisabled,
   ]);
 
   // The chart's window is auto-computed from the longer-mean-surviving
@@ -303,6 +324,7 @@ export function App() {
         bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
         bossStartingEnergy,
         weather: assumptions.weather,
+        candidateMegaBoostDisabled: assumptions.candidateMegaBoostDisabled,
       });
     } catch {
       return null;
@@ -323,6 +345,7 @@ export function App() {
     assumptions.bossChargedMoveFrequencySeconds,
     bossStartingEnergy,
     assumptions.weather,
+    assumptions.candidateMegaBoostDisabled,
   ]);
 
   function handleShare() {
@@ -397,11 +420,15 @@ export function App() {
                 // Team damage attributable to this candidate's mega/primal
                 // boost over its own mean survival — a separate number from
                 // its own damage output, per the assumptions panel's party
-                // size / matching-teammate-count / teammate DPS.
-                const persistsThroughFaint = species.candidates?.[i]?.boost?.persistsThroughFaint ?? false;
+                // size / matching-teammate-count / teammate DPS. `boost` is
+                // undefined for a genuinely non-mega species OR one with the
+                // "disable mega/primal boost" checkbox on — see resolveBoost.
+                const boost = resolveBoost(species.candidates?.[i], assumptions.candidateMegaBoostDisabled[i] ?? false);
+                const hasBoost = boost?.multiplier !== undefined;
+                const persistsThroughFaint = boost?.persistsThroughFaint ?? false;
                 const teamContribution = convertUptimeToTeamDamage({
                   secondsSurvived: c.meanSecondsSurvived,
-                  boostMultiplier: species.candidates?.[i]?.boost?.multiplier ?? 1,
+                  boostMultiplier: boost?.multiplier,
                   teammateCount: assumptions.partySize,
                   matchingTeammateCount: assumptions.matchingTeammateCount,
                   teammateDps: assumptions.teammateDps,
@@ -443,15 +470,25 @@ export function App() {
                       <dd>{ownDps === null ? "-" : ownDps.toFixed(1)}</dd>
                       <dt>Team damage from this candidate's boost</dt>
                       <dd>
-                        {teamContribution.toFixed(0)}
-                        {persistsThroughFaint && (
-                          <span className="badge badge-persists" style={{ marginLeft: 6 }}>
-                            persists past faint
-                          </span>
+                        {hasBoost ? (
+                          <>
+                            {teamContribution.toFixed(0)}
+                            {persistsThroughFaint && (
+                              <span className="badge badge-persists" style={{ marginLeft: 6 }}>
+                                persists past faint
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          "N/A — no mega/primal boost active for this candidate"
                         )}
                       </dd>
-                      <dt>Own + team damage from boost</dt>
-                      <dd>{ownPlusTeam.toFixed(0)}</dd>
+                      {hasBoost && (
+                        <>
+                          <dt>Own + team damage from boost</dt>
+                          <dd>{ownPlusTeam.toFixed(0)}</dd>
+                        </>
+                      )}
                     </dl>
                     <OwnTeamShareBar own={c.meanTotalDamage} team={teamContribution} accent={i === 0 ? "x" : "y"} />
                     {persistsThroughFaint && (
@@ -468,22 +505,24 @@ export function App() {
             </div>
             {results.candidates.length === 2 && (() => {
               const [a, b] = results.candidates;
+              const boostA = resolveBoost(species.candidates?.[0], assumptions.candidateMegaBoostDisabled[0] ?? false);
+              const boostB = resolveBoost(species.candidates?.[1], assumptions.candidateMegaBoostDisabled[1] ?? false);
               const teamA = convertUptimeToTeamDamage({
                 secondsSurvived: a!.meanSecondsSurvived,
-                boostMultiplier: species.candidates?.[0]?.boost?.multiplier ?? 1,
+                boostMultiplier: boostA?.multiplier,
                 teammateCount: assumptions.partySize,
                 matchingTeammateCount: assumptions.matchingTeammateCount,
                 teammateDps: assumptions.teammateDps,
-                persistsThroughFaint: species.candidates?.[0]?.boost?.persistsThroughFaint,
+                persistsThroughFaint: boostA?.persistsThroughFaint,
                 fightDurationSeconds: chartMaxSeconds,
               });
               const teamB = convertUptimeToTeamDamage({
                 secondsSurvived: b!.meanSecondsSurvived,
-                boostMultiplier: species.candidates?.[1]?.boost?.multiplier ?? 1,
+                boostMultiplier: boostB?.multiplier,
                 teammateCount: assumptions.partySize,
                 matchingTeammateCount: assumptions.matchingTeammateCount,
                 teammateDps: assumptions.teammateDps,
-                persistsThroughFaint: species.candidates?.[1]?.boost?.persistsThroughFaint,
+                persistsThroughFaint: boostB?.persistsThroughFaint,
                 fightDurationSeconds: chartMaxSeconds,
               });
               const dpsA = a!.meanSecondsSurvived > 0 ? a!.meanTotalDamage / a!.meanSecondsSurvived : 0;
@@ -521,16 +560,16 @@ export function App() {
                 // too. null (survived the whole simulated window) becomes
                 // the chart's own window length, i.e. no marker/dashing.
                 secondsSurvivedCutoff: results.candidates[0]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
-                boostMultiplier: species.candidates![0].boost?.multiplier ?? 1,
-                persistsThroughFaint: species.candidates![0].boost?.persistsThroughFaint,
+                boostMultiplier: resolveBoost(species.candidates![0], assumptions.candidateMegaBoostDisabled[0] ?? false)?.multiplier,
+                persistsThroughFaint: resolveBoost(species.candidates![0], assumptions.candidateMegaBoostDisabled[0] ?? false)?.persistsThroughFaint,
                 imageUrl: species.candidates![0].imageUrl,
               }}
               y={{
                 name: results.candidates[1]!.name,
                 ownDamageTrajectory: results.candidates[1]!.representativeRun.ownDamageTrajectory,
                 secondsSurvivedCutoff: results.candidates[1]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
-                boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
-                persistsThroughFaint: species.candidates![1].boost?.persistsThroughFaint,
+                boostMultiplier: resolveBoost(species.candidates![1], assumptions.candidateMegaBoostDisabled[1] ?? false)?.multiplier,
+                persistsThroughFaint: resolveBoost(species.candidates![1], assumptions.candidateMegaBoostDisabled[1] ?? false)?.persistsThroughFaint,
                 imageUrl: species.candidates![1].imageUrl,
               }}
               teammateDps={assumptions.teammateDps}
@@ -544,16 +583,16 @@ export function App() {
                 ownDamageTrajectory: results.candidates[0]!.representativeRun.ownDamageTrajectory,
                 damageTakenTrajectory: results.candidates[0]!.representativeRun.damageTakenTrajectory,
                 secondsSurvivedCutoff: results.candidates[0]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
-                boostMultiplier: species.candidates![0].boost?.multiplier ?? 1,
-                persistsThroughFaint: species.candidates![0].boost?.persistsThroughFaint,
+                boostMultiplier: resolveBoost(species.candidates![0], assumptions.candidateMegaBoostDisabled[0] ?? false)?.multiplier,
+                persistsThroughFaint: resolveBoost(species.candidates![0], assumptions.candidateMegaBoostDisabled[0] ?? false)?.persistsThroughFaint,
               }}
               y={{
                 name: results.candidates[1]!.name,
                 ownDamageTrajectory: results.candidates[1]!.representativeRun.ownDamageTrajectory,
                 damageTakenTrajectory: results.candidates[1]!.representativeRun.damageTakenTrajectory,
                 secondsSurvivedCutoff: results.candidates[1]!.representativeRun.faintedAtSeconds ?? chartMaxSeconds,
-                boostMultiplier: species.candidates![1].boost?.multiplier ?? 1,
-                persistsThroughFaint: species.candidates![1].boost?.persistsThroughFaint,
+                boostMultiplier: resolveBoost(species.candidates![1], assumptions.candidateMegaBoostDisabled[1] ?? false)?.multiplier,
+                persistsThroughFaint: resolveBoost(species.candidates![1], assumptions.candidateMegaBoostDisabled[1] ?? false)?.persistsThroughFaint,
               }}
               teammateDps={assumptions.teammateDps}
               partySize={assumptions.partySize}
@@ -578,13 +617,15 @@ export function App() {
                 candidateMeta={[
                   {
                     name: results.candidates[0]!.name,
-                    boostMultiplier: species.candidates[0].boost?.multiplier ?? 1,
-                    persistsThroughFaint: species.candidates[0].boost?.persistsThroughFaint ?? false,
+                    boostMultiplier: resolveBoost(species.candidates[0], assumptions.candidateMegaBoostDisabled[0] ?? false)?.multiplier,
+                    persistsThroughFaint:
+                      resolveBoost(species.candidates[0], assumptions.candidateMegaBoostDisabled[0] ?? false)?.persistsThroughFaint ?? false,
                   },
                   {
                     name: results.candidates[1]!.name,
-                    boostMultiplier: species.candidates[1].boost?.multiplier ?? 1,
-                    persistsThroughFaint: species.candidates[1].boost?.persistsThroughFaint ?? false,
+                    boostMultiplier: resolveBoost(species.candidates[1], assumptions.candidateMegaBoostDisabled[1] ?? false)?.multiplier,
+                    persistsThroughFaint:
+                      resolveBoost(species.candidates[1], assumptions.candidateMegaBoostDisabled[1] ?? false)?.persistsThroughFaint ?? false,
                   },
                 ]}
                 partySize={assumptions.partySize}

@@ -21,8 +21,20 @@ export const OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1;
 
 export interface UptimeConversionInputs {
   secondsSurvived: number;
-  /** On-type multiplier (e.g. 1.3 for a mega boost) — applied to matchingTeammateCount only. */
-  boostMultiplier: number;
+  /**
+   * On-type multiplier (e.g. 1.3 for a mega boost) — applied to
+   * matchingTeammateCount only (the rest get OFF_TYPE_MEGA_BOOST_MULTIPLIER).
+   * `undefined` means this candidate has no boost mechanic active at all
+   * (genuinely non-mega/primal, or a mega/primal with its boost explicitly
+   * disabled for this comparison) — convertUptimeToTeamDamage returns 0
+   * immediately in that case, since "team damage from a boost that doesn't
+   * exist" isn't a real concept. Passing 1 here is NOT equivalent to
+   * `undefined`: 1 still runs the (now-zero, since (1-1)=0) matching term but
+   * still fully credits OFF_TYPE_MEGA_BOOST_MULTIPLIER's REAL boost to
+   * non-matching teammates, which is wrong for a species with no boost at
+   * all — always pass `undefined`, never 1, for "no boost".
+   */
+  boostMultiplier: number | undefined;
   teammateCount: number;
   /**
    * How many of teammateCount share the mega's boosted type and so get the
@@ -52,10 +64,25 @@ export interface UptimeConversionInputs {
 }
 
 /**
- * Converts "this mega survived N seconds longer" into total team damage
- * contributed during that window, split by how many teammates share its
- * boosted type (full boostMultiplier) versus don't (still
- * OFF_TYPE_MEGA_BOOST_MULTIPLIER, never zero).
+ * Converts "this mega survived N seconds longer" into the team damage that
+ * boost's presence is ATTRIBUTABLE FOR during that window — i.e. the EXTRA
+ * damage teammates deal because this candidate is fielded, not their full
+ * damage output while it's alive. A teammate doing 10 DPS who gets boosted
+ * to 13 DPS contributes 3 (the marginal/attributable amount) here, not 13
+ * (their total). This distinction matters: an earlier version of this
+ * function returned the total, which overstated the boost's actual value by
+ * folding in damage the teammate would have dealt with no mega present at
+ * all.
+ *
+ * Split by how many teammates share the boosted type (full boostMultiplier,
+ * so a (boostMultiplier - 1) marginal fraction) versus don't (still
+ * OFF_TYPE_MEGA_BOOST_MULTIPLIER, so an (OFF_TYPE_MEGA_BOOST_MULTIPLIER - 1)
+ * marginal fraction — never zero, since off-type teammates get a real,
+ * if smaller, boost too).
+ *
+ * boostMultiplier === undefined means this candidate has no boost mechanic
+ * active at all (see UptimeConversionInputs.boostMultiplier) — returns 0
+ * immediately, before matching/nonMatching are even considered.
  *
  * The boost's own time window is normally capped at secondsSurvived (the
  * boost stops the instant the boosting Pokémon faints) — except for a
@@ -65,6 +92,7 @@ export interface UptimeConversionInputs {
  */
 export function convertUptimeToTeamDamage(inputs: UptimeConversionInputs): number {
   const { secondsSurvived, boostMultiplier, teammateCount, teammateDps, persistsThroughFaint, fightDurationSeconds } = inputs;
+  if (boostMultiplier === undefined) return 0;
   const boostWindowSeconds =
     persistsThroughFaint && fightDurationSeconds != null
       ? Math.max(fightDurationSeconds, secondsSurvived)
@@ -72,14 +100,16 @@ export function convertUptimeToTeamDamage(inputs: UptimeConversionInputs): numbe
   if (boostWindowSeconds <= 0 || teammateCount <= 0) return 0;
   const matching = Math.min(Math.max(inputs.matchingTeammateCount, 0), teammateCount);
   const nonMatching = teammateCount - matching;
-  const perSecondDamage = matching * teammateDps * boostMultiplier + nonMatching * teammateDps * OFF_TYPE_MEGA_BOOST_MULTIPLIER;
+  const perSecondDamage =
+    matching * teammateDps * (boostMultiplier - 1) + nonMatching * teammateDps * (OFF_TYPE_MEGA_BOOST_MULTIPLIER - 1);
   return boostWindowSeconds * perSecondDamage;
 }
 
 export interface Candidate {
   id: string;
   secondsSurvived: number;
-  boostMultiplier: number;
+  /** undefined means this candidate has no boost mechanic active at all — see UptimeConversionInputs.boostMultiplier. */
+  boostMultiplier: number | undefined;
   boostedType: PokemonType;
   /** This candidate's own raw damage contribution, independent of teammates. */
   ownDamage: number;

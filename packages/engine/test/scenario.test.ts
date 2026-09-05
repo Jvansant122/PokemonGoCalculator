@@ -5,6 +5,7 @@ const sampleScenario: Scenario = {
   candidates: ["raichu-mega-x", "raichu-mega-y"],
   candidateFastMoveIds: [null, null],
   candidateChargedMoveIds: [null, null],
+  candidateMegaBoostDisabled: [false, false],
   target: "kyogre-primal",
   bossFastMoveId: null,
   bossChargedMoveId: null,
@@ -101,5 +102,16 @@ describe("scenario serialization", () => {
     const rainy: Scenario = { ...sampleScenario, weather: "rainy" };
     expect(decodeScenario(encodeScenario(rainy)).weather).toBe("rainy");
     expect(parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", rainy))!.weather).toBe("rainy");
+  });
+
+  it("round-trips a non-default candidateMegaBoostDisabled rather than silently reverting to both-enabled", () => {
+    // Regression guard, same shape as the others above: a disabled-boost
+    // toggle that reverts to "boost enabled" on a shared link would silently
+    // misrepresent an intentionally fair (non-boosted) comparison as boosted.
+    const oneDisabled: Scenario = { ...sampleScenario, candidateMegaBoostDisabled: [true, false] };
+    expect(decodeScenario(encodeScenario(oneDisabled)).candidateMegaBoostDisabled).toEqual([true, false]);
+    expect(
+      parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", oneDisabled))!.candidateMegaBoostDisabled,
+    ).toEqual([true, false]);
   });
 });

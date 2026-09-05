@@ -81,6 +81,10 @@ h1 {
   font-size: 0.9rem;
 }
 
+.iv-input {
+  width: 4ch;
+}
+
 .result-row {
   display: flex;
   gap: 24px;

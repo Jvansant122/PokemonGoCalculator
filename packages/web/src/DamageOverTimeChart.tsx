@@ -13,7 +13,13 @@ export interface DamageOverTimeSeries {
   damageTakenTrajectory?: DamageTrajectoryPoint[];
   /** Point past which this candidate's team-boost contribution stops accruing (its faint time, mean or exact) — unless persistsThroughFaint overrides that below. */
   secondsSurvivedCutoff: number;
-  boostMultiplier: number;
+  /**
+   * undefined means this candidate has no mega/primal boost mechanic active
+   * at all (genuinely non-mega, or the "disable boost" checkbox is on) — see
+   * uptime.ts's UptimeConversionInputs.boostMultiplier. NOT equivalent to `1`;
+   * never fall back to `1` here.
+   */
+  boostMultiplier: number | undefined;
   /**
    * See SpeciesDefinition.boost.persistsThroughFaint — true only for Primal
    * Groudon/Kyogre and Mega Rayquaza. When set, this candidate's team-boost
@@ -261,23 +267,37 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
       </div>
       {crossing ? (
         <p className="crossover-note">
-          Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window (party
-          size {partySize}, {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
+          Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window ({partySize}
+          teammate{partySize === 1 ? "" : "s"}, {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
         </p>
       ) : (
         <p className="crossover-note">
-          No crossing in this window under these assumptions — {finalLeader} leads throughout (party size {partySize},{" "}
-          {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
+          No crossing in this window under these assumptions — {finalLeader} leads throughout ({partySize} teammate
+          {partySize === 1 ? "" : "s"}, {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
         </p>
       )}
       <div className="damage-tally">
         <div>
-          <strong style={{ color: "var(--accent-x)" }}>{x.name}</strong>: own {Math.round(finalOwnX)} + team {Math.round(finalTeamX)} ={" "}
-          {Math.round(finalOwnX + finalTeamX)} total ({pct(finalOwnX, finalTeamX)}% own / {100 - pct(finalOwnX, finalTeamX)}% team)
+          <strong style={{ color: "var(--accent-x)" }}>{x.name}</strong>:{" "}
+          {x.boostMultiplier === undefined ? (
+            <>own {Math.round(finalOwnX)} damage total (no mega/primal boost active — N/A team contribution)</>
+          ) : (
+            <>
+              own {Math.round(finalOwnX)} + team {Math.round(finalTeamX)} = {Math.round(finalOwnX + finalTeamX)} total ({pct(finalOwnX, finalTeamX)}%
+              own / {100 - pct(finalOwnX, finalTeamX)}% team)
+            </>
+          )}
         </div>
         <div>
-          <strong style={{ color: "var(--accent-y)" }}>{y.name}</strong>: own {Math.round(finalOwnY)} + team {Math.round(finalTeamY)} ={" "}
-          {Math.round(finalOwnY + finalTeamY)} total ({pct(finalOwnY, finalTeamY)}% own / {100 - pct(finalOwnY, finalTeamY)}% team)
+          <strong style={{ color: "var(--accent-y)" }}>{y.name}</strong>:{" "}
+          {y.boostMultiplier === undefined ? (
+            <>own {Math.round(finalOwnY)} damage total (no mega/primal boost active — N/A team contribution)</>
+          ) : (
+            <>
+              own {Math.round(finalOwnY)} + team {Math.round(finalTeamY)} = {Math.round(finalOwnY + finalTeamY)} total ({pct(finalOwnY, finalTeamY)}%
+              own / {100 - pct(finalOwnY, finalTeamY)}% team)
+            </>
+          )}
         </div>
       </div>
     </div>

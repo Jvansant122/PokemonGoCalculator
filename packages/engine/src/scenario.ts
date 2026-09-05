@@ -21,6 +21,17 @@ export interface Scenario {
   candidateFastMoveIds: [string | null, string | null];
   /** Per-candidate charged-move selection — see candidateFastMoveIds. */
   candidateChargedMoveIds: [string | null, string | null];
+  /**
+   * Per-candidate "pretend this species has no mega/primal boost mechanic at
+   * all", matched by index to `candidates` — lets a user compare a mega
+   * candidate's DPS fairly against a non-mega one. true disables BOTH that
+   * candidate's own-damage boost AND its team-damage attribution entirely
+   * (see comparison.ts's ComparisonInputs.candidateMegaBoostDisabled and
+   * uptime.ts's convertUptimeToTeamDamage) — a full toggle, not partial.
+   * Defaults to [false, false] (today's implicit behavior: every candidate's
+   * boost, if any, is always active).
+   */
+  candidateMegaBoostDisabled: [boolean, boolean];
   target: string;
   /** Boss fast-move selection. null means "use the boss's first fast move" (today's implicit default). */
   bossFastMoveId: string | null;

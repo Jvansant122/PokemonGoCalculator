@@ -4,6 +4,7 @@ import { calculateDamage } from "../src/damage.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
 import { SHADOW_DEFENSE_MULTIPLIER } from "../src/shadow.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "../src/raidBoss.js";
+import { convertUptimeToTeamDamage } from "../src/uptime.js";
 import type { SpeciesDefinition } from "../src/types.js";
 import {
   MEGA_RAICHU_X,
@@ -434,5 +435,155 @@ describe("runComparison", () => {
         dodge: { kind: "none" },
       }),
     ).toThrow();
+  });
+
+  it("CandidateResult.boostMultiplier is undefined for a genuinely non-mega candidate (no boost field at all)", () => {
+    const nonMega: SpeciesDefinition = {
+      id: "non-mega-attacker",
+      name: "Non Mega",
+      types: ["normal"],
+      baseAttack: 200,
+      baseDefense: 150,
+      baseStamina: 200,
+      fastMoves: [{ id: "f", name: "F", type: "normal", power: 10, energyGain: 10, durationSeconds: 1 }],
+      chargedMoves: [{ id: "c", name: "C", type: "normal", power: 50, energyCost: 40, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    const boss: SpeciesDefinition = {
+      id: "non-mega-test-boss",
+      name: "Boss",
+      types: ["normal"],
+      baseAttack: 100,
+      baseDefense: 200,
+      baseStamina: 30000,
+      fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 5, energyGain: 0, durationSeconds: 100 }],
+      chargedMoves: [],
+    };
+    const [result] = runComparison({
+      candidates: [nonMega],
+      boss,
+      level: 40,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" },
+    });
+    expect(result!.boostMultiplier).toBeUndefined();
+    // Closes the loop with uptime.ts: feeding this straight into
+    // convertUptimeToTeamDamage must show ZERO team-damage-from-boost for a
+    // candidate that was never boosted at all, not the old off-type fallback.
+    expect(
+      convertUptimeToTeamDamage({
+        secondsSurvived: result!.secondsSurvived,
+        boostMultiplier: result!.boostMultiplier,
+        teammateCount: 4,
+        matchingTeammateCount: 4,
+        teammateDps: 26.5,
+      }),
+    ).toBe(0);
+  });
+
+  it("only boosts a candidate's own move when that move's type matches the boost's boostedType (Fix 3: off-type moves get no self-boost)", () => {
+    const fastMoveOnType = { id: "fast-on", name: "Fast On", type: "fire" as const, power: 10, energyGain: 20, durationSeconds: 1 };
+    const chargedMoveOffType = {
+      id: "charged-off",
+      name: "Charged Off",
+      type: "water" as const,
+      power: 80,
+      energyCost: 40,
+      durationSeconds: 2,
+      vulnerableWindowSeconds: 2,
+    };
+    const boostedAttacker: SpeciesDefinition = {
+      id: "boosted-attacker",
+      name: "Boosted Attacker",
+      types: ["fire"],
+      baseAttack: 300,
+      baseDefense: 200,
+      baseStamina: 300,
+      fastMoves: [fastMoveOnType],
+      chargedMoves: [chargedMoveOffType],
+      boost: { multiplier: 2, boostedType: "fire" },
+    };
+    const boss: SpeciesDefinition = {
+      id: "boost-gating-test-boss",
+      name: "Boss",
+      types: ["normal"],
+      baseAttack: 100,
+      baseDefense: 200,
+      baseStamina: 30000,
+      fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 5, energyGain: 0, durationSeconds: 100 }],
+      chargedMoves: [],
+    };
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+    const [result] = runComparison({ candidates: [boostedAttacker], boss, level, ivs, dodge: { kind: "none" } });
+
+    const attackerStats = effectiveStatsAtLevel(boostedAttacker, ivs, level);
+    const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+    // On-type fast move: full 2x self-boost applies.
+    const expectedFastDamagePerHit = calculateDamage({
+      power: fastMoveOnType.power,
+      attackerAttackStat: attackerStats.attack,
+      defenderDefenseStat: bossDefenseStat,
+      stab: true,
+      megaBoostMultiplier: 2,
+    });
+    // Off-type (Water) charged move on a Fire-boosted attacker: no STAB
+    // (species is pure Fire) AND no self-boost (boost is Fire-only) — this
+    // would be silently wrong (over-boosted) under the old unconditional gate.
+    const expectedChargedDamagePerHit = calculateDamage({
+      power: chargedMoveOffType.power,
+      attackerAttackStat: attackerStats.attack,
+      defenderDefenseStat: bossDefenseStat,
+      stab: false,
+      megaBoostMultiplier: 1,
+    });
+    const buggyChargedDamagePerHit = calculateDamage({
+      power: chargedMoveOffType.power,
+      attackerAttackStat: attackerStats.attack,
+      defenderDefenseStat: bossDefenseStat,
+      stab: false,
+      megaBoostMultiplier: 2, // the old, unconditional-boost behavior
+    });
+
+    expect(result!.ownFastMoveDamage % expectedFastDamagePerHit).toBe(0);
+    expect(result!.chargedAttacksLanded).toBeGreaterThan(0);
+    expect(result!.ownChargedDamage / result!.chargedAttacksLanded).toBe(expectedChargedDamagePerHit);
+    expect(expectedChargedDamagePerHit).not.toBe(buggyChargedDamagePerHit);
+    expect(result!.boostMultiplier).toBe(2);
+  });
+
+  it("candidateMegaBoostDisabled fully disables both a candidate's own-damage boost AND its team-damage attribution (a full toggle, not partial)", () => {
+    const boss = PRIMAL_KYOGRE;
+    const [withBoost] = runComparison({
+      candidates: [MEGA_RAICHU_X],
+      boss,
+      level: SCENARIO_A_LEVEL,
+      ivs: SCENARIO_A_PERFECT_IVS,
+      dodge: { kind: "none" },
+    });
+    const [boostDisabled] = runComparison({
+      candidates: [MEGA_RAICHU_X],
+      boss,
+      level: SCENARIO_A_LEVEL,
+      ivs: SCENARIO_A_PERFECT_IVS,
+      dodge: { kind: "none" },
+      candidateMegaBoostDisabled: [true, false],
+    });
+
+    expect(withBoost!.boostMultiplier).toBe(1.3);
+    expect(boostDisabled!.boostMultiplier).toBeUndefined();
+    // Own-damage effect: less charged damage per hit with the boost off.
+    expect(boostDisabled!.ownChargedDamage).toBeLessThan(withBoost!.ownChargedDamage);
+    expect(boostDisabled!.ownFastMoveDamage).toBeLessThan(withBoost!.ownFastMoveDamage);
+    // Team-damage-attribution effect: feeding the disabled result into
+    // convertUptimeToTeamDamage must show zero, not the old off-type fallback.
+    expect(
+      convertUptimeToTeamDamage({
+        secondsSurvived: boostDisabled!.secondsSurvived,
+        boostMultiplier: boostDisabled!.boostMultiplier,
+        teammateCount: 4,
+        matchingTeammateCount: 4,
+        teammateDps: 26.5,
+      }),
+    ).toBe(0);
   });
 });

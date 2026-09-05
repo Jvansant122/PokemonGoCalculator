@@ -39,6 +39,15 @@ export interface Assumptions {
   candidateBChargedMoveId: string | null;
   bossFastMoveId: string | null;
   bossChargedMoveId: string | null;
+  /**
+   * Per-candidate "pretend this species has no mega/primal boost mechanic at
+   * all", matched by index to [candidateAId, candidateBId] — lets a user
+   * compare a mega candidate's DPS fairly against a non-mega one. See
+   * Scenario.candidateMegaBoostDisabled: true disables BOTH that candidate's
+   * own-damage boost AND its team-damage attribution entirely, not a partial
+   * disable. No-op for a candidate that has no `boost` at all already.
+   */
+  candidateMegaBoostDisabled: [boolean, boolean];
   level: number;
   ivAttack: number;
   ivDefense: number;
@@ -158,6 +167,22 @@ export function AssumptionPanel({
                 value={value.candidateAChargedMoveId}
                 onChange={(id) => set("candidateAChargedMoveId", id)}
               />
+              {candidateSpecies[0].boost && (
+                <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={value.candidateMegaBoostDisabled[0]}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        candidateMegaBoostDisabled: [e.target.checked, value.candidateMegaBoostDisabled[1]],
+                      })
+                    }
+                    title="Treats this candidate as if it had no mega/primal boost mechanic at all — both its own move damage boost AND its team-damage attribution — so it can be compared fairly against a non-mega species."
+                  />{" "}
+                  Disable mega/primal boost (fair DPS comparison vs. non-mega)
+                </label>
+              )}
             </>
           )}
         </div>
@@ -189,6 +214,22 @@ export function AssumptionPanel({
                 value={value.candidateBChargedMoveId}
                 onChange={(id) => set("candidateBChargedMoveId", id)}
               />
+              {candidateSpecies[1].boost && (
+                <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                  <input
+                    type="checkbox"
+                    checked={value.candidateMegaBoostDisabled[1]}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        candidateMegaBoostDisabled: [value.candidateMegaBoostDisabled[0], e.target.checked],
+                      })
+                    }
+                    title="Treats this candidate as if it had no mega/primal boost mechanic at all — both its own move damage boost AND its team-damage attribution — so it can be compared fairly against a non-mega species."
+                  />{" "}
+                  Disable mega/primal boost (fair DPS comparison vs. non-mega)
+                </label>
+              )}
             </>
           )}
         </div>
@@ -244,6 +285,7 @@ export function AssumptionPanel({
           <label htmlFor="ivAttack">Attack IV</label>
           <input
             id="ivAttack"
+            className="iv-input"
             type="number"
             min={0}
             max={15}
@@ -255,6 +297,7 @@ export function AssumptionPanel({
           <label htmlFor="ivDefense">Defense IV</label>
           <input
             id="ivDefense"
+            className="iv-input"
             type="number"
             min={0}
             max={15}
@@ -266,6 +309,7 @@ export function AssumptionPanel({
           <label htmlFor="ivStamina">Stamina IV</label>
           <input
             id="ivStamina"
+            className="iv-input"
             type="number"
             min={0}
             max={15}
@@ -418,11 +462,11 @@ export function AssumptionPanel({
         </div>
 
         <div className="field">
-          <label htmlFor="partySize">Party size</label>
+          <label htmlFor="partySize">Teammates (not counting this candidate)</label>
           <input
             id="partySize"
             type="number"
-            min={1}
+            min={0}
             max={20}
             value={value.partySize}
             onChange={(e) => {

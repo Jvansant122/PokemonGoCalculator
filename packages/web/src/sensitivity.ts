@@ -69,8 +69,8 @@ function winnerOf(
   partySize: number,
   teammateDps: number,
   matchingTeammateCount: number,
-  boostX: number,
-  boostY: number,
+  boostX: number | undefined,
+  boostY: number | undefined,
 ): "X" | "Y" {
   // Shared fight length for whichever candidate(s) are flagged
   // persistsThroughFaint (see SpeciesDefinition.boost.persistsThroughFaint) —
@@ -122,12 +122,21 @@ export function computeSensitivity(
   };
   // boostMultiplier/persistsThroughFaint aren't on SustainedCandidateResult
   // (unlike the old CandidateResult) — read straight off the SpeciesDefinition,
-  // same as App.tsx's result cards already do.
+  // same as App.tsx's result cards already do. Both are gated by the
+  // candidateMegaBoostDisabled toggle (per-candidate) — a disabled or
+  // genuinely non-mega candidate has boostMultiplier undefined, which must
+  // propagate as `undefined` (never a `1` fallback — see uptime.ts's
+  // UptimeConversionInputs.boostMultiplier doc comment on why `1` is not
+  // equivalent).
+  const boostDisabled = a.candidateMegaBoostDisabled;
   const persistsThroughFaint: [boolean, boolean] = [
-    candidates[0]!.boost?.persistsThroughFaint ?? false,
-    candidates[1]!.boost?.persistsThroughFaint ?? false,
+    (boostDisabled[0] ? false : candidates[0]!.boost?.persistsThroughFaint) ?? false,
+    (boostDisabled[1] ? false : candidates[1]!.boost?.persistsThroughFaint) ?? false,
   ];
-  const boostMultipliers: [number, number] = [candidates[0]!.boost?.multiplier ?? 1, candidates[1]!.boost?.multiplier ?? 1];
+  const boostMultipliers: [number | undefined, number | undefined] = [
+    boostDisabled[0] ? undefined : candidates[0]!.boost?.multiplier,
+    boostDisabled[1] ? undefined : candidates[1]!.boost?.multiplier,
+  ];
 
   function runSustained(overrides: {
     level?: number;
@@ -145,6 +154,7 @@ export function computeSensitivity(
       bossChargedMoveMeanIntervalSeconds: overrides.bossChargedMoveMeanIntervalSeconds ?? a.bossChargedMoveFrequencySeconds,
       iterations: SENSITIVITY_ITERATIONS,
       weather: a.weather,
+      candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
       ...moveSelections,
     });
     return [
@@ -158,18 +168,20 @@ export function computeSensitivity(
 
   const checks: SensitivityCheck[] = [];
 
-  // 1. Party size: scan 1-20 for the nearest flip. (Considered swapping this
-  // to the engine's own findCrossoverPartySize, which exists and is tested
-  // but has zero call sites in packages/web today — declined: that function
-  // anchors its "flip" to wherever the sweep's own leader first changes
-  // starting from party size 1, not to the specific currently-configured
-  // party size's actual winner (currentWinner here) — the two only agree if
-  // leadership only crosses once across the whole 1-20 range. Usually true
-  // for this linear team-damage math, but not guaranteed, and this loop
-  // already anchors correctly to currentWinner with no extra risk, so kept.)
+  // 1. Teammates: scan 0-20 for the nearest flip (0 = solo, no teammates —
+  // a valid, selectable value since the "Teammates" input's minimum was
+  // dropped from 1 to 0). (Considered swapping this to the engine's own
+  // findCrossoverPartySize, which exists and is tested but has zero call
+  // sites in packages/web today — declined: that function anchors its
+  // "flip" to wherever the sweep's own leader first changes starting from
+  // 0 teammates, not to the specific currently-configured teammate count's
+  // actual winner (currentWinner here) — the two only agree if leadership
+  // only crosses once across the whole 0-20 range. Usually true for this
+  // linear team-damage math, but not guaranteed, and this loop already
+  // anchors correctly to currentWinner with no extra risk, so kept.)
   {
     let crossing: number | null = null;
-    for (let n = 1; n <= 20; n++) {
+    for (let n = 0; n <= 20; n++) {
       const w = winnerOf(x, y, n, a.teammateDps, a.matchingTeammateCount, boostMultipliers[0], boostMultipliers[1]);
       if (w !== currentWinner) {
         crossing = n;
@@ -177,12 +189,12 @@ export function computeSensitivity(
       }
     }
     checks.push({
-      label: "Party size",
+      label: "Teammates",
       currentValue: `${a.partySize}`,
       flips: crossing !== null,
       distance: crossing === null ? Infinity : Math.abs(crossing - a.partySize),
-      distanceLabel: crossing === null ? "no flip found in 1-20" : `flips at party size ${crossing}`,
-      rangeMin: 1,
+      distanceLabel: crossing === null ? "no flip found in 0-20" : `flips at ${crossing} teammate${crossing === 1 ? "" : "s"}`,
+      rangeMin: 0,
       rangeMax: 20,
       currentNumericValue: a.partySize,
       flipNumericValue: crossing,
@@ -217,10 +229,26 @@ export function computeSensitivity(
     });
   }
 
-  // 3. Mega boost multiplier: scan down from the current value toward 1.0.
-  {
+  // 3. Mega boost multiplier: scan down from the current value toward 1.0 —
+  // only meaningful when candidate A actually has an active boost to weaken
+  // (a genuinely non-mega candidate A, or one with the boost disabled via the
+  // assumptions panel, has nothing here to scan).
+  if (boostMultipliers[0] === undefined) {
+    checks.push({
+      label: "Mega boost multiplier",
+      currentValue: "n/a (no boost active)",
+      flips: false,
+      distance: Infinity,
+      distanceLabel: "candidate A has no active mega/primal boost to scan",
+      rangeMin: 1.0,
+      rangeMax: 1.0,
+      currentNumericValue: 1,
+      flipNumericValue: null,
+    });
+  } else {
+    const currentBoostA = boostMultipliers[0];
     let flipAt: number | null = null;
-    for (let m = boostMultipliers[0]; m >= 1.0; m -= 0.02) {
+    for (let m = currentBoostA; m >= 1.0; m -= 0.02) {
       const w = winnerOf(x, y, a.partySize, a.teammateDps, a.matchingTeammateCount, m, m);
       if (w !== currentWinner) {
         flipAt = Math.round(m * 100) / 100;
@@ -229,13 +257,13 @@ export function computeSensitivity(
     }
     checks.push({
       label: "Mega boost multiplier",
-      currentValue: `${boostMultipliers[0]}x`,
+      currentValue: `${currentBoostA}x`,
       flips: flipAt !== null,
-      distance: flipAt === null ? Infinity : Math.abs(boostMultipliers[0] - flipAt),
+      distance: flipAt === null ? Infinity : Math.abs(currentBoostA - flipAt),
       distanceLabel: flipAt === null ? "no flip down to 1.0x" : `flips at ${flipAt}x`,
       rangeMin: 1.0,
-      rangeMax: boostMultipliers[0],
-      currentNumericValue: boostMultipliers[0],
+      rangeMax: currentBoostA,
+      currentNumericValue: currentBoostA,
       flipNumericValue: flipAt,
     });
   }

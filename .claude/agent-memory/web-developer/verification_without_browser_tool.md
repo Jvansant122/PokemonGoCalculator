@@ -7,8 +7,12 @@ metadata:
 
 This agent's declared tool grant is Read/Write/Edit/Bash/Grep/Glob — no browser tool, despite a
 `PostToolUse` hook message mentioning `preview_start`/a "Browser pane" after edits. That hook
-message is generic environment boilerplate, not a real available tool — check the actual function
-list given at the start of the conversation before assuming a preview tool exists.
+message is generic environment boilerplate that fires regardless of whether the tool is actually
+granted — it is not evidence the tool exists. Check the literal `<functions>` list given at the
+start of the conversation, not hook text. Reconfirmed 2026-09-05: no `chromium`/`chrome`/
+`google-chrome`/`msedge` usable from the Bash shell, and no `playwright`/`puppeteer` in
+`node_modules/.bin` anywhere in the repo — there is no scriptable browser fallback, only the ladder
+below.
 
 **Verification ladder used absent a browser tool** (2026-09-05, wiring
 [[wiring-persists-through-faint]]):

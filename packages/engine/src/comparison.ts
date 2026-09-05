@@ -35,12 +35,48 @@ function resolveMove<T extends { id: string }>(moves: T[], id: string | null | u
   return (id ? moves.find((m) => m.id === id) : undefined) ?? moves[0];
 }
 
+/**
+ * Resolves a candidate's effective boost for this comparison: undefined when
+ * the species has no boost mechanic at all, OR when the caller has flagged
+ * this specific candidate's boost as disabled (see
+ * ComparisonInputs.candidateMegaBoostDisabled) — a full "pretend this species
+ * isn't mega/primal boosted at all," not a partial toggle. Every downstream
+ * use (own-damage boost gating below, and the boostMultiplier/boostedType/
+ * persistsThroughFaint fields fed to uptime.ts) reads from this, never from
+ * species.boost directly, so the disable toggle can't be partially applied.
+ */
+function resolveBoost(species: SpeciesDefinition, disabled: boolean): SpeciesDefinition["boost"] | undefined {
+  return disabled ? undefined : species.boost;
+}
+
+/**
+ * The mega/primal self-boost only applies to a candidate's own move when
+ * that move's type matches the boost's boostedType (e.g. Mega Camerupt's
+ * Ground-type Earthquake gets no boost even though Camerupt's boosted type
+ * is Fire) — an off-type move, or a candidate with no active boost at all,
+ * gets NO_BONUS (1), never the full multiplier.
+ */
+function ownBoostMultiplier(boost: SpeciesDefinition["boost"] | undefined, moveType: SpeciesDefinition["types"][number]): number {
+  return boost && moveType === boost.boostedType ? boost.multiplier : 1;
+}
+
 export interface ComparisonInputs {
   candidates: SpeciesDefinition[];
   /** Per-candidate fast-move selection, matched by index to `candidates`. Omit or use null for a given index to default to that species' first fast move (today's behavior). */
   candidateFastMoveIds?: (string | null)[];
   /** Per-candidate charged-move selection — see candidateFastMoveIds. */
   candidateChargedMoveIds?: (string | null)[];
+  /**
+   * Per-candidate "pretend this species has no mega/primal boost mechanic at
+   * all", matched by index to `candidates` — for comparing a mega candidate's
+   * DPS fairly against a non-mega one. When true for a candidate, its
+   * species.boost is treated as entirely absent for EVERY purpose: both this
+   * candidate's own-damage boost (fast/charged) AND its team-damage
+   * attribution (boostMultiplier/boostedType/persistsThroughFaint fed to
+   * uptime.ts) — a full toggle, not a partial one. Defaults to [false, false]
+   * when omitted, so every existing caller needs zero changes.
+   */
+  candidateMegaBoostDisabled?: [boolean, boolean];
   boss: SpeciesDefinition;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
   bossFastMoveId?: string | null;
@@ -88,7 +124,8 @@ export interface CandidateResult {
   ownFastMoveDamage: number;
   /** ownChargedDamage + ownFastMoveDamage — the true total damage output, and what feeds the team-contribution/crossover math (uptime.ts) and the damage-over-time chart. */
   ownTotalDamage: number;
-  boostMultiplier: number;
+  /** undefined means this candidate has no boost mechanic active for this comparison — genuinely non-mega, or candidateMegaBoostDisabled was set. See uptime.ts's UptimeConversionInputs.boostMultiplier. */
+  boostMultiplier: number | undefined;
   boostedType: SpeciesDefinition["types"][number];
   /** See SpeciesDefinition.boost.persistsThroughFaint (uptime.ts consumes this). Defaults to false when the species has no boost at all. */
   persistsThroughFaint: boolean;
@@ -103,7 +140,17 @@ export interface CandidateResult {
  * conclude" can never drift between the two.
  */
 export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
-  const { candidates, boss, level, ivs, dodge, dodgeFastAttacks = false, bossStartingEnergy = 0, weather = "none" } = inputs;
+  const {
+    candidates,
+    boss,
+    level,
+    ivs,
+    dodge,
+    dodgeFastAttacks = false,
+    bossStartingEnergy = 0,
+    weather = "none",
+    candidateMegaBoostDisabled = [false, false],
+  } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
@@ -127,6 +174,7 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
     const candidateFastVsBoss = typeEffectiveness(fastMove.type, boss.types);
     const candidateChargedVsBoss = typeEffectiveness(chargedMove.type, boss.types);
     const bossVsCandidate = typeEffectiveness(bossFastMove.type, species.types);
+    const boost = resolveBoost(species, candidateMegaBoostDisabled[i] ?? false);
 
     const result = simulateOpeningBurst(
       {
@@ -138,13 +186,13 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
         fastDamageOut: {
           stab: species.types.includes(fastMove.type),
           typeEffectiveness: candidateFastVsBoss,
-          megaBoostMultiplier: species.boost?.multiplier ?? 1,
+          megaBoostMultiplier: ownBoostMultiplier(boost, fastMove.type),
           weatherBoosted: isWeatherBoosted(fastMove.type, weather),
         },
         chargedDamageOut: {
           stab: species.types.includes(chargedMove.type),
           typeEffectiveness: candidateChargedVsBoss,
-          megaBoostMultiplier: species.boost?.multiplier ?? 1,
+          megaBoostMultiplier: ownBoostMultiplier(boost, chargedMove.type),
           weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
         },
       },
@@ -171,9 +219,9 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
       ownChargedDamage: result.totalChargedDamage,
       ownFastMoveDamage: result.totalFastMoveDamage,
       ownTotalDamage: result.totalChargedDamage + result.totalFastMoveDamage,
-      boostMultiplier: species.boost?.multiplier ?? 1,
-      boostedType: species.boost?.boostedType ?? species.types[0],
-      persistsThroughFaint: species.boost?.persistsThroughFaint ?? false,
+      boostMultiplier: boost?.multiplier,
+      boostedType: boost?.boostedType ?? species.types[0],
+      persistsThroughFaint: boost?.persistsThroughFaint ?? false,
       ownDamageTrajectory: result.ownDamageTrajectory,
     };
   });
@@ -185,6 +233,8 @@ export interface SustainedComparisonInputs {
   candidateFastMoveIds?: (string | null)[];
   /** Per-candidate charged-move selection — see candidateFastMoveIds. */
   candidateChargedMoveIds?: (string | null)[];
+  /** See ComparisonInputs.candidateMegaBoostDisabled. Defaults to [false, false]. */
+  candidateMegaBoostDisabled?: [boolean, boolean];
   boss: SpeciesDefinition;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
   bossFastMoveId?: string | null;
@@ -244,6 +294,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     maxSeconds = DEFAULT_STEPWISE_MAX_SECONDS,
     iterations = 200,
     weather = "none",
+    candidateMegaBoostDisabled = [false, false],
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
@@ -261,6 +312,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     const candidateChargedVsBoss = typeEffectiveness(chargedMove.type, boss.types);
     const bossVsCandidate = typeEffectiveness(bossFastMove.type, species.types);
     const bossChargedVsCandidate = bossChargedMove ? typeEffectiveness(bossChargedMove.type, species.types) : 1;
+    const boost = resolveBoost(species, candidateMegaBoostDisabled[i] ?? false);
 
     const distribution = runStepwiseDistribution(
       {
@@ -273,13 +325,13 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
           fastDamageOut: {
             stab: species.types.includes(fastMove.type),
             typeEffectiveness: candidateFastVsBoss,
-            megaBoostMultiplier: species.boost?.multiplier ?? 1,
+            megaBoostMultiplier: ownBoostMultiplier(boost, fastMove.type),
             weatherBoosted: isWeatherBoosted(fastMove.type, weather),
           },
           chargedDamageOut: {
             stab: species.types.includes(chargedMove.type),
             typeEffectiveness: candidateChargedVsBoss,
-            megaBoostMultiplier: species.boost?.multiplier ?? 1,
+            megaBoostMultiplier: ownBoostMultiplier(boost, chargedMove.type),
             weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
           },
           holdChargedMoveUntilSafe,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { convertUptimeToTeamDamage, findCrossoverPartySize, DEFAULT_MEGA_BOOST_MULTIPLIER, OFF_TYPE_MEGA_BOOST_MULTIPLIER } from "../src/uptime.js";
 
 describe("convertUptimeToTeamDamage", () => {
-  it("matches the spec's worked example: ~3s extra uptime, 4 teammates at ~26.5 DPS, all matching type", () => {
+  it("matches the spec's worked example, ATTRIBUTABLE portion only: ~3s extra uptime, 4 teammates at ~26.5 DPS, all matching type", () => {
     const damage = convertUptimeToTeamDamage({
       secondsSurvived: 3,
       boostMultiplier: DEFAULT_MEGA_BOOST_MULTIPLIER,
@@ -10,11 +10,25 @@ describe("convertUptimeToTeamDamage", () => {
       matchingTeammateCount: 4,
       teammateDps: 26.5,
     });
-    // 3 * 26.5 * 4 * 1.3 = 413.4 (the boosted total damage during the extra window)
-    expect(damage).toBeCloseTo(413.4, 5);
+    // 3 * 26.5 * 4 * (1.3 - 1) = 95.4 — the EXTRA damage the boost itself
+    // contributes (marginal), not the teammates' full 413.4 total output
+    // while boosted. A teammate doing 10 DPS boosted to 13 DPS should show
+    // up here as 3, not 13.
+    expect(damage).toBeCloseTo(95.4, 5);
   });
 
-  it("gives every off-type teammate the flat OFF_TYPE_MEGA_BOOST_MULTIPLIER, not zero", () => {
+  it("returns 0 when boostMultiplier is undefined — no boost mechanic active at all (genuinely non-mega, or explicitly disabled)", () => {
+    const damage = convertUptimeToTeamDamage({
+      secondsSurvived: 3,
+      boostMultiplier: undefined,
+      teammateCount: 4,
+      matchingTeammateCount: 4,
+      teammateDps: 26.5,
+    });
+    expect(damage).toBe(0);
+  });
+
+  it("gives every off-type teammate a nonzero attributable contribution (OFF_TYPE_MEGA_BOOST_MULTIPLIER - 1), not zero", () => {
     const damage = convertUptimeToTeamDamage({
       secondsSurvived: 3,
       boostMultiplier: DEFAULT_MEGA_BOOST_MULTIPLIER,
@@ -25,8 +39,10 @@ describe("convertUptimeToTeamDamage", () => {
     // The real game gives every party member at least a flat team boost
     // regardless of type — an earlier version of this engine gave off-type
     // teammates 1x (no boost at all), which understated their contribution.
-    expect(damage).toBeCloseTo(3 * 26.5 * 4 * OFF_TYPE_MEGA_BOOST_MULTIPLIER, 5);
-    expect(damage).toBeGreaterThan(3 * 26.5 * 4); // strictly more than "no boost at all"
+    // This is the marginal (attributable) contribution, so it's
+    // (OFF_TYPE_MEGA_BOOST_MULTIPLIER - 1), not the full multiplier.
+    expect(damage).toBeCloseTo(3 * 26.5 * 4 * (OFF_TYPE_MEGA_BOOST_MULTIPLIER - 1), 5);
+    expect(damage).toBeGreaterThan(0); // strictly more than "no boost at all" (which contributes exactly 0)
   });
 
   it("splits contribution proportionally for a mixed team (some matching, some not)", () => {
@@ -37,7 +53,8 @@ describe("convertUptimeToTeamDamage", () => {
       matchingTeammateCount: 1,
       teammateDps: 26.5,
     });
-    const expected = 3 * (1 * 26.5 * DEFAULT_MEGA_BOOST_MULTIPLIER + 3 * 26.5 * OFF_TYPE_MEGA_BOOST_MULTIPLIER);
+    const expected =
+      3 * (1 * 26.5 * (DEFAULT_MEGA_BOOST_MULTIPLIER - 1) + 3 * 26.5 * (OFF_TYPE_MEGA_BOOST_MULTIPLIER - 1));
     expect(damage).toBeCloseTo(expected, 5);
   });
 
@@ -106,8 +123,10 @@ describe("convertUptimeToTeamDamage", () => {
       persistsThroughFaint: true,
       fightDurationSeconds: 180,
     });
-    // 180 * 4 * 26.5 * 1.3 (the full fight, not just the 10s this candidate survived)
-    expect(persisting).toBeCloseTo(180 * 4 * 26.5 * 1.3, 5);
+    // 180 * 4 * 26.5 * (1.3 - 1) — the full fight's ATTRIBUTABLE contribution
+    // (not the teammates' total output), using the full fight window rather
+    // than just the 10s this candidate survived.
+    expect(persisting).toBeCloseTo(180 * 4 * 26.5 * (1.3 - 1), 5);
   });
 
   it("persistsThroughFaint never shrinks the window below secondsSurvived even if fightDurationSeconds is somehow shorter", () => {
@@ -136,8 +155,15 @@ describe("findCrossoverPartySize", () => {
     const x = { id: "X", secondsSurvived: 13, boostMultiplier: 1.3, boostedType: "electric" as const, ownDamage: 190 };
     const y = { id: "Y", secondsSurvived: 10, boostMultiplier: 1.3, boostedType: "electric" as const, ownDamage: 221 };
 
+    // Re-derived for the delta-only (attributable-contribution) formula: each
+    // teammate now only contributes secondsSurvived * partySize * teammateDps
+    // * (boostMultiplier - 1) instead of the old total-output formula, so the
+    // crossover point (where X's longer uptime overtakes Y's raw-damage lead)
+    // lands at a materially larger party size than before (was 4 under the
+    // old, overstated formula) — totalX(p) = 190 + 13*p*2*0.3,
+    // totalY(p) = 221 + 10*p*2*0.3, crossing between p=17 and p=18.
     const crossover = findCrossoverPartySize(x, y, 2, { a: 1, b: 1 });
-    expect(crossover.partySize).toBe(4);
+    expect(crossover.partySize).toBe(18);
     expect(crossover.leaderAtOrAbove).toBe("X");
     expect(crossover.leaderBelow).toBe("Y");
   });

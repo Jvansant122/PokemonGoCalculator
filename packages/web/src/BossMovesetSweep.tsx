@@ -3,7 +3,8 @@ import type { BossChargedMoveVariantResult } from "@pogo-analyzer/engine";
 
 interface CandidateMeta {
   name: string;
-  boostMultiplier: number;
+  /** undefined means this candidate has no mega/primal boost active at all — see uptime.ts's UptimeConversionInputs.boostMultiplier. Never fall back to 1 here. */
+  boostMultiplier: number | undefined;
   persistsThroughFaint: boolean;
 }
 
@@ -69,6 +70,7 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
 
   const winners = new Set(rows.map((r) => r.winnerIndex));
   const rankingFlips = winners.size > 1;
+  const noBoost = [candidateMeta[0].boostMultiplier === undefined, candidateMeta[1].boostMultiplier === undefined] as const;
 
   return (
     <div style={{ marginTop: 20, overflowX: "auto" }}>
@@ -122,6 +124,10 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
         ) : (
           `${winners.size === 1 && rows[0]!.winnerIndex !== null ? candidateMeta[rows[0]!.winnerIndex!].name : "Neither candidate"} wins regardless of which charged move this boss instance rolled.`
         )}
+        {noBoost[0] &&
+          ` ${candidateMeta[0].name} has no active mega/primal boost — its "Own+team" column above equals its "Own total" column exactly.`}
+        {noBoost[1] &&
+          ` ${candidateMeta[1].name} has no active mega/primal boost — its "Own+team" column above equals its "Own total" column exactly.`}
       </p>
     </div>
   );

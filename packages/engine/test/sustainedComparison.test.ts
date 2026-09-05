@@ -184,4 +184,61 @@ describe("runSustainedComparison", () => {
     // survival no longer) as the weak-charged-move variant.
     expect(sweep[1]!.results[0]!.meanSecondsSurvived).toBeLessThanOrEqual(sweep[0]!.results[0]!.meanSecondsSurvived);
   });
+
+  it("only boosts a candidate's own move when its type matches boostedType, in the sustained path too (Fix 3, same gating as runComparison)", () => {
+    const fastMoveOnType = { id: "fast-on", name: "Fast On", type: "fire" as const, power: 10, energyGain: 20, durationSeconds: 1 };
+    const chargedMoveOffType = {
+      id: "charged-off",
+      name: "Charged Off",
+      type: "water" as const,
+      power: 80,
+      energyCost: 40,
+      durationSeconds: 2,
+      vulnerableWindowSeconds: 2,
+    };
+    const boostedAttacker: SpeciesDefinition = {
+      id: "sustained-boosted-attacker",
+      name: "Boosted Attacker",
+      types: ["fire"],
+      baseAttack: 300,
+      baseDefense: 200,
+      baseStamina: 100000, // deliberately huge so it never faints inside the window
+      fastMoves: [fastMoveOnType],
+      chargedMoves: [chargedMoveOffType],
+      boost: { multiplier: 2, boostedType: "fire" },
+    };
+    const boss: SpeciesDefinition = {
+      id: "boost-gating-sustained-boss",
+      name: "Boss",
+      types: ["normal"],
+      baseAttack: 5,
+      baseDefense: 200,
+      baseStamina: 100000,
+      fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 1.5 }],
+      chargedMoves: [{ id: "bc", name: "Boss Charged", type: "normal", power: 50, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    const common = {
+      candidates: [boostedAttacker],
+      boss,
+      level: 40,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" } as const,
+      bossChargedMoveMeanIntervalSeconds: 20,
+      bossChargedMoveWarmupSeconds: 1000, // never fires inside maxSeconds, isolating pure fast/charged own-damage comparison
+      maxSeconds: 20,
+      iterations: 30,
+    };
+
+    const withBoost = runSustainedComparison(common);
+    const boostDisabled = runSustainedComparison({ ...common, candidateMegaBoostDisabled: [true, false] });
+
+    // Fast move (on-type, Fire): boosted 2x normally, so disabling the boost
+    // strictly reduces it.
+    expect(boostDisabled[0]!.meanFastMoveDamage).toBeLessThan(withBoost[0]!.meanFastMoveDamage);
+    // Charged move (off-type, Water on a Fire-boosted attacker): never
+    // boosted either way under the type-gated fix, so disabling the boost
+    // changes nothing here — both runs use identical seeds/timing, so this
+    // should match exactly, not just approximately.
+    expect(boostDisabled[0]!.meanChargedDamage).toBe(withBoost[0]!.meanChargedDamage);
+  });
 });

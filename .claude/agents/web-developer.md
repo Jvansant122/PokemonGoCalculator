@@ -85,3 +85,10 @@ These are not cosmetic; they are the point of the product:
 Keep `.claude/agent-memory/web-developer/MEMORY.md` current: UI conventions you had to
 re-discover the hard way, real bugs found (e.g. the fast/charged move-shape ambiguity above), and
 requests you pushed back on and why. Read it before starting, update it before finishing.
+
+**Use the path relative to the repo root, not your current shell directory.** Your own build/test
+commands routinely `cd` into `packages/web` first — if you then write memory with a bare
+`.claude/agent-memory/...` path from that same shell context, it lands at
+`packages/web/.claude/agent-memory/...`, a stray location no future session ever reads. This has
+happened twice. Before writing memory, confirm you're targeting
+`<repo-root>/.claude/agent-memory/web-developer/`, not wherever your last `cd` left you.
