@@ -2,15 +2,18 @@
   "name": "pogo-analyzer",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "test": "npm run test --workspace=packages/engine",
     "test:engine": "npm run test --workspace=packages/engine",
-    "build": "npm run build --workspaces --if-present"
+    "build": "npm run build --workspaces --if-present",
+    "sync-data": "tsx scripts/sync-data.ts"
   },
   "devDependencies": {
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "tsx": "^4.19.1"
   }
 }

@@ -1,0 +1,34 @@
+{
+  "pokemon_stats.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 264622
+  },
+  "pokemon_types.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 227815
+  },
+  "fast_moves.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 15490
+  },
+  "charged_moves.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 53383
+  },
+  "current_pokemon_moves.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 551903
+  },
+  "cp_multiplier.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 6706
+  },
+  "raids.json": {
+    "fetchedAt": "2026-09-05T00:59:47.801Z",
+    "bytes": 10470
+  },
+  "mega_pokemon.json": {
+    "fetchedAt": "2026-09-05T01:12:12.643Z",
+    "bytes": 19958
+  }
+}

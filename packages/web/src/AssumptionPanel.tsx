@@ -1,7 +1,10 @@
 import type { DodgeBehavior } from "@pogo-analyzer/engine";
 import type { CombatPhase } from "@pogo-analyzer/engine";
+import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 
 export interface Assumptions {
+  candidateAId: string;
+  candidateBId: string;
   targetId: string;
   level: number;
   ivAttack: number;
@@ -9,17 +12,29 @@ export interface Assumptions {
   ivStamina: number;
   dodge: DodgeBehavior;
   bossChargedMoveFrequencySeconds: number;
-  openingBurstSeconds: number;
   phase: CombatPhase;
   partySize: number;
   teammateDps: number;
   teammateTypeMatches: boolean;
+  /** Whether the boss starts the fight already partway charged (see bossStartingEnergyFraction). */
+  bossStartsPrimed: boolean;
+  /** Fraction (0-1) of the boss's first charged move's energy cost it starts with, when bossStartsPrimed is true. */
+  bossStartingEnergyFraction: number;
 }
 
 interface Props {
   value: Assumptions;
   onChange: (next: Assumptions) => void;
-  targetOptions: { id: string; name: string }[];
+  candidateOptions: SpeciesPickerOption[];
+  targetOptions: SpeciesPickerOption[];
+  unmatchedRaids: { raidName: string; tier: string }[];
+  /**
+   * Physically-derived "boss ready for its first charged move" time for the
+   * currently-selected target (see bossChargedMoveReadySeconds), or null if
+   * the target has no resolvable charged move. Computed in App.tsx, where the
+   * resolved boss SpeciesDefinition lives — this panel only displays it.
+   */
+  bossReadySeconds: number | null;
 }
 
 /**
@@ -27,7 +42,7 @@ interface Props {
  * tool produces is conditional on these — nothing is rendered as a single
  * ranked number without this panel attached above it.
  */
-export function AssumptionPanel({ value, onChange, targetOptions }: Props) {
+export function AssumptionPanel({ value, onChange, candidateOptions, targetOptions, unmatchedRaids, bossReadySeconds }: Props) {
   function set<K extends keyof Assumptions>(key: K, next: Assumptions[K]) {
     onChange({ ...value, [key]: next });
   }
@@ -36,15 +51,33 @@ export function AssumptionPanel({ value, onChange, targetOptions }: Props) {
     <section className="panel">
       <h2>Assumptions</h2>
       <div className="assumption-grid">
-        <div className="field">
-          <label htmlFor="target">Raid target</label>
-          <select id="target" value={value.targetId} onChange={(e) => set("targetId", e.target.value)}>
-            {targetOptions.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+        <SpeciesPicker
+          idPrefix="candidate-a"
+          label="Candidate A"
+          options={candidateOptions}
+          value={value.candidateAId}
+          onChange={(id) => set("candidateAId", id)}
+        />
+        <SpeciesPicker
+          idPrefix="candidate-b"
+          label="Candidate B"
+          options={candidateOptions}
+          value={value.candidateBId}
+          onChange={(id) => set("candidateBId", id)}
+        />
+        <div>
+          <SpeciesPicker
+            idPrefix="target"
+            label="Raid target"
+            options={targetOptions}
+            value={value.targetId}
+            onChange={(id) => set("targetId", id)}
+          />
+          {unmatchedRaids.length > 0 && (
+            <p className="species-picker-hint" title="These raids are currently active but have no usable stat data yet.">
+              Also active, no data yet: {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
+            </p>
+          )}
         </div>
 
         <div className="field">
@@ -137,23 +170,44 @@ export function AssumptionPanel({ value, onChange, targetOptions }: Props) {
         </div>
 
         <div className="field">
-          <label htmlFor="openingBurst">
-            {value.phase === "opening-burst" ? "Opening-burst window (s)" : "Simulated fight length (s)"}
-          </label>
-          <input
-            id="openingBurst"
-            type="number"
-            min={1}
-            max={60}
-            value={value.openingBurstSeconds}
-            onChange={(e) => set("openingBurstSeconds", Number(e.target.value))}
-            title={
-              value.phase === "opening-burst"
-                ? "How long the boss goes without a charged move. The comparison only models this window."
-                : "How long each simulated run lasts before being cut off."
-            }
-          />
+          <label>Boss ready for its first charged move</label>
+          <p className="computed-value" title="A boss cannot use a charged move before its own fast move has generated enough energy for it — this is computed from the selected target's move data, not a free assumption.">
+            {bossReadySeconds === null
+              ? "unknown (target has no charged move data)"
+              : value.bossStartsPrimed && bossReadySeconds === 0
+                ? "0s — already primed, see below"
+                : `~${bossReadySeconds.toFixed(1)}s`}
+          </p>
         </div>
+
+        <div className="field">
+          <label htmlFor="bossStartsPrimed">Boss starts already partway charged?</label>
+          <select
+            id="bossStartsPrimed"
+            value={value.bossStartsPrimed ? "yes" : "no"}
+            onChange={(e) => set("bossStartsPrimed", e.target.value === "yes")}
+            title="Models a mega tagging in mid-fight against a boss an earlier trainer's mega already left partway (or fully) charged, instead of a fight that always starts at 0 boss energy."
+          >
+            <option value="no">No — fight starts at 0 boss energy</option>
+            <option value="yes">Yes — boss already has some energy saved</option>
+          </select>
+        </div>
+
+        {value.bossStartsPrimed && (
+          <div className="field">
+            <label htmlFor="bossStartingEnergyFraction">Boss starting energy (% of its charged-move cost)</label>
+            <input
+              id="bossStartingEnergyFraction"
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round(value.bossStartingEnergyFraction * 100)}
+              onChange={(e) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, Number(e.target.value) / 100)))}
+              title="100% means the boss can fire immediately — there's no fast-move-only opening burst left to model; switch to Sustained for that case."
+            />
+          </div>
+        )}
 
         <div className="field">
           <label htmlFor="bossFreq">Boss charged-move mean frequency (s)</label>

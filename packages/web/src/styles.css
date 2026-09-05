@@ -174,3 +174,98 @@ h1 {
   cursor: pointer;
   font-weight: 600;
 }
+
+.species-picker {
+  position: relative;
+}
+
+.species-picker-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #0d0f14;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.species-picker-list li {
+  display: block;
+}
+
+.species-picker-list button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.species-picker-list button:hover,
+.species-picker-list li[aria-selected="true"] button {
+  background: var(--panel);
+}
+
+.species-picker-empty,
+.species-picker-hint {
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+p.species-picker-hint {
+  margin: 4px 0 0;
+}
+
+.species-picker-warning {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #ff6b6b;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.badge-hypothetical {
+  background: rgba(255, 157, 91, 0.18);
+  color: var(--accent-y);
+  border: 1px solid var(--accent-y);
+}
+
+.badge-approximate {
+  background: rgba(255, 107, 107, 0.15);
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+}
+
+.computed-value {
+  margin: 0;
+  padding: 6px 8px;
+  background: #0d0f14;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+}

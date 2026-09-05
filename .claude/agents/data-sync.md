@@ -32,10 +32,25 @@ Never edit `data/raw/` by hand.
 ## Known gap: raid bosses
 
 pogoapi.net does **not** publish a current raid-boss list. Do not invent one and do not
-scrape a fragile page for it. Read the boss roster from `data/raid-bosses.json`, a
-project-owned file that can be updated manually or pointed at a community raid-boss feed.
-If that file is missing, create it with a documented schema and an empty `bosses` array,
-then report that it needs populating.
+scrape a fragile page for it. The confirmed working source, verified live and in active
+use as of the 2026-09-04 sync, is the community-maintained ScrapedDuck feed:
+`https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.json` (mirrors
+leekduck.com's current raid rotation, refreshed regularly by that project). Re-fetch this
+URL on every sync — cache the raw response under `data/raw/raids.json` like any other
+endpoint, then match each entry's `name` against normalized species (and against the
+hand-defined hypothetical fixtures, e.g. Mega Raichu X/Y) to produce
+`data/normalized/activeRaids.json`. This feed gives name/tier/typing but never base
+stats, so a name match is still required to get anything usable; entries that can't be
+matched must be kept (not dropped) with `speciesId: null` so the UI can surface "no data
+available" rather than silently omitting a boss, and approximate matches (stripped
+`Shadow `/`Mega `/`Primal `/regional prefixes standing in for a variant with no real
+stat source) must be flagged with `isApproximate: true`.
+
+If `https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.json` ever goes
+dark or changes shape, fall back to a project-owned override file
+(`data/raid-bosses.json`) that can be updated manually or pointed at a replacement
+community feed. If that fallback file is also missing, create it with a documented
+schema and an empty `bosses` array, then report that it needs populating.
 
 ## Hypothetical species
 

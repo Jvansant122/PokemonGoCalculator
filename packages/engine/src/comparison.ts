@@ -1,9 +1,9 @@
-import { simulateOpeningBurst } from "./combat.js";
+import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajectoryPoint } from "./combat.js";
 import type { DodgeBehavior } from "./breakpoints.js";
 import { effectiveStatsAtLevel } from "./stats.js";
 import { typeEffectiveness } from "./typeChart.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "./raidBoss.js";
-import { runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
+import { DEFAULT_STEPWISE_MAX_SECONDS, runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
 import type { IVSpread, SpeciesDefinition } from "./types.js";
 
 export interface ComparisonInputs {
@@ -14,12 +14,20 @@ export interface ComparisonInputs {
   dodge: DodgeBehavior;
   /**
    * How long the "opening burst" window lasts before a real boss would start
-   * throwing charged moves (see the spec's caveat: the no-charged-move math
-   * only holds at the start of a fight). Defaults to 20s; callers modeling a
-   * shorter or longer opening should override it explicitly rather than
-   * relying on this default forever.
+   * throwing charged moves. Defaults to bossChargedMoveReadySeconds(boss's
+   * fast move, boss's first charged move, bossStartingEnergy) — the earliest
+   * physically possible time, not an arbitrary number — so callers only need
+   * to override this explicitly for a scenario that isn't "boss starts
+   * fresh, this is the natural pre-charged-move window."
    */
   openingBurstSeconds?: number;
+  /**
+   * Energy the boss already has saved when the fight begins (0-energyCost of
+   * its first charged move) — only affects the derived openingBurstSeconds
+   * default above. Models a mega tagging in mid-fight against a boss an
+   * earlier trainer's mega left partway charged. Defaults to 0.
+   */
+  bossStartingEnergy?: number;
 }
 
 export interface CandidateResult {
@@ -30,6 +38,7 @@ export interface CandidateResult {
   ownDamage: number;
   boostMultiplier: number;
   boostedType: SpeciesDefinition["types"][number];
+  ownDamageTrajectory: DamageTrajectoryPoint[];
 }
 
 /**
@@ -39,11 +48,15 @@ export interface CandidateResult {
  * conclude" can never drift between the two.
  */
 export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
-  const { candidates, boss, level, ivs, dodge, openingBurstSeconds = 20 } = inputs;
+  const { candidates, boss, level, ivs, dodge, bossStartingEnergy = 0 } = inputs;
   const bossAttackStat = Math.floor((boss.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
   const bossDefenseStat = Math.floor((boss.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
   const bossFastMove = boss.fastMoves[0];
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
+  const bossChargedMove = boss.chargedMoves[0];
+  const openingBurstSeconds =
+    inputs.openingBurstSeconds ??
+    (bossChargedMove ? bossChargedMoveReadySeconds(bossFastMove, bossChargedMove, bossStartingEnergy) : 20);
 
   return candidates.map((species) => {
     const stats = effectiveStatsAtLevel(species, ivs, level);
@@ -89,6 +102,7 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
       ownDamage: result.totalChargedDamage,
       boostMultiplier: species.boost?.multiplier ?? 1,
       boostedType: species.boost?.boostedType ?? species.types[0],
+      ownDamageTrajectory: result.ownDamageTrajectory,
     };
   });
 }
@@ -101,7 +115,14 @@ export interface SustainedComparisonInputs {
   dodge: DodgeBehavior;
   /** Mean seconds between the boss's charged moves once the sustained phase begins. */
   bossChargedMoveMeanIntervalSeconds: number;
+  /**
+   * Defaults to bossChargedMoveReadySeconds(boss's fast move, boss's charged
+   * move, bossStartingEnergy) — see ComparisonInputs.openingBurstSeconds for
+   * why this replaced a flat 0 default.
+   */
   bossChargedMoveWarmupSeconds?: number;
+  /** See ComparisonInputs.bossStartingEnergy. Defaults to 0. */
+  bossStartingEnergy?: number;
   maxSeconds?: number;
   iterations?: number;
 }
@@ -124,8 +145,9 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     ivs,
     dodge,
     bossChargedMoveMeanIntervalSeconds,
-    bossChargedMoveWarmupSeconds = 0,
-    maxSeconds = 60,
+    bossChargedMoveWarmupSeconds,
+    bossStartingEnergy = 0,
+    maxSeconds = DEFAULT_STEPWISE_MAX_SECONDS,
     iterations = 200,
   } = inputs;
   const bossAttackStat = Math.floor((boss.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
@@ -173,6 +195,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
             : undefined,
           chargedMoveMeanIntervalSeconds: bossChargedMoveMeanIntervalSeconds,
           chargedMoveWarmupSeconds: bossChargedMoveWarmupSeconds,
+          startingEnergy: bossStartingEnergy,
         },
         dodge,
         maxSeconds,

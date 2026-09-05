@@ -28,7 +28,7 @@ export function computeSensitivity(
   a: Assumptions,
 ): SensitivityCheck[] {
   const ivs = { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina };
-  const base = runComparison({ candidates, boss, level: a.level, ivs, dodge: a.dodge, openingBurstSeconds: a.openingBurstSeconds });
+  const base = runComparison({ candidates, boss, level: a.level, ivs, dodge: a.dodge });
   const [x, y] = base as [CandidateResult, CandidateResult];
   const currentWinner = winnerOf(x, y, a.partySize, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, x.boostMultiplier, y.boostMultiplier);
 
@@ -88,7 +88,7 @@ export function computeSensitivity(
   // 4. Dodging: none <-> perfect.
   {
     const flippedDodge: DodgeBehavior = a.dodge.kind === "none" ? { kind: "perfect" } : { kind: "none" };
-    const flippedResult = runComparison({ candidates, boss, level: a.level, ivs, dodge: flippedDodge, openingBurstSeconds: a.openingBurstSeconds });
+    const flippedResult = runComparison({ candidates, boss, level: a.level, ivs, dodge: flippedDodge });
     const [fx, fy] = flippedResult as [CandidateResult, CandidateResult];
     const flippedWinner = winnerOf(fx, fy, a.partySize, a.teammateDps, a.teammateTypeMatches, a.teammateTypeMatches, fx.boostMultiplier, fy.boostMultiplier);
     const flips = flippedWinner !== currentWinner;
@@ -109,7 +109,7 @@ export function computeSensitivity(
         if (candidateLevel < 1 || candidateLevel > 40) continue;
         let result;
         try {
-          result = runComparison({ candidates, boss, level: candidateLevel, ivs, dodge: a.dodge, openingBurstSeconds: a.openingBurstSeconds });
+          result = runComparison({ candidates, boss, level: candidateLevel, ivs, dodge: a.dodge });
         } catch {
           continue;
         }

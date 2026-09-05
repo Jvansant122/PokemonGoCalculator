@@ -14,8 +14,14 @@ npm workspaces monorepo, two packages:
 - `packages/engine` — pure TypeScript, **no I/O, no UI**. Runs standalone from Node with no
   browser. All combat math, breakpoint solvers, and the Phase 5 simulator live here.
 - `packages/web` — Vite + React + TypeScript UI. Imports `@pogo-analyzer/engine` directly from
-  its TS source (via package.json `exports`). No charting library — the crossover chart is
-  hand-rolled inline SVG.
+  its TS source (via package.json `exports`). No charting library — all charts are hand-rolled
+  inline SVG.
+- `data/` — the generalized game-data layer (see "Data layer" below): `data/raw/` (cached
+  fetch responses) and `data/normalized/` (`species.json`, `activeRaids.json`, consumed by
+  `packages/web/src/registry.ts`). Regenerate with `npm run sync-data` (root); never hand-edit.
+- `scripts/sync-data.ts` — the fetch/normalize script (run via `tsx`), importing
+  `fromGameMaster`/`fromGameMasterMove` from `@pogo-analyzer/engine` so there's one transform,
+  not a duplicated one in the script.
 
 Deployed as a static site to **GitHub Pages** via `.github/workflows/deploy.yml` (build on push
 to `main`, Pages source is configured as "GitHub Actions" in repo settings). Live at
@@ -28,6 +34,7 @@ https://jvansant122.github.io/PokemonGoCalculator/. Vite `base` is `/PokemonGoCa
 npm install                          # from repo root, installs both workspaces
 npm run test:engine                  # from repo root — runs packages/engine's vitest suite
 npm run build --workspace=packages/web   # production build, verifies the deploy path
+npm run sync-data                    # from repo root — refreshes data/raw + data/normalized from pogoapi.net/ScrapedDuck
 ```
 
 From inside `packages/engine` or `packages/web`: `npx tsc --noEmit -p tsconfig.json` to type-check.
@@ -58,7 +65,18 @@ existing credentials.
   effective stats, combined with `iv=0` and `RAID_BOSS_CPM=1.0` — reuses the one stat pipeline
   instead of forking a second code path for bosses.
 - **Combat** (`combat.ts`, Phase 1): `simulateOpeningBurst` — deterministic, boss uses only its
-  fast move (the "opening burst" window before a boss starts throwing charged moves).
+  fast move (the "opening burst" window before a boss starts throwing charged moves), and
+  returns `ownDamageTrajectory` (cumulative own damage over time, not just a final total) for
+  the web UI's damage-over-time chart. Also exports `bossChargedMoveReadySeconds(fastMove,
+  chargedMove, startingEnergy?)` — the single source of truth for how long a boss's own fast
+  move takes to generate enough energy for its first charged move (a **lower bound**: it doesn't
+  model bosses gaining energy from damage taken, so real timing can only be sooner, never
+  later). `runComparison`/`runSustainedComparison` (comparison.ts) both default to this instead
+  of a fixed number — do not reintroduce a fixed opening-burst-window default; it was replaced
+  because a small hardcoded/user-typed window both misrepresented the mechanic and caused
+  degenerate all-zero sustained-fight output. `startingEnergy` models a mega tagging in
+  mid-fight against a boss an earlier trainer left partway charged (the web UI's "boss starts
+  primed" toggle).
 - **Breakpoints** (`breakpoints.ts`, Phase 2): `findFastMoveBreakpoints` (damage breakpoint
   table) and `timeToFaint`/`timeToFaintTable` (survivability, with a `DodgeBehavior` model).
   `DODGE_WINDOW_SECONDS = 0.7` documents that a dodge is a timed action, not a standing shield.
@@ -71,7 +89,13 @@ existing credentials.
 - **Stepwise simulator** (`simulate.ts`, Phase 5): 100ms-tick simulator. Boss charged-move timing
   is randomized (`chargedMoveMeanIntervalSeconds` ± 40% jitter via a seeded mulberry32 PRNG, so
   runs are reproducible per-seed) — `runStepwiseDistribution` runs many seeds and reports a
-  distribution (mean/median/p10/p90, fraction dying mid-animation), never a point estimate.
+  distribution (mean/median/p10/p90, fraction dying mid-animation), never a point estimate, plus
+  `representativeRun` (the seed-1 run, full `StepwiseRunResult` including `ownDamageTrajectory`)
+  so the UI has one concrete reproducible trajectory to chart alongside the distribution.
+  `DEFAULT_STEPWISE_MAX_SECONDS = 180` is the single source of truth for how long a run
+  simulates when not overridden — raised from an earlier 60 specifically so this can't silently
+  truncate a real fight; there is no user-facing "simulated fight length" input anymore, it's
+  computed from the results (longest-surviving candidate) for display instead.
   **Any boss hit (fast or charged) landing while the attacker is mid-own-charged-move-animation
   always deals full damage, regardless of the configured `DodgeBehavior`** — a dodge can't be
   re-thrown mid-cast, and its ~0.7s window couldn't cover a multi-second animation anyway. Do
@@ -80,13 +104,21 @@ existing credentials.
 - **GameMaster data loader** (`gamemaster.ts`): accepts pogoapi.net-shaped JSON
   (`pokemon_id`/`pokemon_name`/`base_attack`/`base_defense`/`base_stamina`/`form`) via
   `fromGameMaster`, plus a `SpeciesRegistry` that merges real and user-defined hypothetical
-  entries (`registerHypothetical` flags them `isHypothetical: true`). **Not yet exercised
-  against real fetched data or tested** — see HANDOFF.md.
+  entries (`registerHypothetical` flags them `isHypothetical: true`). Now exercised for real:
+  `scripts/sync-data.ts` calls it against live pogoapi.net data to build `data/normalized/
+  species.json` (1000+ real species, including 48 real mega/primal attackers from
+  `mega_pokemon.json` — **every one of those must have `boost` set explicitly**, since
+  `comparison.ts` only applies the mega multiplier when `species.boost` is present; the fallback
+  is 1, not `DEFAULT_MEGA_BOOST_MULTIPLIER` — this bit the first sync pass and was fixed in
+  `scripts/sync-data.ts`, not silently worked around). `packages/web/src/registry.ts` merges
+  this with the hand-defined hypothetical fixtures at app startup.
 - **Scenarios** (`scenario.ts`): the full input set (`candidates`, `target`, `level`, `ivs`,
-  `dodgeModel`, `partySize`, `teammateDps`, `teammateTypeMatches`, `phase`) serializes to a
-  base64url string in the URL. If you add a new user-facing assumption to the web UI, **you
-  must add it to the `Scenario` interface too** — a missing field silently reverts to a default
-  on a shared link instead of erroring (this exact bug happened once already).
+  `dodgeModel`, `partySize`, `teammateDps`, `teammateTypeMatches`, `phase`,
+  `bossChargedMoveFrequencySeconds`, `bossStartsPrimed`, `bossStartingEnergyFraction`)
+  serializes to a base64url string in the URL. If you add a new user-facing assumption to the
+  web UI, **you must add it to the `Scenario` interface too** — a missing field silently
+  reverts to a default on a shared link instead of erroring (this exact bug happened twice now:
+  once with `teammateTypeMatches`, once with `bossChargedMoveFrequencySeconds`).
 
 ## Fixtures (`fixtures/scenarioA.ts`)
 
@@ -105,16 +137,38 @@ the first place to look, per the spec's own instruction.
 Mega Raichu X carries dual Electric/Steel typing (Y is pure Electric) — this doesn't touch a
 single Scenario A number (Water is neutral to both types) but gives X a genuine, type-chart-
 driven survivability edge against Flying attackers (Mega Skarmory, Scenario B), which is what
-produces an actual crossover in the team-contribution chart.
+produces an actual crossover in the damage-over-time chart at some assumption combinations (not
+all — the sensitivity panel reports "no flip" when the current inputs are far from one).
+
+These 4 species are no longer the *only* candidates/targets — see "Data layer" below. They stay
+as-is and remain the default scenario on first load; the web UI's species pickers draw from a
+merged registry of these hypothetical fixtures plus 1000+ real species.
+
+## Data layer
+
+`data/raw/` (cached pogoapi.net + ScrapedDuck responses) and `data/normalized/species.json` /
+`activeRaids.json` are generated by `scripts/sync-data.ts` (`npm run sync-data`) — never hand-edit
+either directory, rerun the script instead. `pokemon_stats.json`/`pokemon_types.json` etc. only
+cover **Normal-form** species (regional/costume/event forms are out of scope); real mega/primal
+attacker stats come from the separate `mega_pokemon.json` endpoint (48 entries) — pogoapi has
+**no raid-boss roster**, so `activeRaids.json` comes from the community-maintained ScrapedDuck
+feed (`https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.json`), matched against
+real + hypothetical species by name (falling back to a documented `isApproximate: true`
+stand-in — e.g. a Shadow-prefixed raid matched to its non-Shadow base stats — when no exact data
+exists). `packages/web/src/registry.ts` builds the `SpeciesRegistry` web-side by merging this
+with the hand-defined hypothetical fixtures; `packages/engine` itself stays pure (no I/O) —
+`scripts/sync-data.ts` is the one place that fetches anything, calling the engine's own
+`fromGameMaster`/`fromGameMasterMove` so the transform isn't duplicated.
 
 ## Custom subagents
 
-`.claude/agents/` has 6 project-specific subagents (`assumption-auditor`, `data-sync`,
-`engine-verifier`, `matchup-analyst`, `meta-architect`, `site-builder`) the user added mid-project.
-**As of the last session, the user asked not to use them** — do product work directly unless
-asked to route through them again. If asked to use them, they require a session
-restart/resume to pick up newly-added or edited `.md` files (agent definitions load once at
-session start, not live).
+`.claude/agents/` has project-specific subagents (`data-sync`, `engine-verifier`,
+`meta-architect`, `site-builder`) the user added mid-project. **The user has re-enabled using
+them** (reversing an earlier "don't use them" from a prior session) — route matching work
+through them when it fits their charter (e.g. `data-sync` for anything touching `data/` or
+`scripts/sync-data.ts`, `site-builder` for `packages/web` UI work, `engine-verifier` to check
+`packages/engine` after a change). They require a session restart/resume to pick up newly-added
+or edited `.md` files (agent definitions load once at session start, not live).
 
 ## For session continuity
 

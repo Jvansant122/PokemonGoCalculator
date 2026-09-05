@@ -21,15 +21,52 @@ export interface BossProfile {
   damageOut: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
 }
 
+export interface DamageTrajectoryPoint {
+  atSeconds: number;
+  cumulativeDamage: number;
+}
+
 export interface OpeningBurstResult {
   /** Seconds at which the attacker's cumulative damage taken reached its HP, or null if it survived the window. */
   faintedAtSeconds: number | null;
   chargedAttacksLanded: number;
   totalChargedDamage: number;
   totalDamageTaken: number;
+  /**
+   * The attacker's own cumulative charged-move damage over time: a point at
+   * {0, 0}, one point each time a charged attack lands, and a final point at
+   * faintedAtSeconds (or the window end) repeating the last value — so a
+   * chart can draw a flat line after death/window-end with no special-casing.
+   */
+  ownDamageTrajectory: DamageTrajectoryPoint[];
 }
 
 type TimelineEvent = { atSeconds: number; kind: "boss-fast-move" } | { atSeconds: number; kind: "attacker-fast-move" };
+
+/**
+ * The earliest possible time a boss could have enough energy for its first
+ * charged move, counting only its own fast-move casts — not the energy the
+ * real game also grants bosses from damage taken, which this engine doesn't
+ * model on the boss side. That omission is deliberate: this function answers
+ * "cannot happen sooner than X," a lower bound, not "happens at exactly X."
+ * Level-independent (raid bosses use a fixed CPM, not a level curve — see
+ * raidBoss.ts), so it depends only on the boss's own fast/charged move data.
+ *
+ * `startingEnergy` models a boss encountered mid-fight (e.g. after an earlier
+ * trainer's mega already fainted or rotated out) rather than fresh at 0
+ * energy — defaults to 0, today's implicit assumption everywhere else in the
+ * engine.
+ */
+export function bossChargedMoveReadySeconds(
+  fastMove: FastMove,
+  chargedMove: ChargedMove,
+  startingEnergy = 0,
+): number {
+  const remaining = Math.max(0, chargedMove.energyCost - startingEnergy);
+  if (remaining === 0) return 0;
+  if (fastMove.energyGain <= 0) return Infinity;
+  return Math.ceil(remaining / fastMove.energyGain) * fastMove.durationSeconds;
+}
 
 /**
  * Models the "opening burst" phase of a raid: the boss has not yet started
@@ -64,6 +101,7 @@ export function simulateOpeningBurst(
   let totalChargedDamage = 0;
   let faintedAtSeconds: number | null = null;
   let bossHitIndex = 0;
+  const ownDamageTrajectory: DamageTrajectoryPoint[] = [{ atSeconds: 0, cumulativeDamage: 0 }];
 
   for (const event of events) {
     if (event.kind === "boss-fast-move") {
@@ -95,10 +133,17 @@ export function simulateOpeningBurst(
       totalChargedDamage += damage;
       chargedAttacksLanded += 1;
       energy = 0;
+      ownDamageTrajectory.push({ atSeconds: event.atSeconds, cumulativeDamage: totalChargedDamage });
     }
   }
 
-  return { faintedAtSeconds, chargedAttacksLanded, totalChargedDamage, totalDamageTaken };
+  const endSeconds = faintedAtSeconds ?? maxSeconds;
+  const lastPoint = ownDamageTrajectory[ownDamageTrajectory.length - 1]!;
+  if (lastPoint.atSeconds < endSeconds) {
+    ownDamageTrajectory.push({ atSeconds: endSeconds, cumulativeDamage: lastPoint.cumulativeDamage });
+  }
+
+  return { faintedAtSeconds, chargedAttacksLanded, totalChargedDamage, totalDamageTaken, ownDamageTrajectory };
 }
 
 function round(seconds: number): number {

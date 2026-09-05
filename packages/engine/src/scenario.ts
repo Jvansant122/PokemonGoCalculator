@@ -20,6 +20,12 @@ export interface Scenario {
   /** Whether the party's attacking type matches the lead candidate's boost type — see convertUptimeToTeamDamage. */
   teammateTypeMatches: boolean;
   phase: CombatPhase;
+  /** Mean seconds between the boss's charged moves once the sustained phase begins. */
+  bossChargedMoveFrequencySeconds: number;
+  /** Whether the boss starts the fight already partway charged (see bossStartingEnergyFraction). */
+  bossStartsPrimed: boolean;
+  /** Fraction (0-1) of the boss's first charged move's energy cost it starts with, when bossStartsPrimed is true. */
+  bossStartingEnergyFraction: number;
 }
 
 function toBase64Url(bytes: Uint8Array): string {

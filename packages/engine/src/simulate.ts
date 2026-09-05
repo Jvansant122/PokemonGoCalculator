@@ -1,3 +1,5 @@
+import { bossChargedMoveReadySeconds } from "./combat.js";
+import type { DamageTrajectoryPoint } from "./combat.js";
 import { dodgeMultiplierForHit, type DodgeBehavior } from "./breakpoints.js";
 import { calculateDamage, type DamageInputs } from "./damage.js";
 import { energyFromDamageTaken } from "./energy.js";
@@ -25,6 +27,17 @@ import type { ChargedMove, FastMove } from "./types.js";
 
 export const DEFAULT_TICK_SECONDS = 0.1;
 
+/**
+ * Generous safety cap on how long a single sustained-phase run simulates, in
+ * seconds. Raised from an earlier 60 specifically so a small/degenerate
+ * caller-supplied maxSeconds can no longer silently truncate a fight before
+ * anything happens (see comparison.ts — this is now the one place that value
+ * comes from unless a caller has a specific reason to override it). A
+ * 100ms-tick x 200-iteration run at this length still completes in
+ * milliseconds, so there's no real cost to being generous here.
+ */
+export const DEFAULT_STEPWISE_MAX_SECONDS = 180;
+
 /** Boss charged-move intervals are randomized uniformly within +/-40% of the mean. */
 export const BOSS_CHARGED_MOVE_JITTER = 0.4;
 
@@ -47,8 +60,21 @@ export interface StepwiseBoss {
   chargedMoveDamageOut?: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   /** Mean seconds between the boss's charged moves once it starts using them. */
   chargedMoveMeanIntervalSeconds?: number;
-  /** Seconds before the boss can use its first charged move at all. */
+  /**
+   * Seconds before the boss can use its first charged move at all. Defaults
+   * to the physically-derived bossChargedMoveReadySeconds(fastMove,
+   * chargedMove, startingEnergy) rather than 0 — a boss cannot fire a charged
+   * move before its own fast move has generated enough energy for it.
+   */
   chargedMoveWarmupSeconds?: number;
+  /**
+   * Energy the boss already has saved when the fight begins (0-energyCost),
+   * e.g. modeling a mega that tags in mid-fight against a boss an earlier
+   * trainer's mega already left partway charged. Only affects the *default*
+   * chargedMoveWarmupSeconds above; ignored if that's set explicitly.
+   * Defaults to 0 (today's implicit assumption: every fight starts fresh).
+   */
+  startingEnergy?: number;
 }
 
 export interface StepwiseRunResult {
@@ -60,6 +86,8 @@ export interface StepwiseRunResult {
   /** True if the attacker fainted while mid-animation on its own charged move — that attack never landed. */
   diedDuringOwnChargedMoveAnimation: boolean;
   bossChargedHitsTaken: number;
+  /** Same shape/semantics as OpeningBurstResult.ownDamageTrajectory (combat.ts). */
+  ownDamageTrajectory: DamageTrajectoryPoint[];
 }
 
 /** Simple seeded PRNG (mulberry32) so a given seed always reproduces the same run. */
@@ -91,7 +119,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   const { attacker, boss } = params;
   const dodge = params.dodge ?? { kind: "none" };
   const tick = params.tickSeconds ?? DEFAULT_TICK_SECONDS;
-  const maxSeconds = params.maxSeconds ?? 60;
+  const maxSeconds = params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS;
   const rng = mulberry32(params.seed ?? 1);
 
   let hp = attacker.hp;
@@ -103,6 +131,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   let bossHitIndex = 0;
   let faintedAtSeconds: number | null = null;
   let diedDuringOwnChargedMoveAnimation = false;
+  const ownDamageTrajectory: DamageTrajectoryPoint[] = [{ atSeconds: 0, cumulativeDamage: 0 }];
 
   let nextAttackerFastMoveAt = attacker.fastMove.durationSeconds;
   let nextBossFastMoveAt = boss.fastMove.durationSeconds;
@@ -110,7 +139,9 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
 
   let nextBossChargedMoveAt: number | null = null;
   if (boss.chargedMove && boss.chargedMoveMeanIntervalSeconds) {
-    const warmup = boss.chargedMoveWarmupSeconds ?? 0;
+    const warmup =
+      boss.chargedMoveWarmupSeconds ??
+      bossChargedMoveReadySeconds(boss.fastMove, boss.chargedMove, boss.startingEnergy ?? 0);
     nextBossChargedMoveAt = warmup + jitteredInterval(boss.chargedMoveMeanIntervalSeconds, rng);
   }
 
@@ -172,6 +203,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       totalChargedDamage += damage;
       chargedAttacksLanded += 1;
       attackerAnimationEndsAt = null;
+      ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalChargedDamage });
     }
 
     // Attacker's own fast move — locked out while mid-charged-move-animation.
@@ -187,6 +219,12 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     }
   }
 
+  const endSeconds = faintedAtSeconds ?? maxSeconds;
+  const lastDamagePoint = ownDamageTrajectory[ownDamageTrajectory.length - 1]!;
+  if (lastDamagePoint.atSeconds < endSeconds) {
+    ownDamageTrajectory.push({ atSeconds: endSeconds, cumulativeDamage: lastDamagePoint.cumulativeDamage });
+  }
+
   return {
     faintedAtSeconds,
     survivedFullWindow: faintedAtSeconds === null,
@@ -195,6 +233,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     totalDamageTaken,
     diedDuringOwnChargedMoveAnimation,
     bossChargedHitsTaken,
+    ownDamageTrajectory,
   };
 }
 
@@ -207,6 +246,13 @@ export interface DistributionSummary {
   meanSecondsSurvived: number;
   fractionSurvivedFullWindow: number;
   fractionDiedDuringOwnAnimation: number;
+  /**
+   * The first iteration's full run (seed = baseSeed), exposed so callers have
+   * one concrete, reproducible ownDamageTrajectory to chart even though the
+   * underlying phase is randomized — not a claim that this run is typical,
+   * just a stable example alongside the distribution stats above.
+   */
+  representativeRun: StepwiseRunResult;
 }
 
 function percentile(sorted: number[], p: number): number {
@@ -231,7 +277,7 @@ export function runStepwiseDistribution(
   }
 
   const damages = runs.map((r) => r.totalChargedDamage).sort((a, b) => a - b);
-  const survivalSeconds = runs.map((r) => r.faintedAtSeconds ?? (params.maxSeconds ?? 60));
+  const survivalSeconds = runs.map((r) => r.faintedAtSeconds ?? (params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS));
 
   return {
     iterations,
@@ -242,5 +288,6 @@ export function runStepwiseDistribution(
     meanSecondsSurvived: survivalSeconds.reduce((sum, s) => sum + s, 0) / iterations,
     fractionSurvivedFullWindow: runs.filter((r) => r.survivedFullWindow).length / iterations,
     fractionDiedDuringOwnAnimation: runs.filter((r) => r.diedDuringOwnChargedMoveAnimation).length / iterations,
+    representativeRun: runs[0]!,
   };
 }

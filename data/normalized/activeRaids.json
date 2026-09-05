@@ -1,0 +1,74 @@
+[
+  {
+    "raidName": "Mega Raichu X",
+    "tier": "Mega Raids",
+    "speciesId": "raichu-mega-x",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Mega Raichu Y",
+    "tier": "Mega Raids",
+    "speciesId": "raichu-mega-y",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Mega Latias",
+    "tier": "Mega Raids",
+    "speciesId": "latias-mega",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Mega Latios",
+    "tier": "Mega Raids",
+    "speciesId": "latios-mega",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Shadow Slowpoke",
+    "tier": "1-Star Raids",
+    "speciesId": "slowpoke",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Aipom",
+    "tier": "1-Star Raids",
+    "speciesId": "aipom",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Croagunk",
+    "tier": "1-Star Raids",
+    "speciesId": "croagunk",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Grubbin",
+    "tier": "1-Star Raids",
+    "speciesId": "grubbin",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Snorlax",
+    "tier": "3-Star Raids",
+    "speciesId": "snorlax",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Hitmontop",
+    "tier": "3-Star Raids",
+    "speciesId": "hitmontop",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Lampent",
+    "tier": "3-Star Raids",
+    "speciesId": "lampent",
+    "isApproximate": true
+  },
+  {
+    "raidName": "Shadow Giratina (Altered)",
+    "tier": "5-Star Raids",
+    "speciesId": null,
+    "isApproximate": false
+  }
+]

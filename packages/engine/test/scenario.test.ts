@@ -11,6 +11,9 @@ const sampleScenario: Scenario = {
   teammateDps: 26.5,
   teammateTypeMatches: true,
   phase: "opening-burst",
+  bossChargedMoveFrequencySeconds: 15,
+  bossStartsPrimed: false,
+  bossStartingEnergyFraction: 0,
 };
 
 describe("scenario serialization", () => {
@@ -40,5 +43,18 @@ describe("scenario serialization", () => {
     const offType: Scenario = { ...sampleScenario, teammateTypeMatches: false };
     expect(decodeScenario(encodeScenario(offType)).teammateTypeMatches).toBe(false);
     expect(parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", offType))!.teammateTypeMatches).toBe(false);
+  });
+
+  it("round-trips bossChargedMoveFrequencySeconds/bossStartsPrimed/bossStartingEnergyFraction rather than reverting to defaults", () => {
+    const primed: Scenario = {
+      ...sampleScenario,
+      bossChargedMoveFrequencySeconds: 9,
+      bossStartsPrimed: true,
+      bossStartingEnergyFraction: 0.75,
+    };
+    const decoded = decodeScenario(encodeScenario(primed));
+    expect(decoded.bossChargedMoveFrequencySeconds).toBe(9);
+    expect(decoded.bossStartsPrimed).toBe(true);
+    expect(decoded.bossStartingEnergyFraction).toBe(0.75);
   });
 });
