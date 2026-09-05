@@ -193,6 +193,16 @@ driven survivability edge against Flying attackers (Mega Skarmory, Scenario B), 
 produces an actual crossover in the damage-over-time chart at some assumption combinations (not
 all — the sensitivity panel reports "no flip" when the current inputs are far from one).
 
+`MEGA_SKARMORY.baseAttack` was `2000` until a user caught it from oddly-fast Scenario B deaths —
+an 8x outlier against Primal Kyogre's `250` (raid bosses use `baseAttack` as their effective
+attack stat directly, see raidBoss.ts, so this wasn't "a base stat that gets scaled down," it
+was literally an effective attack ~8x any real boss). Fixed to `250`, matching Kyogre's scale.
+`scenarioB.test.ts`'s window/teammate-DPS values were re-derived empirically after the fix
+(neither candidate died within the old fixed 20s test window anymore against a realistic boss).
+**When hand-authoring or reviewing a hypothetical boss fixture, sanity-check its `baseAttack`
+against `PRIMAL_KYOGRE`'s `250`** — nothing else in this project's boss-mode fixtures should be
+an order of magnitude off from that.
+
 These 4 species are no longer the *only* candidates/targets — see "Data layer" below. They stay
 as-is and remain the default scenario on first load; the web UI's species pickers draw from a
 merged registry of these hypothetical fixtures plus 1000+ real species.

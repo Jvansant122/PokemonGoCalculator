@@ -79,6 +79,29 @@ case (`kyogre-primal` was renamed to `kyogre-primal-attacker` to avoid colliding
 existing boss-mode fixture id; the sprite lookup needs the pre-rename name since that's what
 PokeAPI actually knows).
 
+## Also this session: fixed a real data bug (Mega Skarmory dealing absurd damage)
+
+User noticed Mega Skarmory killing candidates implausibly fast and asked why. Root cause:
+`MEGA_SKARMORY.baseAttack` was `2000` in `scenarioA.ts` — an 8x outlier against every other
+boss-mode fixture (`PRIMAL_KYOGRE.baseAttack` is `250`), and since raid bosses in this engine
+treat `baseAttack` as their effective attack stat directly (no CPM/IV scaling, see `raidBoss.ts`),
+`2000` meant Skarmory hit roughly 8x harder than any realistic boss. Almost certainly a
+CP-vs-base-attack-stat mix-up from when this hypothetical fixture was hand-authored. Fixed to
+`250` (matching Kyogre's scale); verified live (Raichu X/Y survival against Skarmory went from
+~6.6s/4.4s to a much more realistic ~37.6s/28.6s in sustained mode). Also re-derived
+`scenarioB.test.ts`'s window length (180s, was a fixed 20s that no longer produced a real death)
+and crossover teammate-DPS value (1, was 5) empirically against the corrected boss stat — both
+tests' *premises* (X survives longer; a crossover exists at low teammate DPS) still hold, just
+at different numbers.
+
+Also audited for other data issues while in there — all clean, nothing else found: no
+duplicate/zero/negative stats across the 1012 synced real species, no duplicate species ids, no
+empty movesets, no charged move with `vulnerableWindowSeconds > durationSeconds`, no synced mega
+species with a `boost.multiplier` other than the intended `1.3`, and the 12 active-raid-to-species
+matches all resolve to the right species by name. The rest of the hand-authored `scenarioA.ts`
+fixture (Raichu X/Y stats, all move powers/costs/durations) checked out fine on manual review —
+Skarmory's `baseAttack` was the one outlier.
+
 ## Not yet done / candidates for next session
 
 1. Mobile-width visual check still hasn't been done (only desktop verified, this session and last).

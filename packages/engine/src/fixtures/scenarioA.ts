@@ -141,7 +141,16 @@ export const MEGA_SKARMORY: SpeciesDefinition = {
   id: "skarmory-mega",
   name: "Mega Skarmory",
   types: ["steel", "flying"],
-  baseAttack: 2000,
+  // Was 2000 — an 8x outlier against every other boss-mode fixture in this
+  // file (Primal Kyogre's baseAttack is 250) and against real raid bosses in
+  // general (effective attack rarely exceeds ~350 even for legendaries; see
+  // raidBoss.ts — this field IS the boss's effective attack stat directly,
+  // not a trainer-mode base stat run through CPM/IVs). Almost certainly a
+  // stray CP-vs-base-attack-stat mix-up when this hypothetical fixture was
+  // hand-authored. Matched to Kyogre's 250 for a comparable threat level
+  // between Scenario A and B's targets — found and fixed after the user
+  // noticed Mega Skarmory dealing implausibly large damage.
+  baseAttack: 250,
   baseDefense: 250,
   baseStamina: 12000,
   fastMoves: [SKY_ATTACK],
