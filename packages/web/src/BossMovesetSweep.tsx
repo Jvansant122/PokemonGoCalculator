@@ -71,6 +71,13 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
   const winners = new Set(rows.map((r) => r.winnerIndex));
   const rankingFlips = winners.size > 1;
   const noBoost = [candidateMeta[0].boostMultiplier === undefined, candidateMeta[1].boostMultiplier === undefined] as const;
+  // "Own+team" is only a distinct number from "Own total" when at least one
+  // candidate actually has team contribution to add — when neither does, it
+  // would just silently duplicate "Own total" for both, misleadingly
+  // implying a distinction that doesn't exist. Dropped entirely in that case
+  // (the winner column then reflects "Own total" alone, which is exactly the
+  // same ranking anyway).
+  const showOwnPlusTeamColumn = !noBoost[0] || !noBoost[1];
 
   return (
     <div style={{ marginTop: 20, overflowX: "auto" }}>
@@ -78,21 +85,21 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
         <thead>
           <tr>
             <th rowSpan={2}>Boss charged move</th>
-            <th colSpan={3} className="time-series-th-x">
+            <th colSpan={showOwnPlusTeamColumn ? 3 : 2} className="time-series-th-x">
               {candidateMeta[0].name}
             </th>
-            <th colSpan={3} className="time-series-th-y">
+            <th colSpan={showOwnPlusTeamColumn ? 3 : 2} className="time-series-th-y">
               {candidateMeta[1].name}
             </th>
-            <th rowSpan={2}>Winner (own+team)</th>
+            <th rowSpan={2}>{showOwnPlusTeamColumn ? "Winner (own+team)" : "Winner (own total)"}</th>
           </tr>
           <tr>
             <th className="time-series-th-x">Survival (s)</th>
             <th className="time-series-th-x">Own total</th>
-            <th className="time-series-th-x">Own+team</th>
+            {showOwnPlusTeamColumn && <th className="time-series-th-x">Own+team</th>}
             <th className="time-series-th-y">Survival (s)</th>
             <th className="time-series-th-y">Own total</th>
-            <th className="time-series-th-y">Own+team</th>
+            {showOwnPlusTeamColumn && <th className="time-series-th-y">Own+team</th>}
           </tr>
         </thead>
         <tbody>
@@ -101,10 +108,10 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
               <td style={{ textAlign: "left" }}>{r.chargedMoveName}</td>
               <td>{r.secondsSurvived[0].toFixed(1)}</td>
               <td>{r.totalDamage[0].toFixed(0)}</td>
-              <td>{r.ownPlusTeam[0].toFixed(0)}</td>
+              {showOwnPlusTeamColumn && <td>{r.ownPlusTeam[0].toFixed(0)}</td>}
               <td>{r.secondsSurvived[1].toFixed(1)}</td>
               <td>{r.totalDamage[1].toFixed(0)}</td>
-              <td>{r.ownPlusTeam[1].toFixed(0)}</td>
+              {showOwnPlusTeamColumn && <td>{r.ownPlusTeam[1].toFixed(0)}</td>}
               <td style={{ textAlign: "left" }}>
                 {r.winnerIndex === null ? "tied" : candidateMeta[r.winnerIndex].name}
               </td>
@@ -113,7 +120,7 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
         </tbody>
       </table>
       <p className="caveats" style={{ marginTop: 8 }}>
-        Every row uses the same assumptions above (level, dodge, party, weather, etc.) — only the boss's charged move
+        Every row uses the same assumptions above (level, dodge, other trainers, weather, etc.) — only the boss's charged move
         varies, since a real raid boss instance is locked to one fixed charged move for its whole lifetime, but
         different instances of "the same" boss can roll different ones from its known movepool.{" "}
         {rankingFlips ? (
@@ -124,10 +131,16 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
         ) : (
           `${winners.size === 1 && rows[0]!.winnerIndex !== null ? candidateMeta[rows[0]!.winnerIndex!].name : "Neither candidate"} wins regardless of which charged move this boss instance rolled.`
         )}
-        {noBoost[0] &&
-          ` ${candidateMeta[0].name} has no active mega/primal boost — its "Own+team" column above equals its "Own total" column exactly.`}
-        {noBoost[1] &&
-          ` ${candidateMeta[1].name} has no active mega/primal boost — its "Own+team" column above equals its "Own total" column exactly.`}
+        {showOwnPlusTeamColumn ? (
+          <>
+            {noBoost[0] &&
+              ` ${candidateMeta[0].name} has no active mega/primal boost — its "Own+team" column above equals its "Own total" column exactly.`}
+            {noBoost[1] &&
+              ` ${candidateMeta[1].name} has no active mega/primal boost — its "Own+team" column above equals its "Own total" column exactly.`}
+          </>
+        ) : (
+          " Neither candidate has an active mega/primal boost in this scenario, so the redundant \"Own+team\" column — which would equal \"Own total\" exactly for both — has been dropped."
+        )}
       </p>
     </div>
   );

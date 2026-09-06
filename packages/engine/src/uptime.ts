@@ -10,12 +10,13 @@ import type { PokemonType } from "./types.js";
 export const DEFAULT_MEGA_BOOST_MULTIPLIER = 1.3;
 
 /**
- * The mega/primal boost is NOT all-or-nothing by type: every party member
- * gets at least this flat boost regardless of type match — only a teammate
- * whose attack type matches the mega's boosted type gets the full
- * `boostMultiplier` (e.g. 1.3) instead. An earlier version of this engine
- * gave off-type teammates 1x (no boost at all), which understated their
- * contribution.
+ * The mega/primal boost is NOT all-or-nothing by type: every other trainer's
+ * Pokémon in the same raid lobby gets at least this flat boost regardless of
+ * type match — only one whose attack type matches the mega's boosted type
+ * gets the full `boostMultiplier` (e.g. 1.3) instead. An earlier version of
+ * this engine gave off-type teammates 1x (no boost at all), which understated
+ * their contribution. (The boost never reaches the mega-bringer's OWN party —
+ * see convertUptimeToTeamDamage's doc comment and matchingTeammateCount below.)
  */
 export const OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1;
 
@@ -39,8 +40,14 @@ export interface UptimeConversionInputs {
   /**
    * How many of teammateCount share the mega's boosted type and so get the
    * full boostMultiplier — the rest get OFF_TYPE_MEGA_BOOST_MULTIPLIER, not
-   * zero. Real teams are rarely all-or-nothing on type, so this is a count,
-   * not a single yes/no for the whole party. Clamped to [0, teammateCount].
+   * zero. Real raid lobbies are rarely all-or-nothing on type, so this is a
+   * count, not a single yes/no for the whole raid. Clamped to
+   * [0, teammateCount]. NOTE: despite the "teammate" naming (kept for
+   * call-site/URL-shape stability — see
+   * .claude/agent-memory/web-developer/fix_teammate_boost_copy_backwards.md),
+   * this counts OTHER TRAINERS' Pokémon simultaneously present in the same
+   * raid lobby, never the mega-bringer's own party — the real mechanic never
+   * boosts its own bringer's bench at all.
    */
   matchingTeammateCount: number;
   teammateDps: number;

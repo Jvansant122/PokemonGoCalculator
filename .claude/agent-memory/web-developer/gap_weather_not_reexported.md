@@ -1,9 +1,18 @@
 ---
 name: gap-weather-not-reexported
-description: packages/engine/src/index.ts does not re-export weather.ts (WeatherCondition/WEATHER_BOOSTED_TYPES/isWeatherBoosted) even though Scenario.weather uses the type — the workaround used in AssumptionPanel.tsx, and what to do once this is fixed
+description: "RESOLVED 2026-09-06: engine-developer added `export * from \"./weather.js\";` to index.ts — WeatherCondition/WEATHER_BOOSTED_TYPES now import directly from @pogo-analyzer/engine, the workaround below is obsolete. Kept for history only."
 metadata:
   type: project
 ---
+
+**RESOLVED as of 2026-09-06** (confirmed while building the Team Raid
+Simulator tab): `packages/engine/src/index.ts` now includes `export * from
+"./weather.js";`, and `AssumptionPanel.tsx` already imports `WeatherCondition`/
+`WEATHER_BOOSTED_TYPES` directly from `@pogo-analyzer/engine` (no local alias
+or hand-duplicated label map anymore). `TeamAssumptionPanel.tsx` was written
+against the real export from the start — don't reintroduce the workaround
+below for any new file. Leaving the original write-up beneath for historical
+context in case a similar re-export gap recurs for a different engine module.
 
 Found 2026-09-05 while wiring the weather assumption (engine-developer's
 `feature_weather_and_boss_moveset_sweep.md`). `packages/engine/src/index.ts`

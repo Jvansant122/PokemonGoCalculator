@@ -1,77 +1,64 @@
 import { describe, expect, it } from "vitest";
 import { runComparison } from "../src/comparison.js";
 import { findCrossoverPartySize } from "../src/uptime.js";
-import {
-  MEGA_RAICHU_X,
-  MEGA_RAICHU_Y,
-  MEGA_SKARMORY,
-  SCENARIO_A_LEVEL,
-  SCENARIO_A_PERFECT_IVS,
-} from "../src/fixtures/scenarioA.js";
+import { BOSS_GALE, CANDIDATE_ALPHA, CANDIDATE_BETA, LEVEL, PERFECT_IVS } from "./fixtures/hypotheticalDuo.js";
 
 /**
- * Scenario B (tank -> team damage): against a Flying attacker, X's secondary
- * Steel typing resists Flying on top of Y's Electric resistance, so X takes
- * less per hit and survives longer under identical dodging — even though X
- * still deals less raw damage per charged attack than Y. This is what
- * produces a crossover in total team contribution as party size grows.
+ * Scenario B (tank -> team damage): against a Flying attacker, Alpha's
+ * secondary Steel typing resists Flying on top of Beta's Electric
+ * resistance, so Alpha takes less per hit and survives longer under
+ * identical dodging — even though Alpha still deals less raw damage per
+ * charged attack than Beta. This is what produces a crossover in total team
+ * contribution as party size grows. See test/fixtures/hypotheticalDuo.ts's
+ * BOSS_GALE doc comment for the exact derivation of the numbers below.
  */
-describe("Scenario B: Mega Raichu X vs Y vs Mega Skarmory (dodging, tank -> team damage)", () => {
-  // Mega Skarmory's baseAttack was fixed from an erroneous 2000 (an 8x outlier
-  // vs. every other boss-mode fixture, e.g. Primal Kyogre's 250 — see
-  // scenarioA.ts) to 250. With a realistic boss attack stat, neither
-  // candidate dies within a mere 20s anymore — the window here needs to be
-  // long enough for a real death to occur under these assumptions (empirically
-  // ~143s for Y; 180s gives comfortable margin and still finishes in
-  // milliseconds, this being a deterministic, non-tick-based simulation).
-  const OPENING_BURST_SECONDS = 180;
+describe("Scenario B: Candidate Alpha vs Beta vs Boss Gale (dodging, tank -> team damage)", () => {
+  // BOSS_GALE's effective attack (230) is matched to BOSS_TIDE's threat
+  // level (see hypotheticalDuo.ts) — a window this long is needed for a real
+  // death to actually occur under these assumptions (empirically Alpha
+  // faints at 110s, Beta at 83.6s); 150s comfortably covers both and still
+  // finishes in milliseconds, this being a deterministic, non-tick-based
+  // simulation.
+  const OPENING_BURST_SECONDS = 150;
 
-  it("X survives longer than Y against a Flying attacker under identical dodging", () => {
-    const [x, y] = runComparison({
-      candidates: [MEGA_RAICHU_X, MEGA_RAICHU_Y],
-      boss: MEGA_SKARMORY,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+  it("Alpha survives longer than Beta against a Flying attacker under identical dodging", () => {
+    const [alpha, beta] = runComparison({
+      candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
+      boss: BOSS_GALE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       dodgeFastAttacks: true,
       openingBurstSeconds: OPENING_BURST_SECONDS,
     });
 
-    expect(x!.secondsSurvived).toBeGreaterThan(y!.secondsSurvived);
+    expect(alpha!.secondsSurvived).toBeGreaterThan(beta!.secondsSurvived);
   });
 
-  it("a large enough party size lets X's extra uptime overtake Y's raw damage lead", () => {
-    const [x, y] = runComparison({
-      candidates: [MEGA_RAICHU_X, MEGA_RAICHU_Y],
-      boss: MEGA_SKARMORY,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+  it("a large enough party size lets Alpha's extra uptime overtake Beta's raw damage lead", () => {
+    const [alpha, beta] = runComparison({
+      candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
+      boss: BOSS_GALE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       dodgeFastAttacks: true,
       openingBurstSeconds: OPENING_BURST_SECONDS,
     });
 
-    expect(y!.ownChargedDamage).toBeGreaterThan(x!.ownChargedDamage);
+    expect(beta!.ownChargedDamage).toBeGreaterThan(alpha!.ownChargedDamage);
 
-    // A much lower teammate DPS than the spec's own worked example (26.5) is
-    // used here deliberately: X's uptime edge over this much longer window
-    // (~37s, vs. Y dying partway through) is worth so much per teammate that
-    // even a modest DPS already overtakes Y's raw-damage lead before party
-    // size 1 — i.e. X wins outright, itself a legitimate,
-    // sensitivity-panel-visible finding (see App.tsx's default scenario). A
-    // slower party is what makes the crossover land inside the plotted 1-20
-    // range for this assertion. ownTotalDamage (charged+fast combined) feeds
-    // the crossover math, not charged-only — that's the true total DPS
-    // output being compared.
+    // ownTotalDamage (charged+fast combined) feeds the crossover math, not
+    // charged-only — that's the true total DPS output being compared.
     const crossover = findCrossoverPartySize(
-      { id: "X", secondsSurvived: x!.secondsSurvived, boostMultiplier: x!.boostMultiplier, boostedType: x!.boostedType, ownDamage: x!.ownTotalDamage },
-      { id: "Y", secondsSurvived: y!.secondsSurvived, boostMultiplier: y!.boostMultiplier, boostedType: y!.boostedType, ownDamage: y!.ownTotalDamage },
+      { id: "Alpha", secondsSurvived: alpha!.secondsSurvived, boostMultiplier: alpha!.boostMultiplier, boostedType: alpha!.boostedType, ownDamage: alpha!.ownTotalDamage },
+      { id: "Beta", secondsSurvived: beta!.secondsSurvived, boostMultiplier: beta!.boostMultiplier, boostedType: beta!.boostedType, ownDamage: beta!.ownTotalDamage },
       1,
       { a: 1, b: 1 },
     );
 
     expect(crossover.partySize).not.toBeNull();
-    expect(crossover.leaderBelow).toBe("Y");
-    expect(crossover.leaderAtOrAbove).toBe("X");
+    expect(crossover.leaderBelow).toBe("Beta");
+    expect(crossover.leaderAtOrAbove).toBe("Alpha");
   });
 });

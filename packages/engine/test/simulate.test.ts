@@ -3,56 +3,56 @@ import { simulateOpeningBurst } from "../src/combat.js";
 import { isTickAlignedDuration, runStepwiseDistribution, simulateStepwiseBattle } from "../src/simulate.js";
 import { typeEffectiveness } from "../src/typeChart.js";
 import {
-  MEGA_RAICHU_X,
-  PRIMAL_KYOGRE,
-  SCENARIO_A_LEVEL,
-  SCENARIO_A_PERFECT_IVS,
-  STATIC_SHOCK,
-  WILD_CHARGE,
-} from "../src/fixtures/scenarioA.js";
+  ARC_SPARK,
+  BOSS_TIDE,
+  CANDIDATE_ALPHA,
+  LEVEL,
+  PERFECT_IVS,
+  VOLT_SLAM,
+} from "./fixtures/hypotheticalDuo.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "../src/raidBoss.js";
 
-const xStats = effectiveStatsAtLevel(MEGA_RAICHU_X, SCENARIO_A_PERFECT_IVS, SCENARIO_A_LEVEL);
-const bossAttack = Math.floor((PRIMAL_KYOGRE.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
-const bossDefense = Math.floor((PRIMAL_KYOGRE.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
-const bossVsX = typeEffectiveness(PRIMAL_KYOGRE.types[0]!, MEGA_RAICHU_X.types);
-const xVsBoss = typeEffectiveness("electric", PRIMAL_KYOGRE.types);
+const alphaStats = effectiveStatsAtLevel(CANDIDATE_ALPHA, PERFECT_IVS, LEVEL);
+const bossAttack = Math.floor((BOSS_TIDE.baseAttack + RAID_BOSS_IVS.attack) * RAID_BOSS_CPM);
+const bossDefense = Math.floor((BOSS_TIDE.baseDefense + RAID_BOSS_IVS.defense) * RAID_BOSS_CPM);
+const bossVsAlpha = typeEffectiveness(BOSS_TIDE.types[0]!, CANDIDATE_ALPHA.types);
+const alphaVsBoss = typeEffectiveness("electric", BOSS_TIDE.types);
 
 const attacker = {
-  hp: xStats.stamina,
-  defenseStat: xStats.defense,
-  attackStat: xStats.attack,
-  fastMove: STATIC_SHOCK,
-  chargedMove: WILD_CHARGE,
-  // Static Shock and Wild Charge are both Electric, so the same type-effectiveness applies to both.
-  fastDamageOut: { stab: true, typeEffectiveness: xVsBoss, megaBoostMultiplier: MEGA_RAICHU_X.boost!.multiplier },
-  chargedDamageOut: { stab: true, typeEffectiveness: xVsBoss, megaBoostMultiplier: MEGA_RAICHU_X.boost!.multiplier },
+  hp: alphaStats.stamina,
+  defenseStat: alphaStats.defense,
+  attackStat: alphaStats.attack,
+  fastMove: ARC_SPARK,
+  chargedMove: VOLT_SLAM,
+  // Arc Spark and Volt Slam are both Electric, so the same type-effectiveness applies to both.
+  fastDamageOut: { stab: true, typeEffectiveness: alphaVsBoss, megaBoostMultiplier: CANDIDATE_ALPHA.boost!.multiplier },
+  chargedDamageOut: { stab: true, typeEffectiveness: alphaVsBoss, megaBoostMultiplier: CANDIDATE_ALPHA.boost!.multiplier },
 };
 
 const bossNoChargedMove = {
   attackStat: bossAttack,
   defenseStat: bossDefense,
-  fastMove: PRIMAL_KYOGRE.fastMoves[0]!,
-  damageOut: { stab: true, typeEffectiveness: bossVsX },
+  fastMove: BOSS_TIDE.fastMoves[0]!,
+  damageOut: { stab: true, typeEffectiveness: bossVsAlpha },
 };
 
 describe("simulateStepwiseBattle", () => {
   it("matches simulateOpeningBurst's death timing, but reveals the charged attack never actually lands once its cast time is modeled", () => {
     // simulateOpeningBurst (Phase 1) treats charged moves as instant once
     // energy is ready — a simplification the spec itself flags as a known
-    // caveat ("both forms are likely to die during their own 3.5-second
-    // charged-move animation"). Here, energy is ready at t=7.5s but the cast
-    // takes 3.5s (finishing at t=11.0s), and the fourth Waterfall hit kills
-    // at exactly t=10.0s — so the more realistic model shows the attack
-    // never lands at all, which the simplified model silently assumed away.
+    // caveat ("the attacker is likely to die during its own charged-move
+    // animation"). Here, energy is ready at t=5.0s but the cast takes 3.5s
+    // (finishing at t=8.5s), and the third Tidal Surge hit kills at exactly
+    // t=7.5s — so the more realistic model shows the attack never lands at
+    // all, which the simplified model silently assumed away.
     const openingBurst = simulateOpeningBurst(attacker, bossNoChargedMove);
     const stepwise = simulateStepwiseBattle({ attacker, boss: bossNoChargedMove });
 
-    expect(openingBurst.faintedAtSeconds).toBe(10.0);
+    expect(openingBurst.faintedAtSeconds).toBe(7.5);
     expect(openingBurst.chargedAttacksLanded).toBe(1);
 
-    expect(stepwise.faintedAtSeconds).toBe(10.0);
+    expect(stepwise.faintedAtSeconds).toBe(7.5);
     expect(stepwise.chargedAttacksLanded).toBe(0);
     expect(stepwise.totalChargedDamage).toBe(0);
     expect(stepwise.diedDuringOwnChargedMoveAnimation).toBe(true);
@@ -355,9 +355,9 @@ describe("simulateStepwiseBattle", () => {
 
     it("pads a final point out to the run's actual end time, mirroring ownDamageTrajectory's tail-padding", () => {
       // Reuses the module's first scenario (attacker vs bossNoChargedMove),
-      // which faints at exactly t=10.0 with the last boss hit landing on
+      // which faints at exactly t=7.5 with the last boss hit landing on
       // that same tick — so the trajectory's last real point is already at
-      // t=10 and no extra padding point is needed; this pins that the array
+      // t=7.5 and no extra padding point is needed; this pins that the array
       // ends exactly at faintedAtSeconds either way (whether via a real hit
       // or the padding branch), matching ownDamageTrajectory's behavior.
       const stepwise = simulateStepwiseBattle({ attacker, boss: bossNoChargedMove });

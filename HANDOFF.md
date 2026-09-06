@@ -1,7 +1,116 @@
 # Handoff
 
-Last updated: 2026-09-05. Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-06. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
+
+## 2026-09-06: two new tabs (Team Raid Simulator, Species Report), a real boss-stats bug fixed, hypothetical fixtures deleted
+
+Large session, several independent threads landed in sequence. Everything below was independently
+re-verified by the overseer (tests/typecheck/build plus live browser checks), not just trusted from
+subagent self-reports — two subagent tasks this session were cut off mid-run by a session rate
+limit, and both times the actual completed code on disk was verified directly rather than assumed
+good or bad.
+
+- **Visual QA pass + 5 UI bugs, shipped** (`25dbf01`, deployed): an "unfamiliar user" screenshot
+  walkthrough of the whole page found the shrunk Attack/Defense/Stamina IV boxes had no visible
+  digit and could silently change value on click (native number-spinner arrows overlapping an
+  invisible digit at `4ch` width — fixed by suppressing the spinner and widening slightly), move
+  dropdowns truncating before the DPS figure, an unexplained "also active, no data yet" caption,
+  and the share-link input forcing page-level horizontal scroll at some viewport widths (missing
+  `min-width: 0` on a flex child). Default matchup also changed to real species (Kartana vs.
+  Rayquaza vs. Mega Latios) instead of the hypothetical Raichu/Kyogre fixtures.
+- **Mega-boost scope corrected — a real, corroborated finding, not a guess**: the mega/primal
+  team-wide damage boost never applies to the boosting Pokémon's own party — only to *other
+  trainers* simultaneously in the same raid lobby (a solo trainer only has one Pokémon active at a
+  time, so there's no "own bench" to boost). Confirmed via 3 independent sources including Niantic/
+  TPC's own official Mega Evolution guide, not just a community wiki. The shipped tool's copy had
+  this backwards ("Teammates (not counting this candidate)", "your party's teammates") — reworded
+  across `AssumptionPanel.tsx`/`App.tsx`/`DamageOverTimeChart.tsx`/`sensitivity.ts`/
+  `BossMovesetSweep.tsx` to "other trainers also in this raid." Pure copy/doc-comment fix, no math
+  changed. This finding also directly shaped the Team Raid Simulator's design (see below) — a
+  same-roster team-boost calculation would be mechanically wrong, not just redundant, so it has
+  none.
+- **UI simplification + new move metrics**: the "other trainers" input fields and the per-candidate
+  team-damage-boost row now disappear entirely (not just show "N/A") whenever neither candidate has
+  an active boost; the damage-over-time table and boss-moveset-sweep table drop their now-redundant
+  "Total damage"/"Own+team" columns in that same state. `MoveSelect.tsx` gained two new derived
+  metrics: energy-per-second on fast moves, and a labeled composite "Efficiency: DPS×DPE" on
+  charged moves (this tool's own derived stat, explicitly not claimed as an official/community one).
+- **Real raid-boss stats bug found and fixed** — a real correctness bug that was already live in the
+  shipped comparator, not a new-feature gap: `RAID_BOSS_CPM = 1.0` treated a boss's base stats as
+  already boss-effective, which is only true for the (now-deleted) hand-authored hypothetical
+  fixtures. Any **real** synced species used as a live raid target (already selectable via
+  `activeRaidBossOptions()`) was getting ~200 HP and no stat multiplier instead of its real
+  multi-thousand HP pool and tier CP multiplier. Fixed: `raidBoss.ts` gained a real per-tier HP
+  table (600/3600/9000/15000/22500/25000 for 1-star through Primal — literal Bulbapedia wikitext
+  quote, 3 independent fetches agree) and per-tier Attack/Defense multiplier (0.5974/0.73/0.79),
+  applied via the existing `effectiveStat()` helper for Attack/Defense but as a flat table lookup
+  for HP (HP is *not* CPM-scaled — a real, easy-to-get-wrong distinction, now covered by a
+  regression test). A new `SpeciesDefinition.statsArePrecomputed` flag branches real-species-math vs.
+  already-final hand-tuned fixtures, so pinned test numbers didn't need to move. Live-verified: the
+  same default matchup's survival numbers changed (Kartana 10.0s→12.0s, Rayquaza 6.5s→7.5s) once the
+  fix landed, confirming it actually took effect, not just compiled.
+- **The 4 hand-authored hypothetical fixtures were fully deleted, at the user's explicit request**
+  (`MEGA_RAICHU_X`/`Y`, `PRIMAL_KYOGRE`, `MEGA_SKARMORY` — `packages/engine/src/fixtures/
+  scenarioA.ts` no longer exists). The user was asked to clarify scope first (UI-picker-only hide
+  vs. full deletion including the pinned tests that depended on them) and chose full deletion, then
+  separately asked that the pinned tests be *replaced* with suitable new coverage rather than just
+  removed — done: new test-only fixtures live under `packages/engine/test/fixtures/
+  hypotheticalDuo.ts`, deliberately **not** under `src/` and **not** re-exported, since being
+  reachable from `packages/web`'s species picker was the root problem with the original 4 (they
+  were never supposed to be user-selectable "real" options). Every pinned number in the rewritten
+  tests was verified by actually running the engine's own code, not hand arithmetic. `packages/web`
+  broke as expected (4 dangling imports in `registry.ts`) and was fixed in a follow-up pass — the
+  real synced "Primal Kyogre" species (a real raid boss, unrelated to the deleted engine constant of
+  the same display name) is unaffected and still selectable, confirmed live.
+- **Team Raid Simulator tab, new** — one trainer's own 6-Pokémon sequential lineup against a raid
+  boss's real HP pool and countdown timer. Grounded in real-game research, not assumed: a full
+  6-Pokémon wipe is **not** a hard loss in the real game — you're bounced to the lobby, heal with Bag
+  items (a real resource cost, assumed-unlimited for v1, named as such), and can rejoin the *same*
+  raid attempt repeatedly with only one shared clock running across attempts; the only real loss
+  condition is the raid timer expiring. Engine side (`teamRaid.ts`/`teamScenario.ts`): `runTeamRaid`
+  loops per-slot fights (reusing the existing stepwise simulator directly, no new combat math),
+  paying a `reviveCostSeconds` and restarting from slot 1 on a full wipe (capped at
+  `MAX_TEAM_RAID_CYCLES = 1000`, an engineering safety guard only — the real game imposes no cap).
+  `swapCostSeconds`/`reviveCostSeconds` both default to 0 (no confirmed real value exists for
+  either); a labeled ~13s community-estimate preset is offered for the revive cost only. Web side:
+  this app's **first tab-switcher** (`App.tsx`'s `view=` query param + a `.tab-switcher` nav — the
+  Species Report tab below reuses this same scaffold), a 6-slot roster builder, real per-tier boss
+  HP/timer wired through, a wipe/revive-aware damage chart, and its own shareable `TeamScenario`
+  (`?ts=`). Fully live-verified: default roster, a real "timer expired, wipe count 4" run, the full
+  per-cycle/per-slot breakdown table, and a share-link round-trip that correctly restores the exact
+  tab and roster. **Known gap, not a bug in what's built**: the `isMega` flag is UI bookkeeping only
+  — the engine doesn't stop a roster containing two different mega-capable species (no real-game
+  analogue, since only one Pokémon can be mega-evolved account-wide at a time). Nobody's hit it
+  yet since the default roster only has one; worth a stricter engine-side check someday.
+- **Species Report tab, new** — pick one Pokémon, see it ranked against every currently-active real
+  raid boss (not "every boss ever" — no such tagged dataset exists yet), by the same real stepwise/
+  dodge/randomized-cadence simulator the comparator uses (survival-weighted, not flat power/duration
+  DPS), plus a cheap no-simulation "type-matchup percentile" sanity-check column that's explicitly
+  labeled separately so it's never confused with the simulated ranking. Deliberately has **no**
+  synthetic "other trainers" team-boost modeling — there's no second party to attribute it to in a
+  single-species view, and inventing one would drift toward the out-of-scope Teambuilding Analyzer.
+  Each row hands off to the two-candidate comparator (pre-fills candidate A + target, switches tabs)
+  via a new `comparatorPrefill.ts`. Its own shareable `SpeciesReportScenario` (`?sr=`). Live-verified
+  end to end: a real ranked table for Kartana across 12 bosses, the row hand-off correctly landing
+  on the comparator tab with the right species/target selected, and a share-link round-trip.
+  **Known gap, named rather than faked**: "boss starts primed" was deliberately left out of this
+  tab's assumptions — a single shared absolute-energy value doesn't generalize correctly across 12
+  bosses with different charged-move costs the way the other two tabs' fraction-based version does;
+  would need a per-target override or a boss-invariant definition if wanted later.
+- **Recurring stray-memory-directory bug hit twice more this session** (`packages/.claude/agent-
+  memory/engine-developer/...` and `packages/engine/.claude/agent-memory/engine-developer/...`
+  instead of the repo root) — same root cause as before (a subagent's own build/test commands drift
+  its CWD mid-task). Manually merged into `.claude/agent-memory/engine-developer/` and the stray
+  directories deleted. The `web-developer.md` fix applied in an earlier session didn't carry over to
+  `engine-developer.md` — worth adding the same instruction there too, next time agent definitions
+  are touched.
+- Two agent tasks were cut off mid-run by a session rate limit this session (once building the Team
+  Raid Simulator engine primitives, once cleaning up the fixture-deletion's web-side references) —
+  both times, a fresh dispatch (or, for the second, the overseer's own direct verification) confirmed
+  the actual code already on disk was complete and correct before continuing, rather than assuming
+  either way from the interrupted self-report.
+- Working tree is uncommitted as of this writing — about to be committed and shipped in one push.
 
 ## 2026-09-05, same session continued: two ideation passes routed and landed, sensitivity panel rebuilt
 

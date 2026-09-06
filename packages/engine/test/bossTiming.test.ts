@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { bossChargedMoveReadySeconds } from "../src/combat.js";
-import { WATERFALL, HYDRO_PUMP } from "../src/fixtures/scenarioA.js";
+import { MAELSTROM, TIDAL_SURGE } from "./fixtures/hypotheticalDuo.js";
 import type { ChargedMove, FastMove } from "../src/types.js";
 
 describe("bossChargedMoveReadySeconds", () => {
-  it("derives Primal Kyogre's real fixture timing: ceil(100/8) * 2.5 = 32.5s", () => {
-    expect(bossChargedMoveReadySeconds(WATERFALL, HYDRO_PUMP)).toBe(32.5);
+  it("derives Boss Tide's real fixture timing: ceil(100/10) * 2.5 = 25.0s", () => {
+    expect(bossChargedMoveReadySeconds(TIDAL_SURGE, MAELSTROM)).toBe(25.0);
   });
 
   it("returns 0 immediately when starting energy already meets the cost", () => {
-    expect(bossChargedMoveReadySeconds(WATERFALL, HYDRO_PUMP, 100)).toBe(0);
-    expect(bossChargedMoveReadySeconds(WATERFALL, HYDRO_PUMP, 250)).toBe(0);
+    expect(bossChargedMoveReadySeconds(TIDAL_SURGE, MAELSTROM, 100)).toBe(0);
+    expect(bossChargedMoveReadySeconds(TIDAL_SURGE, MAELSTROM, 250)).toBe(0);
   });
 
   it("shortens as starting energy increases, never going below 0", () => {
-    const zero = bossChargedMoveReadySeconds(WATERFALL, HYDRO_PUMP, 0);
-    const half = bossChargedMoveReadySeconds(WATERFALL, HYDRO_PUMP, 50);
+    const zero = bossChargedMoveReadySeconds(TIDAL_SURGE, MAELSTROM, 0);
+    const half = bossChargedMoveReadySeconds(TIDAL_SURGE, MAELSTROM, 50);
     expect(half).toBeLessThan(zero);
     expect(half).toBeGreaterThanOrEqual(0);
   });

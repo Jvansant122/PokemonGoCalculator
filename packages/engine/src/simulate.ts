@@ -140,6 +140,23 @@ export interface StepwiseBoss {
    * Defaults to 0 (today's implicit assumption: every fight starts fresh).
    */
   startingEnergy?: number;
+  /**
+   * Seconds until the boss's charged move fires again, ALREADY fully
+   * resolved — no jitteredInterval is rolled on top of this, unlike
+   * chargedMoveWarmupSeconds (which represents "seconds until first becoming
+   * energy-ready," always followed by one more random interval roll before
+   * the actual first cast — correct for a fresh fight, wrong for a cooldown
+   * that's already mid-countdown). Set this instead of
+   * chargedMoveWarmupSeconds/startingEnergy specifically to carry a boss's
+   * already-ticking charged-move cooldown across a trainer's team-raid slot
+   * handoff (see teamRaid.ts and StepwiseRunResult.bossChargedMoveResidualSeconds,
+   * this run's own version of the same value) — reusing chargedMoveWarmupSeconds
+   * directly for that purpose would double up a cooldown that had already
+   * fully rolled its random interval in the previous slot's run, silently
+   * granting the next slot extra free time. Takes priority over
+   * chargedMoveWarmupSeconds/startingEnergy when set.
+   */
+  chargedMoveNextFireInSeconds?: number;
 }
 
 export interface StepwiseRunResult {
@@ -164,6 +181,26 @@ export interface StepwiseRunResult {
    * directly.
    */
   damageTakenTrajectory: DamageTrajectoryPoint[];
+  /**
+   * How many seconds were left on the boss's charged-move cooldown when this
+   * run ended (attacker fainted, or hit maxSeconds) — null when the boss has
+   * no charged-move timing configured at all (no chargedMove, or no
+   * chargedMoveMeanIntervalSeconds), since there's nothing to carry forward
+   * in that case. Clamped to >= 0 (a run can end exactly on the tick the
+   * boss's charged move was scheduled to fire, which nextBossChargedMoveAt
+   * already reflects as having "fired," not gone negative).
+   *
+   * The one real consumer of this is teamRaid.ts's sequential slot-handoff
+   * orchestrator: feed this straight into the next slot's
+   * StepwiseBoss.chargedMoveWarmupSeconds so the boss's own attack cadence
+   * doesn't reset just because the trainer swapped in a fresh Pokémon — this
+   * field is exactly the piece the doc comment on chargedMoveWarmupSeconds/
+   * startingEnergy above already anticipated ("a mega that tags in mid-fight
+   * against a boss an earlier trainer's mega already left partway charged"),
+   * generalized from a multi-trainer scenario to a single trainer's own
+   * sequential swap-in, which is mechanically identical from the boss's side.
+   */
+  bossChargedMoveResidualSeconds: number | null;
 }
 
 /** Simple seeded PRNG (mulberry32) so a given seed always reproduces the same run. */
@@ -228,10 +265,16 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
 
   let nextBossChargedMoveAt: number | null = null;
   if (boss.chargedMove && boss.chargedMoveMeanIntervalSeconds) {
-    const warmup =
-      boss.chargedMoveWarmupSeconds ??
-      bossChargedMoveReadySeconds(boss.fastMove, boss.chargedMove, boss.startingEnergy ?? 0);
-    nextBossChargedMoveAt = warmup + jitteredInterval(boss.chargedMoveMeanIntervalSeconds, rng);
+    if (boss.chargedMoveNextFireInSeconds != null) {
+      // Already fully resolved (carried forward from a prior slot's residual
+      // cooldown) — no additional jitteredInterval roll on top.
+      nextBossChargedMoveAt = boss.chargedMoveNextFireInSeconds;
+    } else {
+      const warmup =
+        boss.chargedMoveWarmupSeconds ??
+        bossChargedMoveReadySeconds(boss.fastMove, boss.chargedMove, boss.startingEnergy ?? 0);
+      nextBossChargedMoveAt = warmup + jitteredInterval(boss.chargedMoveMeanIntervalSeconds, rng);
+    }
   }
 
   const EPS = 1e-9;
@@ -386,6 +429,9 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     damageTakenTrajectory.push({ atSeconds: endSeconds, cumulativeDamage: lastDamageTakenPoint.cumulativeDamage });
   }
 
+  const bossChargedMoveResidualSeconds =
+    nextBossChargedMoveAt !== null ? Math.max(0, nextBossChargedMoveAt - endSeconds) : null;
+
   return {
     faintedAtSeconds,
     survivedFullWindow: faintedAtSeconds === null,
@@ -397,6 +443,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     bossChargedHitsTaken,
     ownDamageTrajectory,
     damageTakenTrajectory,
+    bossChargedMoveResidualSeconds,
   };
 }
 

@@ -34,10 +34,21 @@ off, check here first before anywhere else.
   purely from being hit. `MAX_ENERGY = 100` is the real per-Pokémon stored-energy cap.
 - **`typeChart.ts`**: dual-typing stacks multiplicatively across both of a defender's types
   (current-gen multipliers: 1.6 / 0.625 / 0.390625 — not the old 2/0.5/0.25).
-- **`raidBoss.ts`**: a raid boss's "base stats" are already its effective stats, combined with
-  `iv=0` and `RAID_BOSS_CPM=1.0` — reuses the one stat pipeline instead of forking a second code
-  path. A hand-authored boss `baseAttack` is the literal number it hits with, not a base stat
-  that gets scaled down further.
+- **`raidBoss.ts`**: branches on `SpeciesDefinition.statsArePrecomputed`. A **precomputed** boss's
+  base stats are already its effective stats (`iv=0`, `RAID_BOSS_CPM=1.0`) — only the hand-tuned
+  test-only fixtures (see "Fixtures" below) use this path. Every **real synced species** used as a
+  live raid target goes through real per-tier math instead: `RAID_TIER_TABLE` gives a fixed HP pool
+  and an Attack/Defense multiplier per tier (1-star through Primal — literal Bulbapedia wikitext
+  quote, 3 independent fetches agree: HP 600/3600/9000/15000/22500/25000, multiplier
+  0.5974/0.73/0.79). Attack/Defense go through the normal `effectiveStat(base, 15, tierMultiplier)`
+  pipeline (raid bosses carry perfect IV 15) — reuse it, don't duplicate. **HP does NOT go through
+  `effectiveStat` at all** — it's the tier table's fixed value directly, never derived from
+  `baseStamina`. This asymmetry is easy to get wrong; there's a regression test guarding it
+  specifically (`raidBossTier.test.ts`). `bossEffectiveStats`/`bossEffectiveHp` in `comparison.ts`
+  are the two functions that apply this branch — call them, don't reimplement the branch at a call
+  site. A real target's tier isn't a `Scenario` field (deliberately — it's derived from `target` via
+  the live raid feed, not an independent user setting; see `feedback_boss_tier_not_in_scenario.md`
+  if reconsidering this).
 - **`combat.ts`** (deterministic opening-burst path): `simulateOpeningBurst` — boss uses only its
   fast move (the window before it can throw a charged move), returns `ownDamageTrajectory`
   (cumulative combined fast+charged damage over time, not just a final total). Also exports
@@ -69,7 +80,12 @@ off, check here first before anywhere else.
   mega/primal boost is **not all-or-nothing by type**: every teammate gets at least
   `OFF_TYPE_MEGA_BOOST_MULTIPLIER = 1.1`; only teammates matching the boosted type get the full
   `boostMultiplier`. `matchingTeammateCount` is an absolute count (0..`teammateCount`);
-  `findCrossoverPartySize` takes a *fraction* instead since it sweeps party size.
+  `findCrossoverPartySize` takes a *fraction* instead since it sweeps party size. **The "teammates"
+  this function credits are other trainers, not the boosting Pokémon's own party** — confirmed via
+  3 independent sources including Niantic's own official guide: the boost never reaches the
+  mega-bringer's own bench (a solo trainer only has one Pokémon active at a time). This is why
+  `teamRaid.ts` (below) has zero cross-slot team-boost math — don't add any; it'd be mechanically
+  wrong for a single trainer's own roster, not just redundant.
 - **`comparison.ts`**: `runComparison` (opening-burst, tests only) and `runSustainedComparison`
   (the only path the web UI drives, returns a distribution). Both take `dodgeFastAttacks?`
   alongside `dodge`; sustained also takes `holdChargedMoveUntilSafe?` (see `simulate.ts`). Each
@@ -120,6 +136,21 @@ off, check here first before anywhere else.
   `energyCost` on every move object regardless of which one actually applies (whichever doesn't
   is just `0`) — never assume you can tell fast from charged by which of those fields is present;
   a caller has to know which movepool it's looking at.
+- **`teamRaid.ts`** / **`teamScenario.ts`**: a single trainer's own 6-slot sequential roster vs. a
+  boss's real HP pool and countdown timer — a different shareable state (`TeamScenario`, sibling to
+  `Scenario`, not an extension of it) from the two-candidate comparator. `runTeamRaid` reuses the
+  existing stepwise simulator per slot (no new combat math) and loops on a full-roster wipe: real
+  raids let you heal at the lobby and rejoin the same attempt, so a wipe pays `reviveCostSeconds`
+  and restarts from slot 1 rather than ending the run — `TeamRaidOutcome` is only
+  `"cleared" | "timerExpired"`, there's no `teamWiped` loss state. `MAX_TEAM_RAID_CYCLES = 1000` is
+  a pure engineering safety cap (the real game imposes none). `swapCostSeconds`/`reviveCostSeconds`
+  both default to `0` — no confirmed real value exists for either.
+- **`speciesReport.ts`**: `runSpeciesReverseLookup` ranks one species against a **caller-supplied**
+  list of boss targets (this package has no I/O, so it can't read the live raid feed itself —
+  `packages/web`'s `registry.ts` resolves the real active-boss list and passes it in). Reuses
+  `runSustainedComparison` with a single-element `candidates` array per boss — verify that's still
+  legal before assuming it, don't just trust a design doc. No team-boost attribution here either,
+  same reasoning as `teamRaid.ts` above.
 - **`scenario.ts`**: `Scenario` is the full shareable input set, serialized to a base64url string.
   **Every user-facing assumption in the web UI must have a matching field here** — a missing
   field silently reverts to a default on a shared link instead of erroring, and this has bitten
@@ -131,35 +162,30 @@ off, check here first before anywhere else.
   reintroduce a phase toggle if asked; push back and ask what the request is really trying to
   express (this was a deliberate, explicit product decision, not an oversight).
 
-## Fixtures (`fixtures/scenarioA.ts`)
+## Fixtures (`test/fixtures/hypotheticalDuo.ts`)
 
-Mega Raichu X/Y, Primal Kyogre, and Mega Skarmory are hypothetical (not live Pokémon GO content).
-Base stats were hand-derived to reproduce the spec's pinned acceptance numbers exactly:
+**As of 2026-09-06, the original 4 product-level hypothetical fixtures (Mega Raichu X/Y, Primal
+Kyogre, Mega Skarmory — formerly `src/fixtures/scenarioA.ts`) were deleted at the user's explicit
+request** — they were reachable from `packages/web`'s species picker, which was never the intent.
+If you're looking for pinned-acceptance-number derivations styled like the old ones (level/IV
+sweeps, exact survival-time/damage pins), that logic now lives in `test/scenarioA.test.ts`/
+`test/scenarioB.test.ts` directly, backed by a **test-only** fixture module,
+`test/fixtures/hypotheticalDuo.ts` (`CANDIDATE_ALPHA`/`CANDIDATE_BETA`, `BOSS_TIDE`/`BOSS_GALE`).
 
-- Level 35, perfect stamina IV: both Raichu forms ~130 HP.
-- Fast-move damage constant across attack IV 13-15: X=4, Y=5.
-- No dodge: both survive exactly 10.0s, land exactly 1 charged attack: X=190 damage, Y=221
-  damage (16.32% delta). See `test/scenarioA.test.ts` for the full derivation.
+**This module must stay test-only — do not move it under `src/` or re-export it from
+`src/index.ts`.** That's the one rule that actually matters here; being importable from
+`packages/web` was the entire problem with the old fixtures. Every pinned number in it must be
+verified by actually running the engine's own code (a throwaway vitest/tsx scratch script, deleted
+after use — see `verification_without_browser_tool.md` in `web-developer`'s memory for the
+technique), not hand arithmetic, same discipline as the original fixtures.
 
-**Do not casually change `baseAttack`/`baseDefense`/`baseStamina`/move `power`/`energyCost` on
-these fixtures** — if a refactor breaks the acceptance tests, check the flooring stage in
-`stats.ts` first, per the spec's own instruction, before touching fixture numbers. Mega Raichu X
-carries dual Electric/Steel typing (Y is pure Electric) — neutral to Water so it doesn't touch a
-Scenario A number, but gives X a real type-chart survivability edge against Flying attackers
-(Mega Skarmory, Scenario B). Raid bosses' `baseAttack` is their literal effective attack stat, no
-CPM/IV scaling — **sanity-check any new/edited boss fixture's `baseAttack` against
-`PRIMAL_KYOGRE`'s `250`**; an 8x-outlier Mega Skarmory `baseAttack` (a stray CP-vs-effective-stat
-mix-up) was a real, shipped bug caught only because the user noticed implausible damage output.
-`scenarioB.test.ts`'s window/teammate-DPS thresholds are NOT spec-pinned — they're derived
-empirically against current fixture stats, so re-derive them if a boss-mode fixture stat changes.
-
-Mega Raichu X/Y's `fastMoves`/`chargedMoves` arrays carry their own spec-tuned default move at
-index 0 (`STATIC_SHOCK`/`WILD_CHARGE` — required for the pinned numbers above), with the rest of
-real Raichu's actual movepool (sourced from `data/normalized/species.json`, not hand-guessed)
-appended after it, so the moveset picker has real alternatives without disturbing index-0
-defaults. The real movepool includes real Raichu's own actual "Wild Charge" (id `251`, different
-numbers from the spec-tuned fixture move at id `wild-charge`) — two differently-tuned entries
-sharing a display name in the picker is expected, not a bug; don't rename either to "fix" it.
+All 4 test-only bosses/candidates need `statsArePrecomputed: true` (see the `raidBoss.ts` bullet
+above) so they keep using already-final hand-tuned stats — omitting it would silently route them
+through the real per-tier math instead, which would change their numbers and break every pinned
+test that depends on them. If you hand-author a **new** boss-shaped `SpeciesDefinition` anywhere
+(tests or otherwise) and mean for its `baseAttack`/`baseDefense`/`baseStamina` to be literal
+already-effective combat stats rather than real base stats needing tier math, set this flag
+explicitly — it does not default to the old fixtures' behavior.
 
 ## Testing
 
@@ -185,3 +211,11 @@ Keep `.claude/agent-memory/engine-developer/MEMORY.md` current: real bugs found 
 cause, empirically-derived constants and why they're not arbitrary, and any request you pushed
 back on (e.g. "bring back the phase toggle") along with why. Read it before starting, update it
 before finishing.
+
+**Use the path relative to the repo root, not your current shell directory.** Your own build/test
+commands routinely `cd` into `packages/engine` (or deeper) first — if you then write memory with a
+bare `.claude/agent-memory/...` path from that same shell context, it lands somewhere like
+`packages/.claude/agent-memory/...` or `packages/engine/.claude/agent-memory/...`, a stray location
+no future session ever reads. This has happened at least twice. Before writing memory, confirm
+you're targeting `<repo-root>/.claude/agent-memory/engine-developer/`, not wherever your last `cd`
+left you.

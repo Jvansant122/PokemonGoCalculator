@@ -3,7 +3,14 @@ import type { DodgeBehavior } from "./breakpoints.js";
 import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
 import { shadowAdjustedBaseStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
-import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "./raidBoss.js";
+import {
+  DEFAULT_REAL_RAID_TIER,
+  RAID_BOSS_CPM,
+  RAID_BOSS_IVS,
+  REAL_RAID_BOSS_IV,
+  raidTierStats,
+  type RaidTier,
+} from "./raidBoss.js";
 import { DEFAULT_STEPWISE_MAX_SECONDS, runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
 import type { ChargedMove, IVSpread, SpeciesDefinition } from "./types.js";
 import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
@@ -14,24 +21,66 @@ import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
  * baseAttack/baseDefense before the single floor — several real raid bosses
  * are Shadow, so this can't just be skipped for boss mode. Shares
  * shadowAdjustedBaseStats with stats.ts's effectiveStatsAtLevel rather than
- * forking a second Shadow-multiplier code path.
+ * forking a second Shadow-multiplier code path. Exported (not just
+ * module-private) so teamRaid.ts's per-slot orchestrator can reuse the exact
+ * same boss-stat derivation rather than forking a second one.
+ *
+ * Branches on SpeciesDefinition.statsArePrecomputed: a precomputed boss
+ * (this engine's own test-only hypothetical fixtures, plus hand-authored
+ * synthetic test bosses) keeps the old iv=0/cpm=1.0 pass-through unchanged — its
+ * baseAttack/baseDefense fields already ARE the final effective numbers, and
+ * re-deriving them under the real tier formula would silently break the
+ * pinned Scenario A/B test values. A real synced species instead gets the
+ * real per-tier formula (REAL_RAID_BOSS_IV=15, tier's attackDefenseMultiplier
+ * — see raidBoss.ts's RAID_TIER_TABLE), defaulting to DEFAULT_REAL_RAID_TIER
+ * when `tier` is omitted (e.g. the species isn't currently a live raid
+ * target with a known tier).
  */
-function bossEffectiveStats(boss: SpeciesDefinition): { attack: number; defense: number } {
+export function bossEffectiveStats(boss: SpeciesDefinition, tier?: RaidTier): { attack: number; defense: number } {
   const { baseAttack, baseDefense } = shadowAdjustedBaseStats(boss);
+  if (boss.statsArePrecomputed) {
+    return {
+      attack: effectiveStat(baseAttack, RAID_BOSS_IVS.attack, RAID_BOSS_CPM),
+      defense: effectiveStat(baseDefense, RAID_BOSS_IVS.defense, RAID_BOSS_CPM),
+    };
+  }
+  const { attackDefenseMultiplier } = raidTierStats(tier ?? DEFAULT_REAL_RAID_TIER);
   return {
-    attack: effectiveStat(baseAttack, RAID_BOSS_IVS.attack, RAID_BOSS_CPM),
-    defense: effectiveStat(baseDefense, RAID_BOSS_IVS.defense, RAID_BOSS_CPM),
+    attack: effectiveStat(baseAttack, REAL_RAID_BOSS_IV, attackDefenseMultiplier),
+    defense: effectiveStat(baseDefense, REAL_RAID_BOSS_IV, attackDefenseMultiplier),
   };
+}
+
+/**
+ * Boss effective HP — the critical asymmetry versus bossEffectiveStats
+ * above: a real boss's battle HP is a FIXED, flat pool set directly per tier
+ * (RAID_TIER_TABLE), completely decoupled from the species' own baseStamina
+ * stat and NOT run through effectiveStat/CPM at all (Bulbapedia's own text:
+ * "a fixed Boss HP value based on the raid level"). Do NOT "fix" this by
+ * applying effectiveStat(baseStamina, REAL_RAID_BOSS_IV, multiplier) the way
+ * attack/defense are handled above — that would not reproduce real boss HP
+ * pools and was explicitly flagged as the wrong fix path during this
+ * feature's research (see raidBoss.ts's RaidTierStats.hp doc comment).
+ *
+ * A precomputed boss (see bossEffectiveStats) instead reads baseStamina
+ * straight through, unchanged — exactly like today's pass-through behavior,
+ * since its baseStamina field already IS the final effective HP pool by
+ * construction.
+ */
+export function bossEffectiveHp(boss: SpeciesDefinition, tier?: RaidTier): number {
+  if (boss.statsArePrecomputed) return boss.baseStamina;
+  return raidTierStats(tier ?? DEFAULT_REAL_RAID_TIER).hp;
 }
 
 /**
  * Resolves a move selection by id against a species' available moves, falling
  * back to the first move when the id is omitted, null, or doesn't match —
- * i.e. today's implicit "always use moves[0]" behavior. Shared by both
- * runComparison and runSustainedComparison so a candidate/boss move choice
- * means the same thing in either path.
+ * i.e. today's implicit "always use moves[0]" behavior. Shared by
+ * runComparison, runSustainedComparison, AND teamRaid.ts's per-slot
+ * orchestrator so a candidate/boss/team-slot move choice means the same
+ * thing everywhere.
  */
-function resolveMove<T extends { id: string }>(moves: T[], id: string | null | undefined): T | undefined {
+export function resolveMove<T extends { id: string }>(moves: T[], id: string | null | undefined): T | undefined {
   return (id ? moves.find((m) => m.id === id) : undefined) ?? moves[0];
 }
 
@@ -45,7 +94,7 @@ function resolveMove<T extends { id: string }>(moves: T[], id: string | null | u
  * persistsThroughFaint fields fed to uptime.ts) reads from this, never from
  * species.boost directly, so the disable toggle can't be partially applied.
  */
-function resolveBoost(species: SpeciesDefinition, disabled: boolean): SpeciesDefinition["boost"] | undefined {
+export function resolveBoost(species: SpeciesDefinition, disabled: boolean): SpeciesDefinition["boost"] | undefined {
   return disabled ? undefined : species.boost;
 }
 
@@ -54,9 +103,14 @@ function resolveBoost(species: SpeciesDefinition, disabled: boolean): SpeciesDef
  * that move's type matches the boost's boostedType (e.g. Mega Camerupt's
  * Ground-type Earthquake gets no boost even though Camerupt's boosted type
  * is Fire) — an off-type move, or a candidate with no active boost at all,
- * gets NO_BONUS (1), never the full multiplier.
+ * gets NO_BONUS (1), never the full multiplier. Exported for teamRaid.ts —
+ * see that module's doc comment for why a team-raid slot's OWN damage still
+ * uses this (a fielded mega form's stats/boost are inherent to that species),
+ * while the team-wide "boosts teammates" side of the mechanic is deliberately
+ * never computed there at all (a solo trainer's own mega never boosts their
+ * own bench — see teamRaid.ts).
  */
-function ownBoostMultiplier(boost: SpeciesDefinition["boost"] | undefined, moveType: SpeciesDefinition["types"][number]): number {
+export function ownBoostMultiplier(boost: SpeciesDefinition["boost"] | undefined, moveType: SpeciesDefinition["types"][number]): number {
   return boost && moveType === boost.boostedType ? boost.multiplier : 1;
 }
 
@@ -78,6 +132,14 @@ export interface ComparisonInputs {
    */
   candidateMegaBoostDisabled?: [boolean, boolean];
   boss: SpeciesDefinition;
+  /**
+   * Which real raid tier the boss counts as, for real (non-precomputed)
+   * species — see bossEffectiveStats/bossEffectiveHp above and raidBoss.ts's
+   * RAID_TIER_TABLE. Ignored entirely when boss.statsArePrecomputed is true
+   * (this project's hypothetical fixtures). Omitted/undefined for a real
+   * species defaults to DEFAULT_REAL_RAID_TIER ("5-Star Raids").
+   */
+  bossRaidTier?: RaidTier;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
   bossFastMoveId?: string | null;
   /** Boss charged-move selection. Omit/null defaults to the boss's first charged move (today's behavior). */
@@ -151,7 +213,7 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
     weather = "none",
     candidateMegaBoostDisabled = [false, false],
   } = inputs;
-  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
+  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
@@ -236,6 +298,8 @@ export interface SustainedComparisonInputs {
   /** See ComparisonInputs.candidateMegaBoostDisabled. Defaults to [false, false]. */
   candidateMegaBoostDisabled?: [boolean, boolean];
   boss: SpeciesDefinition;
+  /** See ComparisonInputs.bossRaidTier. */
+  bossRaidTier?: RaidTier;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
   bossFastMoveId?: string | null;
   /** Boss charged-move selection. Omit/null defaults to the boss's first charged move (today's behavior) — also determines which move's `perfectlyDodgeable` flag applies. */
@@ -296,7 +360,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     weather = "none",
     candidateMegaBoostDisabled = [false, false],
   } = inputs;
-  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss);
+  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);

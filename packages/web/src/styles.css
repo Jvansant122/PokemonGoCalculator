@@ -39,6 +39,70 @@ h1 {
   font-size: 0.95rem;
 }
 
+.tab-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  padding: 8px 4px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent-x);
+  font-weight: 600;
+}
+
+.team-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.team-slot-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.team-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.team-slot-order-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.team-slot-order-buttons button {
+  background: #0d0f14;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.team-slot-order-buttons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);

@@ -102,6 +102,21 @@ interface Props {
 }
 
 /**
+ * Whether a candidate currently has a mega/primal boost mechanic that's
+ * actually live — a genuinely non-mega species (no `.boost` at all) or one
+ * with its per-candidate "disable mega/primal boost" checkbox ticked both
+ * count as no boost. Mirrors App.tsx's own `resolveBoost(species, disabled)`
+ * exactly (species.boost if not disabled, else undefined) — not imported
+ * directly to avoid a circular import (App.tsx already imports `Assumptions`
+ * from this file), so kept as a small local equivalent instead of a second,
+ * divergent reimplementation of any real math (this is trivial field access,
+ * same as the original).
+ */
+function hasActiveBoost(species: SpeciesDefinition | null, disabled: boolean): boolean {
+  return !!species?.boost && !disabled;
+}
+
+/**
  * Always-visible assumption panel (Phase 4, point 9). Every conclusion this
  * tool produces is conditional on these — nothing is rendered as a single
  * ranked number without this panel attached above it.
@@ -131,6 +146,16 @@ export function AssumptionPanel({
     ? (bossSpecies.chargedMoves.find((m) => m.id === value.bossChargedMoveId) ?? bossSpecies.chargedMoves[0])
     : undefined;
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
+
+  // The "other trainers" party inputs below only affect anything when at
+  // least one candidate has a live mega/primal boost to attribute team damage
+  // from — a pure no-op group otherwise (both non-mega, or both disabled),
+  // so it's hidden entirely rather than shown next to an inert "N/A" result.
+  // Recomputed on every render, so toggling a species or a disable-checkbox
+  // shows/hides this live, not just once on mount.
+  const anyBoostActive =
+    hasActiveBoost(candidateSpecies[0], value.candidateMegaBoostDisabled[0]) ||
+    hasActiveBoost(candidateSpecies[1], value.candidateMegaBoostDisabled[1]);
 
   return (
     <section className="panel">
@@ -466,47 +491,51 @@ export function AssumptionPanel({
           )}
         </div>
 
-        <div className="field">
-          <label htmlFor="partySize">Teammates (not counting this candidate)</label>
-          <input
-            id="partySize"
-            type="number"
-            min={0}
-            max={20}
-            value={value.partySize}
-            onChange={(e) => {
-              const partySize = Number(e.target.value);
-              onChange({ ...value, partySize, matchingTeammateCount: Math.min(value.matchingTeammateCount, partySize) });
-            }}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="teammateDps">Teammate DPS (each)</label>
-          <input
-            id="teammateDps"
-            type="number"
-            min={0}
-            step={0.1}
-            value={value.teammateDps}
-            onChange={(e) => set("teammateDps", Number(e.target.value))}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="matchingTeammateCount">Teammates matching boost type (of {value.partySize})</label>
-          <input
-            id="matchingTeammateCount"
-            type="range"
-            min={0}
-            max={value.partySize}
-            step={1}
-            value={value.matchingTeammateCount}
-            onChange={(e) => set("matchingTeammateCount", Number(e.target.value))}
-            title="How many of your party's highest-DPS teammates share the lead candidate's boosted type and so get the full mega-boost multiplier — the rest still get a smaller, non-zero boost (real teams are rarely all-or-nothing on type)."
-          />
-          <span className="species-picker-hint">
-            {value.matchingTeammateCount} matching / {value.partySize - value.matchingTeammateCount} off-type
-          </span>
-        </div>
+        {anyBoostActive && (
+          <>
+            <div className="field">
+              <label htmlFor="partySize">Other trainers also in this raid (not this candidate)</label>
+              <input
+                id="partySize"
+                type="number"
+                min={0}
+                max={20}
+                value={value.partySize}
+                onChange={(e) => {
+                  const partySize = Number(e.target.value);
+                  onChange({ ...value, partySize, matchingTeammateCount: Math.min(value.matchingTeammateCount, partySize) });
+                }}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="teammateDps">Other trainers' DPS (each)</label>
+              <input
+                id="teammateDps"
+                type="number"
+                min={0}
+                step={0.1}
+                value={value.teammateDps}
+                onChange={(e) => set("teammateDps", Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="matchingTeammateCount">Other trainers matching boost type (of {value.partySize})</label>
+              <input
+                id="matchingTeammateCount"
+                type="range"
+                min={0}
+                max={value.partySize}
+                step={1}
+                value={value.matchingTeammateCount}
+                onChange={(e) => set("matchingTeammateCount", Number(e.target.value))}
+                title="How many of the other trainers simultaneously in this raid (each with their own single active Pokémon — the mega/primal boost only reaches other trainers' Pokémon, never this candidate's own bench) have their highest-DPS Pokémon share the lead candidate's boosted type and so get the full mega-boost multiplier — the rest still get a smaller, non-zero boost (real raid lobbies are rarely all-or-nothing on type)."
+              />
+              <span className="species-picker-hint">
+                {value.matchingTeammateCount} matching / {value.partySize - value.matchingTeammateCount} off-type
+              </span>
+            </div>
+          </>
+        )}
 
         <div className="field">
           <label htmlFor="minFightLength">Extend simulated window to at least (s)</label>

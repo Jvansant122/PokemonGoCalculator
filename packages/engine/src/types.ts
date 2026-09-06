@@ -100,6 +100,29 @@ export interface SpeciesDefinition {
    * plain data set by whoever constructs the SpeciesDefinition.
    */
   imageUrl?: string;
+  /**
+   * Marks this species' baseAttack/baseDefense/baseStamina fields as
+   * already-final, boss-effective numbers — i.e. NOT raw base stats needing
+   * the real per-tier raid-boss derivation (see raidBoss.ts's RAID_TIER_TABLE
+   * and comparison.ts's bossEffectiveStats/bossEffectiveHp). True only for
+   * hand-tuned hypothetical raid-boss fixtures (this engine's own
+   * test/fixtures/hypotheticalDuo.ts, whose numbers were reverse-engineered
+   * to reproduce pinned Scenario A/B test values under the old
+   * iv=0/cpm=1.0 pass-through — test-only, never exported from src/) and
+   * hand-authored synthetic boss fixtures elsewhere in this engine's own
+   * test suite (same category: round numbers picked to already BE the
+   * effective stat, not a real species' actual base stats).
+   *
+   * Defaults to false/undefined for every real synced species (from
+   * fromGameMaster) — those need the real tier-keyed formula derived fresh
+   * from their own base stats whenever fielded as a boss, since a real
+   * species' baseAttack/baseDefense/baseStamina are ordinary trainer-mode
+   * base stats, not boss-effective numbers. Only consumed when a species is
+   * used in the BOSS role; irrelevant to a species used as a candidate/
+   * attacker (which always goes through the ordinary trainer CPM/IV pipeline
+   * in stats.ts regardless of this flag).
+   */
+  statsArePrecomputed?: boolean;
 }
 
 export interface Combatant {

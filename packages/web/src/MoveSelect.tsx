@@ -7,6 +7,19 @@ function approximateDps(move: Move): number {
   return move.durationSeconds > 0 ? move.power / move.durationSeconds : 0;
 }
 
+/**
+ * Charged-move-only composite: DPS x DPE (damage-per-energy-cost), i.e.
+ * power^2 / (duration x energyCost) — an explicitly hand-rolled metric for
+ * this tool (not an official game stat or a known community one), meant to
+ * give a single-number feel for "damage output relative to both time AND
+ * energy spent" since a reader asking for one figure shouldn't have to do
+ * the DPS/DPE tradeoff arithmetic themselves. Labeled honestly as "DPS×DPE"
+ * in the option text below so it isn't mistaken for a recognized stat.
+ */
+function chargedEfficiency(move: ChargedMove): number {
+  return move.durationSeconds > 0 && move.energyCost > 0 ? (move.power * move.power) / (move.durationSeconds * move.energyCost) : 0;
+}
+
 function optionLabel(move: Move, kind: "fast" | "charged"): string {
   const dps = approximateDps(move).toFixed(1);
   // Real synced move data (see gamemaster.ts's fromGameMasterMove) sets BOTH
@@ -14,8 +27,17 @@ function optionLabel(move: Move, kind: "fast" | "charged"): string {
   // is just 0 — so which field to show can't be sniffed from the object's
   // shape; it has to come from the caller telling us whether this list is a
   // fast or charged movepool.
-  const energyLabel = kind === "charged" ? `${(move as ChargedMove).energyCost} energy cost` : `+${(move as FastMove).energyGain} energy`;
-  return `${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS), ${energyLabel}`;
+  if (kind === "charged") {
+    const chargedMove = move as ChargedMove;
+    const efficiency = chargedEfficiency(chargedMove).toFixed(1);
+    return `${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS), ${chargedMove.energyCost} energy cost, Efficiency: ${efficiency} (DPS×DPE)`;
+  }
+  const fastMove = move as FastMove;
+  // Energy Per Second: how quickly this fast move refills the energy meter —
+  // shown alongside DPS since a fast move's value is a tradeoff between the
+  // two (the highest-DPS fast moves are often the worst energy generators).
+  const eps = move.durationSeconds > 0 ? (fastMove.energyGain / move.durationSeconds).toFixed(1) : "0.0";
+  return `${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS, ~${eps} EPS), +${fastMove.energyGain} energy`;
 }
 
 interface Props {

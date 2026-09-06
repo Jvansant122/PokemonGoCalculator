@@ -1,22 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { compareAcrossBossChargedMoves, runSustainedComparison } from "../src/comparison.js";
-import {
-  MEGA_RAICHU_X,
-  MEGA_RAICHU_Y,
-  MEGA_SKARMORY,
-  PRIMAL_KYOGRE,
-  SCENARIO_A_LEVEL,
-  SCENARIO_A_PERFECT_IVS,
-} from "../src/fixtures/scenarioA.js";
+import { BOSS_GALE, BOSS_TIDE, CANDIDATE_ALPHA, CANDIDATE_BETA, LEVEL, PERFECT_IVS } from "./fixtures/hypotheticalDuo.js";
 import type { SpeciesDefinition } from "../src/types.js";
 
 describe("runSustainedComparison", () => {
   it("returns a distribution (not a point estimate) per candidate once the boss starts using charged moves", () => {
     const [x, y] = runSustainedComparison({
-      candidates: [MEGA_RAICHU_X, MEGA_RAICHU_Y],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 12,
       bossChargedMoveWarmupSeconds: 8,
@@ -31,9 +24,9 @@ describe("runSustainedComparison", () => {
       expect(result.medianTotalDamage).toBeGreaterThanOrEqual(result.p10TotalDamage);
     }
 
-    // Kyogre's Hydro Pump is lethal on its own against these HP totals, so
+    // Boss Tide's Maelstrom is lethal on its own against these HP totals, so
     // adding it to the fight should shorten survival versus Scenario A's
-    // fast-move-only opening burst (10.0s) at least some of the time.
+    // fast-move-only opening burst (7.5s) at least some of the time.
     expect(x!.meanSecondsSurvived).toBeLessThanOrEqual(40);
     expect(y!.meanSecondsSurvived).toBeLessThanOrEqual(40);
 
@@ -44,20 +37,20 @@ describe("runSustainedComparison", () => {
 
   it("derives bossChargedMoveWarmupSeconds from the boss's own energy economy when omitted, instead of firing at t=0", () => {
     const [x] = runSustainedComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 12,
       // bossChargedMoveWarmupSeconds intentionally omitted.
       iterations: 50,
     });
-    // Without a physically-derived warmup, the boss could fire Hydro Pump
-    // (100 cost) almost immediately; with it (~32.5s minimum), X should
-    // survive at least as long as the plain fast-move-only fight (10.0s),
-    // since no run's boss charged move can land before ~32.5s.
-    expect(x!.meanSecondsSurvived).toBeGreaterThanOrEqual(10);
+    // Without a physically-derived warmup, the boss could fire Maelstrom
+    // (100 cost) almost immediately; with it (~25.0s minimum), X should
+    // survive at least as long as the plain fast-move-only fight (7.5s),
+    // since no run's boss charged move can land before ~25.0s.
+    expect(x!.meanSecondsSurvived).toBeGreaterThanOrEqual(7.5);
   });
 
   it("no longer produces degenerate all-zero output for a too-small caller-supplied window (the fixed bug)", () => {
@@ -68,10 +61,10 @@ describe("runSustainedComparison", () => {
     // is generous enough that omitting maxSeconds entirely never does this
     // for a normal matchup.
     const [x, y] = runSustainedComparison({
-      candidates: [MEGA_RAICHU_X, MEGA_RAICHU_Y],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 15,
       iterations: 50,
@@ -83,14 +76,14 @@ describe("runSustainedComparison", () => {
   });
 
   it("threads weather through to the stepwise path, boosting both the candidate's and the boss's own moves", () => {
-    // Both Mega Raichu (Static Shock/Wild Charge, Electric) and Primal
-    // Kyogre (Waterfall/Hydro Pump, Water) have moves boosted by "rainy" —
-    // a real "boosts both sides at once" case, not a synthetic one.
+    // Both Candidate Alpha (Arc Spark/Volt Slam, Electric) and Boss Tide
+    // (Tidal Surge/Maelstrom, Water) have moves boosted by "rainy" — a real
+    // "boosts both sides at once" case, not a synthetic one.
     const noWeather = runSustainedComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 20,
       bossChargedMoveWarmupSeconds: 40,
@@ -98,10 +91,10 @@ describe("runSustainedComparison", () => {
       iterations: 50,
     });
     const rainy = runSustainedComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 20,
       bossChargedMoveWarmupSeconds: 40,
@@ -121,21 +114,21 @@ describe("runSustainedComparison", () => {
 
   it("compareAcrossBossChargedMoves sweeps every one of the boss's known charged moves", () => {
     const sweep = compareAcrossBossChargedMoves({
-      candidates: [MEGA_RAICHU_X, MEGA_RAICHU_Y],
-      boss: MEGA_SKARMORY,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
+      boss: BOSS_GALE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 12,
       maxSeconds: 40,
       iterations: 30,
     });
 
-    // Mega Skarmory's fixture only has one charged move (Brave Bird) today,
-    // so this sweep is a single-entry array — still exercises the plumbing
+    // BOSS_GALE's fixture only has one charged move (Sky Crash) today, so
+    // this sweep is a single-entry array — still exercises the plumbing
     // (id/name resolution, results shape) without depending on a second
     // charged move existing on this hypothetical fixture.
-    expect(sweep.length).toBe(MEGA_SKARMORY.chargedMoves.length);
+    expect(sweep.length).toBe(BOSS_GALE.chargedMoves.length);
     expect(sweep.length).toBeGreaterThan(0);
     for (const variant of sweep) {
       expect(variant.chargedMoveId).toBeTruthy();
@@ -145,7 +138,7 @@ describe("runSustainedComparison", () => {
         expect(result.meanSecondsSurvived).toBeGreaterThan(0);
       }
     }
-    expect(sweep[0]!.chargedMoveId).toBe(MEGA_SKARMORY.chargedMoves[0]!.id);
+    expect(sweep[0]!.chargedMoveId).toBe(BOSS_GALE.chargedMoves[0]!.id);
   });
 
   it("compareAcrossBossChargedMoves sweeps a multi-move boss and produces one entry per charged move", () => {
@@ -164,13 +157,14 @@ describe("runSustainedComparison", () => {
       baseStamina: 20000,
       fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal", power: 10, energyGain: 0, durationSeconds: 1.5 }],
       chargedMoves: [weakCharged, strongCharged],
+      statsArePrecomputed: true,
     };
 
     const sweep = compareAcrossBossChargedMoves({
-      candidates: [MEGA_RAICHU_X],
+      candidates: [CANDIDATE_ALPHA],
       boss: multiMoveBoss,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       bossChargedMoveMeanIntervalSeconds: 8,
       maxSeconds: 60,
@@ -216,6 +210,7 @@ describe("runSustainedComparison", () => {
       baseStamina: 100000,
       fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 1.5 }],
       chargedMoves: [{ id: "bc", name: "Boss Charged", type: "normal", power: 50, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+      statsArePrecomputed: true,
     };
     const common = {
       candidates: [boostedAttacker],

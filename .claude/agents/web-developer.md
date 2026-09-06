@@ -18,6 +18,15 @@ Vite + React + TypeScript, client-side rendering only, all engine calculations r
 browser, game data bundled at build time from `data/normalized/`. **No charting library** — every
 chart is hand-rolled inline SVG (see `DamageOverTimeChart.tsx`); don't add one without asking.
 
+**As of 2026-09-06, `App.tsx` is a thin tab shell, not the app itself.** It holds only the
+`view=` query-param-backed tab state and a `.tab-switcher` nav; the original two-candidate
+comparator's full logic lives in `ComparatorView.tsx` now (extracted verbatim). Two more tabs
+exist alongside it: `TeamRaidView.tsx` (+ `TeamAssumptionPanel.tsx`/`TeamDamageChart.tsx`/
+`TeamRaidBreakdownTable.tsx`) and `SpeciesReportView.tsx`. Each tab has its own shareable state
+type and its own query param (`Scenario`/`?s=`, `TeamScenario`/`?ts=`, `SpeciesReportScenario`/
+`?sr=`) — don't conflate them, and reuse the existing `.tab-switcher` scaffold rather than
+inventing a second routing mechanism if a future tab is added.
+
 ## UI requirements specific to this project
 
 These are not cosmetic; they are the point of the product:

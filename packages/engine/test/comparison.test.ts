@@ -6,62 +6,57 @@ import { SHADOW_DEFENSE_MULTIPLIER } from "../src/shadow.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "../src/raidBoss.js";
 import { convertUptimeToTeamDamage } from "../src/uptime.js";
 import type { SpeciesDefinition } from "../src/types.js";
-import {
-  MEGA_RAICHU_X,
-  MEGA_RAICHU_Y,
-  PRIMAL_KYOGRE,
-  SCENARIO_A_LEVEL,
-  SCENARIO_A_PERFECT_IVS,
-} from "../src/fixtures/scenarioA.js";
+import { BOSS_TIDE, CANDIDATE_ALPHA, CANDIDATE_BETA, LEVEL, PERFECT_IVS } from "./fixtures/hypotheticalDuo.js";
 
 describe("runComparison", () => {
   it("reproduces the Scenario A acceptance numbers through the shared comparison path", () => {
-    const [x, y] = runComparison({
-      candidates: [MEGA_RAICHU_X, MEGA_RAICHU_Y],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+    const [alpha, beta] = runComparison({
+      candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
     });
 
-    expect(x!.secondsSurvived).toBe(10);
-    expect(y!.secondsSurvived).toBe(10);
-    expect(x!.chargedAttacksLanded).toBe(1);
-    expect(y!.chargedAttacksLanded).toBe(1);
-    expect(x!.ownChargedDamage).toBe(190);
-    expect(y!.ownChargedDamage).toBe(221);
+    expect(alpha!.secondsSurvived).toBe(7.5);
+    expect(beta!.secondsSurvived).toBe(7.5);
+    expect(alpha!.chargedAttacksLanded).toBe(1);
+    expect(beta!.chargedAttacksLanded).toBe(1);
+    expect(alpha!.ownChargedDamage).toBe(171);
+    expect(beta!.ownChargedDamage).toBe(189);
 
     // ownDamageTrajectory is the COMBINED fast+charged total over time, so its
     // final value is the charged total plus whatever fast-move damage also
-    // landed against the boss over the same 10s — not 190/221 alone.
-    expect(x!.ownTotalDamage).toBe(x!.ownChargedDamage + x!.ownFastMoveDamage);
-    expect(x!.ownDamageTrajectory[0]).toEqual({ atSeconds: 0, cumulativeDamage: 0 });
-    expect(x!.ownDamageTrajectory.at(-1)).toEqual({ atSeconds: 10, cumulativeDamage: x!.ownTotalDamage });
-    expect(y!.ownDamageTrajectory.at(-1)).toEqual({ atSeconds: 10, cumulativeDamage: y!.ownTotalDamage });
-    // X and Y share the exact same fast move (Static Shock) and fight length,
-    // so their fast-move damage should differ only via their own attack stat
-    // (Y > X) — sanity-check it's actually being tracked, not left at 0.
-    expect(x!.ownFastMoveDamage).toBeGreaterThan(0);
-    expect(y!.ownFastMoveDamage).toBeGreaterThanOrEqual(x!.ownFastMoveDamage);
+    // landed against the boss over the same 7.5s — not 171/189 alone.
+    expect(alpha!.ownTotalDamage).toBe(alpha!.ownChargedDamage + alpha!.ownFastMoveDamage);
+    expect(alpha!.ownDamageTrajectory[0]).toEqual({ atSeconds: 0, cumulativeDamage: 0 });
+    expect(alpha!.ownDamageTrajectory.at(-1)).toEqual({ atSeconds: 7.5, cumulativeDamage: alpha!.ownTotalDamage });
+    expect(beta!.ownDamageTrajectory.at(-1)).toEqual({ atSeconds: 7.5, cumulativeDamage: beta!.ownTotalDamage });
+    // Alpha and Beta share the exact same fast move (Arc Spark) and fight
+    // length, so their fast-move damage should differ only via their own
+    // attack stat (Beta > Alpha) — sanity-check it's actually being tracked,
+    // not left at 0.
+    expect(alpha!.ownFastMoveDamage).toBeGreaterThan(0);
+    expect(beta!.ownFastMoveDamage).toBeGreaterThanOrEqual(alpha!.ownFastMoveDamage);
   });
 
   it("derives the opening-burst window from the boss's own energy economy instead of a fixed 20s default", () => {
-    // Primal Kyogre: Waterfall (energyGain 8, 2.5s) needs ceil(100/8)=13 casts
-    // for Hydro Pump's 100 cost -> 13 * 2.5 = 32.5s. Both Raichu forms faint
-    // at 10.0s regardless (well inside either the old 20s or new 32.5s), so
-    // this only changes behavior for a candidate that would otherwise have
+    // Boss Tide: Tidal Surge (energyGain 10, 2.5s) needs ceil(100/10)=10 casts
+    // for Maelstrom's 100 cost -> 10 * 2.5 = 25.0s. Both candidates faint at
+    // 7.5s regardless (well inside either the old 20s or new 25.0s), so this
+    // only changes behavior for a candidate that would otherwise have
     // survived past the old fixed window.
-    const [x] = runComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+    const [alpha] = runComparison({
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "perfect" },
     });
-    // Perfect dodge quarters incoming damage, so X now easily outlasts the
-    // old fixed 20s default; confirm it's capped at the new derived ~32.5s
-    // window instead of an artificially small or infinite one.
-    expect(x!.secondsSurvived).toBeLessThanOrEqual(32.5);
+    // dodge (DodgeBehavior) has no effect during the opening burst (see
+    // below), so this just confirms survival is capped at the new derived
+    // ~25.0s window instead of an artificially small or infinite one.
+    expect(alpha!.secondsSurvived).toBeLessThanOrEqual(25.0);
   });
 
   it("dodging fast attacks extends survival time versus no dodging (opening burst has no charged attacks to dodge)", () => {
@@ -69,17 +64,17 @@ describe("runComparison", () => {
     // boss never throws a charged move during the opening burst — so it's
     // `dodgeFastAttacks` (a plain boolean) that matters here, not `dodge`.
     const noDodge = runComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
     });
     const dodgingFastAttacks = runComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       dodgeFastAttacks: true,
     });
@@ -88,17 +83,17 @@ describe("runComparison", () => {
 
   it("dodge (charged-attack behavior) has no effect during the opening burst, since the boss never throws a charged move there", () => {
     const noDodge = runComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
     });
     const perfectChargedDodge = runComparison({
-      candidates: [MEGA_RAICHU_X],
-      boss: PRIMAL_KYOGRE,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      candidates: [CANDIDATE_ALPHA],
+      boss: BOSS_TIDE,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "perfect" },
     });
     expect(perfectChargedDodge[0]!.secondsSurvived).toBe(noDodge[0]!.secondsSurvived);
@@ -134,6 +129,11 @@ describe("runComparison", () => {
       baseStamina: 30000,
       fastMoves: [bossFastMove],
       chargedMoves: [],
+      // A hand-authored synthetic test boss: these numbers are meant to
+      // already BE the effective boss stats (see comparison.ts's
+      // RAID_BOSS_IVS/RAID_BOSS_CPM used directly below), not a real
+      // species' raw base stats needing the real per-tier derivation.
+      statsArePrecomputed: true,
     };
 
     const level = 40;
@@ -208,6 +208,7 @@ describe("runComparison", () => {
       baseStamina: 30000,
       fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 100 }],
       chargedMoves: [],
+      statsArePrecomputed: true,
     };
     const level = 40;
     const ivs = { attack: 15, defense: 15, stamina: 15 };
@@ -262,6 +263,7 @@ describe("runComparison", () => {
       baseStamina: 20000,
       fastMoves: [bossFastMove],
       chargedMoves: [],
+      statsArePrecomputed: true,
     };
     const shadowBoss: SpeciesDefinition = { ...normalBoss, id: "shadow-boss", name: "Shadow Boss", isShadow: true };
 
@@ -326,6 +328,7 @@ describe("runComparison", () => {
       baseStamina: 30000,
       fastMoves: [bossFastMove],
       chargedMoves: [],
+      statsArePrecomputed: true,
     };
     const level = 40;
     const ivs = { attack: 15, defense: 15, stamina: 15 };
@@ -390,6 +393,7 @@ describe("runComparison", () => {
       baseStamina: 20000,
       fastMoves: [bossFastMove],
       chargedMoves: [],
+      statsArePrecomputed: true,
     };
     const level = 40;
     const ivs = { attack: 15, defense: 15, stamina: 15 };
@@ -415,6 +419,7 @@ describe("runComparison", () => {
       chargedMoves: [],
       isShadow: true,
       boost: { multiplier: 1.3, boostedType: "normal" },
+      statsArePrecomputed: true,
     };
     const attacker: SpeciesDefinition = {
       id: "shadow-boss-test-attacker-2",
@@ -457,6 +462,7 @@ describe("runComparison", () => {
       baseStamina: 30000,
       fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 5, energyGain: 0, durationSeconds: 100 }],
       chargedMoves: [],
+      statsArePrecomputed: true,
     };
     const [result] = runComparison({
       candidates: [nonMega],
@@ -511,6 +517,7 @@ describe("runComparison", () => {
       baseStamina: 30000,
       fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 5, energyGain: 0, durationSeconds: 100 }],
       chargedMoves: [],
+      statsArePrecomputed: true,
     };
     const level = 40;
     const ivs = { attack: 15, defense: 15, stamina: 15 };
@@ -552,19 +559,19 @@ describe("runComparison", () => {
   });
 
   it("candidateMegaBoostDisabled fully disables both a candidate's own-damage boost AND its team-damage attribution (a full toggle, not partial)", () => {
-    const boss = PRIMAL_KYOGRE;
+    const boss = BOSS_TIDE;
     const [withBoost] = runComparison({
-      candidates: [MEGA_RAICHU_X],
+      candidates: [CANDIDATE_ALPHA],
       boss,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
     });
     const [boostDisabled] = runComparison({
-      candidates: [MEGA_RAICHU_X],
+      candidates: [CANDIDATE_ALPHA],
       boss,
-      level: SCENARIO_A_LEVEL,
-      ivs: SCENARIO_A_PERFECT_IVS,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
       dodge: { kind: "none" },
       candidateMegaBoostDisabled: [true, false],
     });
@@ -585,5 +592,56 @@ describe("runComparison", () => {
         teammateDps: 26.5,
       }),
     ).toBe(0);
+  });
+
+  it("threads bossRaidTier through to a real (non-precomputed) boss's actual attack stat, changing the fight", () => {
+    // A real synced-style boss (no statsArePrecomputed) — its effective
+    // attack/defense must come from the REAL per-tier formula, and a
+    // higher-multiplier tier should hit the candidate harder (shorter
+    // survival), all else held equal.
+    const attacker: SpeciesDefinition = {
+      id: "boss-tier-test-attacker",
+      name: "Attacker",
+      types: ["normal"],
+      baseAttack: 200,
+      baseDefense: 150,
+      baseStamina: 150,
+      fastMoves: [{ id: "af", name: "Attacker Fast", type: "normal", power: 8, energyGain: 10, durationSeconds: 1 }],
+      chargedMoves: [{ id: "ac", name: "Attacker Charged", type: "normal", power: 60, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    const realBoss: SpeciesDefinition = {
+      id: "real-tier-test-boss",
+      name: "Real Tier Boss",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 150,
+      baseStamina: 9999, // irrelevant to runComparison (no boss-HP concept there) — just a placeholder
+      fastMoves: [{ id: "bf", name: "Boss Fast", type: "normal", power: 30, energyGain: 0, durationSeconds: 1.5 }],
+      chargedMoves: [],
+    };
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+
+    const [vsOneStarTier] = runComparison({
+      candidates: [attacker],
+      boss: realBoss,
+      bossRaidTier: "1-Star Raids",
+      level,
+      ivs,
+      dodge: { kind: "none" },
+    });
+    const [vsMegaTier] = runComparison({
+      candidates: [attacker],
+      boss: realBoss,
+      bossRaidTier: "Mega Raids",
+      level,
+      ivs,
+      dodge: { kind: "none" },
+    });
+
+    // Same fast-attack cadence on both sides regardless of tier, so a
+    // strictly shorter survival time under the higher-multiplier tier is
+    // itself proof the boss's real attack stat responded to bossRaidTier.
+    expect(vsMegaTier!.secondsSurvived).toBeLessThan(vsOneStarTier!.secondsSurvived);
   });
 });

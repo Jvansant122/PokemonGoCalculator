@@ -268,12 +268,12 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
       {crossing ? (
         <p className="crossover-note">
           Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window ({partySize}
-          teammate{partySize === 1 ? "" : "s"}, {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
+          other trainer{partySize === 1 ? "" : "s"} in this raid, {matchingTeammateCount} matching type, {teammateDps} DPS each).
         </p>
       ) : (
         <p className="crossover-note">
-          No crossing in this window under these assumptions — {finalLeader} leads throughout ({partySize} teammate
-          {partySize === 1 ? "" : "s"}, {matchingTeammateCount} matching type, {teammateDps} DPS/teammate).
+          No crossing in this window under these assumptions — {finalLeader} leads throughout ({partySize} other trainer
+          {partySize === 1 ? "" : "s"} in this raid, {matchingTeammateCount} matching type, {teammateDps} DPS each).
         </p>
       )}
       <div className="damage-tally">

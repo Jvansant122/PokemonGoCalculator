@@ -89,6 +89,15 @@ export function DamageOverTimeTable({ x, y, teammateDps, partySize, matchingTeam
   const yDiedInWindow = y.secondsSurvivedCutoff < maxSeconds - EPS;
   const xHasBoost = x.boostMultiplier !== undefined;
   const yHasBoost = y.boostMultiplier !== undefined;
+  // "Total damage" (own+team) is only a distinct number from "Own damage"
+  // when at least one candidate actually has team contribution to add — when
+  // neither does, the column would just silently duplicate "Own damage" for
+  // both candidates, which misleadingly implies a distinction that doesn't
+  // exist. Dropped entirely (not shown as an equal-but-present column) in
+  // that case, rather than per-candidate (this is one shared table, and both
+  // candidates are affected identically when this is false).
+  const showTotalColumn = xHasBoost || yHasBoost;
+  const colsPerCandidate = showTotalColumn ? 3 : 2;
 
   return (
     <div style={{ marginTop: 20, overflowX: "auto" }}>
@@ -96,18 +105,18 @@ export function DamageOverTimeTable({ x, y, teammateDps, partySize, matchingTeam
         <thead>
           <tr>
             <th rowSpan={2}>Time</th>
-            <th colSpan={3} className="time-series-th-x">
+            <th colSpan={colsPerCandidate} className="time-series-th-x">
               {x.name}
             </th>
-            <th colSpan={3} className="time-series-th-y">
+            <th colSpan={colsPerCandidate} className="time-series-th-y">
               {y.name}
             </th>
           </tr>
           <tr>
-            <th className="time-series-th-x">Total damage</th>
+            {showTotalColumn && <th className="time-series-th-x">Total damage</th>}
             <th className="time-series-th-x">Damage taken</th>
             <th className="time-series-th-x">Own damage</th>
-            <th className="time-series-th-y">Total damage</th>
+            {showTotalColumn && <th className="time-series-th-y">Total damage</th>}
             <th className="time-series-th-y">Damage taken</th>
             <th className="time-series-th-y">Own damage</th>
           </tr>
@@ -119,10 +128,10 @@ export function DamageOverTimeTable({ x, y, teammateDps, partySize, matchingTeam
             return (
               <tr key={t}>
                 <td>{Math.round(t)}s</td>
-                <td>{formatDamage(rx.totalDamage)}</td>
+                {showTotalColumn && <td>{formatDamage(rx.totalDamage)}</td>}
                 <td>{formatDamage(rx.damageTaken)}</td>
                 <td>{formatDamage(rx.ownDamage)}</td>
-                <td>{formatDamage(ry.totalDamage)}</td>
+                {showTotalColumn && <td>{formatDamage(ry.totalDamage)}</td>}
                 <td>{formatDamage(ry.damageTaken)}</td>
                 <td>{formatDamage(ry.ownDamage)}</td>
               </tr>
@@ -134,22 +143,32 @@ export function DamageOverTimeTable({ x, y, teammateDps, partySize, matchingTeam
         Same representative run (seed 1) as the chart above, sampled every {step}s across the same ~
         {maxSeconds.toFixed(0)}s window (final row snapped to the exact window end even where that isn't a multiple
         of {step}s) — not {times.length} independent measurements, but the same event-driven cumulative
-        trajectories held flat between events (step interpolation), same as the chart's own lines. All three columns
-        are running totals, not rates, so a dead candidate's numbers simply stop growing rather than drifting
-        anywhere.
+        trajectories held flat between events (step interpolation), same as the chart's own lines. Every shown
+        column is a running total, not a rate, so a dead candidate's numbers simply stop growing rather than
+        drifting anywhere.
         {(xDiedInWindow || yDiedInWindow) && " "}
         {xDiedInWindow &&
           `${x.name} died ~${x.secondsSurvivedCutoff.toFixed(1)}s into this run — its own damage and damage taken hold flat from then on${
-            x.persistsThroughFaint ? ", though its team contribution (and so Total damage) keeps accruing since this boost persists past faint" : ""
+            x.persistsThroughFaint && showTotalColumn
+              ? ", though its team contribution (and so Total damage) keeps accruing since this boost persists past faint"
+              : ""
           }. `}
         {yDiedInWindow &&
           `${y.name} died ~${y.secondsSurvivedCutoff.toFixed(1)}s into this run — its own damage and damage taken hold flat from then on${
-            y.persistsThroughFaint ? ", though its team contribution (and so Total damage) keeps accruing since this boost persists past faint" : ""
+            y.persistsThroughFaint && showTotalColumn
+              ? ", though its team contribution (and so Total damage) keeps accruing since this boost persists past faint"
+              : ""
           }.`}
-        {!xHasBoost &&
-          ` ${x.name} has no active mega/primal boost (genuinely non-mega, or disabled via the assumptions panel) — its Total damage column above equals its Own damage column exactly, since there is no team contribution to add.`}
-        {!yHasBoost &&
-          ` ${y.name} has no active mega/primal boost (genuinely non-mega, or disabled via the assumptions panel) — its Total damage column above equals its Own damage column exactly, since there is no team contribution to add.`}
+        {showTotalColumn ? (
+          <>
+            {!xHasBoost &&
+              ` ${x.name} has no active mega/primal boost (genuinely non-mega, or disabled via the assumptions panel) — its Total damage column above equals its Own damage column exactly, since there is no team contribution to add.`}
+            {!yHasBoost &&
+              ` ${y.name} has no active mega/primal boost (genuinely non-mega, or disabled via the assumptions panel) — its Total damage column above equals its Own damage column exactly, since there is no team contribution to add.`}
+          </>
+        ) : (
+          " Neither candidate has an active mega/primal boost in this scenario (genuinely non-mega, or disabled via the assumptions panel), so the redundant \"Total damage\" column — which would equal \"Own damage\" exactly for both — has been dropped."
+        )}
       </p>
     </div>
   );

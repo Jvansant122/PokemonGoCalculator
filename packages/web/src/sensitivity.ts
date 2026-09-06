@@ -1,5 +1,5 @@
 import { convertUptimeToTeamDamage, runSustainedComparison } from "@pogo-analyzer/engine";
-import type { DodgeBehavior, SpeciesDefinition, SustainedCandidateResult } from "@pogo-analyzer/engine";
+import type { DodgeBehavior, RaidTier, SpeciesDefinition, SustainedCandidateResult } from "@pogo-analyzer/engine";
 import type { Assumptions } from "./AssumptionPanel.js";
 
 export interface SensitivityCheck {
@@ -112,6 +112,16 @@ export function computeSensitivity(
   candidates: [SpeciesDefinition, SpeciesDefinition],
   boss: SpeciesDefinition,
   a: Assumptions,
+  /**
+   * See App.tsx's bossRaidTier / registry.ts's raidTierForSpeciesId — must
+   * match whatever tier the main displayed result actually used, or this
+   * panel's "current winner" baseline (and every flip it reports relative to
+   * it) could silently disagree with the result cards above it for a real
+   * (non-precomputed) boss. undefined falls back to the engine's own
+   * DEFAULT_REAL_RAID_TIER, same as omitting it from runSustainedComparison
+   * directly.
+   */
+  bossRaidTier?: RaidTier,
 ): SensitivityCheck[] {
   const ivs = { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina };
   const moveSelections = {
@@ -147,6 +157,7 @@ export function computeSensitivity(
     const results = runSustainedComparison({
       candidates,
       boss,
+      bossRaidTier,
       level: overrides.level ?? a.level,
       ivs: overrides.ivs ?? ivs,
       dodge: overrides.dodge ?? a.dodge,
@@ -169,13 +180,17 @@ export function computeSensitivity(
 
   const checks: SensitivityCheck[] = [];
 
-  // 1. Teammates: scan 0-20 for the nearest flip (0 = solo, no teammates —
-  // a valid, selectable value since the "Teammates" input's minimum was
-  // dropped from 1 to 0). (Considered swapping this to the engine's own
+  // 1. Other trainers in the raid: scan 0-20 for the nearest flip (0 = solo
+  // raid, no other trainers present — a valid, selectable value since the
+  // "Other trainers also in this raid" input's minimum was dropped from 1 to
+  // 0). partySize/teammateDps/matchingTeammateCount are internal names only
+  // at this point — this models other trainers simultaneously in the same
+  // raid lobby, never this candidate's own bench (a solo trainer only has one
+  // Pokémon active at a time). (Considered swapping this to the engine's own
   // findCrossoverPartySize, which exists and is tested but has zero call
   // sites in packages/web today — declined: that function anchors its
   // "flip" to wherever the sweep's own leader first changes starting from
-  // 0 teammates, not to the specific currently-configured teammate count's
+  // 0 other trainers, not to the specific currently-configured count's
   // actual winner (currentWinner here) — the two only agree if leadership
   // only crosses once across the whole 0-20 range. Usually true for this
   // linear team-damage math, but not guaranteed, and this loop already
@@ -190,11 +205,11 @@ export function computeSensitivity(
       }
     }
     checks.push({
-      label: "Teammates",
+      label: "Other trainers in this raid",
       currentValue: `${a.partySize}`,
       flips: crossing !== null,
       distance: crossing === null ? Infinity : Math.abs(crossing - a.partySize),
-      distanceLabel: crossing === null ? "no flip found in 0-20" : `flips at ${crossing} teammate${crossing === 1 ? "" : "s"}`,
+      distanceLabel: crossing === null ? "no flip found in 0-20" : `flips at ${crossing} other trainer${crossing === 1 ? "" : "s"}`,
       rangeMin: 0,
       rangeMax: 20,
       currentNumericValue: a.partySize,
@@ -202,7 +217,7 @@ export function computeSensitivity(
     });
   }
 
-  // 2. Matching teammate count: scan the full 0..partySize range for the nearest flip.
+  // 2. Matching-type count among other trainers: scan the full 0..partySize range for the nearest flip.
   {
     let nearest: number | null = null;
     let flipValue: number | null = null;
@@ -218,11 +233,11 @@ export function computeSensitivity(
       }
     }
     checks.push({
-      label: "Matching teammates (of party)",
+      label: "Other trainers matching boost type (of raid)",
       currentValue: `${a.matchingTeammateCount}/${a.partySize}`,
       flips: nearest !== null,
       distance: nearest ?? Infinity,
-      distanceLabel: nearest === null ? `no flip across 0-${a.partySize} matching` : `flips within ${nearest} teammate(s)`,
+      distanceLabel: nearest === null ? `no flip across 0-${a.partySize} matching` : `flips within ${nearest} trainer(s)`,
       rangeMin: 0,
       rangeMax: a.partySize,
       currentNumericValue: a.matchingTeammateCount,
@@ -348,12 +363,12 @@ export function computeSensitivity(
     });
   }
 
-  // 6. Average teammate DPS: teammateDps is the literal unit "seconds
-  // survived" gets converted into (convertUptimeToTeamDamage) — scan up/down
-  // from the current value for the nearest flip. Pure post-processing (no
-  // re-simulation needed): teammateDps never touches the simulator, only the
-  // team-damage conversion, so this reuses the already-computed x/y exactly
-  // like checks 1-3 above.
+  // 6. Average DPS of those other trainers: teammateDps is the literal unit
+  // "seconds survived" gets converted into (convertUptimeToTeamDamage) — scan
+  // up/down from the current value for the nearest flip. Pure post-processing
+  // (no re-simulation needed): teammateDps never touches the simulator, only
+  // the team-damage conversion, so this reuses the already-computed x/y
+  // exactly like checks 1-3 above.
   {
     const maxScan = Math.max(a.teammateDps * 3, 200);
     const step = Math.max(0.5, a.teammateDps / 40);
@@ -369,7 +384,7 @@ export function computeSensitivity(
       }
     }
     checks.push({
-      label: "Average teammate DPS",
+      label: "Average DPS of other trainers",
       currentValue: `${a.teammateDps}`,
       flips: flipAt !== null,
       distance: flipAt === null ? Infinity : Math.abs(flipAt - a.teammateDps),

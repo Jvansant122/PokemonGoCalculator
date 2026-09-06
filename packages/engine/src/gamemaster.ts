@@ -75,8 +75,9 @@ export function fromGameMasterMove(raw: RawGameMasterMove): FastMove & ChargedMo
 /**
  * A species registry that starts from GameMaster-sourced entries but is equally
  * happy to hold user-defined hypothetical entries (custom base stats, typings,
- * movesets) — required because the scenarios this tool exists to compare
- * (Mega Raichu X/Y, Mega Skarmory) aren't live content and never will be.
+ * movesets) — required because some scenarios this tool exists to compare
+ * (e.g. a hypothetical mega form that isn't live content and never will be)
+ * can't be sourced from real game data at all.
  */
 export class SpeciesRegistry {
   private readonly byId = new Map<string, SpeciesDefinition>();

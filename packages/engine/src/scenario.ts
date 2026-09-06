@@ -74,13 +74,18 @@ export interface Scenario {
   weather: WeatherCondition;
 }
 
-function toBase64Url(bytes: Uint8Array): string {
+/**
+ * Exported (not just module-private) so teamScenario.ts's TeamScenario
+ * encode/decode can reuse the exact same base64url-JSON transport rather
+ * than forking a second copy of it.
+ */
+export function toBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function fromBase64Url(encoded: string): Uint8Array {
+export function fromBase64Url(encoded: string): Uint8Array {
   const base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
   const binary = atob(padded);

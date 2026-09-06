@@ -1,9 +1,7 @@
 import {
-  MEGA_RAICHU_X,
-  MEGA_RAICHU_Y,
-  MEGA_SKARMORY,
-  PRIMAL_KYOGRE,
   SpeciesRegistry,
+  isKnownRaidTier,
+  type RaidTier,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
 
@@ -28,19 +26,20 @@ const RAW_SPECIES = speciesData as unknown as SpeciesDefinition[];
 const RAW_ACTIVE_RAIDS = activeRaidsData as unknown as RawActiveRaidEntry[];
 
 /**
- * Single memoized registry for the whole app: 1012 real species (registered
- * as-is) plus the 4 hand-defined hypothetical fixtures that power this
- * project's pinned default scenario (Scenario A) — registered via
- * `registerHypothetical` so they keep carrying `isHypothetical: true` all the
- * way to the UI, exactly as they do today.
+ * Single memoized registry for the whole app: every real species from the
+ * data layer's normalized output, registered as-is. This project previously
+ * also registered 4 hand-defined hypothetical fixtures (Mega Raichu X/Y,
+ * Mega Skarmory, Primal Kyogre) via `registerHypothetical` — those fixtures
+ * have since been deleted from the engine entirely (product direction: no
+ * replacement), so nothing is registered as hypothetical here anymore. The
+ * `isHypothetical` field and its picker badge remain generic infrastructure
+ * on `SpeciesDefinition`/`SpeciesRegistry` for any future speculative real
+ * data, not dead code tied to these 4 specifically.
  */
 function buildRegistry(): SpeciesRegistry {
   const registry = new SpeciesRegistry();
   for (const species of RAW_SPECIES) {
     registry.register(species);
-  }
-  for (const hypothetical of [MEGA_RAICHU_X, MEGA_RAICHU_Y, PRIMAL_KYOGRE, MEGA_SKARMORY]) {
-    registry.registerHypothetical(hypothetical);
   }
   return registry;
 }
@@ -98,6 +97,32 @@ export function unmatchedActiveRaids(): { raidName: string; tier: string }[] {
   }));
 }
 
+/**
+ * Which real raid tier a species currently counts as, per the live raid
+ * feed — feeds comparison.ts's ComparisonInputs.bossRaidTier/
+ * SustainedComparisonInputs.bossRaidTier so a real (non-precomputed) boss's
+ * effective attack/defense/HP use the correct per-tier numbers (see
+ * raidBoss.ts's RAID_TIER_TABLE) instead of always assuming
+ * DEFAULT_REAL_RAID_TIER. Returns null when the species isn't a CURRENTLY
+ * active raid target at all (e.g. picked from the general species picker
+ * rather than the live raid list, or a hypothetical fixture) — the caller
+ * falls back to the engine's own DEFAULT_REAL_RAID_TIER in that case, same
+ * as omitting bossRaidTier entirely.
+ *
+ * Deliberately NOT surfaced as a Scenario field: a boss's tier is derived
+ * data about the target (same as its baseAttack/imageUrl/etc, all resolved
+ * fresh from `target` on every load), not an independent user-facing
+ * setting with its own control in the UI — there is no tier picker to
+ * round-trip. If a future request adds an explicit tier override control,
+ * that setting (not this derivation) is what would need a new Scenario
+ * field.
+ */
+export function raidTierForSpeciesId(id: string): RaidTier | null {
+  const entry = RAW_ACTIVE_RAIDS.find((r) => r.speciesId === id);
+  if (!entry) return null;
+  return isKnownRaidTier(entry.tier) ? entry.tier : null;
+}
+
 export interface TargetPickerOption {
   id: string;
   label: string;
@@ -108,9 +133,7 @@ export interface TargetPickerOption {
 /**
  * The target picker's option list: currently-active raid bosses pinned to the
  * top (so "what's live right now" is the default browsing experience), then
- * every other registered species below (reachable by search) — this is how
- * this project's own hypothetical bosses (Primal Kyogre, Mega Skarmory) stay
- * selectable even though they will never appear in a live raid feed.
+ * every other registered species below (reachable by search).
  *
  * Badge priority when more than one could apply: approximate/hypothetical
  * beats shadow, since those two are mutually exclusive with each other and
