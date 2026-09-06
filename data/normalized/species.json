@@ -81261,6 +81261,195 @@
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10075.png"
   },
   {
+    "id": "mewtwo-mega-y",
+    "name": "Mega Mewtwo Y",
+    "types": [
+      "psychic"
+    ],
+    "baseAttack": 413,
+    "baseDefense": 223,
+    "baseStamina": 228,
+    "fastMoves": [
+      {
+        "id": "226",
+        "name": "Psycho Cut",
+        "type": "psychic",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "235",
+        "name": "Confusion",
+        "type": "psychic",
+        "power": 19,
+        "energyGain": 14,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "108",
+        "name": "Psychic",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "79",
+        "name": "Thunderbolt",
+        "type": "electric",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "39",
+        "name": "Ice Beam",
+        "type": "ice",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "247",
+        "name": "Focus Blast",
+        "type": "fighting",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "24",
+        "name": "Flamethrower",
+        "type": "fire",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "109",
+        "name": "Psystrike",
+        "type": "psychic",
+        "power": 95,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "70",
+        "name": "Shadow Ball",
+        "type": "ghost",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "14",
+        "name": "Hyper Beam",
+        "type": "normal",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      }
+    ],
+    "boost": {
+      "multiplier": 1.3,
+      "boostedType": "psychic"
+    },
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10044.png"
+  },
+  {
+    "id": "skarmory-mega",
+    "name": "Mega Skarmory",
+    "types": [
+      "steel",
+      "flying"
+    ],
+    "baseAttack": 273,
+    "baseDefense": 228,
+    "baseStamina": 163,
+    "fastMoves": [
+      {
+        "id": "239",
+        "name": "Steel Wing",
+        "type": "steel",
+        "power": 14,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "255",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "256",
+        "name": "Brave Bird",
+        "type": "flying",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "257",
+        "name": "Sky Attack",
+        "type": "flying",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "36",
+        "name": "Flash Cannon",
+        "type": "steel",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "boost": {
+      "multiplier": 1.3,
+      "boostedType": "steel"
+    },
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png"
+  },
+  {
     "id": "slowpoke-shadow",
     "name": "Shadow Slowpoke",
     "types": [

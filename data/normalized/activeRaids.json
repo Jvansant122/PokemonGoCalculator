@@ -2,7 +2,7 @@
   {
     "raidName": "Mega Mewtwo Y",
     "tier": "Super Mega Raids",
-    "speciesId": null,
+    "speciesId": "mewtwo-mega-y",
     "isApproximate": false
   },
   {
@@ -14,8 +14,8 @@
   {
     "raidName": "Mega Skarmory",
     "tier": "Mega Raids",
-    "speciesId": "skarmory",
-    "isApproximate": true
+    "speciesId": "skarmory-mega",
+    "isApproximate": false
   },
   {
     "raidName": "Mega Aggron",

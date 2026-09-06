@@ -46,5 +46,7 @@
   "gallade-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10068.png",
   "audino-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10069.png",
   "diancie-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10075.png",
-  "kyogre-primal": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10077.png"
+  "kyogre-primal": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10077.png",
+  "mewtwo-mega-y": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10044.png",
+  "skarmory-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png"
 }
