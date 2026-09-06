@@ -5,7 +5,10 @@ metadata:
   type: project
 ---
 
-Status: proposed 2026-09-05, pending overseer decision. Not yet built.
+Status: proposed 2026-09-05. **BUILT** (confirmed 2026-09-05 in a later session) — `Scenario.weather`
+field, `weather.ts`, `AssumptionPanel.tsx`'s Weather `<select>`, applied to both candidate and boss
+damage in `comparison.ts` via `isWeatherBoosted`. Modeled as the 1.2x damage multiplier only (the
+"+5 effective levels" nuance was not implemented, per the flag in this proposal).
 
 **What it would show:** a weather-condition selector (the 7 real conditions — see
 [[fact_weather_boost_mechanic]] — or "none") in `AssumptionPanel`, applied per-move (not

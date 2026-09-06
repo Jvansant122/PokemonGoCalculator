@@ -268,54 +268,58 @@ export function AssumptionPanel({
           )}
         </div>
 
-        <div className="field">
-          <label htmlFor="level">Level (both candidates)</label>
-          <input
-            id="level"
-            type="number"
-            min={1}
-            max={40}
-            step={0.5}
-            value={value.level}
-            onChange={(e) => set("level", Number(e.target.value))}
-          />
-        </div>
+        <div>
+          <div className="field">
+            <label htmlFor="level">Level (both candidates)</label>
+            <input
+              id="level"
+              type="number"
+              min={1}
+              max={40}
+              step={0.5}
+              value={value.level}
+              onChange={(e) => set("level", Number(e.target.value))}
+            />
+          </div>
 
-        <div className="field">
-          <label htmlFor="ivAttack">Attack IV</label>
-          <input
-            id="ivAttack"
-            className="iv-input"
-            type="number"
-            min={0}
-            max={15}
-            value={value.ivAttack}
-            onChange={(e) => set("ivAttack", Number(e.target.value))}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="ivDefense">Defense IV</label>
-          <input
-            id="ivDefense"
-            className="iv-input"
-            type="number"
-            min={0}
-            max={15}
-            value={value.ivDefense}
-            onChange={(e) => set("ivDefense", Number(e.target.value))}
-          />
-        </div>
-        <div className="field">
-          <label htmlFor="ivStamina">Stamina IV</label>
-          <input
-            id="ivStamina"
-            className="iv-input"
-            type="number"
-            min={0}
-            max={15}
-            value={value.ivStamina}
-            onChange={(e) => set("ivStamina", Number(e.target.value))}
-          />
+          <div className="iv-row">
+            <div className="field">
+              <label htmlFor="ivAttack">Attack IV</label>
+              <input
+                id="ivAttack"
+                className="iv-input"
+                type="number"
+                min={0}
+                max={15}
+                value={value.ivAttack}
+                onChange={(e) => set("ivAttack", Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="ivDefense">Defense IV</label>
+              <input
+                id="ivDefense"
+                className="iv-input"
+                type="number"
+                min={0}
+                max={15}
+                value={value.ivDefense}
+                onChange={(e) => set("ivDefense", Number(e.target.value))}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="ivStamina">Stamina IV</label>
+              <input
+                id="ivStamina"
+                className="iv-input"
+                type="number"
+                min={0}
+                max={15}
+                value={value.ivStamina}
+                onChange={(e) => set("ivStamina", Number(e.target.value))}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="field">

@@ -5,8 +5,10 @@ metadata:
   type: project
 ---
 
-Proposed 2026-09-05 (third ideation pass, first UI-focused pass, by this agent). Not yet built,
-rejected, or routed — status: **proposed, pending overseer decision**.
+Proposed 2026-09-05 (third ideation pass, first UI-focused pass, by this agent). **BUILT** (confirmed
+2026-09-05 in a later session) — `SensitivityCheck` now carries `rangeMin`/`rangeMax`/
+`currentNumericValue`/`flipNumericValue`, rendered by `SensitivityView.tsx`'s `FlipBar` (hand-rolled
+inline SVG number line), exactly as proposed.
 
 **What it would show:** `SensitivityView.tsx` currently renders each of `computeSensitivity`'s 7
 checks (party size, matching teammates, mega boost multiplier, dodge accuracy, level, teammate

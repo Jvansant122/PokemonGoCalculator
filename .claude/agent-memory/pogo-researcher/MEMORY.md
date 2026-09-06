@@ -4,19 +4,20 @@
 - [Shadow Pokemon stats + mega-exclusivity](fact_shadow_pokemon_stats.md) — Atk x1.2/Def x0.83, and Shadow can't Mega Evolve [community-consensus]
 - [Proposal: boost-persists-through-faint species flag](proposal_boost_persists_through_faint.md) — proposed 2026-09-05, **BUILT** (SpeciesDefinition.boost.persistsThroughFaint, uptime.ts)
 - [Proposal: real Shadow stat multipliers](proposal_shadow_stat_multipliers.md) — proposed 2026-09-05, **BUILT** (isShadow + shadow.ts, wired through data-sync too)
-- [Proposal: teammateDps sensitivity check](proposal_teammate_dps_sensitivity.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #6 "Average teammate DPS", confirmed 2026-09-05)
-- [Proposal: continuous dodge-skill crossover](proposal_dodge_skill_crossover.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #4 "Dodge accuracy", confirmed 2026-09-05)
-- [Proposal: boss cadence sensitivity check](proposal_boss_cadence_sensitivity.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #7 "Boss charged-move cadence", confirmed 2026-09-05)
-- [Finding: findCrossoverPartySize unwired in web UI](finding_crossover_party_size_unwired.md) — cheap wiring gap, not a proposal; still accurate as of 2026-09-05
-- [Fact: no post-charged-move lockout beyond stated duration](fact_no_post_charged_move_lockout.md) — researched 2026-09-05, [community-consensus] only, gamepress.gg/pvpoke.com hard to fetch directly here
-- [Proposal: sensitivity flip-bar visualization](proposal_sensitivity_flip_bar.md) — proposed 2026-09-05 (UI pass), pending overseer decision
-- [Proposal: crossover rate across randomized runs](proposal_crossover_rate_across_runs.md) — proposed 2026-09-05 (UI pass), pending; needs engine-side per-run crossing computation, cross-cutting
-- [Proposal: DPS/TDO community vocabulary labels](proposal_dps_tdo_vocabulary.md) — proposed 2026-09-05 (UI pass), pending overseer decision
-- [Proposal: result-card own/team share bar](proposal_result_card_share_bar.md) — proposed 2026-09-05 (UI pass), pending overseer decision
-- [Fact: DPS/TDO/eDPS community vocabulary confirmed](fact_dps_tdo_vocabulary.md) — [community-consensus], researched 2026-09-05
-- [Fact: weatherBoosted/bestBuddy are dead inputs](fact_weather_bestbuddy_dead_inputs.md) — damage.ts models both, no call site or Scenario field ever uses them, confirmed 2026-09-05
+- [Proposal: teammateDps sensitivity check](proposal_teammate_dps_sensitivity.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #6 "Average teammate DPS")
+- [Proposal: continuous dodge-skill crossover](proposal_dodge_skill_crossover.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #4 "Dodge accuracy")
+- [Proposal: boss cadence sensitivity check](proposal_boss_cadence_sensitivity.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #7 "Boss charged-move cadence")
+- [Finding: findCrossoverPartySize unwired in web UI](finding_crossover_party_size_unwired.md) — cheap wiring gap, not a proposal; still unwired as of 2026-09-05 (recheck before reusing)
+- [Fact: no post-charged-move lockout beyond stated duration](fact_no_post_charged_move_lockout.md) — [community-consensus] only, gamepress.gg/pvpoke.com hard to fetch directly here
+- [Proposal: sensitivity flip-bar visualization](proposal_sensitivity_flip_bar.md) — proposed 2026-09-05, **BUILT** (SensitivityView.tsx's FlipBar, confirmed later session)
+- [Proposal: crossover rate across randomized runs](proposal_crossover_rate_across_runs.md) — proposed 2026-09-05, still pending/not built as of 2026-09-05; needs engine-side per-run crossing computation, cross-cutting — do not repropose, it's a known backlog item
+- [Proposal: DPS/TDO community vocabulary labels](proposal_dps_tdo_vocabulary.md) — proposed 2026-09-05, **BUILT** (result-card dl labels, confirmed later session)
+- [Proposal: result-card own/team share bar](proposal_result_card_share_bar.md) — proposed 2026-09-05, **BUILT** (App.tsx's OwnTeamShareBar, confirmed later session)
+- [Fact: DPS/TDO/eDPS community vocabulary confirmed](fact_dps_tdo_vocabulary.md) — [community-consensus]
+- [Fact: weatherBoosted/bestBuddy are dead inputs](fact_weather_bestbuddy_dead_inputs.md) — STALE as of 2026-09-05: weatherBoosted is now live (see weather scenario proposal, built); bestBuddy still dead
 - [Fact: weather boost mechanic details](fact_weather_boost_mechanic.md) — 1.2x dmg + "+5 effective levels", type-per-weather map, applies both sides in raids [community-consensus]
 - [Fact: friendship/raid scope nuance](fact_friendship_raid_scope_nuance.md) — Best Buddy CP Boost vs PvP-only friendship attack multiplier are different mechanics, don't conflate
-- [Proposal: weather as Scenario assumption](proposal_weather_scenario_assumption.md) — proposed 2026-09-05 (open-ended pass), pending; new Scenario field, flags round-trip
-- [Proposal: boss moveset-variant comparison](proposal_boss_moveset_variant_comparison.md) — proposed 2026-09-05 (open-ended pass), pending; discrete axis, not a sensitivity.ts row
-- [Proposal: Field Survey ranked table across real species](proposal_field_survey_ranked_table.md) — proposed 2026-09-05 (open-ended pass), pending; biggest scope, touches Scenario tuple shape, flags Teambuilding-Analyzer adjacency
+- [Proposal: weather as Scenario assumption](proposal_weather_scenario_assumption.md) — proposed 2026-09-05, **BUILT** (Scenario.weather, 1.2x-only, no "+5 levels" nuance modeled, confirmed later session)
+- [Proposal: boss moveset-variant comparison](proposal_boss_moveset_variant_comparison.md) — proposed 2026-09-05, **BUILT** (compareAcrossBossChargedMoves + BossMovesetSweep, confirmed later session)
+- [Proposal: Field Survey ranked table across real species](proposal_field_survey_ranked_table.md) — proposed 2026-09-05, pending/not built as of 2026-09-05; biggest scope, touches Scenario tuple shape, flags Teambuilding-Analyzer adjacency — do not repropose, own large undertaking
+- [Proposal: per-stat IV sensitivity checks](proposal_iv_sensitivity_checks.md) — proposed 2026-09-05 (4th pass), routed for direct build; web-only, sensitivity.ts, no new Scenario field

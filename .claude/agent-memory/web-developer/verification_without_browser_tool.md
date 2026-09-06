@@ -42,3 +42,32 @@ below.
 
 Always kill the background `vite preview` process before finishing (find it via
 `Get-NetTCPConnection -LocalPort <port>` in PowerShell) — don't leave it running.
+
+**Update 2026-09-05 (IV sensitivity checks): `npx tsx` clears the import-resolution ceiling that
+blocks `node --experimental-strip-types`.** [[sensitivity-flip-bar-and-share-bar]] found that
+`node --experimental-strip-types` throws `ERR_MODULE_NOT_FOUND` the moment a scratch script
+imports a sibling module via a `.js`-suffixed specifier resolving to `.ts` source (this repo's
+"bundler" moduleResolution convention) — that was treated as a hard ceiling, forcing a fallback to
+grep-the-built-bundle instead of actually exercising the function. Re-tested this session:
+dropping the scratch script *inside* `packages/web/src/` (as a real sibling of the module under
+test, e.g. `_scratch_iv_check.ts` next to `sensitivity.ts`) and running it with `npx tsx
+path/to/script.ts` resolves `./sensitivity.js` → `sensitivity.ts` and `./registry.js` →
+`registry.ts` correctly, including pulling in the real bundled `data/normalized/species.json` via
+`registry.ts`'s own relative import. This means a full `computeSensitivity(...)` call (or any
+function with sibling-module imports) genuinely is numerically provable pre-browser, not just an
+isolated pure-formula file — this raises the ceiling from step 5 above. Always delete the scratch
+file and confirm via `git status --porcelain` afterward; it must not linger even uncommitted.
+
+**The pinned default fixtures (Mega Raichu X/Y vs Primal Kyogre) are so lopsided that almost every
+sensitivity check reports "no flip found"** — a real `computeSensitivity` output of all-Infinity
+distances doesn't distinguish "my new check is broken" from "this scenario just doesn't flip
+here." To get a genuine positive case while testing a new check, swap in two real, comparably-
+matched mega species from `data/normalized/species.json` (e.g. `latias-mega` vs `latios-mega` —
+same typing, one bulkier/one harder-hitting, a real tradeoff pair) via `speciesRegistry.get(id)`
+directly in the scratch script — this reliably produces real flips across several checks at once,
+useful both for confirming the new check's positive case and for spot-confirming the pre-existing
+checks weren't disturbed. Also useful: the 1.3x mega-boost swamps modest IV deltas by default (IV
+checks report "no flip" for a fair matchup), but setting `candidateMegaBoostDisabled: [true, true]`
+removes that dominant term and lets Attack/Defense IV checks show real flips — a legitimate way to
+get a same-run positive-and-negative pair (Stamina IV stayed "no flip" while Attack/Defense both
+flipped) without needing two separate scratch scenarios.

@@ -5,8 +5,9 @@ metadata:
   type: project
 ---
 
-Proposed 2026-09-05 (third ideation pass, first UI-focused pass, by this agent). Not yet built,
-rejected, or routed — status: **proposed, pending overseer decision**.
+Proposed 2026-09-05 (third ideation pass, first UI-focused pass, by this agent). **BUILT** (confirmed
+2026-09-05 in a later session) — `App.tsx`'s `OwnTeamShareBar`, rendered directly in each result card
+below the `dl`, exactly as proposed.
 
 **What it would show:** `DamageOverTimeChart.tsx` already computes and displays, under the chart,
 a `.damage-tally` line per candidate: "own {X} + team {Y} = {total} ({pct}% own / {pct}% team)".

@@ -8,3 +8,4 @@
 - [Weather + boss-moveset-sweep UI](feature_weather_and_boss_moveset_sweep.md) — full add-scenario-assumption checklist for weather, BossMovesetSweep.tsx, which species have 2+ charged moves to test with
 - [weather.ts not re-exported from engine index.ts](gap_weather_not_reexported.md) — WeatherCondition/WEATHER_BOOSTED_TYPES unreachable from packages/web; Scenario["weather"] workaround used
 - [Disable-mega-boost toggle + undefined-boost N/A convention](feature_disable_mega_boost_toggle.md) — candidateMegaBoostDisabled checklist, resolveBoost(species,disabled) helper, "N/A not 0" display rule, a real tsx cwd-resolution gotcha
+- [Attack/Defense/Stamina IV sensitivity checks](feature_iv_sensitivity_checks.md) — copied Level check's exact pattern, runSustained gained ivs override, tsx now proven to clear the strip-types import ceiling

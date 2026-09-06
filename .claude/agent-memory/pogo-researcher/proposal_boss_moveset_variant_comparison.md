@@ -5,7 +5,9 @@ metadata:
   type: project
 ---
 
-Status: proposed 2026-09-05, pending overseer decision. Not yet built.
+Status: proposed 2026-09-05. **BUILT** (confirmed 2026-09-05 in a later session) — `comparison.ts`'s
+`compareAcrossBossChargedMoves`, wired into `App.tsx`/`BossMovesetSweep.tsx` as "Does the winner
+depend on the boss's charged-move roll?", rendered whenever the boss has 2+ known charged moves.
 
 **What it would show:** today `bossChargedMoveId` picks exactly one of the boss's
 charged moves per comparison (`comparison.ts`'s `resolveMove`, defaulting to moves[0]).

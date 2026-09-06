@@ -5,8 +5,9 @@ metadata:
   type: project
 ---
 
-Proposed 2026-09-05 (third ideation pass, first UI-focused pass, by this agent). Not yet built,
-rejected, or routed — status: **proposed, pending overseer decision**.
+Proposed 2026-09-05 (third ideation pass, first UI-focused pass, by this agent). **BUILT** (confirmed
+2026-09-05 in a later session) — result-card `dl` in `App.tsx` now reads "Mean own total
+(charged+fast) — TDO" and "Own damage per second — DPS", exactly as proposed.
 
 **What it would show:** community raid-attacker tools (GamePress-style rankings; confirmed via web
 search 2026-09-05, [community-consensus] tier — see aggregator sites like Dittobase, PoGoMate,

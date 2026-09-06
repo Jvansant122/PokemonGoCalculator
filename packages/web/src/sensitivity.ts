@@ -142,12 +142,13 @@ export function computeSensitivity(
     level?: number;
     dodge?: DodgeBehavior;
     bossChargedMoveMeanIntervalSeconds?: number;
+    ivs?: { attack: number; defense: number; stamina: number };
   } = {}): [SensitivityCandidate, SensitivityCandidate] {
     const results = runSustainedComparison({
       candidates,
       boss,
       level: overrides.level ?? a.level,
-      ivs,
+      ivs: overrides.ivs ?? ivs,
       dodge: overrides.dodge ?? a.dodge,
       dodgeFastAttacks: a.dodgeFastAttacks,
       holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
@@ -415,6 +416,47 @@ export function computeSensitivity(
       rangeMax: maxBound,
       currentNumericValue: current,
       flipNumericValue: flipAt,
+    });
+  }
+
+  // 8-10. IVs (attack/defense/stamina): each is a real, already-adjustable
+  // assumption exactly as uncontrollable at comparison time as level is (most
+  // players are asking about their actual caught specimen, not a hypothetical
+  // 15/15/15) — scan the full 0-15 per-stat range outward from the current
+  // value, holding the other two IVs and every other assumption fixed,
+  // following the exact same outward-scan pattern as check 5 (Level).
+  const ivChecks: Array<{ label: string; key: "attack" | "defense" | "stamina" }> = [
+    { label: "Attack IV", key: "attack" },
+    { label: "Defense IV", key: "defense" },
+    { label: "Stamina IV", key: "stamina" },
+  ];
+  for (const { label, key } of ivChecks) {
+    const currentIv = ivs[key];
+    let nearest: number | null = null;
+    let flipValue: number | null = null;
+    for (let delta = 1; delta <= 15; delta++) {
+      for (const candidateIv of [currentIv - delta, currentIv + delta]) {
+        if (candidateIv < 0 || candidateIv > 15) continue;
+        const [ivx, ivy] = runSustained({ ivs: { ...ivs, [key]: candidateIv } });
+        const w = winnerOf(ivx, ivy, a.partySize, a.teammateDps, a.matchingTeammateCount, boostMultipliers[0], boostMultipliers[1]);
+        if (w !== currentWinner) {
+          nearest = delta;
+          flipValue = candidateIv;
+          break;
+        }
+      }
+      if (nearest !== null) break;
+    }
+    checks.push({
+      label,
+      currentValue: `${currentIv}`,
+      flips: nearest !== null,
+      distance: nearest ?? Infinity,
+      distanceLabel: nearest === null ? "no flip within 0-15" : `flips at IV ${flipValue}`,
+      rangeMin: 0,
+      rangeMax: 15,
+      currentNumericValue: currentIv,
+      flipNumericValue: flipValue,
     });
   }
 
