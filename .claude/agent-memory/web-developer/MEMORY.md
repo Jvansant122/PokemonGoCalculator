@@ -14,3 +14,4 @@
 - [Team Raid Simulator tab + tab-switcher scaffold](feature_team_raid_simulator_tab.md) — isMega validation-only gotcha, per-tier bossEffectiveHp, trajectories already stacked (no shared-helper reuse needed), normalizeTeamAssumptions pattern
 - [weather.ts re-export gap](gap_weather_not_reexported.md) — RESOLVED 2026-09-06, engine now exports it directly; old workaround is obsolete, don't reintroduce it
 - [Species Report tab (reverse lookup)](feature_species_report_tab.md) — ComparatorPrefill hand-off, why its Scenario codec lives in web not engine, scope cuts on bossStartsPrimed for multi-boss sweeps
+- [Species Report sort-mode not serialized](bugfix_species_report_sortmode_not_serialized.md) — a display-only toggle is still a scenario field; audit other tabs' bare useState for the same blind spot

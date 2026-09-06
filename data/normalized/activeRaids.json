@@ -1,32 +1,32 @@
 [
   {
-    "raidName": "Mega Mewtwo X",
+    "raidName": "Mega Mewtwo Y",
     "tier": "Super Mega Raids",
     "speciesId": null,
     "isApproximate": false
   },
   {
-    "raidName": "Mega Beedrill",
+    "raidName": "Mega Steelix",
     "tier": "Mega Raids",
-    "speciesId": "beedrill-mega",
+    "speciesId": "steelix-mega",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Victreebel",
+    "raidName": "Mega Skarmory",
     "tier": "Mega Raids",
-    "speciesId": "victreebel",
+    "speciesId": "skarmory",
     "isApproximate": true
   },
   {
-    "raidName": "Mega Pinsir",
+    "raidName": "Mega Aggron",
     "tier": "Mega Raids",
-    "speciesId": "pinsir-mega",
+    "speciesId": "aggron-mega",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Abomasnow",
+    "raidName": "Mega Glalie",
     "tier": "Mega Raids",
-    "speciesId": "abomasnow-mega",
+    "speciesId": "glalie-mega",
     "isApproximate": false
   },
   {

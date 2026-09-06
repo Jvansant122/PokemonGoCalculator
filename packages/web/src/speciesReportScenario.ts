@@ -1,6 +1,14 @@
 import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type WeatherCondition } from "@pogo-analyzer/engine";
 
 /**
+ * Which column the results table is ranked by — a display-only choice (it
+ * never changes what runSpeciesReverseLookup computes, only how the rows are
+ * ordered), but still a real user-facing setting and therefore still part of
+ * the shareable scenario. See SpeciesReportView.tsx's sortRows.
+ */
+export type SpeciesReportSortMode = "damage" | "typeMatchup";
+
+/**
  * The complete, shareable description of one Species Report (reverse-lookup)
  * run — a sibling of scenario.ts's `Scenario` and teamScenario.ts's
  * `TeamScenario`, not an extension of either. Per
@@ -32,6 +40,8 @@ export interface SpeciesReportScenario {
   weather: WeatherCondition;
   /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption swept across every boss, same field name/meaning as Scenario's own bossChargedMoveFrequencySeconds. */
   bossChargedMoveFrequencySeconds: number;
+  /** Which column the results table is sorted by — see SpeciesReportSortMode. */
+  sortMode: SpeciesReportSortMode;
 }
 
 export function encodeSpeciesReportScenario(scenario: SpeciesReportScenario): string {

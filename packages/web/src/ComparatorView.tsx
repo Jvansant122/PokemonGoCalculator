@@ -712,10 +712,13 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           move" above), derived from the target's own fast-move energy gain and its charged move's cost. That
           derivation is a lower bound: it counts only the boss's own fast-move casts, not the energy real raid bosses
           also gain from damage taken, so a boss could in principle go off sooner, never later. "Mean charged damage"
-          and "mean fast-move damage" above are tracked separately because a candidate that dies mid-animation on its
-          own charged move (see "Died mid own-animation") lands 0 charged damage that run but may still have dealt
-          real fast-move damage beforehand — "mean total damage" and the median/p10-p90 figures are the combined
-          total, not charged-only. Any boss hit — fast or charged — that lands while a candidate is mid-animation on
+          and "mean fast-move damage" above are tracked separately. "Died mid own-animation" describes only the
+          final, fatal charged-move attempt of a run — that specific attempt lands 0 damage, since the candidate
+          dies before its own cast resolves. It does not mean the run's charged damage total is zero: a candidate
+          can land one or more earlier charged-move casts (each counting toward "mean charged damage") before a
+          later cast turns fatal mid-animation, and can also have dealt real fast-move damage throughout — "mean
+          total damage" and the median/p10-p90 figures are the combined total, not charged-only. Any boss hit — fast
+          or charged — that lands while a candidate is mid-animation on
           its own charged move deals guaranteed full damage: you can't throw a new dodge while locked into your own
           cast, and a dodge's reduction window (roughly 0.7s) couldn't cover a multi-second animation even if you
           could. Dodging costs 0.5s of your own attack cycle per attempt, whether it's a charged-attack dodge or (if

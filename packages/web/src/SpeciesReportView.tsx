@@ -16,6 +16,7 @@ import {
   buildSpeciesReportScenarioUrl,
   parseSpeciesReportScenarioFromUrl,
   type SpeciesReportScenario,
+  type SpeciesReportSortMode,
 } from "./speciesReportScenario.js";
 import { activeRaidBossOptions, candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, unmatchedActiveRaids } from "./registry.js";
 
@@ -64,6 +65,8 @@ export interface SpeciesReportAssumptions {
   weather: WeatherCondition;
   /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption swept across every boss target. */
   bossChargedMoveFrequencySeconds: number;
+  /** Which column the results table is sorted by — display-only, but still a real setting a shared link must preserve. */
+  sortMode: SpeciesReportSortMode;
 }
 
 const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
@@ -78,6 +81,7 @@ const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
   dodgeFastAttacks: false,
   weather: "none",
   bossChargedMoveFrequencySeconds: 15,
+  sortMode: "damage",
 };
 
 function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesReportScenario {
@@ -91,6 +95,7 @@ function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesReportScenar
     dodgeFastAttacks: a.dodgeFastAttacks,
     weather: a.weather,
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
+    sortMode: a.sortMode,
   };
 }
 
@@ -110,6 +115,10 @@ function scenarioToAssumptions(s: SpeciesReportScenario): SpeciesReportAssumptio
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
     weather: s.weather ?? "none",
     bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
+    // `??` guards a scenario URL encoded before this field existed (the bug
+    // this exact change is fixing) rather than surfacing `undefined` into the
+    // sort-mode toggle's active-button check.
+    sortMode: s.sortMode ?? DEFAULT_ASSUMPTIONS.sortMode,
   };
 }
 
@@ -131,9 +140,7 @@ function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
   return s.imageUrl ? <img src={s.imageUrl} alt="" className="species-icon" /> : null;
 }
 
-type SortMode = "damage" | "typeMatchup";
-
-function sortRows(rows: SpeciesReportRow[], mode: SortMode): SpeciesReportRow[] {
+function sortRows(rows: SpeciesReportRow[], mode: SpeciesReportSortMode): SpeciesReportRow[] {
   const copy = rows.slice();
   if (mode === "typeMatchup") {
     copy.sort((a, b) => (b.typeMatchupPercentile ?? b.offensiveTypeMatchup) - (a.typeMatchupPercentile ?? a.offensiveTypeMatchup));
@@ -158,7 +165,6 @@ function sortRows(rows: SpeciesReportRow[], mode: SortMode): SpeciesReportRow[] 
  */
 export function SpeciesReportView({ onCompare }: { onCompare: (prefill: ComparatorPrefill) => void }) {
   const [assumptions, setAssumptions] = useState<SpeciesReportAssumptions>(initialAssumptions);
-  const [sortMode, setSortMode] = useState<SortMode>("damage");
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const speciesOptions = useMemo(() => candidatePickerOptions(), []);
@@ -233,7 +239,10 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
     typeMatchupCorpus,
   ]);
 
-  const sortedRows = useMemo(() => (result.data ? sortRows(result.data.rows, sortMode) : []), [result.data, sortMode]);
+  const sortedRows = useMemo(
+    () => (result.data ? sortRows(result.data.rows, assumptions.sortMode) : []),
+    [result.data, assumptions.sortMode],
+  );
 
   // An honest, cheap observation in place of the two-candidate comparator's
   // "ratio sentence" convention — this view has no second candidate to
@@ -493,15 +502,15 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           <div className="tab-switcher" role="group" aria-label="Sort by" style={{ marginBottom: 12 }}>
             <button
               type="button"
-              className={`tab-button${sortMode === "damage" ? " active" : ""}`}
-              onClick={() => setSortMode("damage")}
+              className={`tab-button${assumptions.sortMode === "damage" ? " active" : ""}`}
+              onClick={() => setAssumptions({ ...assumptions, sortMode: "damage" })}
             >
               Sort: sustained mean damage
             </button>
             <button
               type="button"
-              className={`tab-button${sortMode === "typeMatchup" ? " active" : ""}`}
-              onClick={() => setSortMode("typeMatchup")}
+              className={`tab-button${assumptions.sortMode === "typeMatchup" ? " active" : ""}`}
+              onClick={() => setAssumptions({ ...assumptions, sortMode: "typeMatchup" })}
             >
               Sort: type-matchup percentile
             </button>

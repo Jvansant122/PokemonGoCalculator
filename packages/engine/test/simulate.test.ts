@@ -408,6 +408,76 @@ describe("simulateStepwiseBattle", () => {
     });
   });
 
+  describe("diedDuringOwnChargedMoveAnimation does not imply zero total charged damage", () => {
+    it("lands one charged attack, then dies mid a SECOND cast fueled purely by damage-taken energy — the run's charged damage stays nonzero", () => {
+      // Reproduces a skeptic-reported "contradiction" seen on the live
+      // Comparator's default scenario (Rayquaza vs. Mega Latios,
+      // 2026-09-06): the result card showed "died mid own-animation: 100%"
+      // alongside a nonzero mean charged damage, which looked like a bug
+      // given the app's own caveat text ("a candidate who dies mid-animation
+      // lands 0 charged damage that run"). Investigation (a throwaway tsx
+      // trace against the real default scenario) showed this is NOT an
+      // engine bug: the attacker's own fast move here contributes zero
+      // energy (energyGain=0), so all its energy comes from
+      // ENERGY_PER_DAMAGE_TAKEN — enough to fire a charged move, land it,
+      // and then immediately re-enter a second cast (fed by more
+      // damage-taken energy accumulated mid-animation) before fainting
+      // during THAT second cast. The caveat text's blanket claim is the
+      // actual bug (a web-developer fix, not an engine one) — this test
+      // pins the correct invariant so no future engine change "fixes" this
+      // by zeroing out totalChargedDamage whenever
+      // diedDuringOwnChargedMoveAnimation is true.
+      //
+      // Hand-traced tick-by-tick (attackStat=defenseStat=100 throughout, so
+      // damage = floor(0.5*power)+1):
+      //   t=1,2,3: boss fast hits (power 38 -> 20 dmg each) grant
+      //     floor(20*0.5)=10 energy each; energy reaches 30 (chargedMove's
+      //     cost) exactly at t=3 -> first cast starts, ends at t=5.
+      //   t=4: mid-animation boss hit still lands (20 dmg) and still grants
+      //     energy (10) — mid-animation only gates dodging, never the hit or
+      //     the energy grant.
+      //   t=5: first cast resolves (lands, power 50 -> 26 dmg), THEN this
+      //     tick's boss hit lands (another +10 energy, running total 20).
+      //   t=6: boss hit brings energy to 30 again -> second cast starts
+      //     immediately, ends at t=8.
+      //   t=7: hp has taken exactly 7*20=140 damage against hp=140 -> fatal,
+      //     strictly mid the second (t=6..t=8) cast.
+      const attacker = {
+        hp: 140,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 50, energyCost: 30, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 38, energyGain: 0, durationSeconds: 1 },
+        damageOut: { stab: false },
+      };
+
+      const result = simulateStepwiseBattle({ attacker, boss, dodge: { kind: "none" }, maxSeconds: 10 });
+
+      expect(result.faintedAtSeconds).toBe(7);
+      expect(result.diedDuringOwnChargedMoveAnimation).toBe(true);
+      // The contradiction the skeptic flagged, pinned as the CORRECT
+      // combination rather than "fixed" to force totalChargedDamage to 0:
+      expect(result.chargedAttacksLanded).toBe(1);
+      expect(result.totalChargedDamage).toBe(26);
+      expect(result.totalChargedDamage).toBeGreaterThan(0);
+
+      // A distribution over this same (fully deterministic — no boss
+      // charged move, no jitter) matchup reproduces the exact live-app
+      // symptom: 100% "died mid own-animation" alongside nonzero mean
+      // charged damage, across every seed, not just one unlucky run.
+      const distribution = runStepwiseDistribution({ attacker, boss, dodge: { kind: "none" }, maxSeconds: 10 }, 50);
+      expect(distribution.fractionDiedDuringOwnAnimation).toBe(1);
+      expect(distribution.meanChargedDamage).toBe(26);
+    });
+  });
+
   describe("same-tick tie between the attacker's own charged-move animation completing and a fatal boss hit", () => {
     it("credits the charged attack landing before applying the fatal boss hit, rather than silently discarding it", () => {
       // attacker fires its own fast move at t=1 (energyGain=100 >= chargedMove

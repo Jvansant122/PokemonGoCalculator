@@ -12,3 +12,4 @@
 - [Boss tier is derived data, not a Scenario setting](feedback_boss_tier_not_in_scenario.md) — deliberately did not add a Scenario field for raid tier; judgment call, flag if a future request wants a real tier-override UI control
 - [Fixture deletion: hypothetical duo](fixture_deletion_hypothetical_duo.md) — deleted MEGA_RAICHU_X/Y/PRIMAL_KYOGRE/MEGA_SKARMORY, replaced with test-only fixtures
 - [Real vs hypothetical fixture tradeoff](real_vs_hypothetical_fixture_tradeoff.md) — prefer hand-authored pins over real synced species for exact regression numbers
+- [Mid-animation-death vs zero-charged-damage investigation](investigation_charged_damage_mid_animation_contradiction.md) — skeptic-reported "contradiction" was real mechanic (2 casts/run), actual bug was in web's caveat text, not engine

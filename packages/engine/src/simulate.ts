@@ -167,7 +167,21 @@ export interface StepwiseRunResult {
   /** Damage the attacker's own fast move dealt to the boss over the run. */
   totalFastMoveDamage: number;
   totalDamageTaken: number;
-  /** True if the attacker fainted while mid-animation on its own charged move — that attack never landed. */
+  /**
+   * True if the attacker fainted while mid-animation on its own charged
+   * move — that ONE (fatal) cast never landed. This is NOT the same claim as
+   * "totalChargedDamage is 0 for this run": an attacker can gain enough
+   * energy purely from damage taken (see energy.ts's
+   * ENERGY_PER_DAMAGE_TAKEN) to fire a charged move, have it land, and then
+   * immediately re-enter a SECOND cast (still using leftover/accumulated
+   * energy) before dying mid that second one — a real, correctly-modeled
+   * sequence, not a bug. In that case chargedAttacksLanded/totalChargedDamage
+   * reflect the first (successful) cast, while this flag is true because of
+   * the second (interrupted) one. A caller must not assume
+   * diedDuringOwnChargedMoveAnimation implies zero charged damage for the
+   * run as a whole — see simulate.test.ts's "died mid own-animation does not
+   * imply zero total charged damage" test, which pins exactly this sequence.
+   */
   diedDuringOwnChargedMoveAnimation: boolean;
   bossChargedHitsTaken: number;
   /** Combined fast+charged cumulative own damage over time — see OpeningBurstResult.ownDamageTrajectory (combat.ts) for the exact shape/semantics. */
