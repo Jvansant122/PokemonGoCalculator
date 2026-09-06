@@ -13,3 +13,4 @@
 - [Fixture deletion: hypothetical duo](fixture_deletion_hypothetical_duo.md) — deleted MEGA_RAICHU_X/Y/PRIMAL_KYOGRE/MEGA_SKARMORY, replaced with test-only fixtures
 - [Real vs hypothetical fixture tradeoff](real_vs_hypothetical_fixture_tradeoff.md) — prefer hand-authored pins over real synced species for exact regression numbers
 - [Mid-animation-death vs zero-charged-damage investigation](investigation_charged_damage_mid_animation_contradiction.md) — skeptic-reported "contradiction" was real mechanic (2 casts/run), actual bug was in web's caveat text, not engine
+- [IV comparison feature](feature_iv_comparison.md) — ivComparison.ts's compareIvSpreads, exact signature, non-monotonic divergence finding, no Scenario field added (engine-only task)

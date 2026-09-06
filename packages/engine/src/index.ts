@@ -10,6 +10,7 @@ export * from "./shadow.js";
 export * from "./weather.js";
 export * from "./gamemaster.js";
 export * from "./breakpoints.js";
+export * from "./ivComparison.js";
 export * from "./uptime.js";
 export * from "./scenario.js";
 export * from "./comparison.js";

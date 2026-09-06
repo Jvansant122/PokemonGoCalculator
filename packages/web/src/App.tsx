@@ -1,26 +1,33 @@
 import { useState } from "react";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { ComparatorView } from "./ComparatorView.js";
+import { IvBreakpointsView } from "./IvBreakpointsView.js";
 import { SpeciesReportView } from "./SpeciesReportView.js";
 import { TeamRaidView } from "./TeamRaidView.js";
 
-/** The app's three views. */
-export type AppTab = "comparator" | "team-raid" | "species-report";
+/** The app's four views. */
+export type AppTab = "comparator" | "team-raid" | "species-report" | "iv-breakpoints";
 
 /**
  * Which tab a shared link should land on. Deliberately a SEPARATE query param
  * from any view's own scenario param (`s` for Scenario, `ts` for TeamScenario,
- * `sr` for SpeciesReportScenario) — a URL can only ever be "about" one tab's
- * scenario at a time, but the three scenario encodings themselves stay fully
- * independent so this file never has to know their shapes. Every view's own
- * "Build link" button additionally stamps this param onto its generated URL
- * so reloading a shared link restores the same tab it was built from, not
- * whatever tab happened to be open last.
+ * `sr` for SpeciesReportScenario, `ivc` for IvBreakpointsScenario) — a URL can
+ * only ever be "about" one tab's scenario at a time, but the four scenario
+ * encodings themselves stay fully independent so this file never has to know
+ * their shapes. Every view's own "Build link" button additionally stamps this
+ * param onto its generated URL so reloading a shared link restores the same
+ * tab it was built from, not whatever tab happened to be open last.
  */
 function initialTab(): AppTab {
   if (typeof window === "undefined") return "comparator";
   const requested = new URLSearchParams(window.location.search).get("view");
-  return requested === "team-raid" ? "team-raid" : requested === "species-report" ? "species-report" : "comparator";
+  return requested === "team-raid"
+    ? "team-raid"
+    : requested === "species-report"
+      ? "species-report"
+      : requested === "iv-breakpoints"
+        ? "iv-breakpoints"
+        : "comparator";
 }
 
 /**
@@ -72,13 +79,24 @@ export function App() {
         >
           Species Report
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "iv-breakpoints"}
+          className={`tab-button${tab === "iv-breakpoints" ? " active" : ""}`}
+          onClick={() => setTab("iv-breakpoints")}
+        >
+          IV Breakpoints
+        </button>
       </nav>
       {tab === "comparator" ? (
         <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
       ) : tab === "team-raid" ? (
         <TeamRaidView />
-      ) : (
+      ) : tab === "species-report" ? (
         <SpeciesReportView onCompare={handleCompareFromSpeciesReport} />
+      ) : (
+        <IvBreakpointsView />
       )}
     </div>
   );

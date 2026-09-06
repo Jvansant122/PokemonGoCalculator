@@ -15,3 +15,4 @@
 - [weather.ts re-export gap](gap_weather_not_reexported.md) — RESOLVED 2026-09-06, engine now exports it directly; old workaround is obsolete, don't reintroduce it
 - [Species Report tab (reverse lookup)](feature_species_report_tab.md) — ComparatorPrefill hand-off, why its Scenario codec lives in web not engine, scope cuts on bossStartsPrimed for multi-boss sweeps
 - [Species Report sort-mode not serialized](bugfix_species_report_sortmode_not_serialized.md) — a display-only toggle is still a scenario field; audit other tabs' bare useState for the same blind spot
+- [IV Breakpoints tab (fourth tab)](feature_iv_breakpoints_tab.md) — no standalone damage-modifier helper exists (replicate comparison.ts's inline construction), timeToFaint is fast-move-only (one dodge control, no boss charged move), empirically confirmed non-monotonic divergence

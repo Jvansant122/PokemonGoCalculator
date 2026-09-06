@@ -162,6 +162,26 @@ h1 {
   margin-top: 14px;
 }
 
+.field-group-label {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* IV Breakpoints per-level table: a cell where the two spreads actually
+   produce a different rounded result at this level (see ivComparison.ts's
+   IvComparisonRow.*Differs flags) — a visible highlight distinct from the
+   ordinary striped-row background above, so a diverging figure stands out
+   even on an even/odd row. */
+.iv-cell-diverges {
+  background: rgba(76, 175, 125, 0.14);
+}
+
+.iv-cell-winner {
+  font-weight: 700;
+  color: var(--good);
+}
+
 .result-row {
   display: flex;
   gap: 24px;
