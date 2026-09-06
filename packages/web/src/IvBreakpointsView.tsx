@@ -20,7 +20,14 @@ import {
   parseIvBreakpointsScenarioFromUrl,
   type IvBreakpointsScenario,
 } from "./ivBreakpointsScenario.js";
-import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import {
+  activeRaidBossOptions,
+  candidatePickerOptions,
+  raidTierForSpeciesId,
+  speciesRegistry,
+  targetPickerOptions,
+  unmatchedActiveRaids,
+} from "./registry.js";
 
 // Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx/
 // SpeciesReportView.tsx — duplicated rather than imported, matching the
@@ -133,6 +140,52 @@ function ivLabel(iv: IVSpread): string {
 }
 
 /**
+ * Compacts a boolean flag column (e.g. `fastMoveDamageDiffers`) from a full
+ * `IvComparisonRow[]` into a count plus a scannable range string ("19.5,
+ * 21–23, 37" rather than a 79-entry level dump). Grouping is done by RUN
+ * INDEX in `rows` (which is always the full, ascending-sorted level ladder),
+ * not by numeric level difference — this stays correct even if the ladder's
+ * step size ever varies, since two adjacent `rows` entries are by definition
+ * "the next level up" regardless of their numeric gap.
+ */
+function formatDivergentLevels(
+  rows: IvComparisonRow[],
+  key: "fastMoveDamageDiffers" | "chargedMoveDamageDiffers" | "timeToFaintDiffers",
+): { count: number; text: string } {
+  const flags = rows.map((r) => r[key]);
+  const count = flags.filter(Boolean).length;
+  if (count === 0) return { count, text: "none" };
+  const ranges: string[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (!flags[i]) {
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < rows.length && flags[j + 1]) j++;
+    ranges.push(i === j ? `${rows[i]!.level}` : `${rows[i]!.level}–${rows[j]!.level}`);
+    i = j + 1;
+  }
+  return { count, text: ranges.join(", ") };
+}
+
+interface BossSweepRow {
+  bossId: string;
+  raidName: string;
+  tier: string;
+  isApproximate: boolean;
+  isShadow: boolean;
+  imageUrl?: string;
+  totalLevels: number;
+  anyDivergence: boolean;
+  fastMoveDamage: { count: number; text: string };
+  chargedMoveDamage: { count: number; text: string };
+  timeToFaint: { count: number; text: string };
+  error?: string;
+}
+
+/**
  * "First becomes different at level X" — deliberately NOT "from level X
  * onward", since divergence between two IV spreads is not monotonic across
  * levels (floor-rounding can close a gap back up at a higher level even after
@@ -175,10 +228,23 @@ export function IvBreakpointsView() {
   const speciesOptions = useMemo(() => candidatePickerOptions(), []);
   const targetOptions = useMemo(() => targetPickerOptions(), []);
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
+  const activeBossOptions = useMemo(() => activeRaidBossOptions(), []);
 
   const species = useMemo(() => resolveSpecies(assumptions.speciesId), [assumptions.speciesId]);
   const boss = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
   const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
+
+  // The attacker's resolved fast/charged move objects — shared by the
+  // single-target `result` computation below AND the all-active-bosses sweep
+  // (`bossSweep`), so both stay derived from the exact same move resolution
+  // rather than two copies that could drift apart.
+  const resolvedAttackerMoves = useMemo(() => {
+    if (!species) return null;
+    const fastMove = resolveMove(species.fastMoves, assumptions.fastMoveId);
+    const chargedMove = resolveMove(species.chargedMoves, assumptions.chargedMoveId);
+    if (!fastMove || !chargedMove) return null;
+    return { fastMove, chargedMove };
+  }, [species, assumptions.fastMoveId, assumptions.chargedMoveId]);
 
   // There is no user-selectable "combat phase" here either, same standing
   // decision as every other tab — though this simplified per-level model has
@@ -188,10 +254,9 @@ export function IvBreakpointsView() {
   const result = useMemo(() => {
     if (!species || !boss) return { data: null as IvComparisonResult | null, error: null as string | null };
     try {
-      const fastMove = resolveMove(species.fastMoves, assumptions.fastMoveId);
-      const chargedMove = resolveMove(species.chargedMoves, assumptions.chargedMoveId);
+      if (!resolvedAttackerMoves) throw new Error(`${species.name} needs at least one fast move and one charged move.`);
+      const { fastMove, chargedMove } = resolvedAttackerMoves;
       const bossFastMove = resolveMove(boss.fastMoves, assumptions.bossFastMoveId);
-      if (!fastMove || !chargedMove) throw new Error(`${species.name} needs at least one fast move and one charged move.`);
       if (!bossFastMove) throw new Error(`${boss.name} has no fast move defined.`);
 
       const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, bossRaidTier);
@@ -237,14 +302,120 @@ export function IvBreakpointsView() {
     species,
     boss,
     bossRaidTier,
-    assumptions.fastMoveId,
-    assumptions.chargedMoveId,
+    resolvedAttackerMoves,
     assumptions.bossFastMoveId,
     assumptions.ivA,
     assumptions.ivB,
     assumptions.dodge,
     assumptions.weather,
   ]);
+
+  // The all-active-raid-bosses sweep: loops the exact same inline
+  // damage-modifier construction the single-target `result` computation above
+  // uses (STAB/type-effectiveness/weather via the same exported primitives),
+  // once per currently-active raid boss, each with its OWN first fast move and
+  // per-tier effective attack/defense (no per-boss move picker exists for this
+  // sweep — that would be a UI control per boss, which this report deliberately
+  // doesn't need). Answers "which active bosses actually care about the IV
+  // difference between spread A and B, and at which levels" — a scannable
+  // summary layered above the single-target per-level table, not a
+  // replacement for it.
+  const bossSweep = useMemo<BossSweepRow[]>(() => {
+    if (!species || !resolvedAttackerMoves) return [];
+    const { fastMove, chargedMove } = resolvedAttackerMoves;
+    return activeBossOptions.map((opt): BossSweepRow => {
+      const bossSpecies = resolveSpecies(opt.id);
+      if (!bossSpecies) {
+        return {
+          bossId: opt.id,
+          raidName: opt.raidName,
+          tier: opt.tier,
+          isApproximate: opt.isApproximate,
+          isShadow: false,
+          imageUrl: opt.imageUrl,
+          totalLevels: 0,
+          anyDivergence: false,
+          fastMoveDamage: { count: 0, text: "n/a" },
+          chargedMoveDamage: { count: 0, text: "n/a" },
+          timeToFaint: { count: 0, text: "n/a" },
+          error: "no stat data available for this raid target",
+        };
+      }
+      try {
+        const tier = raidTierForSpeciesId(opt.id) ?? undefined;
+        const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(bossSpecies, tier);
+        const bossFastMove = resolveMove(bossSpecies.fastMoves, null);
+        if (!bossFastMove) throw new Error(`${bossSpecies.name} has no fast move defined.`);
+
+        const fastMoveDamageModifiers = {
+          stab: species.types.includes(fastMove.type),
+          typeEffectiveness: typeEffectiveness(fastMove.type, bossSpecies.types),
+          weatherBoosted: isWeatherBoosted(fastMove.type, assumptions.weather),
+        };
+        const chargedMoveDamageModifiers = {
+          stab: species.types.includes(chargedMove.type),
+          typeEffectiveness: typeEffectiveness(chargedMove.type, bossSpecies.types),
+          weatherBoosted: isWeatherBoosted(chargedMove.type, assumptions.weather),
+        };
+        const incomingDamageModifiers = {
+          stab: bossSpecies.types.includes(bossFastMove.type),
+          typeEffectiveness: typeEffectiveness(bossFastMove.type, species.types),
+          weatherBoosted: isWeatherBoosted(bossFastMove.type, assumptions.weather),
+        };
+
+        const cmp = compareIvSpreads({
+          species,
+          fastMove,
+          chargedMove,
+          ivA: assumptions.ivA,
+          ivB: assumptions.ivB,
+          bossDefenseStat,
+          fastMoveDamageModifiers,
+          chargedMoveDamageModifiers,
+          bossAttackStat,
+          bossFastMovePower: bossFastMove.power,
+          bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
+          incomingDamageModifiers,
+          dodge: assumptions.dodge,
+        });
+
+        const fastMoveDamage = formatDivergentLevels(cmp.rows, "fastMoveDamageDiffers");
+        const chargedMoveDamage = formatDivergentLevels(cmp.rows, "chargedMoveDamageDiffers");
+        const timeToFaint = formatDivergentLevels(cmp.rows, "timeToFaintDiffers");
+
+        return {
+          bossId: opt.id,
+          raidName: opt.raidName,
+          tier: opt.tier,
+          isApproximate: opt.isApproximate,
+          isShadow: bossSpecies.isShadow ?? false,
+          imageUrl: opt.imageUrl,
+          totalLevels: cmp.rows.length,
+          anyDivergence: fastMoveDamage.count > 0 || chargedMoveDamage.count > 0 || timeToFaint.count > 0,
+          fastMoveDamage,
+          chargedMoveDamage,
+          timeToFaint,
+        };
+      } catch (err) {
+        return {
+          bossId: opt.id,
+          raidName: opt.raidName,
+          tier: opt.tier,
+          isApproximate: opt.isApproximate,
+          isShadow: bossSpecies.isShadow ?? false,
+          imageUrl: opt.imageUrl,
+          totalLevels: 0,
+          anyDivergence: false,
+          fastMoveDamage: { count: 0, text: "error" },
+          chargedMoveDamage: { count: 0, text: "error" },
+          timeToFaint: { count: 0, text: "error" },
+          error: (err as Error).message,
+        };
+      }
+    });
+  }, [species, resolvedAttackerMoves, activeBossOptions, assumptions.ivA, assumptions.ivB, assumptions.dodge, assumptions.weather]);
+
+  const impactedBossCount = useMemo(() => bossSweep.filter((r) => r.anyDivergence).length, [bossSweep]);
 
   function handleShare() {
     const url = new URL(
@@ -265,6 +436,11 @@ export function IvBreakpointsView() {
     }),
     [rows],
   );
+  // Display-order only — highest level first, per request. `compareIvSpreads`
+  // itself always returns ascending; `rows` (used for the counts above and
+  // the headline) is left untouched so nothing downstream of the raw
+  // computation changes, only how the table below iterates it.
+  const rowsForTable = useMemo(() => [...rows].reverse(), [rows]);
 
   return (
     <>
@@ -490,6 +666,72 @@ export function IvBreakpointsView() {
         )}
       </section>
 
+      {species && resolvedAttackerMoves && bossSweep.length > 0 && (
+        <section className="panel">
+          <h2>Impact across currently-active raid bosses</h2>
+          <p className="crossover-note">
+            {impactedBossCount === 0
+              ? `Spread A (${ivLabel(assumptions.ivA)}) and Spread B (${ivLabel(assumptions.ivB)}) are functionally identical at every level against every one of the ${bossSweep.length} currently-active raid bosses below — no fast-move damage, charged-move damage, or time-to-faint difference appears anywhere in range, against any of them. Powering up whichever spread is cheaper for you costs nothing here, no matter which of these bosses you're actually facing.`
+              : `${impactedBossCount} of ${bossSweep.length} currently-active raid bosses show a real divergence between Spread A (${ivLabel(assumptions.ivA)}) and Spread B (${ivLabel(assumptions.ivB)}) somewhere in the level range — the rest show none. See the specific divergent levels per boss below; as with the per-level table further down, a divergence at one level is not a promise it holds at the next.`}
+          </p>
+          <p className="caveats" style={{ margin: "8px 0 12px" }}>
+            Each boss below uses its OWN per-tier effective attack/defense and its own first fast move (there's no
+            per-boss fast-move picker in this sweep) — otherwise the exact same {species.name} moveset, IV spreads,
+            dodge behavior, and weather configured above. Scoped to the currently-active real raid roster only, same
+            as the Species Report tab.
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table className="time-series-table">
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Boss</th>
+                  <th>Impacted?</th>
+                  <th>Fast-move dmg divergent levels</th>
+                  <th>Charged-move dmg divergent levels</th>
+                  <th>Time-to-faint divergent levels</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bossSweep.map((row) => (
+                  <tr key={row.bossId}>
+                    <td style={{ textAlign: "left" }}>
+                      {row.imageUrl && <img src={row.imageUrl} alt="" className="species-icon" />} {row.raidName}
+                      <span className="species-picker-hint"> ({row.tier})</span>
+                      {row.isApproximate && <span className="badge badge-approximate">approximate</span>}
+                      {row.isShadow && <span className="badge badge-shadow">shadow</span>}
+                    </td>
+                    {row.error ? (
+                      <td colSpan={4} style={{ color: "#ff6b6b" }}>
+                        Could not compute: {row.error}
+                      </td>
+                    ) : (
+                      <>
+                        <td>{row.anyDivergence ? "Yes" : "No impact"}</td>
+                        <td className={row.fastMoveDamage.count > 0 ? "iv-cell-diverges" : undefined}>
+                          {row.fastMoveDamage.count > 0
+                            ? `${row.fastMoveDamage.count}/${row.totalLevels}: ${row.fastMoveDamage.text}`
+                            : "none"}
+                        </td>
+                        <td className={row.chargedMoveDamage.count > 0 ? "iv-cell-diverges" : undefined}>
+                          {row.chargedMoveDamage.count > 0
+                            ? `${row.chargedMoveDamage.count}/${row.totalLevels}: ${row.chargedMoveDamage.text}`
+                            : "none"}
+                        </td>
+                        <td className={row.timeToFaint.count > 0 ? "iv-cell-diverges" : undefined}>
+                          {row.timeToFaint.count > 0
+                            ? `${row.timeToFaint.count}/${row.totalLevels}: ${row.timeToFaint.text}`
+                            : "none"}
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {overallError && (
         <section className="panel">
           <p style={{ color: "#ff6b6b" }}>Could not compute this comparison: {overallError}</p>
@@ -534,7 +776,7 @@ export function IvBreakpointsView() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => {
+                {rowsForTable.map((row) => {
                   const fmtTtf = (v: number | null) => (v === null ? `>${60}s` : `${v.toFixed(1)}s`);
                   const fastWinner =
                     row.fastMoveDamageDiffers && row.ivA.fastMoveDamage !== row.ivB.fastMoveDamage
@@ -616,7 +858,10 @@ export function IvBreakpointsView() {
           mega/primal species' own-damage boost multiplier at all — pick a non-mega, non-primal species for an exact
           match, or use the Comparator/Species Report tabs for a mega-form species. Raid targets marked "approximate"
           use a documented stand-in species' stats because no better data exists yet — treat those results as
-          directional, not exact.
+          directional, not exact. The "impact across currently-active raid bosses" report above sweeps every
+          currently-active raid boss using each boss's OWN first fast move (there is no per-boss fast-move picker for
+          that sweep, unlike the single selected target below which honors your explicit fast-move pick) — if a boss
+          normally uses several fast moves in rotation, only the first one registered for it is checked there.
         </p>
       </section>
     </>
