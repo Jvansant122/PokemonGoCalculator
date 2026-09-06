@@ -1,8 +1,9 @@
 # Meta-Architect Memory Index
 
-- [Project config shape](project-config-shape.md) — current: 7 agents as of 2026-09-05 pm (stale — 8 as of 2026-09-06, see skeptic-addition); pre-split 4-agent snapshot kept below for history.
+- [Project config shape](project-config-shape.md) — current: 7 agents as of 2026-09-05 pm (stale — 9 as of 2026-09-06, see skeptic-addition/code-simplifier-addition); pre-split 4-agent snapshot kept below for history.
 - [pogo-researcher addition](pogo-researcher-addition.md) — 2026-09-05: 7th agent, routing clean, both findings (unscoped Write, Teambuilding-Analyzer decision) fixed same day.
 - [skeptic addition](skeptic-addition.md) — 2026-09-06: 8th agent, browser-driving adversarial checker of the live app; routing distinguished from engine-verifier/site-builder/pogo-researcher; description trimmed 760→537 chars.
+- [code-simplifier addition](code-simplifier-addition.md) — 2026-09-06: 9th agent, read-only dead-code/duplication auditor for packages/engine+web/scripts, out of .claude/ scope; must cross-check CLAUDE.md Standing Decisions before flagging; no ts-prune/knip installed so relies on Grep.
 - [Six-agent split audit](six-agent-split.md) — 2026-09-05: engine-developer/web-developer added, site-builder narrowed; routing clean, CLAUDE.md cut ~62%, two real findings.
 - [Sprite mechanism dropped](sprite-mechanism-dropped.md) — RESOLVED (was a false positive): content was already in data-sync.md/engine-developer.md at d1305f6.
 - [web-developer tool mismatch](web-developer-tool-mismatch.md) — RESOLVED (was a false positive): web-developer.md already hedges on tool availability at d1305f6.

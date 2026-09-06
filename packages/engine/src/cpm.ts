@@ -1,7 +1,23 @@
 /**
  * CP Multiplier table, keyed by level (including half-levels). Sourced from the
- * public Pokémon GO GameMaster data (levels 1-40). Values are the multipliers
- * applied to (base stat + IV) to produce an effective stat at that level.
+ * public Pokémon GO GameMaster data (levels 1-40), extended through level 50.
+ * Values are the multipliers applied to (base stat + IV) to produce an
+ * effective stat at that level.
+ *
+ * Levels 41-50 (and their half-levels) were added 2026-09-06. The whole-level
+ * values (41, 42, ..., 50) were read directly out of the live PokeMiners/game_masters
+ * `latest.json` GAME_MASTER dump on GitHub (`PLAYER_LEVEL_SETTINGS.playerLevel.cpMultiplier`,
+ * a raw array indexed by level-1) via a real curl+JSON.parse, and cross-checked to match
+ * this table's own existing levels 1-40 exactly. The half-level values (40.5, 41.5, ...,
+ * 49.5) were computed from those verified whole-level values via
+ * CPM(n+0.5) = sqrt((CPM(n)^2 + CPM(n+1)^2)/2), confirmed correct by reproducing this
+ * table's own already-pinned 39.5 entry to 8 significant figures using the same formula.
+ * Levels 50.5+ are deliberately omitted: the raw array does continue with distinct
+ * values through level 54 before flatlining (a padding artifact), but the real,
+ * live-game-confirmed max Pokémon power-up level is 50 (Niantic's Oct 2025 trainer-level-cap
+ * blog post explicitly says the raise to 80 "only affects Trainer level and not Pokémon";
+ * the Pokémon cap has been 50 since Nov 2020's GO Beyond update). Full derivation detail:
+ * `.claude/agent-memory/pogo-researcher/fact_cpm_table_levels_41_50.md`.
  */
 export const CPM_TABLE: Record<number, number> = {
   1: 0.094, 1.5: 0.1351374318, 2: 0.16639787, 2.5: 0.192650919,
@@ -23,13 +39,18 @@ export const CPM_TABLE: Record<number, number> = {
   33: 0.74976104, 33.5: 0.7527290867, 34: 0.7556855, 34.5: 0.7586303683,
   35: 0.76156384, 35.5: 0.7644860647, 36: 0.76739717, 36.5: 0.7702972656,
   37: 0.7731865, 37.5: 0.7760649616, 38: 0.77893275, 38.5: 0.7817900548,
-  39: 0.784637, 39.5: 0.7874736075, 40: 0.7903,
+  39: 0.784637, 39.5: 0.7874736075, 40: 0.7903, 40.5: 0.7928039417157309,
+  41: 0.7953, 41.5: 0.7978039170121942, 42: 0.8003, 42.5: 0.8028038926163724,
+  43: 0.8053, 43.5: 0.8078038685225517, 44: 0.8103, 44.5: 0.8128038447251588,
+  45: 0.8153, 45.5: 0.8178038212187566, 46: 0.8203, 46.5: 0.8228037979980404,
+  47: 0.8253, 47.5: 0.8278037750578334, 48: 0.8303, 48.5: 0.8328037523930834,
+  49: 0.8353, 49.5: 0.8378037299988584, 50: 0.8403,
 };
 
 export function cpmForLevel(level: number): number {
   const cpm = CPM_TABLE[level];
   if (cpm === undefined) {
-    throw new Error(`No CPM entry for level ${level}. Valid levels are 1-40 in 0.5 steps.`);
+    throw new Error(`No CPM entry for level ${level}. Valid levels are 1-50 in 0.5 steps.`);
   }
   return cpm;
 }

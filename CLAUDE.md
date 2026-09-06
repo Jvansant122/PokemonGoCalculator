@@ -94,7 +94,7 @@ existing credentials.
 
 ## Subagents and routing
 
-`.claude/agents/` has eight project-specific subagents. Agent definitions load once at session
+`.claude/agents/` has nine project-specific subagents. Agent definitions load once at session
 start, not live — a session restart/resume is needed to pick up a newly-added or edited `.md`
 file. Route by what the request actually needs, not by habit:
 
@@ -123,6 +123,11 @@ file. Route by what the request actually needs, not by habit:
   looking for a reason to distrust each number rather than trusting it. Use after a UI or data
   change, not while implementing one. Never fixes anything — hands findings back to
   `engine-developer`/`web-developer`/`data-sync`.
+- **`code-simplifier`** — a read-only audit of `packages/engine`, `packages/web`, and `scripts/`
+  for dead code, unused exports, cross-package duplication, oversized files/functions, and needless
+  abstraction. Use after a batch of feature work, not mid-implementation. Cross-checks every
+  candidate against this file's "Standing decisions" first and never fixes anything itself — hands
+  findings back to `engine-developer`/`web-developer`/`data-sync`, or `meta-architect` for `.claude/`.
 
 ## Skills and hooks
 

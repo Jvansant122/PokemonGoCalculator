@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  DEFAULT_REAL_RAID_TIER,
   WEATHER_BOOSTED_TYPES,
   bossEffectiveStats,
   compareIvSpreads,
@@ -10,6 +11,7 @@ import {
   type IVSpread,
   type IvComparisonResult,
   type IvComparisonRow,
+  type RaidTier,
   type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
@@ -21,7 +23,7 @@ import {
   type IvBreakpointsScenario,
 } from "./ivBreakpointsScenario.js";
 import {
-  activeRaidBossOptions,
+  allSpeciesOptions,
   candidatePickerOptions,
   raidTierForSpeciesId,
   speciesRegistry,
@@ -51,6 +53,59 @@ const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
     label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
   };
 });
+
+/**
+ * Numeric Niantic/Bulbapedia raid difficulty tier for each of this project's
+ * `RaidTier` label strings. `RaidTier` itself (engine/src/raidBoss.ts) carries
+ * no numeric field, only the label strings the live raid feed emits — this
+ * map exists purely so the web layer can bucket/filter by tier without the
+ * engine needing to grow a field no combat formula actually needs. Sourced
+ * from Bulbapedia's "Raid Battle (GO)" difficulty table, the SAME page
+ * raidBoss.ts's own `RAID_TIER_TABLE` already cites for its HP/multiplier
+ * figures [community-consensus] — not a fresh guess, just adding the numeric
+ * column that table's own doc comment didn't need to carry: 1-Star Raids = 1,
+ * 3-Star Raids = 3, Mega Raids = 4, 5-Star Raids = 5, Legendary Mega Raids and
+ * Primal Raids both = 6 (six-star tier), Super Mega Raids = 7.
+ */
+const RAID_TIER_NUMERIC: Record<RaidTier, number> = {
+  "1-Star Raids": 1,
+  "3-Star Raids": 3,
+  "Mega Raids": 4,
+  "5-Star Raids": 5,
+  "Legendary Mega Raids": 6,
+  "Primal Raids": 6,
+  "Super Mega Raids": 7,
+};
+
+/**
+ * "Tier 4 and higher" per the numeric map above — derived from it (filtered
+ * on the numbers) rather than hand-listing the 5 label strings a second time,
+ * so the two can't silently drift apart if a tier's number ever needs
+ * correcting. Excludes "1-Star Raids"/"3-Star Raids" only.
+ */
+const TIER_4_PLUS_LABELS = new Set<RaidTier>(
+  (Object.keys(RAID_TIER_NUMERIC) as RaidTier[]).filter((tier) => RAID_TIER_NUMERIC[tier] >= 4),
+);
+
+/**
+ * This tab deliberately restricts its whole sweep (single-target per-level
+ * table AND the all-species report below) to levels 35 through 50 inclusive,
+ * in the same 0.5 steps `CPM_TABLE` (packages/engine/src/cpm.ts) uses — NOT
+ * `compareIvSpreads`'s own default of every registered level (1 through 50
+ * as of the level-50 cap extension). This is a fixed product decision (same
+ * as "check every level" was previously a fixed decision, just a narrower
+ * fixed range now), not a user-adjustable setting, so it's a plain module
+ * constant rather than an `IvBreakpointsScenario` field. Built with a loop
+ * rather than 31 hand-typed literals so it can't drift from the intended
+ * range. `(50 - 35) / 0.5 + 1 === 31` levels total.
+ */
+const LEVELS_35_TO_50: number[] = (() => {
+  const levels: number[] = [];
+  for (let level = 35; level <= 50; level += 0.5) {
+    levels.push(level);
+  }
+  return levels;
+})();
 
 // The motivating real case this tab was built for: a real user's two owned
 // Delphox, wondering which spread is worth the candy/stardust to power up.
@@ -140,49 +195,87 @@ function ivLabel(iv: IVSpread): string {
 }
 
 /**
- * Compacts a boolean flag column (e.g. `fastMoveDamageDiffers`) from a full
- * `IvComparisonRow[]` into a count plus a scannable range string ("19.5,
- * 21–23, 37" rather than a 79-entry level dump). Grouping is done by RUN
- * INDEX in `rows` (which is always the full, ascending-sorted level ladder),
- * not by numeric level difference — this stays correct even if the ladder's
- * step size ever varies, since two adjacent `rows` entries are by definition
- * "the next level up" regardless of their numeric gap.
+ * Tallies, across every (level, metric) instance in one target's full
+ * `compareIvSpreads` result, which spread had the strictly higher value —
+ * `fastMoveDamage`/`chargedMoveDamage`/`timeToFaintSeconds` are all "higher is
+ * better", so no sign conflict between them. A tie at a given level/metric
+ * (including "both spreads outlast the scan window") increments neither.
+ * `timeToFaintSeconds: null` means "outlasted the scan window" — treated as
+ * beating any finite value, same `?? Infinity` convention the per-level table
+ * below already uses for its own winner-bolding.
  */
-function formatDivergentLevels(
-  rows: IvComparisonRow[],
-  key: "fastMoveDamageDiffers" | "chargedMoveDamageDiffers" | "timeToFaintDiffers",
-): { count: number; text: string } {
-  const flags = rows.map((r) => r[key]);
-  const count = flags.filter(Boolean).length;
-  if (count === 0) return { count, text: "none" };
-  const ranges: string[] = [];
-  let i = 0;
-  while (i < rows.length) {
-    if (!flags[i]) {
-      i++;
-      continue;
+function tallyIvSpreadWins(rows: IvComparisonRow[]): { winsA: number; winsB: number } {
+  let winsA = 0;
+  let winsB = 0;
+  for (const row of rows) {
+    if (row.ivA.fastMoveDamage !== row.ivB.fastMoveDamage) {
+      row.ivA.fastMoveDamage > row.ivB.fastMoveDamage ? winsA++ : winsB++;
     }
-    let j = i;
-    while (j + 1 < rows.length && flags[j + 1]) j++;
-    ranges.push(i === j ? `${rows[i]!.level}` : `${rows[i]!.level}–${rows[j]!.level}`);
-    i = j + 1;
+    if (row.ivA.chargedMoveDamage !== row.ivB.chargedMoveDamage) {
+      row.ivA.chargedMoveDamage > row.ivB.chargedMoveDamage ? winsA++ : winsB++;
+    }
+    const ttfA = row.ivA.timeToFaintSeconds ?? Infinity;
+    const ttfB = row.ivB.timeToFaintSeconds ?? Infinity;
+    if (ttfA !== ttfB) {
+      ttfA > ttfB ? winsA++ : winsB++;
+    }
   }
-  return { count, text: ranges.join(", ") };
+  return { winsA, winsB };
 }
 
-interface BossSweepRow {
-  bossId: string;
-  raidName: string;
-  tier: string;
-  isApproximate: boolean;
-  isShadow: boolean;
-  imageUrl?: string;
-  totalLevels: number;
-  anyDivergence: boolean;
-  fastMoveDamage: { count: number; text: string };
-  chargedMoveDamage: { count: number; text: string };
-  timeToFaint: { count: number; text: string };
-  error?: string;
+/**
+ * Aggregate verdict across every registered species this tool can target
+ * (the full roster from `allSpeciesOptions()` — same species reachable via
+ * the "Raid boss / target" picker's tail below the active-raid entries;
+ * exact count drifts with each data-sync, deliberately not hardcoded here)
+ * — NOT an attempt
+ * to invent an "every raid boss ever" historical dataset (speciesReport.ts's
+ * own doc comments document why that dataset doesn't exist); this just
+ * broadens "which targets to sweep" from "currently live in the raid
+ * rotation" to "every species this tool already lets a user pick as a
+ * target".
+ */
+/** Win tallies for one bucket of targets (either "all tiers" or one specific tier). */
+interface IvSweepBucket {
+  total: number;
+  countA: number;
+  countB: number;
+  ties: number;
+}
+
+/** One populated tier's bucket, carrying its own numeric tier alongside the label for display/sort. */
+interface IvSweepTierRow extends IvSweepBucket {
+  tier: RaidTier;
+  tierNumeric: number;
+}
+
+interface IvSweepAggregate {
+  /** Species successfully computed (excludes any lacking usable move data). */
+  totalComputed: number;
+  errorCount: number;
+  /** Species where Spread A's summed win-tally across all levels/metrics is strictly higher. */
+  countA: number;
+  /** Species where Spread B's summed win-tally is strictly higher. */
+  countB: number;
+  /** Species where the tallies are equal (including both zero, i.e. never diverges). */
+  ties: number;
+  /**
+   * The same win tallies as above, but bucketed by each target's own
+   * resolved raid tier (`raidTierForSpeciesId(id) ?? DEFAULT_REAL_RAID_TIER`
+   * — identical resolution used to build that target's boss stats). Only
+   * tiers with at least one computed target are present, sorted by numeric
+   * tier ascending. There are at most 7 possible entries here.
+   */
+  byTier: IvSweepTierRow[];
+  /**
+   * The headline verdict, restricted to targets whose resolved tier is
+   * "Mega Raids"/"5-Star Raids"/"Legendary Mega Raids"/"Primal Raids"/
+   * "Super Mega Raids" (numeric tier 4+, see TIER_4_PLUS_LABELS) — excludes
+   * "1-Star Raids"/"3-Star Raids" targets entirely, per the user's request
+   * that the single headline sentence not be diluted by low-tier trash
+   * raids nobody is actually deciding an IV spread against.
+   */
+  tier4Plus: IvSweepBucket;
 }
 
 /**
@@ -194,6 +287,29 @@ interface BossSweepRow {
  * the source of truth; this sentence is a headline pointer into it, not a
  * summary that replaces it.
  */
+/**
+ * The "Spread X outperforms Spread Y in N of M raids..." sentence, factored
+ * out so both the tier-4+ headline and (if ever needed) an all-tiers sentence
+ * can share the exact same wording/tie-handling rather than drifting apart —
+ * `scopeIntro` is the sentence up through "...this tool can model" (already
+ * carrying its own target count), this function only appends the comparison
+ * clause.
+ */
+function bucketVerdictSentence(bucket: IvSweepBucket, ivA: IVSpread, ivB: IVSpread, scopeIntro: string): string {
+  if (bucket.total === 0) return `${scopeIntro}, but none could be computed for this matchup.`;
+  if (bucket.countA === bucket.countB) {
+    return `${scopeIntro}, Spread A (${ivLabel(ivA)}) and Spread B (${ivLabel(ivB)}) each come out ahead in ${bucket.countA} of them — neither spread outperforms the other more often overall (${bucket.ties} show no meaningful difference either way).`;
+  }
+  const aWins = bucket.countA > bucket.countB;
+  const winnerLabel = aWins ? "A" : "B";
+  const winnerIv = ivLabel(aWins ? ivA : ivB);
+  const loserLabel = aWins ? "B" : "A";
+  const loserIv = ivLabel(aWins ? ivB : ivA);
+  const winnerCount = aWins ? bucket.countA : bucket.countB;
+  const loserCount = aWins ? bucket.countB : bucket.countA;
+  return `${scopeIntro}, Spread ${winnerLabel} (${winnerIv}) outperforms Spread ${loserLabel} (${loserIv}) in ${winnerCount} of them, versus ${loserCount} where Spread ${loserLabel} comes out ahead (${bucket.ties} show no meaningful difference either way) — Spread ${winnerLabel} outperforms Spread ${loserLabel} in ${winnerCount - loserCount} more raids overall.`;
+}
+
 function headline(result: IvComparisonResult, ivA: IVSpread, ivB: IVSpread): string {
   const { fastMoveDamage, chargedMoveDamage, timeToFaint } = result.firstDivergenceLevel;
   if (fastMoveDamage === null && chargedMoveDamage === null && timeToFaint === null) {
@@ -209,7 +325,10 @@ function headline(result: IvComparisonResult, ivA: IVSpread, ivB: IVSpread): str
 /**
  * "IV Breakpoints" — the IV/level-investment analogue of this project's core
  * "where does the ranking flip" thesis: compares TWO IV spreads of the SAME
- * species/moveset across every level, to answer "is it worth spending
+ * species/moveset across levels 35 through 50 (see LEVELS_35_TO_50 — the
+ * practically-relevant power-up range for a Pokémon a player already owns
+ * and is deciding whether to keep investing in, not the full 1-50 range
+ * `compareIvSpreads` supports by default), to answer "is it worth spending
  * candy/stardust to power up spread A over spread B, and if so starting at
  * what level". Built for a real motivating case: a user's two owned Delphox
  * (14/15/15 and 15/13/15) — see DEFAULT_IV_A/DEFAULT_IV_B.
@@ -228,7 +347,7 @@ export function IvBreakpointsView() {
   const speciesOptions = useMemo(() => candidatePickerOptions(), []);
   const targetOptions = useMemo(() => targetPickerOptions(), []);
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
-  const activeBossOptions = useMemo(() => activeRaidBossOptions(), []);
+  const allTargetOptions = useMemo(() => allSpeciesOptions(), []);
 
   const species = useMemo(() => resolveSpecies(assumptions.speciesId), [assumptions.speciesId]);
   const boss = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
@@ -292,6 +411,7 @@ export function IvBreakpointsView() {
           bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
           incomingDamageModifiers,
           dodge: assumptions.dodge,
+          levels: LEVELS_35_TO_50,
         }),
         error: null as string | null,
       };
@@ -310,39 +430,57 @@ export function IvBreakpointsView() {
     assumptions.weather,
   ]);
 
-  // The all-active-raid-bosses sweep: loops the exact same inline
-  // damage-modifier construction the single-target `result` computation above
-  // uses (STAB/type-effectiveness/weather via the same exported primitives),
-  // once per currently-active raid boss, each with its OWN first fast move and
-  // per-tier effective attack/defense (no per-boss move picker exists for this
-  // sweep — that would be a UI control per boss, which this report deliberately
-  // doesn't need). Answers "which active bosses actually care about the IV
-  // difference between spread A and B, and at which levels" — a scannable
-  // summary layered above the single-target per-level table, not a
-  // replacement for it.
-  const bossSweep = useMemo<BossSweepRow[]>(() => {
-    if (!species || !resolvedAttackerMoves) return [];
+  // The full-roster sweep: loops the exact same inline damage-modifier
+  // construction the single-target `result` computation above uses
+  // (STAB/type-effectiveness/weather via the same exported primitives), once
+  // per EVERY registered species (not just the currently-active raid roster —
+  // see IvSweepAggregate's doc comment), each with its OWN first fast move and
+  // per-tier effective attack/defense (falling back to the engine's own
+  // DEFAULT_REAL_RAID_TIER for anything not currently live, same convention
+  // as bossEffectiveStats/SustainedComparisonInputs.bossRaidTier use
+  // everywhere else — raidTierForSpeciesId returning null already triggers
+  // that fallback via bossEffectiveStats' own `tier ?? DEFAULT_REAL_RAID_TIER`
+  // default, so nothing extra needs importing here). No per-target move picker
+  // exists for this sweep — that would be a UI control per species, which
+  // this report deliberately doesn't need. Answers "which spread wins more
+  // often across every raid target this tool can model" as a single tallied
+  // verdict, not a per-target table — see tallyIvSpreadWins's doc comment for
+  // exactly how one target's "winner" is decided.
+  const sweepAggregate = useMemo<IvSweepAggregate>(() => {
+    const empty: IvSweepAggregate = {
+      totalComputed: 0,
+      errorCount: 0,
+      countA: 0,
+      countB: 0,
+      ties: 0,
+      byTier: [],
+      tier4Plus: { total: 0, countA: 0, countB: 0, ties: 0 },
+    };
+    if (!species || !resolvedAttackerMoves) return empty;
     const { fastMove, chargedMove } = resolvedAttackerMoves;
-    return activeBossOptions.map((opt): BossSweepRow => {
+    let totalComputed = 0;
+    let errorCount = 0;
+    let countA = 0;
+    let countB = 0;
+    let ties = 0;
+    // Per-tier buckets, keyed by the SAME resolved-tier string used to build
+    // each target's boss stats below — populated lazily so only tiers that
+    // actually have at least one computed target ever appear.
+    const tierBuckets = new Map<RaidTier, IvSweepBucket>();
+    const tier4Plus: IvSweepBucket = { total: 0, countA: 0, countB: 0, ties: 0 };
+    for (const opt of allTargetOptions) {
       const bossSpecies = resolveSpecies(opt.id);
       if (!bossSpecies) {
-        return {
-          bossId: opt.id,
-          raidName: opt.raidName,
-          tier: opt.tier,
-          isApproximate: opt.isApproximate,
-          isShadow: false,
-          imageUrl: opt.imageUrl,
-          totalLevels: 0,
-          anyDivergence: false,
-          fastMoveDamage: { count: 0, text: "n/a" },
-          chargedMoveDamage: { count: 0, text: "n/a" },
-          timeToFaint: { count: 0, text: "n/a" },
-          error: "no stat data available for this raid target",
-        };
+        errorCount++;
+        continue;
       }
       try {
-        const tier = raidTierForSpeciesId(opt.id) ?? undefined;
+        // Exact same resolution used everywhere else to build this target's
+        // boss stats — required here too since bucketing needs the ACTUAL
+        // resolved tier, not `undefined` (bossEffectiveStats' own internal
+        // `?? DEFAULT_REAL_RAID_TIER` default is this same constant, so
+        // passing it explicitly changes nothing about the computed stats).
+        const tier = raidTierForSpeciesId(opt.id) ?? DEFAULT_REAL_RAID_TIER;
         const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(bossSpecies, tier);
         const bossFastMove = resolveMove(bossSpecies.fastMoves, null);
         if (!bossFastMove) throw new Error(`${bossSpecies.name} has no fast move defined.`);
@@ -377,45 +515,41 @@ export function IvBreakpointsView() {
           bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
           incomingDamageModifiers,
           dodge: assumptions.dodge,
+          levels: LEVELS_35_TO_50,
         });
 
-        const fastMoveDamage = formatDivergentLevels(cmp.rows, "fastMoveDamageDiffers");
-        const chargedMoveDamage = formatDivergentLevels(cmp.rows, "chargedMoveDamageDiffers");
-        const timeToFaint = formatDivergentLevels(cmp.rows, "timeToFaintDiffers");
-
-        return {
-          bossId: opt.id,
-          raidName: opt.raidName,
-          tier: opt.tier,
-          isApproximate: opt.isApproximate,
-          isShadow: bossSpecies.isShadow ?? false,
-          imageUrl: opt.imageUrl,
-          totalLevels: cmp.rows.length,
-          anyDivergence: fastMoveDamage.count > 0 || chargedMoveDamage.count > 0 || timeToFaint.count > 0,
-          fastMoveDamage,
-          chargedMoveDamage,
-          timeToFaint,
-        };
-      } catch (err) {
-        return {
-          bossId: opt.id,
-          raidName: opt.raidName,
-          tier: opt.tier,
-          isApproximate: opt.isApproximate,
-          isShadow: bossSpecies.isShadow ?? false,
-          imageUrl: opt.imageUrl,
-          totalLevels: 0,
-          anyDivergence: false,
-          fastMoveDamage: { count: 0, text: "error" },
-          chargedMoveDamage: { count: 0, text: "error" },
-          timeToFaint: { count: 0, text: "error" },
-          error: (err as Error).message,
-        };
+        const { winsA, winsB } = tallyIvSpreadWins(cmp.rows);
+        totalComputed++;
+        let bucket = tierBuckets.get(tier);
+        if (!bucket) {
+          bucket = { total: 0, countA: 0, countB: 0, ties: 0 };
+          tierBuckets.set(tier, bucket);
+        }
+        bucket.total++;
+        const inTier4Plus = TIER_4_PLUS_LABELS.has(tier);
+        if (inTier4Plus) tier4Plus.total++;
+        if (winsA > winsB) {
+          countA++;
+          bucket.countA++;
+          if (inTier4Plus) tier4Plus.countA++;
+        } else if (winsB > winsA) {
+          countB++;
+          bucket.countB++;
+          if (inTier4Plus) tier4Plus.countB++;
+        } else {
+          ties++;
+          bucket.ties++;
+          if (inTier4Plus) tier4Plus.ties++;
+        }
+      } catch {
+        errorCount++;
       }
-    });
-  }, [species, resolvedAttackerMoves, activeBossOptions, assumptions.ivA, assumptions.ivB, assumptions.dodge, assumptions.weather]);
-
-  const impactedBossCount = useMemo(() => bossSweep.filter((r) => r.anyDivergence).length, [bossSweep]);
+    }
+    const byTier: IvSweepTierRow[] = [...tierBuckets.entries()]
+      .map(([tier, bucket]) => ({ tier, tierNumeric: RAID_TIER_NUMERIC[tier], ...bucket }))
+      .sort((a, b) => a.tierNumeric - b.tierNumeric);
+    return { totalComputed, errorCount, countA, countB, ties, byTier, tier4Plus };
+  }, [species, resolvedAttackerMoves, allTargetOptions, assumptions.ivA, assumptions.ivB, assumptions.dodge, assumptions.weather]);
 
   function handleShare() {
     const url = new URL(
@@ -666,69 +800,72 @@ export function IvBreakpointsView() {
         )}
       </section>
 
-      {species && resolvedAttackerMoves && bossSweep.length > 0 && (
+      {species && resolvedAttackerMoves && sweepAggregate.totalComputed > 0 && (
         <section className="panel">
-          <h2>Impact across currently-active raid bosses</h2>
+          <h2>Impact across every raid target this tool can model</h2>
           <p className="crossover-note">
-            {impactedBossCount === 0
-              ? `Spread A (${ivLabel(assumptions.ivA)}) and Spread B (${ivLabel(assumptions.ivB)}) are functionally identical at every level against every one of the ${bossSweep.length} currently-active raid bosses below — no fast-move damage, charged-move damage, or time-to-faint difference appears anywhere in range, against any of them. Powering up whichever spread is cheaper for you costs nothing here, no matter which of these bosses you're actually facing.`
-              : `${impactedBossCount} of ${bossSweep.length} currently-active raid bosses show a real divergence between Spread A (${ivLabel(assumptions.ivA)}) and Spread B (${ivLabel(assumptions.ivB)}) somewhere in the level range — the rest show none. See the specific divergent levels per boss below; as with the per-level table further down, a divergence at one level is not a promise it holds at the next.`}
+            {bucketVerdictSentence(
+              sweepAggregate.tier4Plus,
+              assumptions.ivA,
+              assumptions.ivB,
+              `Across the ${sweepAggregate.tier4Plus.total} tier-4-and-higher raid targets this tool can model (Mega Raids, 5-Star Raids, Legendary Mega Raids, Primal Raids, and Super Mega Raids — 1-Star and 3-Star Raids excluded)`,
+            )}
           </p>
-          <p className="caveats" style={{ margin: "8px 0 12px" }}>
-            Each boss below uses its OWN per-tier effective attack/defense and its own first fast move (there's no
-            per-boss fast-move picker in this sweep) — otherwise the exact same {species.name} moveset, IV spreads,
-            dodge behavior, and weather configured above. Scoped to the currently-active real raid roster only, same
-            as the Species Report tab.
+
+          <p className="field-group-label" style={{ marginTop: 12 }}>
+            Breakdown by raid tier (every tier, not just tier 4+)
           </p>
-          <div style={{ overflowX: "auto" }}>
+          <div style={{ overflowX: "auto", margin: "4px 0 12px" }}>
             <table className="time-series-table">
               <thead>
                 <tr>
-                  <th style={{ textAlign: "left" }}>Boss</th>
-                  <th>Impacted?</th>
-                  <th>Fast-move dmg divergent levels</th>
-                  <th>Charged-move dmg divergent levels</th>
-                  <th>Time-to-faint divergent levels</th>
+                  <th>Raid tier</th>
+                  <th>Targets</th>
+                  <th>Spread A wins</th>
+                  <th>Spread B wins</th>
+                  <th>Ties</th>
                 </tr>
               </thead>
               <tbody>
-                {bossSweep.map((row) => (
-                  <tr key={row.bossId}>
-                    <td style={{ textAlign: "left" }}>
-                      {row.imageUrl && <img src={row.imageUrl} alt="" className="species-icon" />} {row.raidName}
-                      <span className="species-picker-hint"> ({row.tier})</span>
-                      {row.isApproximate && <span className="badge badge-approximate">approximate</span>}
-                      {row.isShadow && <span className="badge badge-shadow">shadow</span>}
+                {sweepAggregate.byTier.map((row) => (
+                  <tr key={row.tier}>
+                    <td>
+                      {row.tier} (tier {row.tierNumeric}){!TIER_4_PLUS_LABELS.has(row.tier) && " — excluded from headline above"}
                     </td>
-                    {row.error ? (
-                      <td colSpan={4} style={{ color: "#ff6b6b" }}>
-                        Could not compute: {row.error}
-                      </td>
-                    ) : (
-                      <>
-                        <td>{row.anyDivergence ? "Yes" : "No impact"}</td>
-                        <td className={row.fastMoveDamage.count > 0 ? "iv-cell-diverges" : undefined}>
-                          {row.fastMoveDamage.count > 0
-                            ? `${row.fastMoveDamage.count}/${row.totalLevels}: ${row.fastMoveDamage.text}`
-                            : "none"}
-                        </td>
-                        <td className={row.chargedMoveDamage.count > 0 ? "iv-cell-diverges" : undefined}>
-                          {row.chargedMoveDamage.count > 0
-                            ? `${row.chargedMoveDamage.count}/${row.totalLevels}: ${row.chargedMoveDamage.text}`
-                            : "none"}
-                        </td>
-                        <td className={row.timeToFaint.count > 0 ? "iv-cell-diverges" : undefined}>
-                          {row.timeToFaint.count > 0
-                            ? `${row.timeToFaint.count}/${row.totalLevels}: ${row.timeToFaint.text}`
-                            : "none"}
-                        </td>
-                      </>
-                    )}
+                    <td>{row.total}</td>
+                    <td>{row.countA}</td>
+                    <td>{row.countB}</td>
+                    <td>{row.ties}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          <p className="caveats" style={{ margin: "8px 0 12px" }}>
+            "Outperforms" here means: for every level and every one of fast-move damage/charged-move damage/
+            time-to-faint (all three "higher is better"), tally which spread has the strictly higher value at that
+            level (a tie contributes to neither), then sum those tallies across all levels for that target — whichever
+            spread has the higher total tally is the winner for that target; equal tallies (including never
+            diverging at all) count as a tie. This is summed and counted once per target species, then partitioned by
+            each target's own resolved raid tier (<code>raidTierForSpeciesId(id) ?? DEFAULT_REAL_RAID_TIER</code> — the
+            same resolution used to build that target's boss stats everywhere else in this tool). The headline
+            sentence above only aggregates the tier-4-and-higher buckets from the table; the table itself shows every
+            tier this sweep actually populated, including 1-Star/3-Star. This is NOT a claim about every raid boss
+            that has ever existed — see the caveats section below.
+            {sweepAggregate.errorCount > 0 &&
+              ` ${sweepAggregate.errorCount} registered species could not be computed (missing moveset data) and are excluded from the totals above.`}
+          </p>
+          <p className="caveats" style={{ margin: "8px 0 12px" }}>
+            Honest limitation: any species that isn't a currently-active real raid boss defaults to the standard
+            5-Star Raids tier (see the engine's <code>DEFAULT_REAL_RAID_TIER</code>) — itself already tier 5, already
+            inside the tier-4-and-up scope above — so this tier restriction's practical effect on today's numbers is
+            narrow. It excludes {sweepAggregate.totalComputed - sweepAggregate.tier4Plus.total} of the{" "}
+            {sweepAggregate.totalComputed} modeled targets above, all of them 1-Star/3-Star entries from the handful
+            of raids currently live in the real rotation — the remaining {sweepAggregate.tier4Plus.total} targets
+            (the vast majority of the sweep) were never going to be excluded by this filter regardless, since a
+            species with no live raid data defaults straight to tier 5, not to an unknown tier.
+          </p>
         </section>
       )}
 
@@ -845,6 +982,12 @@ export function IvBreakpointsView() {
       <section className="panel">
         <h2>Known caveats</h2>
         <p className="caveats">
+          Both the per-level table below and the all-raid-targets report above only check levels 35 through 50 (in
+          the usual 0.5 steps, 31 levels total) — the range a player already investing candy/stardust into a
+          specific Pokémon actually cares about, not the full 1-50 range this engine can compute. This is a fixed
+          scope for this tab, not a setting.
+        </p>
+        <p className="caveats">
           This is a deliberately simpler model than the Comparator/Team Raid/Species Report tabs' full randomized
           stepwise simulator: the target's incoming damage here is modeled as its FAST move landing repeatedly,
           forever (see engine's ivComparison.ts/breakpoints.ts timeToFaint) — there is no charged-move combat on
@@ -858,10 +1001,14 @@ export function IvBreakpointsView() {
           mega/primal species' own-damage boost multiplier at all — pick a non-mega, non-primal species for an exact
           match, or use the Comparator/Species Report tabs for a mega-form species. Raid targets marked "approximate"
           use a documented stand-in species' stats because no better data exists yet — treat those results as
-          directional, not exact. The "impact across currently-active raid bosses" report above sweeps every
-          currently-active raid boss using each boss's OWN first fast move (there is no per-boss fast-move picker for
-          that sweep, unlike the single selected target below which honors your explicit fast-move pick) — if a boss
-          normally uses several fast moves in rotation, only the first one registered for it is checked there.
+          directional, not exact. The "impact across every raid target this tool can model" report above sweeps
+          every registered species (not just the currently-active raid roster) using each target's OWN first fast
+          move (there is no per-target fast-move picker for that sweep, unlike the single selected target below
+          which honors your explicit fast-move pick) — if a target normally uses several fast moves in rotation,
+          only the first one registered for it is checked there. That report is a count of how many modelable
+          targets each spread comes out ahead against, not a historical "every raid boss that has ever existed"
+          dataset — no such dataset exists for this tool (see the Species Report tab's own documented scope for the
+          same limitation).
         </p>
       </section>
     </>
