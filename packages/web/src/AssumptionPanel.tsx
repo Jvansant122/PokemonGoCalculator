@@ -243,7 +243,8 @@ export function AssumptionPanel({
           />
           {unmatchedRaids.length > 0 && (
             <p className="species-picker-hint" title="These raids are currently active but have no usable stat data yet.">
-              Also active, no data yet: {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
+              Other raids currently live in-game that this tool can't model yet (no stat data available):{" "}
+              {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
             </p>
           )}
           {bossSpecies && (

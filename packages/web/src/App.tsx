@@ -17,11 +17,12 @@ import { SensitivityView } from "./SensitivityView.js";
 import { computeSensitivity } from "./sensitivity.js";
 import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 
-// These are this project's pinned Scenario A defaults (see CLAUDE.md) — the
-// page must render this exact comparison on a fresh load with no URL param.
-const DEFAULT_CANDIDATE_A_ID = "raichu-mega-x";
-const DEFAULT_CANDIDATE_B_ID = "raichu-mega-y";
-const DEFAULT_TARGET_ID = "kyogre-primal";
+// Default matchup shown on a fresh page load with no URL param. This is just
+// the initial UI state (not a pinned engine acceptance-test fixture — those
+// live in packages/engine/src/fixtures/scenarioA.ts and are unaffected by this).
+const DEFAULT_CANDIDATE_A_ID = "kartana";
+const DEFAULT_CANDIDATE_B_ID = "rayquaza";
+const DEFAULT_TARGET_ID = "latios-mega";
 const MAX_ENERGY = 100;
 
 const DEFAULT_ASSUMPTIONS: Assumptions = {

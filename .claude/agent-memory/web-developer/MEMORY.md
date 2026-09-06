@@ -9,3 +9,4 @@
 - [weather.ts not re-exported from engine index.ts](gap_weather_not_reexported.md) — WeatherCondition/WEATHER_BOOSTED_TYPES unreachable from packages/web; Scenario["weather"] workaround used
 - [Disable-mega-boost toggle + undefined-boost N/A convention](feature_disable_mega_boost_toggle.md) — candidateMegaBoostDisabled checklist, resolveBoost(species,disabled) helper, "N/A not 0" display rule, a real tsx cwd-resolution gotcha
 - [Attack/Defense/Stamina IV sensitivity checks](feature_iv_sensitivity_checks.md) — copied Level check's exact pattern, runSustained gained ivs override, tsx now proven to clear the strip-types import ceiling
+- [IV-input spinner + layout QA fixes](bugfix_iv_input_spinner_and_layout_qa.md) — narrow number-input spinner ate clicks and hid the digit; also grid/caption/flex-shrink fixes
