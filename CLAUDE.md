@@ -94,7 +94,7 @@ existing credentials.
 
 ## Subagents and routing
 
-`.claude/agents/` has seven project-specific subagents. Agent definitions load once at session
+`.claude/agents/` has eight project-specific subagents. Agent definitions load once at session
 start, not live — a session restart/resume is needed to pick up a newly-added or edited `.md`
 file. Route by what the request actually needs, not by habit:
 
@@ -118,6 +118,11 @@ file. Route by what the request actually needs, not by habit:
 - **`pogo-researcher`** — real Pokémon GO game mechanics/content/meta questions, and feature or
   metric ideas for the comparator. Never implements — proposes only, and must flag anything that
   would touch a standing decision above rather than quietly routing around it.
+- **`skeptic`** — an independent, read-only pass over the *live, rendered* app: visually drives all
+  three tabs and cross-checks what's on screen against `data/normalized/` and real game facts,
+  looking for a reason to distrust each number rather than trusting it. Use after a UI or data
+  change, not while implementing one. Never fixes anything — hands findings back to
+  `engine-developer`/`web-developer`/`data-sync`.
 
 ## Skills and hooks
 
