@@ -1,7 +1,43 @@
 # Handoff
 
-Last updated: 2026-09-06. Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-07. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
+
+## 2026-09-07: raid-tier reconciliation shipped; Power-Up Optimizer researched; login/persistence spec written for next session
+
+- **`lastKnownRaidTier` shipped** (`8d6fd08`, deployed, confirmed via GitHub Actions API): a real
+  observed raid tier, now persisted on `SpeciesDefinition` and preferred by
+  `defaultRaidTierForSpecies()` over its old per-rarity guess. Two sources populate it: `data-sync`
+  now writes it automatically whenever a species matches a currently-live raid (so this data isn't
+  lost again once a species rotates out — verified live this session via Mega Mewtwo Y picking up
+  "Super Mega Raids" purely from today's feed), plus a researched backfill for 7 of the 11
+  previously-added allowlist megas (Raichu X/Y, Victreebel, Dragonite, Malamar, Mewtwo X, Starmie).
+  A pre-existing uncommitted fix (Legendary-rarity megas defaulting to "Legendary Mega Raids" instead
+  of generic "Mega Raids") was found blocking this work and committed standalone first (`28bad88`) —
+  see the code's own commit history for how that was resolved (preserved, not discarded, per this
+  session's git-safety practice). 150/150 engine tests, clean typecheck both packages, clean build.
+- **`pogo-researcher` fleshed out the "Power-Up Optimizer" idea in `IDEAS.md`** (untracked, not yet
+  committed — this session left it that way, same as every session touching it so far): real
+  stardust/candy cost data exists at pogoapi.net's `pokemon_powerup_requirements.json` (not yet
+  fetched by `sync-data.ts` — real `data-sync` work needed, not a hand-typed table), and a sharper
+  mechanical argument than "team DPS > raw CP" in the abstract — damage is floored to an integer per
+  hit, so a power-up can raise ATK with zero actual DPS change until it crosses the next real
+  breakpoint against a specific boss's Defense (same concept the IV Breakpoints tab already uses).
+  It flagged one open scope question rather than assuming an answer: no-login `Scenario`-URL roster
+  vs. real auth+persistence.
+- **That scope question is now resolved**: the user chose real login. Full architecture spec written
+  to `PLAN_login_and_roster_persistence.md` (Firebase Auth with Google Sign-In only + Cloud
+  Firestore — no server, no change to GitHub Pages hosting, no password handling since it's pure
+  OAuth delegation). This is the project's first-ever backend dependency; the plan explicitly flags
+  that no existing subagent owns "auth infrastructure" and recommends the overseer session wire it
+  directly (Firebase project setup itself needs the **user**, not an agent — creating the project and
+  enabling Google Sign-In requires their own Google account sign-in, which this assistant can't do
+  for them). **Not yet started** — this is a plan for a fresh session to pick up, per the user's
+  explicit request this session ("write out a spec ... i will use it in a new session"). Read that
+  plan's "Step 1: Firebase project setup" first — it's a checklist for the user, not code.
+- `IDEAS.md` updated to point at the new plan from the Optimizer's own step list (sequenced before
+  the Optimizer's roster-data-model step, not folded into it — login is app-wide infra, not
+  Optimizer-specific).
 
 ## 2026-09-06: two new tabs (Team Raid Simulator, Species Report), a real boss-stats bug fixed, hypothetical fixtures deleted
 
