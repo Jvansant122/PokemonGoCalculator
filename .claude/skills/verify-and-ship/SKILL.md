@@ -50,21 +50,20 @@ diagnose and — worse — is live-deployed if it happens to pass a step you ski
    any other git-safety rule already in force for this session — this skill doesn't grant new
    permission to push, it just describes what to do once permission exists.
 
-7. **Watch the deploy.** This repo has no `gh` CLI installed, but it's a public repo so the
-   GitHub REST API works unauthenticated. **Scope the query to `deploy.yml`** — this repo has a
-   second workflow (`check-mega-gaps.yml`, a weekly scheduled Bulbapedia diff), so an unscoped
-   `actions/runs?per_page=1` can hand you that run instead and you'll report the wrong
-   conclusion:
+7. **Watch the deploy.** Use the **`watch-github-actions`** skill — don't hand-write a `curl`
+   poll loop here. The unauthenticated API budget is 60 requests/hour, and once it's spent every
+   request returns a 403 with no `status` field, so an ad-hoc loop spins for 15+ minutes instead
+   of reporting anything. That skill's script is bounded, scopes the query to `deploy.yml` (this
+   repo's second workflow, `check-mega-gaps.yml`, will otherwise hand you the wrong run and the
+   wrong conclusion), and always exits with a meaningful code:
+
    ```bash
-   curl -s "https://api.github.com/repos/Jvansant122/PokemonGoCalculator/actions/workflows/deploy.yml/runs?per_page=1"
+   export PATH="/c/Program Files/nodejs:$PATH"; node .claude/skills/watch-github-actions/scripts/gha-watch.mjs --workflow deploy.yml
    ```
-   Poll until the run whose `head_sha` matches your just-pushed commit shows
-   `"status": "completed"`, then report its `"conclusion"`. A run can sit at `queued` for a bit
-   before moving to `in_progress` — that's normal, keep polling rather than assuming it's stuck.
-   **Never poll with a foreground `sleep` loop** — it blocks the session for the whole deploy.
-   Use `Monitor` with an until-condition, or a `run_in_background` Bash poll, so the user can
-   still interject while it runs. If `conclusion` isn't `"success"`, say so plainly; don't report
-   "pushed" as if that means "deployed."
+
+   Run it with `run_in_background: true` so the user can still interject. Only exit code `0`
+   means deployed — read that skill for what `1`/`2`/`3` mean. If the conclusion isn't
+   `success`, say so plainly; don't report "pushed" as if that means "deployed."
 
 ## What "done" looks like
 
