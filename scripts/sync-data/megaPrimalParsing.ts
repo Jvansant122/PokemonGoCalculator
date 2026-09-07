@@ -43,13 +43,12 @@ export function parseMegaOrPrimalRaidName(name: string): MegaOrPrimalRaidNamePar
   return { prefix, baseName, suffix };
 }
 
-/** GAME_MASTER's own SCREAMING_SNAKE_CASE pokemon enum, e.g. "Skarmory" -> "SKARMORY". */
-export function gameMasterEnumFor(pokemonName: string): string {
-  return pokemonName
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
+// gameMasterEnumFor (a single-transform GAME_MASTER enum guesser) was
+// replaced by resolvePokemonEnum in ./gameMasterMatching.ts as part of the
+// 2026-09-06 pipeline switch — that version tries both of GAME_MASTER's real
+// naming conventions plus a hand-authored override map, checked against the
+// actual known enum set, since a single deterministic transform doesn't
+// cover every species (see that function's doc comment).
 
 export function tempEvoIdFor(prefix: "Mega" | "Primal", suffix?: "X" | "Y"): string {
   if (prefix === "Primal") return "TEMP_EVOLUTION_PRIMAL";

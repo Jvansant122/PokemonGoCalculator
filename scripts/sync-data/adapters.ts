@@ -7,7 +7,8 @@
 
 import type { PokemonType, RawGameMasterMove } from "@pogo-analyzer/engine";
 
-import type { RawMoveEntry, PokemonRarity } from "./rawShapes.ts";
+import type { RawMoveEntry, GameMasterMoveRecord } from "./rawShapes.ts";
+import { displayNameForMovementId } from "./gameMasterMatching.ts";
 
 /**
  * Mirrors the exact one-liner `toPokemonType` in packages/engine/src/gamemaster.ts
@@ -33,6 +34,31 @@ export function toRawGameMasterMove(m: RawMoveEntry): RawGameMasterMove {
 }
 
 /**
+ * Converts a GAME_MASTER moveSettings record (see fetchGameMasterData in
+ * ./fetchCache.ts) into the engine's RawGameMasterMove input shape. Unlike
+ * pogoapi's own move endpoints, GAME_MASTER's `moveSettings` table has no
+ * human-readable display name field at all — only `movementId`
+ * (e.g. "PSYCHO_CUT_FAST") — so `name` is synthesized via
+ * displayNameForMovementId, confirmed 2026-09-06 to exactly reconstruct
+ * pogoapi's own current display name for every move checked (see that
+ * function's doc comment).
+ */
+export function toRawGameMasterMoveFromMoveSettings(
+  movementId: string,
+  record: GameMasterMoveRecord,
+  isFast: boolean,
+): RawGameMasterMove {
+  return {
+    move_id: movementId,
+    name: displayNameForMovementId(movementId, isFast),
+    type: record.pokemonType ?? "POKEMON_TYPE_NORMAL",
+    power: record.power,
+    energy_delta: record.energyDelta,
+    duration_ms: record.durationMs,
+  };
+}
+
+/**
  * National-dex sprite from the PokeAPI sprites mirror on GitHub — no API call
  * needed, just the dex id we already have from pokemon_stats.json.
  */
@@ -40,28 +66,8 @@ export function spriteUrlForDexId(pokemonId: number): string {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
 }
 
-/**
- * Normalizes pokemon_rarity.json's own exact casing/spelling ("Legendary" /
- * "Mythic" / "Standard" / "Ultra beast" — confirmed via direct fetch
- * 2026-09-06, all four are the only category keys the live response has)
- * into this project's PokemonRarity enum. Throws on anything unrecognized
- * rather than silently defaulting, so an upstream vocabulary change (a fifth
- * category, a respelling) surfaces as a loud sync failure instead of quietly
- * misclassifying species — see sync-data.ts's call site for the one place
- * this is invoked, always inside a try/catch that reports it as a validation
- * error rather than crashing the whole sync.
- */
-export function toPokemonRarity(rawRarity: string): PokemonRarity {
-  switch (rawRarity) {
-    case "Standard":
-      return "STANDARD";
-    case "Legendary":
-      return "LEGENDARY";
-    case "Mythic":
-      return "MYTHIC";
-    case "Ultra beast":
-      return "ULTRA_BEAST";
-    default:
-      throw new Error(`toPokemonRarity: unrecognized pogoapi rarity category "${rawRarity}"`);
-  }
-}
+// toPokemonRarity (pogoapi pokemon_rarity.json category -> PokemonRarity) was
+// removed as part of the 2026-09-06 GAME_MASTER pipeline switch: GAME_MASTER's
+// own `pokemonClass` field replaces that fetch entirely (confirmed exact
+// count match against pokemon_rarity.json's own categories) — see
+// pokemonClassToRarity in ./gameMasterMatching.ts.
