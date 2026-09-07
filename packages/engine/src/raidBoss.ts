@@ -1,3 +1,5 @@
+import type { SpeciesDefinition } from "./types.js";
+
 /**
  * Raid bosses don't level up or roll IVs the way trainer-owned Pokémon do — Niantic
  * publishes their effective stats directly. To reuse the single stat pipeline in
@@ -97,6 +99,53 @@ export const RAID_TIER_TABLE: Record<RaidTier, RaidTierStats> = {
  * defaulting to 0 rather than a fabricated "realistic" number.
  */
 export const DEFAULT_REAL_RAID_TIER: RaidTier = "5-Star Raids";
+
+/**
+ * A per-species-classed replacement for blindly assuming
+ * DEFAULT_REAL_RAID_TIER whenever a real boss's actual current tier isn't
+ * known (species not in today's live raid feed) — see
+ * .claude/agent-memory/pogo-researcher/proposal_default_raid_tier_fallback.md
+ * for the research this implements. Previously EVERY unmatched real species
+ * (including an ordinary Tier-1 species like Caterpie) silently modeled as a
+ * Legendary-tier boss; most species are Standard-rarity, so this was wrong
+ * far more often than right.
+ *
+ * Priority order:
+ * 1. A real, non-hypothetical mega/primal form (`species.boost` set) ->
+ *    "Mega Raids". Real mega/primal species never actually raid at 3-star or
+ *    5-star, so branching on their (base-species) `rarity` alone would still
+ *    be wrong — `boost` is a strictly better signal here, already on every
+ *    synced mega/primal SpeciesDefinition (scripts/sync-data.ts). Note this
+ *    can't further distinguish "Mega Raids" from "Legendary Mega
+ *    Raids"/"Primal Raids"/"Super Mega Raids" (all four share the same 0.79
+ *    attackDefenseMultiplier, differing only in HP pool) — SpeciesDefinition
+ *    has no clean signal for that today, so "Mega Raids" (the most common
+ *    mega-tier raid) is the single best guess, not a fully solved case.
+ * 2. Otherwise, `species.rarity`: STANDARD -> "3-Star Raids" (the common
+ *    case), LEGENDARY -> "5-Star Raids". MYTHIC/ULTRA_BEAST and
+ *    missing/undefined rarity data (neither Mythic nor Ultra Beast has
+ *    historically been a standard raid-boss category, and undefined means
+ *    data-sync has no classification for this species at all) both pass
+ *    through to DEFAULT_REAL_RAID_TIER, the true last resort — kept as its
+ *    own named export rather than inlined here so callers/tests can still
+ *    reference "the honest placeholder" directly.
+ *
+ * Only meaningful for a real (non-precomputed) boss — see comparison.ts's
+ * bossEffectiveStats/bossEffectiveHp, the only two callers. Irrelevant to
+ * `statsArePrecomputed` bosses (this engine's own hypothetical/test
+ * fixtures), which short-circuit before ever reaching this function.
+ */
+export function defaultRaidTierForSpecies(species: SpeciesDefinition): RaidTier {
+  if (species.boost) return "Mega Raids";
+  switch (species.rarity) {
+    case "STANDARD":
+      return "3-Star Raids";
+    case "LEGENDARY":
+      return "5-Star Raids";
+    default:
+      return DEFAULT_REAL_RAID_TIER;
+  }
+}
 
 /** Looks up a tier's fixed HP + Attack/Defense multiplier. Total over RaidTier — every member of the union has a table row. */
 export function raidTierStats(tier: RaidTier): RaidTierStats {

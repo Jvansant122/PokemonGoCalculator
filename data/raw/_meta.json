@@ -24,15 +24,19 @@
     "bytes": 6706
   },
   "raids.json": {
-    "fetchedAt": "2026-09-06T22:12:27.217Z",
+    "fetchedAt": "2026-09-07T00:34:58.521Z",
     "bytes": 12433
   },
   "mega_pokemon.json": {
-    "fetchedAt": "2026-09-06T22:12:26.962Z",
+    "fetchedAt": "2026-09-07T00:34:58.227Z",
     "bytes": 19958
   },
   "game_master_mega_overrides.json": {
-    "fetchedAt": "2026-09-06T22:12:27.893Z",
+    "fetchedAt": "2026-09-07T00:34:59.407Z",
     "bytes": 39351
+  },
+  "pokemon_rarity.json": {
+    "fetchedAt": "2026-09-07T00:34:58.796Z",
+    "bytes": 219907
   }
 }

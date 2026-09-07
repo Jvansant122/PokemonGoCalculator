@@ -16,7 +16,12 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import type { RawMegaPokemonEntry, RawRaidEntry, RawGameMasterEntry } from "./rawShapes.ts";
+import type {
+  RawMegaPokemonEntry,
+  RawRaidEntry,
+  RawGameMasterEntry,
+  RawPokemonRarityResponse,
+} from "./rawShapes.ts";
 
 export function readJson<T>(rawDir: string, filename: string): T {
   return JSON.parse(readFileSync(join(rawDir, filename), "utf-8")) as T;
@@ -67,6 +72,38 @@ export async function fetchAndCacheMegaPokemon(rawDir: string): Promise<RawMegaP
   writeFileSync(join(rawDir, "mega_pokemon.json"), text);
   recordFetchMeta(rawDir, "mega_pokemon.json", Buffer.byteLength(text, "utf-8"));
   return JSON.parse(text) as RawMegaPokemonEntry[];
+}
+
+const POKEMON_RARITY_URL = "https://pogoapi.net/api/v1/pokemon_rarity.json";
+
+/**
+ * Fetches pokemon_rarity.json live and caches the raw response under data/raw/
+ * with a fetch timestamp (see recordFetchMeta) — same convention as
+ * fetchAndCacheMegaPokemon. Added 2026-09-06 per pogo-researcher's proposal
+ * (see .claude/agent-memory/pogo-researcher/proposal_default_raid_tier_fallback.md)
+ * as the data-sync half of fixing raidBoss.ts's DEFAULT_REAL_RAID_TIER
+ * fallback (the engine-side consumption change is a separate follow-up, not
+ * this function's concern). pogoapi's own response shape is an object keyed
+ * by rarity CATEGORY name ("Legendary"/"Mythic"/"Standard"/"Ultra beast" —
+ * confirmed via direct fetch, not documented ahead of time), each value an
+ * array of per-species/per-form entries that already carry their own
+ * `rarity` field matching the category key — see RawPokemonRarityResponse's
+ * doc comment for why the caller can flatten this without needing the outer
+ * key. Fetched live on every sync run (this project's classification rarely
+ * changes, but there's no strong reason to special-case it as
+ * assumed-pre-cached like pokemon_stats.json etc. — a single small request
+ * is cheap).
+ */
+export async function fetchAndCachePokemonRarity(rawDir: string): Promise<RawPokemonRarityResponse> {
+  const response = await fetch(POKEMON_RARITY_URL);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch ${POKEMON_RARITY_URL}: ${response.status} ${response.statusText}`);
+  }
+  const text = await response.text();
+  if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
+  writeFileSync(join(rawDir, "pokemon_rarity.json"), text);
+  recordFetchMeta(rawDir, "pokemon_rarity.json", Buffer.byteLength(text, "utf-8"));
+  return JSON.parse(text) as RawPokemonRarityResponse;
 }
 
 const SCRAPEDDUCK_RAIDS_URL = "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.json";

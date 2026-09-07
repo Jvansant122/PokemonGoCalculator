@@ -88,17 +88,20 @@ import type {
   RawMoveEntry,
   RawCurrentMovesEntry,
   RawMegaPokemonEntry,
+  RawPokemonRarityResponse,
+  PokemonRarity,
   ActiveRaidEntry,
 } from "./sync-data/rawShapes.ts";
 import {
   fetchAndCacheMegaPokemon,
   fetchAndCacheRaids,
+  fetchAndCachePokemonRarity,
   fetchGameMasterMegaOverrides,
   fetchMegaSpriteUrls,
   raidFallbackPathFor,
   type GameMasterFetchResult,
 } from "./sync-data/fetchCache.ts";
-import { toPokemonType, toRawGameMasterMove, spriteUrlForDexId } from "./sync-data/adapters.ts";
+import { toPokemonType, toRawGameMasterMove, spriteUrlForDexId, toPokemonRarity } from "./sync-data/adapters.ts";
 import {
   megaSpeciesIdFor,
   parseMegaOrPrimalRaidName,
@@ -125,6 +128,48 @@ const rawMegaPokemon = await fetchAndCacheMegaPokemon(RAW_DIR);
 await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
 const raidFetchResult = await fetchAndCacheRaids(RAW_DIR, REPO_ROOT);
 const rawRaids = raidFetchResult.entries;
+await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
+
+let rawPokemonRarityResponse: RawPokemonRarityResponse | null = null;
+let pokemonRarityFetchError: string | null = null;
+try {
+  rawPokemonRarityResponse = await fetchAndCachePokemonRarity(RAW_DIR);
+} catch (err) {
+  pokemonRarityFetchError = err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * pokemon_id -> normalized rarity, flattened from pogoapi's own
+ * category-keyed response shape (see RawPokemonRarityResponse's doc comment).
+ * Confirmed 2026-09-06 (direct inspection of a full live fetch): a given
+ * pokemon_id NEVER disagrees on rarity across its own listed forms (e.g.
+ * Galarian Articuno and Normal-form Articuno are both "Legendary") — so this
+ * intentionally keys on pokemon_id alone, ignoring `form` entirely, rather
+ * than needing to match the exact per-species form this pass normalizes (see
+ * defaultFormByPokemonId below) the way typesByPokemonId/movesByPokemonId do.
+ * Any species pokemon_stats.json lists that pokemon_rarity.json doesn't
+ * (none found in the same 2026-09-06 check — full 1024/1024 coverage) falls
+ * back to "STANDARD", the least-surprising default per pogo-researcher's
+ * proposal (most species really are Standard-tier).
+ */
+const rarityByPokemonId = new Map<number, PokemonRarity>();
+const rarityParseFailures: string[] = [];
+if (rawPokemonRarityResponse) {
+  for (const category of Object.values(rawPokemonRarityResponse)) {
+    for (const entry of category) {
+      if (rarityByPokemonId.has(entry.pokemon_id)) continue; // already set from another form; forms agree, confirmed above
+      try {
+        rarityByPokemonId.set(entry.pokemon_id, toPokemonRarity(entry.rarity));
+      } catch (err) {
+        rarityParseFailures.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+  }
+}
+function rarityFor(pokemonId: number): PokemonRarity {
+  return rarityByPokemonId.get(pokemonId) ?? "STANDARD";
+}
+const pokemonIdsMissingFromRarityData = new Set<number>();
 
 const rawStats = readJson<RawPokemonStatsEntry[]>("pokemon_stats.json");
 const rawTypes = readJson<RawPokemonTypesEntry[]>("pokemon_types.json");
@@ -350,6 +395,13 @@ for (const stat of normalStats) {
   // handled here (unlike the 48 mega entries below, which need a per-species
   // PokeAPI lookup for their own distinct internal ID).
   definition.imageUrl = spriteUrlForDexId(stat.pokemon_id);
+  // `rarity` is NOT yet a field @pogo-analyzer/engine's SpeciesDefinition type
+  // declares (see this file's `rarity`-related WARNINGS output for the
+  // escalation to engine-developer) — attached via a local cast rather than
+  // editing packages/engine/src/types.ts from this script, per this project's
+  // "schema decisions belong to engine-developer" convention.
+  if (!rarityByPokemonId.has(stat.pokemon_id)) pokemonIdsMissingFromRarityData.add(stat.pokemon_id);
+  (definition as SpeciesDefinition & { rarity?: PokemonRarity }).rarity = rarityFor(stat.pokemon_id);
 
   species.push(definition);
 }
@@ -586,6 +638,13 @@ for (const m of rawMegaPokemonCombined) {
   // type stands in for "the type this mega's boost applies to."
   definition.boost = { multiplier: DEFAULT_MEGA_BOOST_MULTIPLIER, boostedType: pokemonTypes[0] };
   reservedSpeciesIds.add(finalId);
+  // Mega/primal rarity is keyed on the BASE species' pokemon_id, same as
+  // moves/types above — pokemon_rarity.json classifies the species, not the
+  // mega form specifically (and every real mega/primal is itself Standard-
+  // or Legendary-rarity depending on its base species, which pokemon_id
+  // captures fine). See the normal-species loop above for the same pattern.
+  if (!rarityByPokemonId.has(m.pokemon_id)) pokemonIdsMissingFromRarityData.add(m.pokemon_id);
+  (definition as SpeciesDefinition & { rarity?: PokemonRarity }).rarity = rarityFor(m.pokemon_id);
 
   megaSpecies.push(definition);
 }
@@ -782,7 +841,7 @@ const SCRAPEDDUCK_RAIDS_URL = "https://raw.githubusercontent.com/bigfoott/Scrape
 const raidsWithNullSpecies = activeRaids.filter((r) => r.speciesId === null).length;
 const raidsApproximate = activeRaids.filter((r) => r.isApproximate).length;
 
-console.log(`SYNCED: pokemon_stats, pokemon_types, fast_moves, charged_moves, current_pokemon_moves, cp_multiplier, mega_pokemon, scrapedduck-raids (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length} single-form (Normal, or fallback — see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (synthesized for Shadow raid matches, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} moves)`);
+console.log(`SYNCED: pokemon_stats, pokemon_types, fast_moves, charged_moves, current_pokemon_moves, cp_multiplier, mega_pokemon, scrapedduck-raids, pokemon_rarity (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length} single-form (Normal, or fallback — see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (synthesized for Shadow raid matches, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} moves)`);
 console.log(`CHANGED (species.json): ${speciesDiffs.length > 0 ? speciesDiffs.join("; ") : "none"}`);
 console.log(`CHANGED (activeRaids.json): ${raidDiffs.length > 0 ? raidDiffs.join("; ") : "none"}`);
 console.log(`AFFECTS SCENARIOS: none (no saved scenarios reference normalized species yet; scenarioA.ts fixtures untouched)`);
@@ -794,6 +853,13 @@ if (raidFetchResult.source === "scrapedduck") {
 } else {
   console.log(`  - VALIDATION: ScrapedDuck raids feed unreachable/malformed this run (${raidFetchResult.error}), AND no project-owned override file existed yet — created an empty one at ${RAID_FALLBACK_PATH} (schema: { bosses: RawRaidEntry[] }). activeRaids.json is EMPTY this run until that file is populated by hand or the feed recovers.`);
 }
+if (pokemonRarityFetchError) {
+  console.log(`  - VALIDATION: pokemon_rarity.json fetch failed (${pokemonRarityFetchError}) — every species' rarity field this run defaulted to "STANDARD" (least-surprising fallback, per pogo-researcher's proposal), NOT sourced from live data. Re-run once the endpoint recovers.`);
+} else {
+  console.log(`  - pokemon_rarity.json fetched live and re-cached this run (data/raw/pokemon_rarity.json). Confirmed 2026-09-06: pogoapi's response is an object keyed by rarity category ("Legendary"/"Mythic"/"Standard"/"Ultra beast"), flattened here by pokemon_id (form ignored — a given pokemon_id never disagrees on rarity across its own listed forms, confirmed by direct inspection). ${rarityParseFailures.length > 0 ? `VALIDATION: ${rarityParseFailures.length} unrecognized rarity value(s) encountered (upstream vocabulary may have changed — see toPokemonRarity in scripts/sync-data/adapters.ts): ${rarityParseFailures.join("; ")}` : "All rarity values recognized."}`);
+}
+console.log(`  - pokemon_id values present in pokemon_stats.json/mega_pokemon.json but absent from pokemon_rarity.json (defaulted to "STANDARD"): ${pokemonIdsMissingFromRarityData.size === 0 ? "none (full coverage this run)" : [...pokemonIdsMissingFromRarityData].join(", ")}`);
+console.log(`  - SCHEMA GAP for engine-developer: every species.json entry now carries a \`rarity: "STANDARD" | "LEGENDARY" | "MYTHIC" | "ULTRA_BEAST"\` field (attached via a local cast in scripts/sync-data.ts, NOT yet declared on @pogo-analyzer/engine's SpeciesDefinition type in packages/engine/src/types.ts) — this is data-sync's half of fixing raidBoss.ts's DEFAULT_REAL_RAID_TIER blanket "5-Star Raids" fallback (see .claude/agent-memory/pogo-researcher/proposal_default_raid_tier_fallback.md); the engine-side type declaration + DEFAULT_REAL_RAID_TIER consumption change is intentionally NOT made by this script.`);
 console.log(`  - Scope limitation: only one form per species (form === "Normal", or a documented fallback — see next line) was normalized from pokemon_stats.json (${normalStats.length} candidates out of ${rawStats.length} total rows spanning 273 distinct forms), plus all ${rawMegaPokemon.length} mega_pokemon.json entries. Other regional/costume/event forms are still out of scope this pass.`);
 console.log(`  - Fallback-form species (no row labeled "Normal" in pokemon_stats.json; ${fallbackFormPokemonIds.size} of ${defaultFormByPokemonId.size} distinct pokemon_id values): normalized under their first-listed form, or a FORM_OVERRIDES entry when the first-listed form was confirmed wrong (see below). Full audit completed 2026-09-05 against all 59 species named in the previous sync's report (Bulbapedia/GamePress/PoGo-release-status cross-check, not just a spot-check): ${[...fallbackFormPokemonIds].map((id) => `${rawStats.find((s) => s.pokemon_id === id)?.pokemon_name} (${defaultFormByPokemonId.get(id)})`).join(", ")}`);
 console.log(`  - FORM_OVERRIDES applied (${Object.keys(FORM_OVERRIDES).length} species, see scripts/sync-data.ts's FORM_OVERRIDES doc comment for the full per-species reasoning): Shellos/Gastrodon -> West_sea, Darmanitan -> Standard, Deerling/Sawsbuck -> Spring, Flabébé/Floette/Florges -> Red, Aegislash -> Shield, Zygarde -> Fifty_percent, Lycanroc -> Midday, Wishiwashi -> Solo, Mimikyu -> Disguised, Sinistea/Polteageist -> Phony, Zacian/Zamazenta -> Hero, Palafin -> Zero, Dudunsparce -> Two, Poltchageist -> Counterfeit, Sinistcha -> Unremarkable.`);

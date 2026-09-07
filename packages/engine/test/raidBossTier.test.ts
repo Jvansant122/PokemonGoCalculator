@@ -7,6 +7,7 @@ import {
   RAID_BOSS_IVS,
   RAID_TIER_TABLE,
   REAL_RAID_BOSS_IV,
+  defaultRaidTierForSpecies,
   isKnownRaidTier,
   raidTierStats,
   type RaidTier,
@@ -141,5 +142,90 @@ describe("bossEffectiveStats / bossEffectiveHp: real vs precomputed bosses", () 
     // This fixture's real tier HP (9000) differs from its hand-tuned 12000 —
     // the branch must actually matter here.
     expect(ANOTHER_PRECOMPUTED_STYLE_BOSS.baseStamina).not.toBe(RAID_TIER_TABLE["Mega Raids"].hp);
+  });
+});
+
+describe("defaultRaidTierForSpecies: rarity-keyed fallback (replaces the old blanket DEFAULT_REAL_RAID_TIER guess)", () => {
+  const baseFields = {
+    types: ["normal"] as [SpeciesDefinition["types"][number]],
+    baseAttack: 150,
+    baseDefense: 150,
+    baseStamina: 150,
+    fastMoves: [{ id: "f", name: "Fast", type: "normal" as const, power: 8, energyGain: 8, durationSeconds: 1 }],
+    chargedMoves: [{ id: "c", name: "Charged", type: "normal" as const, power: 70, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+  };
+
+  it("Standard rarity resolves to 3-Star Raids, not 5-Star", () => {
+    const species: SpeciesDefinition = { id: "standard-species", name: "Standard Species", rarity: "STANDARD", ...baseFields };
+    expect(defaultRaidTierForSpecies(species)).toBe("3-Star Raids");
+  });
+
+  it("Legendary rarity resolves to 5-Star Raids", () => {
+    const species: SpeciesDefinition = { id: "legendary-species", name: "Legendary Species", rarity: "LEGENDARY", ...baseFields };
+    expect(defaultRaidTierForSpecies(species)).toBe("5-Star Raids");
+  });
+
+  it("Mythic rarity passes through to DEFAULT_REAL_RAID_TIER (not historically a standard raid-boss category)", () => {
+    const species: SpeciesDefinition = { id: "mythic-species", name: "Mythic Species", rarity: "MYTHIC", ...baseFields };
+    expect(defaultRaidTierForSpecies(species)).toBe(DEFAULT_REAL_RAID_TIER);
+  });
+
+  it("Ultra Beast rarity passes through to DEFAULT_REAL_RAID_TIER", () => {
+    const species: SpeciesDefinition = { id: "ultra-beast-species", name: "Ultra Beast Species", rarity: "ULTRA_BEAST", ...baseFields };
+    expect(defaultRaidTierForSpecies(species)).toBe(DEFAULT_REAL_RAID_TIER);
+  });
+
+  it("missing/undefined rarity data passes through to DEFAULT_REAL_RAID_TIER", () => {
+    const species: SpeciesDefinition = { id: "no-rarity-species", name: "No Rarity Species", ...baseFields };
+    expect(defaultRaidTierForSpecies(species)).toBe(DEFAULT_REAL_RAID_TIER);
+  });
+
+  it("a real mega/primal species (species.boost set) resolves to Mega Raids regardless of its (base-species) rarity", () => {
+    const standardMega: SpeciesDefinition = {
+      id: "standard-mega-species",
+      name: "Standard Mega Species",
+      rarity: "STANDARD",
+      boost: { multiplier: 1.3, boostedType: "normal" },
+      ...baseFields,
+    };
+    const legendaryMega: SpeciesDefinition = {
+      id: "legendary-mega-species",
+      name: "Legendary Mega Species",
+      rarity: "LEGENDARY",
+      boost: { multiplier: 1.3, boostedType: "normal" },
+      ...baseFields,
+    };
+    expect(defaultRaidTierForSpecies(standardMega)).toBe("Mega Raids");
+    expect(defaultRaidTierForSpecies(legendaryMega)).toBe("Mega Raids");
+  });
+
+  it("bossEffectiveStats/bossEffectiveHp actually resolve through defaultRaidTierForSpecies end-to-end when no tier is supplied", () => {
+    const standardSpecies: SpeciesDefinition = { id: "standard-e2e", name: "Standard E2E", rarity: "STANDARD", ...baseFields };
+    const legendarySpecies: SpeciesDefinition = { id: "legendary-e2e", name: "Legendary E2E", rarity: "LEGENDARY", ...baseFields };
+
+    expect(bossEffectiveStats(standardSpecies)).toEqual(bossEffectiveStats(standardSpecies, "3-Star Raids"));
+    expect(bossEffectiveHp(standardSpecies)).toBe(RAID_TIER_TABLE["3-Star Raids"].hp);
+
+    expect(bossEffectiveStats(legendarySpecies)).toEqual(bossEffectiveStats(legendarySpecies, "5-Star Raids"));
+    expect(bossEffectiveHp(legendarySpecies)).toBe(RAID_TIER_TABLE["5-Star Raids"].hp);
+
+    // Sanity: Standard and Legendary must actually diverge (3600 HP vs 15000 HP) —
+    // proves this isn't coincidentally passing both branches with the same tier.
+    expect(bossEffectiveHp(standardSpecies)).not.toBe(bossEffectiveHp(legendarySpecies));
+  });
+
+  it("a precomputed boss with rarity/boost set is still completely unaffected — statsArePrecomputed short-circuits before rarity is ever consulted", () => {
+    const precomputedWithRarity: SpeciesDefinition = {
+      id: "precomputed-with-rarity",
+      name: "Precomputed With Rarity",
+      rarity: "STANDARD",
+      boost: { multiplier: 1.3, boostedType: "normal" },
+      statsArePrecomputed: true,
+      ...baseFields,
+      baseStamina: 20000,
+    };
+    expect(bossEffectiveHp(precomputedWithRarity)).toBe(20000);
+    expect(bossEffectiveHp(precomputedWithRarity)).not.toBe(RAID_TIER_TABLE["3-Star Raids"].hp);
+    expect(bossEffectiveHp(precomputedWithRarity)).not.toBe(RAID_TIER_TABLE["Mega Raids"].hp);
   });
 });

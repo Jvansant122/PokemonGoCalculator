@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import {
-  DEFAULT_REAL_RAID_TIER,
   bossEffectiveStats,
   compareIvSpreads,
+  defaultRaidTierForSpecies,
   isWeatherBoosted,
   resolveMove,
   typeEffectiveness,
@@ -246,11 +246,13 @@ export function IvBreakpointsView() {
   // per EVERY registered species (not just the currently-active raid roster —
   // see IvSweepAggregate's doc comment), each with its OWN first fast move and
   // per-tier effective attack/defense (falling back to the engine's own
-  // DEFAULT_REAL_RAID_TIER for anything not currently live, same convention
-  // as bossEffectiveStats/SustainedComparisonInputs.bossRaidTier use
-  // everywhere else — raidTierForSpeciesId returning null already triggers
-  // that fallback via bossEffectiveStats' own `tier ?? DEFAULT_REAL_RAID_TIER`
-  // default, so nothing extra needs importing here). No per-target move picker
+  // per-rarity `defaultRaidTierForSpecies` for anything not currently live —
+  // STANDARD species default to "3-Star Raids", LEGENDARY to "5-Star Raids",
+  // mega/primal-boosted to "Mega Raids", everything else to the old blanket
+  // "5-Star Raids" last resort. This tier is resolved explicitly here (unlike
+  // the single-target `result` above, which passes `?? undefined` and lets
+  // bossEffectiveStats apply the same default internally) because bucketing
+  // below needs the ACTUAL resolved tier as a map key, not `undefined`.
   // exists for this sweep — that would be a UI control per species, which
   // this report deliberately doesn't need. Answers "which spread wins more
   // often across every raid target this tool can model" as a single tallied
@@ -285,12 +287,12 @@ export function IvBreakpointsView() {
         continue;
       }
       try {
-        // Exact same resolution used everywhere else to build this target's
-        // boss stats — required here too since bucketing needs the ACTUAL
-        // resolved tier, not `undefined` (bossEffectiveStats' own internal
-        // `?? DEFAULT_REAL_RAID_TIER` default is this same constant, so
-        // passing it explicitly changes nothing about the computed stats).
-        const tier = raidTierForSpeciesId(opt.id) ?? DEFAULT_REAL_RAID_TIER;
+        // Live tier if this target is currently an active raid boss; otherwise
+        // the engine's own per-rarity default for this specific species (see
+        // the comment above this loop) — passing it explicitly here changes
+        // nothing about the computed stats vs. bossEffectiveStats' own
+        // internal fallback, since that's the same function.
+        const tier = raidTierForSpeciesId(opt.id) ?? defaultRaidTierForSpecies(bossSpecies);
         const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(bossSpecies, tier);
         const bossFastMove = resolveMove(bossSpecies.fastMoves, null);
         if (!bossFastMove) throw new Error(`${bossSpecies.name} has no fast move defined.`);

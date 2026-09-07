@@ -9,6 +9,21 @@ export interface IVSpread {
   stamina: number;
 }
 
+/**
+ * pogoapi.net's `pokemon_rarity.json` classification — the community's own
+ * coarse "how does this species show up in the game" vocabulary (data-sync's
+ * `toPokemonRarity` normalizes pogoapi's raw category strings, e.g. "Ultra
+ * beast", into this exact union). Consumed by raidBoss.ts's
+ * `defaultRaidTierForSpecies` to pick a more defensible real-raid-tier
+ * fallback than one single blanket guess when a species isn't in today's
+ * live raid feed — see
+ * .claude/agent-memory/pogo-researcher/proposal_default_raid_tier_fallback.md
+ * for the research behind this. Optional/undefined for any species
+ * data-sync hasn't classified (or a hand-authored test/hypothetical fixture
+ * that never goes through fromGameMaster at all).
+ */
+export type PokemonRarity = "STANDARD" | "LEGENDARY" | "MYTHIC" | "ULTRA_BEAST";
+
 export interface FastMove {
   id: string;
   name: string;
@@ -123,6 +138,18 @@ export interface SpeciesDefinition {
    * in stats.ts regardless of this flag).
    */
   statsArePrecomputed?: boolean;
+  /**
+   * pogoapi.net's Standard/Legendary/Mythic/Ultra-Beast classification for
+   * this species (see PokemonRarity's doc comment). Populated by data-sync
+   * for every real synced species (scripts/sync-data.ts's `rarityFor`,
+   * defaulting to "STANDARD" itself when pokemon_rarity.json is missing the
+   * id) as of 2026-09-06; undefined for hand-authored hypothetical/test
+   * fixtures that never went through fromGameMaster. Only consumed when a
+   * species is used in the BOSS role (raidBoss.ts's
+   * defaultRaidTierForSpecies) — irrelevant to a species used as a
+   * candidate/attacker, same scoping as statsArePrecomputed above.
+   */
+  rarity?: PokemonRarity;
 }
 
 export interface EffectiveStats {

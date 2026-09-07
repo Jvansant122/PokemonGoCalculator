@@ -4,10 +4,10 @@ import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
 import { shadowAdjustedBaseStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
 import {
-  DEFAULT_REAL_RAID_TIER,
   RAID_BOSS_CPM,
   RAID_BOSS_IVS,
   REAL_RAID_BOSS_IV,
+  defaultRaidTierForSpecies,
   raidTierStats,
   type RaidTier,
 } from "./raidBoss.js";
@@ -47,9 +47,10 @@ import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
  * re-deriving them under the real tier formula would silently break the
  * pinned Scenario A/B test values. A real synced species instead gets the
  * real per-tier formula (REAL_RAID_BOSS_IV=15, tier's attackDefenseMultiplier
- * — see raidBoss.ts's RAID_TIER_TABLE), defaulting to DEFAULT_REAL_RAID_TIER
- * when `tier` is omitted (e.g. the species isn't currently a live raid
- * target with a known tier).
+ * — see raidBoss.ts's RAID_TIER_TABLE), defaulting to
+ * defaultRaidTierForSpecies(boss) (rarity/boost-keyed; DEFAULT_REAL_RAID_TIER
+ * as its own last resort) when `tier` is omitted (e.g. the species isn't
+ * currently a live raid target with a known tier).
  */
 export function bossEffectiveStats(boss: SpeciesDefinition, tier?: RaidTier): { attack: number; defense: number } {
   const { baseAttack, baseDefense } = shadowAdjustedBaseStats(boss);
@@ -59,7 +60,7 @@ export function bossEffectiveStats(boss: SpeciesDefinition, tier?: RaidTier): { 
       defense: effectiveStat(baseDefense, RAID_BOSS_IVS.defense, RAID_BOSS_CPM),
     };
   }
-  const { attackDefenseMultiplier } = raidTierStats(tier ?? DEFAULT_REAL_RAID_TIER);
+  const { attackDefenseMultiplier } = raidTierStats(tier ?? defaultRaidTierForSpecies(boss));
   return {
     attack: effectiveStat(baseAttack, REAL_RAID_BOSS_IV, attackDefenseMultiplier),
     defense: effectiveStat(baseDefense, REAL_RAID_BOSS_IV, attackDefenseMultiplier),
@@ -84,7 +85,7 @@ export function bossEffectiveStats(boss: SpeciesDefinition, tier?: RaidTier): { 
  */
 export function bossEffectiveHp(boss: SpeciesDefinition, tier?: RaidTier): number {
   if (boss.statsArePrecomputed) return boss.baseStamina;
-  return raidTierStats(tier ?? DEFAULT_REAL_RAID_TIER).hp;
+  return raidTierStats(tier ?? defaultRaidTierForSpecies(boss)).hp;
 }
 
 /**
@@ -152,7 +153,9 @@ export interface ComparisonInputs {
    * species — see bossEffectiveStats/bossEffectiveHp above and raidBoss.ts's
    * RAID_TIER_TABLE. Ignored entirely when boss.statsArePrecomputed is true
    * (this project's hypothetical fixtures). Omitted/undefined for a real
-   * species defaults to DEFAULT_REAL_RAID_TIER ("5-Star Raids").
+   * species defaults to defaultRaidTierForSpecies(boss) — rarity/boost-keyed,
+   * falling back to DEFAULT_REAL_RAID_TIER ("5-Star Raids") only as the true
+   * last resort (species with no rarity data, or Mythic/Ultra Beast).
    */
   bossRaidTier?: RaidTier;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */

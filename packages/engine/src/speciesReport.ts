@@ -37,7 +37,7 @@ import type { WeatherCondition } from "./weather.js";
 /** One boss to sweep against, exactly as the design doc specifies — the caller (web layer) resolves this from data/normalized/activeRaids.json via registry.ts; this module never reads it directly. */
 export interface SpeciesReportBossTarget {
   species: SpeciesDefinition;
-  /** See comparison.ts's SustainedComparisonInputs.bossRaidTier — ignored entirely when species.statsArePrecomputed is true. Omitted for a real species defaults to DEFAULT_REAL_RAID_TIER ("5-Star Raids"), same as everywhere else this field is threaded. */
+  /** See comparison.ts's SustainedComparisonInputs.bossRaidTier — ignored entirely when species.statsArePrecomputed is true. Omitted for a real species defaults to defaultRaidTierForSpecies(species) (rarity/boost-keyed; DEFAULT_REAL_RAID_TIER as the true last resort), same as everywhere else this field is threaded. */
   tier?: RaidTier;
   /** Boss fast-move selection for this specific target. Omit/null defaults to the boss's first fast move (today's behavior everywhere else in this engine). */
   bossFastMoveId?: string | null;

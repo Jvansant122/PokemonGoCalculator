@@ -108,7 +108,8 @@ export interface TeamRaidInputs {
    * raidBoss.ts's RAID_TIER_TABLE. Ignored entirely when
    * boss.statsArePrecomputed is true (this project's hypothetical fixtures
    * and hand-authored test bosses). Omitted/undefined for a real species
-   * defaults to DEFAULT_REAL_RAID_TIER ("5-Star Raids").
+   * defaults to defaultRaidTierForSpecies(boss) (rarity/boost-keyed;
+   * DEFAULT_REAL_RAID_TIER as the true last resort).
    */
   bossRaidTier?: RaidTier;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move. */
