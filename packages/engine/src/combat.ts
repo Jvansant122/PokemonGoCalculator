@@ -3,6 +3,28 @@ import { calculateDamage, type DamageInputs } from "./damage.js";
 import { energyFromDamageTaken } from "./energy.js";
 import type { ChargedMove, FastMove } from "./types.js";
 
+/**
+ * NOTE (2026-09-06 code-simplifier audit): simulateOpeningBurst/
+ * AttackerProfile/BossProfile/OpeningBurstResult have zero production
+ * callers — packages/web only drives runSustainedComparison/
+ * compareAcrossBossChargedMoves/simulateStepwiseBattle (the Phase 5 stepwise
+ * engine in simulate.ts). This is intentional, not dead code to delete: this
+ * "Phase 1 opening burst" cluster is kept alive on purpose as a deterministic
+ * acceptance-test harness that pins the core stats/damage/type-chart formula
+ * pipeline independent of the sustained engine's randomized boss timing (see
+ * comparison.test.ts, test/scenarioA.test.ts, test/scenarioB.test.ts,
+ * test/bossTiming.test.ts, and part of test/simulate.test.ts). Because it has
+ * no randomness (unlike simulate.ts's seeded-jitter boss timing), it's the
+ * only place exact hand-derived numbers (e.g. Scenario A's 171/189
+ * charged-damage split at 7.5s) can be pinned bit-for-bit. Do not delete this
+ * cluster or its tests as "unused" without first migrating that exact-number
+ * coverage to runSustainedComparison — judged not clearly low-risk to do so
+ * in the same pass that found it, given how much of the pinned-number
+ * derivation leans on this path's determinism. `bossChargedMoveReadySeconds`
+ * below is the one export from this file that IS live in production (reused
+ * by simulate.ts) — do not lump it in with the rest of this file when
+ * auditing for dead code again.
+ */
 export interface AttackerProfile {
   hp: number;
   defenseStat: number;

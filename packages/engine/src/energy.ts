@@ -9,40 +9,7 @@ export const ENERGY_PER_DAMAGE_TAKEN = 0.5;
 
 export const MAX_ENERGY = 100;
 
-/** Energy gained from a single fast move landing (a flat, move-defined amount). */
-export function energyFromFastMove(fastMoveEnergyGain: number): number {
-  return fastMoveEnergyGain;
-}
-
 /** Energy gained from a single instance of incoming damage. */
 export function energyFromDamageTaken(damageTaken: number): number {
   return Math.floor(damageTaken * ENERGY_PER_DAMAGE_TAKEN);
-}
-
-export interface EnergyEvent {
-  /** Seconds from the start of the fight at which this energy is gained. */
-  atSeconds: number;
-  amount: number;
-  source: "fast-move" | "damage-taken";
-}
-
-/**
- * Merges a combatant's own fast-move energy gains with the energy it gains from
- * incoming damage, in time order, and reports the running total plus the first
- * moment (if any) it reaches the charged move's energy cost.
- */
-export function accumulateEnergy(
-  events: EnergyEvent[],
-  energyCost: number,
-): { readyAtSeconds: number | null; finalEnergy: number } {
-  const sorted = [...events].sort((a, b) => a.atSeconds - b.atSeconds);
-  let total = 0;
-  let readyAtSeconds: number | null = null;
-  for (const event of sorted) {
-    total += event.amount;
-    if (readyAtSeconds === null && total >= energyCost) {
-      readyAtSeconds = event.atSeconds;
-    }
-  }
-  return { readyAtSeconds, finalEnergy: Math.min(total, MAX_ENERGY) };
 }

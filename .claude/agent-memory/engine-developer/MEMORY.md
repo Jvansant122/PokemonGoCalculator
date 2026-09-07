@@ -15,3 +15,4 @@
 - [Mid-animation-death vs zero-charged-damage investigation](investigation_charged_damage_mid_animation_contradiction.md) — skeptic-reported "contradiction" was real mechanic (2 casts/run), actual bug was in web's caveat text, not engine
 - [IV comparison feature](feature_iv_comparison.md) — ivComparison.ts's compareIvSpreads, exact signature, non-monotonic divergence finding, no Scenario field added (engine-only task)
 - [CPM table extended to level 50](fact_cpm_table_extended_to_50.md) — cpm.ts's CPM_TABLE 1-50, values pre-verified by pogo-researcher (not re-derived), 50.5+ deliberately excluded
+- [Dead-code audit 2026-09-06](dead_code_audit_2026_09_06.md) — deleted Combatant/accumulateEnergy/EnergyEvent/energyFromFastMove; kept+documented runComparison/simulateOpeningBurst cluster as intentional acceptance-pin

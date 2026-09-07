@@ -12,6 +12,7 @@ import {
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
+import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates a
@@ -258,7 +259,7 @@ export function TeamRaidView() {
     // Stamps `view=team-raid` alongside the `ts` param so reloading this
     // link restores THIS tab, not whichever one App.tsx happened to default
     // to — see App.tsx's tab-switch scaffold.
-    const url = new URL(buildTeamScenarioUrl(window.location.href.split("?")[0]!, assumptionsToTeamScenario(assumptions)));
+    const url = new URL(buildTeamScenarioUrl(getBaseUrl(), assumptionsToTeamScenario(assumptions)));
     url.searchParams.set("view", "team-raid");
     window.history.replaceState(null, "", url.toString());
     setShareUrl(url.toString());

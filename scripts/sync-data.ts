@@ -11,6 +11,18 @@
  * pogoapi record becomes a SpeciesDefinition. See CLAUDE.md's "single code
  * path" philosophy and packages/engine/src/gamemaster.ts.
  *
+ * As of a 2026-09-06 code-simplifier-prompted reorg, this file is the
+ * orchestrator only — the fetch/cache functions, raw pogoapi/GAME_MASTER
+ * shapes, mega/primal name-parsing helpers, Shadow-variant synthesis, and
+ * prev-vs-next diffing each moved to their own module under
+ * scripts/sync-data/ (see the imports below). What's left here is the
+ * sequential, heavily-stateful pipeline itself: loading raw data, building
+ * the normalized species list (and its mega/primal/Shadow-variant
+ * extensions), matching active raids against it, validating, writing output,
+ * and reporting — all of which share enough local state (maps built once and
+ * read by several later steps) that splitting it further would trade real
+ * cohesion for indirection, not reduce it.
+ *
  * Scope (documented limitation, see completion report / WARNINGS output):
  * this pass only normalizes ONE form per species — `"Normal"` where a species
  * has one, else a documented fallback (see defaultFormByPokemonId below).
@@ -40,16 +52,17 @@
  * normalizes them. `mega_pokemon.json` and the ScrapedDuck active-raids feed
  * (`raids.json`) are the two exceptions: this script fetches and re-caches
  * BOTH live on every run (see fetchAndCacheMegaPokemon / fetchAndCacheRaids
- * below), since raid rotations change intraday and a stale cached raids.json
- * silently produces a stale activeRaids.json otherwise (confirmed live,
- * 2026-09-06 — see WARNINGS for the fallback-file behavior if the feed ever
- * goes dark or changes shape). mega_pokemon.json models a mega/primal
- * Pokémon as a real trainer-owned ATTACKER (run through the standard
- * level/IV/CPM pipeline) — not as a raid boss (see packages/engine/src/
- * raidBoss.ts's separate, simplified pipeline) — so its 48 entries are added
- * to species.json as ordinary (non-hypothetical) species, under ids derived
- * from `mega_name` rather than `pokemon_name`/`form`, disambiguated against
- * any existing id (see megaSpeciesIdFor below).
+ * in scripts/sync-data/fetchCache.ts), since raid rotations change intraday
+ * and a stale cached raids.json silently produces a stale activeRaids.json
+ * otherwise (confirmed live, 2026-09-06 — see WARNINGS for the fallback-file
+ * behavior if the feed ever goes dark or changes shape). mega_pokemon.json
+ * models a mega/primal Pokémon as a real trainer-owned ATTACKER (run through
+ * the standard level/IV/CPM pipeline) — not as a raid boss (see
+ * packages/engine/src/raidBoss.ts's separate, simplified pipeline) — so its
+ * 48 entries are added to species.json as ordinary (non-hypothetical)
+ * species, under ids derived from `mega_name` rather than `pokemon_name`/
+ * `form` (disambiguated against any existing id — see megaSpeciesIdFor in
+ * scripts/sync-data/megaPrimalParsing.ts).
  *
  * Run via: npm run sync-data (from repo root) -> tsx scripts/sync-data.ts
  */
@@ -64,439 +77,53 @@ import {
   speciesIdFor,
   DEFAULT_MEGA_BOOST_MULTIPLIER,
   type PokemonType,
-  type RawGameMasterMove,
   type SpeciesDefinition,
   type FastMove,
   type ChargedMove,
 } from "@pogo-analyzer/engine";
+
+import type {
+  RawPokemonStatsEntry,
+  RawPokemonTypesEntry,
+  RawMoveEntry,
+  RawCurrentMovesEntry,
+  RawMegaPokemonEntry,
+  ActiveRaidEntry,
+} from "./sync-data/rawShapes.ts";
+import {
+  fetchAndCacheMegaPokemon,
+  fetchAndCacheRaids,
+  fetchGameMasterMegaOverrides,
+  fetchMegaSpriteUrls,
+  raidFallbackPathFor,
+  type GameMasterFetchResult,
+} from "./sync-data/fetchCache.ts";
+import { toPokemonType, toRawGameMasterMove, spriteUrlForDexId } from "./sync-data/adapters.ts";
+import {
+  megaSpeciesIdFor,
+  parseMegaOrPrimalRaidName,
+  gameMasterEnumFor,
+  tempEvoIdFor,
+} from "./sync-data/megaPrimalParsing.ts";
+import { getOrCreateShadowVariant } from "./sync-data/shadowVariant.ts";
+import { diffSpecies, diffRaids } from "./sync-data/diff.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
 const RAW_DIR = join(REPO_ROOT, "data", "raw");
 const NORMALIZED_DIR = join(REPO_ROOT, "data", "normalized");
 
-// ---------------------------------------------------------------------------
-// Raw pogoapi shapes (subset of fields this script reads)
-// ---------------------------------------------------------------------------
-
-interface RawPokemonStatsEntry {
-  pokemon_id: number;
-  pokemon_name: string;
-  form: string;
-  base_attack: number;
-  base_defense: number;
-  base_stamina: number;
-}
-
-interface RawPokemonTypesEntry {
-  pokemon_id: number;
-  pokemon_name: string;
-  form: string;
-  type: string[];
-}
-
-interface RawMoveEntry {
-  move_id: number;
-  name: string;
-  type: string;
-  power: number;
-  energy_delta: number;
-  duration: number;
-}
-
-interface RawCurrentMovesEntry {
-  pokemon_id: number;
-  pokemon_name: string;
-  form: string;
-  fast_moves: string[];
-  charged_moves: string[];
-  elite_fast_moves: string[];
-  elite_charged_moves: string[];
-}
-
-interface RawRaidEntry {
-  name: string;
-  tier: string;
-  canBeShiny?: boolean;
-  types?: { name: string }[];
-}
-
-/**
- * Shape of a single entry from https://pogoapi.net/api/v1/mega_pokemon.json.
- * `pokemon_id`/`pokemon_name`/`form` describe the BASE (non-mega) species —
- * that's what current_pokemon_moves.json and fast/charged move learnsets are
- * keyed on, since a mega form doesn't get its own separate learnset in the
- * live game. `mega_name` and `stats` describe the mega/primal form itself.
- */
-interface RawMegaPokemonEntry {
-  first_time_mega_energy_required: number;
-  form: string;
-  mega_energy_required: number;
-  mega_name: string;
-  pokemon_id: number;
-  pokemon_name: string;
-  stats: {
-    base_attack: number;
-    base_defense: number;
-    base_stamina: number;
-  };
-  type: string[];
-}
-
-interface ActiveRaidEntry {
-  raidName: string;
-  tier: string;
-  speciesId: string | null;
-  isApproximate: boolean;
-}
-
-/**
- * Minimal shape this script reads out of a GAME_MASTER dump (PokeMiners'
- * mirror of Niantic's own client-side file — see GAME_MASTER_URL below). Only
- * used as a fallback for a mega/primal a currently-live raid references that
- * pogoapi.net's mega_pokemon.json doesn't yet cover (see the "GAME_MASTER
- * fallback" section further down for why this is gated on "is this raid
- * actually live right now" rather than a blind scrape).
- */
-interface RawGameMasterTempEvoOverride {
-  tempEvoId?: string;
-  stats?: { baseStamina: number; baseAttack: number; baseDefense: number };
-  typeOverride1?: string;
-  typeOverride2?: string;
-}
-
-interface RawGameMasterEvolutionBranch {
-  temporaryEvolution?: string;
-  temporaryEvolutionEnergyCost?: number;
-  temporaryEvolutionEnergyCostSubsequent?: number;
-}
-
-interface RawGameMasterPokemonSettings {
-  pokemonId: string;
-  type?: string;
-  type2?: string;
-  tempEvoOverrides?: RawGameMasterTempEvoOverride[];
-  evolutionBranch?: RawGameMasterEvolutionBranch[];
-}
-
-interface RawGameMasterEntry {
-  templateId?: string;
-  data?: {
-    pokemonSettings?: RawGameMasterPokemonSettings;
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function readJson<T>(filename: string): T {
   return JSON.parse(readFileSync(join(RAW_DIR, filename), "utf-8")) as T;
-}
-
-/**
- * Mirrors the exact one-liner `toPokemonType` in packages/engine/src/gamemaster.ts
- * (lowercase, strip a "pokemon_type_" prefix if present). That helper is not
- * exported from the engine — fromGameMaster expects already-converted
- * PokemonType values for its `types` parameter — so this script replicates
- * the single line rather than duplicating any real transform logic. Keep this
- * in sync with gamemaster.ts if that function ever changes.
- */
-function toPokemonType(type: string): PokemonType {
-  return type.toLowerCase().replace(/^pokemon_type_/, "") as PokemonType;
-}
-
-function toRawGameMasterMove(m: RawMoveEntry): RawGameMasterMove {
-  return {
-    move_id: String(m.move_id),
-    name: m.name,
-    type: m.type,
-    power: m.power,
-    energy_delta: m.energy_delta,
-    duration_ms: m.duration,
-  };
-}
-
-interface RawFetchMeta {
-  fetchedAt: string;
-  bytes: number;
-}
-
-/**
- * Records/updates a single filename's fetch timestamp + byte size in
- * data/raw/_meta.json, preserving whatever entries are already there for
- * files this script doesn't itself fetch (see module docstring).
- */
-function recordFetchMeta(filename: string, bytes: number): void {
-  const metaPath = join(RAW_DIR, "_meta.json");
-  let meta: Record<string, RawFetchMeta> = {};
-  if (existsSync(metaPath)) {
-    try {
-      meta = JSON.parse(readFileSync(metaPath, "utf-8"));
-    } catch {
-      meta = {};
-    }
-  }
-  meta[filename] = { fetchedAt: new Date().toISOString(), bytes };
-  writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-}
-
-const MEGA_POKEMON_URL = "https://pogoapi.net/api/v1/mega_pokemon.json";
-
-/**
- * Fetches mega_pokemon.json live and caches the raw response under data/raw/
- * with a fetch timestamp (see recordFetchMeta). This is the one endpoint this
- * script fetches itself rather than assuming pre-cached — see module
- * docstring. Only a single request is made here, so the project convention of
- * a short delay between sequential fetches doesn't apply (nothing to space
- * out against).
- */
-async function fetchAndCacheMegaPokemon(): Promise<RawMegaPokemonEntry[]> {
-  const response = await fetch(MEGA_POKEMON_URL);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${MEGA_POKEMON_URL}: ${response.status} ${response.statusText}`);
-  }
-  const text = await response.text();
-  if (!existsSync(RAW_DIR)) mkdirSync(RAW_DIR, { recursive: true });
-  writeFileSync(join(RAW_DIR, "mega_pokemon.json"), text);
-  recordFetchMeta("mega_pokemon.json", Buffer.byteLength(text, "utf-8"));
-  return JSON.parse(text) as RawMegaPokemonEntry[];
-}
-
-const SCRAPEDDUCK_RAIDS_URL = "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.json";
-const RAID_FALLBACK_PATH = join(REPO_ROOT, "data", "raid-bosses.json");
-
-interface RaidFallbackFile {
-  /**
-   * Documented schema for the project-owned override file used only when
-   * the live ScrapedDuck feed is unreachable or returns an unexpected shape
-   * (see fetchAndCacheRaids below and CLAUDE.md's "Known gap: raid bosses").
-   * Each entry has the same shape pogoapi/ScrapedDuck give this script
-   * (RawRaidEntry) so it slots into the rest of this pipeline unchanged.
-   * Update by hand, or repoint `SCRAPEDDUCK_RAIDS_URL`-equivalent logic at a
-   * replacement community feed, if this file is ever actually needed.
-   */
-  bosses: RawRaidEntry[];
-}
-
-interface RaidFetchResult {
-  entries: RawRaidEntry[];
-  source: "scrapedduck" | "fallback-file" | "fallback-file-created-empty";
-  error?: string;
-}
-
-/**
- * Fetches the ScrapedDuck active-raids feed live and re-caches it under
- * data/raw/raids.json on EVERY sync run (unlike the other pogoapi endpoints,
- * which this script assumes are already cached from an earlier pass — see
- * module docstring). Raid rotations are confirmed to change intraday
- * (2026-09-06 freshness check), so treating this one as "fetch once, reuse
- * forever" silently produces a stale activeRaids.json.
- *
- * Falls back to a project-owned override file (data/raid-bosses.json, repo
- * root — NOT data/raw/) if the feed is unreachable or its shape has changed
- * (not just any non-2xx — a malformed/non-array body also triggers the
- * fallback rather than silently feeding garbage into raid matching). If that
- * fallback file doesn't exist either, creates it with a documented empty
- * `bosses` array and reports (via the returned `source`) that it needs
- * populating, per CLAUDE.md's "Known gap: raid bosses" — this script never
- * invents raid-boss data itself.
- */
-async function fetchAndCacheRaids(): Promise<RaidFetchResult> {
-  try {
-    const response = await fetch(SCRAPEDDUCK_RAIDS_URL);
-    if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
-    }
-    const text = await response.text();
-    const parsed: unknown = JSON.parse(text);
-    if (!Array.isArray(parsed)) {
-      throw new Error("unexpected shape: response body is not an array");
-    }
-    if (!existsSync(RAW_DIR)) mkdirSync(RAW_DIR, { recursive: true });
-    writeFileSync(join(RAW_DIR, "raids.json"), text);
-    recordFetchMeta("raids.json", Buffer.byteLength(text, "utf-8"));
-    return { entries: parsed as RawRaidEntry[], source: "scrapedduck" };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (existsSync(RAID_FALLBACK_PATH)) {
-      try {
-        const fallback = JSON.parse(readFileSync(RAID_FALLBACK_PATH, "utf-8")) as RaidFallbackFile;
-        return { entries: fallback.bosses ?? [], source: "fallback-file", error: message };
-      } catch {
-        // Fallback file itself is malformed — fall through to treating it as absent.
-      }
-    }
-    if (!existsSync(dirname(RAID_FALLBACK_PATH))) mkdirSync(dirname(RAID_FALLBACK_PATH), { recursive: true });
-    const emptyFallback: RaidFallbackFile = { bosses: [] };
-    writeFileSync(RAID_FALLBACK_PATH, JSON.stringify(emptyFallback, null, 2));
-    return { entries: [], source: "fallback-file-created-empty", error: message };
-  }
-}
-
-const GAME_MASTER_URL = "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json";
-const GAME_MASTER_CACHE_PATH = join(RAW_DIR, "game_master_mega_overrides.json");
-
-/**
- * A single mega/primal stat block extracted from GAME_MASTER, keyed by GAME_MASTER's
- * own SCREAMING_SNAKE_CASE pokemon enum (e.g. "SKARMORY") and its tempEvoId
- * (e.g. "TEMP_EVOLUTION_MEGA") rather than this project's own id scheme —
- * translated into this project's RawMegaPokemonEntry shape by the caller.
- */
-interface GameMasterMegaOverrideRecord {
-  pokemonId: string;
-  tempEvoId: string;
-  baseAttack: number;
-  baseDefense: number;
-  baseStamina: number;
-  type1?: string;
-  type2?: string;
-  firstTimeMegaEnergyRequired?: number;
-  megaEnergyRequired?: number;
-}
-
-interface GameMasterFetchResult {
-  records: GameMasterMegaOverrideRecord[];
-  source: "live" | "error";
-  error?: string;
-}
-
-/**
- * Second, fallback source for mega/primal base stats, consulted only when a
- * currently-live raid (per the ScrapedDuck feed) names a mega/primal
- * pogoapi.net's mega_pokemon.json doesn't cover — see the "GAME_MASTER
- * fallback" block below for the gating logic and why gating on liveness
- * matters here specifically.
- *
- * GAME_MASTER_URL is PokeMiners' long-running, actively-maintained mirror of
- * Niantic's own client-side GAME_MASTER dump — the authoritative upstream
- * pogoapi.net itself ultimately derives from. The live file is ~19-20MB and
- * changes shape/size with every game update; this script fetches it live but
- * extracts and caches ONLY a compact slice (every pokemonSettings entry that
- * carries a tempEvoOverrides block, i.e. every mega/primal-*capable* species,
- * released or not) to data/raw/game_master_mega_overrides.json, rather than
- * committing the full multi-megabyte upstream dump to data/raw/ on every
- * sync — that would bloat this repo's history for a source this project only
- * consults as a rare fallback. No lighter official mega/primal-only mirror of
- * GAME_MASTER was found to exist (checked 2026-09-06) — PokeMiners publishes
- * the full dump only.
- *
- * IMPORTANT reliability caveat (confirmed live 2026-09-06): GAME_MASTER
- * carries tempEvoOverrides stat blocks for mega forms Niantic has coded
- * client-side but NEVER actually released or put into rotation — e.g. Mega
- * Falinks/Malamar/Chesnaught/Delphox/Greninja all have real, well-formed
- * tempEvoOverrides entries despite not existing in pogoapi.net's list, not
- * appearing in any current or past raid rotation, and (for the non-Kalos-
- * starter cases) not being real Mega Evolutions in the mainline games at all
- * — this is Niantic's client preloading data for unannounced future content,
- * a known datamining phenomenon. This is exactly why this script never mines
- * GAME_MASTER speculatively: a record is only ever used to fill a gap for a
- * raid name the live ScrapedDuck feed says is ACTUALLY rotating right now
- * (see megaOrPrimalRaidGaps below) — that gating is the whole safeguard
- * against surfacing unreleased/speculative stats as real ones.
- */
-async function fetchGameMasterMegaOverrides(): Promise<GameMasterFetchResult> {
-  try {
-    const response = await fetch(GAME_MASTER_URL);
-    if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
-    }
-    const text = await response.text();
-    const parsed: unknown = JSON.parse(text);
-    if (!Array.isArray(parsed)) {
-      throw new Error("unexpected shape: response body is not an array");
-    }
-    const records: GameMasterMegaOverrideRecord[] = [];
-    for (const entry of parsed as RawGameMasterEntry[]) {
-      const ps = entry?.data?.pokemonSettings;
-      if (!ps?.tempEvoOverrides || !ps.pokemonId) continue;
-      for (const override of ps.tempEvoOverrides) {
-        if (!override.stats || !override.tempEvoId) continue;
-        const branch = ps.evolutionBranch?.find((b) => b.temporaryEvolution === override.tempEvoId);
-        records.push({
-          pokemonId: ps.pokemonId,
-          tempEvoId: override.tempEvoId,
-          baseAttack: override.stats.baseAttack,
-          baseDefense: override.stats.baseDefense,
-          baseStamina: override.stats.baseStamina,
-          type1: override.typeOverride1 ?? ps.type,
-          type2: override.typeOverride2 ?? ps.type2,
-          firstTimeMegaEnergyRequired: branch?.temporaryEvolutionEnergyCost,
-          megaEnergyRequired: branch?.temporaryEvolutionEnergyCostSubsequent,
-        });
-      }
-    }
-    if (!existsSync(RAW_DIR)) mkdirSync(RAW_DIR, { recursive: true });
-    const cacheBody = JSON.stringify(
-      { sourceUrl: GAME_MASTER_URL, fetchedAt: new Date().toISOString(), records },
-      null,
-      2,
-    );
-    writeFileSync(GAME_MASTER_CACHE_PATH, cacheBody);
-    recordFetchMeta("game_master_mega_overrides.json", Buffer.byteLength(cacheBody, "utf-8"));
-    return { records, source: "live" };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { records: [], source: "error", error: message };
-  }
-}
-
-/**
- * National-dex sprite from the PokeAPI sprites mirror on GitHub — no API call
- * needed, just the dex id we already have from pokemon_stats.json.
- */
-function spriteUrlForDexId(pokemonId: number): string {
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemonId}.png`;
-}
-
-const MEGA_SPRITE_CACHE_PATH = join(RAW_DIR, "mega_sprite_urls.json");
-
-/**
- * Mega/primal forms each have their own internal PokeAPI id (not derivable
- * from the national dex number), so unlike spriteUrlForDexId this needs one
- * PokeAPI request per species — looked up by name, and this project's own
- * generated ids (e.g. "venusaur-mega", "charizard-mega-x") happen to match
- * PokeAPI's slug convention exactly (confirmed live for several, including —
- * surprisingly — the hypothetical fixtures: pokeapi.co has real sprite data
- * for "raichu-mega-x"/"raichu-mega-y"/"skarmory-mega" even though those
- * forms aren't released, see HANDOFF.md). Results are cached to
- * data/raw/mega_sprite_urls.json so a re-sync doesn't re-fetch 48 sprites
- * every time; a lookup that 404s or errors just leaves that species without
- * an image rather than failing the whole sync.
- */
-async function fetchMegaSpriteUrls(speciesIds: string[]): Promise<Record<string, string>> {
-  let cache: Record<string, string> = {};
-  if (existsSync(MEGA_SPRITE_CACHE_PATH)) {
-    try {
-      cache = JSON.parse(readFileSync(MEGA_SPRITE_CACHE_PATH, "utf-8"));
-    } catch {
-      cache = {};
-    }
-  }
-  const missing = speciesIds.filter((id) => !cache[id]);
-  for (const id of missing) {
-    try {
-      const res = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`);
-      if (res.ok) {
-        const json = (await res.json()) as { sprites?: { front_default?: string | null } };
-        if (json.sprites?.front_default) cache[id] = json.sprites.front_default;
-      }
-    } catch {
-      // Best-effort — a missing sprite just means no image for that species, not a sync failure.
-    }
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
-  writeFileSync(MEGA_SPRITE_CACHE_PATH, JSON.stringify(cache, null, 2));
-  return cache;
 }
 
 // ---------------------------------------------------------------------------
 // Load raw data
 // ---------------------------------------------------------------------------
 
-const rawMegaPokemon = await fetchAndCacheMegaPokemon();
+const rawMegaPokemon = await fetchAndCacheMegaPokemon(RAW_DIR);
 await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
-const raidFetchResult = await fetchAndCacheRaids();
+const raidFetchResult = await fetchAndCacheRaids(RAW_DIR, REPO_ROOT);
 const rawRaids = raidFetchResult.entries;
 
 const rawStats = readJson<RawPokemonStatsEntry[]>("pokemon_stats.json");
@@ -757,11 +384,12 @@ for (const stat of normalStats) {
 // same movesByPokemonId map (keyed by base pokemon_id + "Normal" form) used
 // for ordinary species above, not a mega-specific lookup.
 //
-// Id scheme: megaSpeciesIdFor() strips the base pokemon_name out of mega_name
-// to get a suffix (e.g. "Mega Charizard X" - "Charizard" -> "mega-x"), then
-// builds `${pokemon_name}-${suffix}` (e.g. "charizard-mega-x"). If that id
-// already exists (in the real Normal-form species built above), "-attacker"
-// is appended to disambiguate. This used to be specifically needed for Primal
+// Id scheme: megaSpeciesIdFor() (scripts/sync-data/megaPrimalParsing.ts)
+// strips the base pokemon_name out of mega_name to get a suffix (e.g. "Mega
+// Charizard X" - "Charizard" -> "mega-x"), then builds
+// `${pokemon_name}-${suffix}` (e.g. "charizard-mega-x"). If that id already
+// exists (in the real Normal-form species built above), "-attacker" is
+// appended to disambiguate. This used to be specifically needed for Primal
 // Kyogre, whose natural id "kyogre-primal" collided with a hand-defined
 // raid-boss fixture of the same id (scenarioA.ts's PRIMAL_KYOGRE) even though
 // the two modeled completely different things (attacker vs. boss stat
@@ -771,56 +399,14 @@ for (const stat of normalStats) {
 // below is kept as general-purpose defensive logic, not because a specific
 // collision is currently expected.
 
-function megaSpeciesIdFor(pokemonName: string, megaName: string): string {
-  const suffix = megaName
-    .replace(pokemonName, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-");
-  return `${pokemonName.toLowerCase()}-${suffix}`;
-}
-
 // ---------------------------------------------------------------------------
 // GAME_MASTER fallback: fill gaps where a CURRENTLY-LIVE raid names a
 // mega/primal pogoapi.net's mega_pokemon.json doesn't cover. General
 // mechanism (any future pogoapi gap gets checked here), not special-cased to
-// any one species — see fetchGameMasterMegaOverrides's doc comment for the
-// reliability caveat this gating protects against.
+// any one species — see fetchGameMasterMegaOverrides's doc comment
+// (scripts/sync-data/fetchCache.ts) for the reliability caveat this gating
+// protects against.
 // ---------------------------------------------------------------------------
-
-interface MegaOrPrimalRaidNameParts {
-  prefix: "Mega" | "Primal";
-  baseName: string;
-  suffix?: "X" | "Y";
-}
-
-function parseMegaOrPrimalRaidName(name: string): MegaOrPrimalRaidNameParts | null {
-  const prefixMatch = name.match(/^(Mega|Primal) (.+)$/);
-  if (!prefixMatch) return null;
-  const prefix = prefixMatch[1] as "Mega" | "Primal";
-  let baseName = prefixMatch[2];
-  let suffix: "X" | "Y" | undefined;
-  const suffixMatch = baseName.match(/^(.+) (X|Y)$/);
-  if (suffixMatch) {
-    baseName = suffixMatch[1];
-    suffix = suffixMatch[2] as "X" | "Y";
-  }
-  return { prefix, baseName, suffix };
-}
-
-/** GAME_MASTER's own SCREAMING_SNAKE_CASE pokemon enum, e.g. "Skarmory" -> "SKARMORY". */
-function gameMasterEnumFor(pokemonName: string): string {
-  return pokemonName
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function tempEvoIdFor(prefix: "Mega" | "Primal", suffix?: "X" | "Y"): string {
-  if (prefix === "Primal") return "TEMP_EVOLUTION_PRIMAL";
-  return suffix ? `TEMP_EVOLUTION_MEGA_${suffix}` : "TEMP_EVOLUTION_MEGA";
-}
 
 const pokemonIdByName = new Map<string, number>();
 for (const s of rawStats) {
@@ -838,7 +424,7 @@ const gameMasterCrossChecks: string[] = [];
 let gameMasterFetchResult: GameMasterFetchResult | null = null;
 
 if (megaOrPrimalRaidGaps.length > 0) {
-  gameMasterFetchResult = await fetchGameMasterMegaOverrides();
+  gameMasterFetchResult = await fetchGameMasterMegaOverrides(RAW_DIR);
   await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
 
   for (const raid of megaOrPrimalRaidGaps) {
@@ -1010,7 +596,7 @@ for (const m of rawMegaPokemonCombined) {
 // is purely an internal disambiguation, PokeAPI has never heard of it.
 const collisionRenames = new Map(megaIdCollisions.map((c) => [c.usedId, c.wouldBeId]));
 const spriteLookupIds = megaSpecies.map((m) => collisionRenames.get(m.id) ?? m.id);
-const megaSpriteUrls = await fetchMegaSpriteUrls(spriteLookupIds);
+const megaSpriteUrls = await fetchMegaSpriteUrls(RAW_DIR, spriteLookupIds);
 for (const m of megaSpecies) {
   const lookupId = collisionRenames.get(m.id) ?? m.id;
   const url = megaSpriteUrls[lookupId];
@@ -1045,43 +631,11 @@ const speciesLookupPool = species.map((s) => ({ id: s.id, name: s.name }));
 const speciesById = new Map(species.map((s) => [s.id, s]));
 
 /**
- * "Shadow " raid entries used to just point speciesId at the unboosted base
- * species and get flagged isApproximate: true (this project didn't model the
- * real Shadow atk/def multiplier). Now that shadow.ts's
- * shadowAdjustedBaseStats/SpeciesDefinition.isShadow exist (engine-developer,
- * 2026-09-05), a Shadow raid entry gets its OWN distinct SpeciesDefinition —
- * same pattern as a mega/primal getting its own id separate from its base
- * form — with raw base stats copied unmultiplied from the base species (the
- * engine applies SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER at
- * effective-stat time; pre-multiplying here would double-apply once combined
- * with the engine's own shadowAdjustedBaseStats). Cached per base species id
- * so e.g. two "Shadow Slowpoke" raid tiers don't synthesize two entries.
+ * Cached per base species id so e.g. two "Shadow Slowpoke" raid tiers don't
+ * synthesize two entries — see getOrCreateShadowVariant
+ * (scripts/sync-data/shadowVariant.ts) for the synthesis itself.
  */
 const shadowSpeciesByBaseId = new Map<string, SpeciesDefinition>();
-
-function shadowVariantIdFor(baseId: string): string {
-  return `${baseId}-shadow`;
-}
-
-function getOrCreateShadowVariant(baseSpecies: SpeciesDefinition): SpeciesDefinition {
-  const existing = shadowSpeciesByBaseId.get(baseSpecies.id);
-  if (existing) return existing;
-  const shadowId = shadowVariantIdFor(baseSpecies.id);
-  const shadow: SpeciesDefinition = {
-    ...baseSpecies,
-    id: shadowId,
-    name: `Shadow ${baseSpecies.name}`,
-    isShadow: true,
-    // Shadow and mega/primal boost are mutually exclusive in the real game
-    // (shadow.ts's shadowAdjustedBaseStats throws if both are set) — the base
-    // species this is derived from is never itself a mega/primal form (a
-    // "Shadow Mega X" raid doesn't exist), but strip boost defensively rather
-    // than trust that invariant silently.
-    boost: undefined,
-  };
-  shadowSpeciesByBaseId.set(baseSpecies.id, shadow);
-  return shadow;
-}
 
 const activeRaids: ActiveRaidEntry[] = [];
 let unmatchedRaidCount = 0;
@@ -1125,7 +679,7 @@ for (const raid of rawRaids) {
               // getOrCreateShadowVariant above.
               const baseSpecies = speciesById.get(baseMatch);
               if (baseSpecies) {
-                const shadowVariant = getOrCreateShadowVariant(baseSpecies);
+                const shadowVariant = getOrCreateShadowVariant(baseSpecies, shadowSpeciesByBaseId);
                 speciesId = shadowVariant.id;
                 isApproximate = false;
                 break;
@@ -1206,48 +760,6 @@ if (existsSync(raidsOutPath)) {
   }
 }
 
-function diffSpecies(prev: SpeciesDefinition[] | null, next: SpeciesDefinition[]): string[] {
-  if (!prev) return ["initial sync (no previous species.json baseline)"];
-  const diffs: string[] = [];
-  const prevById = new Map(prev.map((s) => [s.id, s]));
-  const nextById = new Map(next.map((s) => [s.id, s]));
-  for (const [id, ns] of nextById) {
-    const ps = prevById.get(id);
-    if (!ps) {
-      diffs.push(`+ ${id} (new species)`);
-      continue;
-    }
-    if (JSON.stringify(ps) !== JSON.stringify(ns)) {
-      diffs.push(`~ ${id} changed`);
-    }
-  }
-  for (const id of prevById.keys()) {
-    if (!nextById.has(id)) diffs.push(`- ${id} (removed)`);
-  }
-  return diffs;
-}
-
-function diffRaids(prev: ActiveRaidEntry[] | null, next: ActiveRaidEntry[]): string[] {
-  if (!prev) return ["initial sync (no previous activeRaids.json baseline)"];
-  const diffs: string[] = [];
-  const prevByName = new Map(prev.map((r) => [r.raidName, r]));
-  const nextByName = new Map(next.map((r) => [r.raidName, r]));
-  for (const [name, nr] of nextByName) {
-    const pr = prevByName.get(name);
-    if (!pr) {
-      diffs.push(`+ ${name} (new raid entry)`);
-      continue;
-    }
-    if (JSON.stringify(pr) !== JSON.stringify(nr)) {
-      diffs.push(`~ ${name} changed (${JSON.stringify(pr)} -> ${JSON.stringify(nr)})`);
-    }
-  }
-  for (const name of prevByName.keys()) {
-    if (!nextByName.has(name)) diffs.push(`- ${name} (no longer an active raid)`);
-  }
-  return diffs;
-}
-
 const speciesDiffs = diffSpecies(previousSpecies, species);
 const raidDiffs = diffRaids(previousRaids, activeRaids);
 
@@ -1263,6 +775,9 @@ writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
+
+const RAID_FALLBACK_PATH = raidFallbackPathFor(REPO_ROOT);
+const SCRAPEDDUCK_RAIDS_URL = "https://raw.githubusercontent.com/bigfoott/ScrapedDuck/data/raids.json";
 
 const raidsWithNullSpecies = activeRaids.filter((r) => r.speciesId === null).length;
 const raidsApproximate = activeRaids.filter((r) => r.isApproximate).length;
@@ -1290,7 +805,7 @@ console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/mov
 console.log(`  - Unresolved move names referenced by current_pokemon_moves but absent from fast_moves/charged_moves.json (likely retired/legacy moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);
-console.log(`  - GAME_MASTER fallback for mega/primal stats pogoapi.net's mega_pokemon.json doesn't cover (second automated source, PokeMiners' GAME_MASTER mirror, see fetchGameMasterMegaOverrides in scripts/sync-data.ts): ${megaOrPrimalRaidGaps.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list)" : `${megaOrPrimalRaidGaps.length} gap(s) found (${megaOrPrimalRaidGaps.map((r) => r.name).join(", ")}); GAME_MASTER fetch ${gameMasterFetchResult?.source === "live" ? `succeeded (data/raw/game_master_mega_overrides.json cached, ${gameMasterFetchResult.records.length} tempEvoOverrides records extracted)` : `FAILED: ${gameMasterFetchResult?.error}`}; resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (fell through to the existing approximate base-stat fallback instead): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
+console.log(`  - GAME_MASTER fallback for mega/primal stats pogoapi.net's mega_pokemon.json doesn't cover (second automated source, PokeMiners' GAME_MASTER mirror, see fetchGameMasterMegaOverrides in scripts/sync-data/fetchCache.ts): ${megaOrPrimalRaidGaps.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list)" : `${megaOrPrimalRaidGaps.length} gap(s) found (${megaOrPrimalRaidGaps.map((r) => r.name).join(", ")}); GAME_MASTER fetch ${gameMasterFetchResult?.source === "live" ? `succeeded (data/raw/game_master_mega_overrides.json cached, ${gameMasterFetchResult.records.length} tempEvoOverrides records extracted)` : `FAILED: ${gameMasterFetchResult?.error}`}; resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (fell through to the existing approximate base-stat fallback instead): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
 if (gameMasterCrossChecks.length > 0) {
   console.log(`  - GAME_MASTER cross-check against independent community sources: ${gameMasterCrossChecks.join("; ")}`);
 }

@@ -125,14 +125,6 @@ export interface SpeciesDefinition {
   statsArePrecomputed?: boolean;
 }
 
-export interface Combatant {
-  species: SpeciesDefinition;
-  level: number;
-  ivs: IVSpread;
-  fastMove: FastMove;
-  chargedMove: ChargedMove;
-}
-
 export interface EffectiveStats {
   attack: number;
   defense: number;

@@ -11,6 +11,7 @@ import {
 } from "@pogo-analyzer/engine";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 import {
   buildSpeciesReportScenarioUrl,
@@ -18,6 +19,7 @@ import {
   type SpeciesReportScenario,
   type SpeciesReportSortMode,
 } from "./speciesReportScenario.js";
+import { getBaseUrl } from "./urlUtils.js";
 import { activeRaidBossOptions, candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, unmatchedActiveRaids } from "./registry.js";
 
 // Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx
@@ -258,9 +260,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
     // Also pins `view=species-report` so reloading/sharing this link lands on
     // this tab, not whichever one happened to be open — see App.tsx's
     // tab-switch scaffold, which all three views' share flows now write into.
-    const url = new URL(
-      buildSpeciesReportScenarioUrl(window.location.href.split("?")[0]!, assumptionsToScenario(assumptions)),
-    );
+    const url = new URL(buildSpeciesReportScenarioUrl(getBaseUrl(), assumptionsToScenario(assumptions)));
     url.searchParams.set("view", "species-report");
     window.history.replaceState(null, "", url.toString());
     setShareUrl(url.toString());
@@ -547,7 +547,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
                       {meta?.raidName ?? row.bossName}
                       <span className="species-picker-hint"> ({row.bossTier ?? meta?.tier ?? "unknown tier"})</span>
                       {meta?.isApproximate && <span className="badge badge-approximate">approximate</span>}
-                      {bossSpecies?.isShadow && <span className="badge badge-shadow">shadow</span>}
+                      <SpeciesBadges isShadow={bossSpecies?.isShadow} />
                     </td>
                     <td>{row.offensiveTypeMatchup.toFixed(3)}x</td>
                     <td>

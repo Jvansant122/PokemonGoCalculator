@@ -1,6 +1,6 @@
 # Meta-Architect Memory Index
 
-- [Project config shape](project-config-shape.md) — current: 7 agents as of 2026-09-05 pm (stale — 9 as of 2026-09-06, see skeptic-addition/code-simplifier-addition); pre-split 4-agent snapshot kept below for history.
+- [Project config shape](project-config-shape.md) — current: 9 agents as of 2026-09-06; also logs the 2026-09-06 "three tabs" stale-doc fix (4th tab, IV Breakpoints, added but CLAUDE.md not updated).
 - [pogo-researcher addition](pogo-researcher-addition.md) — 2026-09-05: 7th agent, routing clean, both findings (unscoped Write, Teambuilding-Analyzer decision) fixed same day.
 - [skeptic addition](skeptic-addition.md) — 2026-09-06: 8th agent, browser-driving adversarial checker of the live app; routing distinguished from engine-verifier/site-builder/pogo-researcher; description trimmed 760→537 chars.
 - [code-simplifier addition](code-simplifier-addition.md) — 2026-09-06: 9th agent, read-only dead-code/duplication auditor for packages/engine+web/scripts, out of .claude/ scope; must cross-check CLAUDE.md Standing Decisions before flagging; no ts-prune/knip installed so relies on Grep.

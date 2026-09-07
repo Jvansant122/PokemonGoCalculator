@@ -1,6 +1,7 @@
 import { MAX_TEAM_RAID_SLOTS, WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { SpeciesBadges } from "./SpeciesBadges.js";
 
 const WEATHER_LABELS: Record<WeatherCondition, string> = {
   none: "None",
@@ -155,8 +156,7 @@ export function TeamAssumptionPanel({
               <div className="team-slot-header">
                 <strong>
                   Slot {i + 1}
-                  {species?.isHypothetical && <span className="badge badge-hypothetical">hypothetical</span>}
-                  {species?.isShadow && <span className="badge badge-shadow">shadow</span>}
+                  <SpeciesBadges isHypothetical={species?.isHypothetical} isShadow={species?.isShadow} />
                 </strong>
                 <div className="team-slot-order-buttons">
                   <button type="button" onClick={() => moveSlot(i, -1)} disabled={i === 0} title="Fights earlier">

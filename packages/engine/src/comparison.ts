@@ -16,6 +16,21 @@ import type { ChargedMove, IVSpread, SpeciesDefinition } from "./types.js";
 import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
 
 /**
+ * NOTE (2026-09-06 code-simplifier audit): runComparison/ComparisonInputs/
+ * CandidateResult below have zero production callers — packages/web only
+ * drives runSustainedComparison/compareAcrossBossChargedMoves further down in
+ * this same file. This is intentional, not dead code: see combat.ts's
+ * matching note at the top of that file for why this "Phase 1 opening burst"
+ * cluster is kept as a deterministic acceptance-test harness (comparison.test.ts,
+ * test/scenarioA.test.ts, test/scenarioB.test.ts, test/bossTiming.test.ts,
+ * part of test/simulate.test.ts) pinning the core formula pipeline
+ * independent of the sustained engine's randomized boss timing. Do not delete
+ * runComparison/ComparisonInputs/CandidateResult as unused without first
+ * confirming the exact pinned-number coverage they provide can be reproduced
+ * through runSustainedComparison instead.
+ */
+
+/**
  * Boss effective attack/defense stats, applying shadow.ts's Shadow
  * multiplier (if the boss species is flagged isShadow) to the raw
  * baseAttack/baseDefense before the single floor — several real raid bosses

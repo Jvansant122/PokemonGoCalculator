@@ -16,6 +16,8 @@ import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { computeSensitivity } from "./sensitivity.js";
+import { SpeciesBadges } from "./SpeciesBadges.js";
+import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 
 // Default matchup shown on a fresh page load with no URL param. This is just
@@ -410,7 +412,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
     // Also pins `view=comparator` so reloading/sharing this link doesn't land
     // on whichever tab happened to be active last — see App.tsx's tab-switch
     // scaffold, which both views' share flows now write into.
-    const url = new URL(buildScenarioUrl(window.location.href.split("?")[0]!, assumptionsToScenario(assumptions)));
+    const url = new URL(buildScenarioUrl(getBaseUrl(), assumptionsToScenario(assumptions)));
     url.searchParams.set("view", "comparator");
     window.history.replaceState(null, "", url.toString());
     setShareUrl(url.toString());
@@ -511,8 +513,10 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                   <div key={c.id} className={`result-card ${i === 0 ? "x" : "y"}`}>
                     <h3>
                       {species.candidates?.[i] && <SpeciesIcon s={species.candidates[i]} />} {c.name}
-                      {species.candidates?.[i]?.isHypothetical && <span className="badge badge-hypothetical">hypothetical</span>}
-                      {species.candidates?.[i]?.isShadow && <span className="badge badge-shadow">shadow</span>}
+                      <SpeciesBadges
+                        isHypothetical={species.candidates?.[i]?.isHypothetical}
+                        isShadow={species.candidates?.[i]?.isShadow}
+                      />
                     </h3>
                     <dl>
                       <dt>Mean survival</dt>

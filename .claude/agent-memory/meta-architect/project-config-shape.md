@@ -5,6 +5,13 @@ metadata:
   type: project
 ---
 
+**Update (2026-09-06):** CLAUDE.md's "Repo layout" packages/web bullet and the `skeptic` bullet
+both said "three tabs"/`s`/`ts`/`sr` after a 4th tab (**IV Breakpoints**, `ivc` param,
+`ivBreakpointsScenario.ts`) had already shipped and been added to App.tsx's own comment —
+code-simplifier caught it, fixed same-day. Recurring pattern: CLAUDE.md's tab count/param list
+lags app changes; re-grep for "three tab"/"tabs" and the query-param list whenever a new
+tab/Scenario-family type ships.
+
 **Update (2026-09-05, later same day):** split from 4 to 6 agents — `engine-developer` and
 `web-developer` added, `site-builder` narrowed to build/deploy, CLAUDE.md rewritten around an
 overseer/router role. Full audit of the split: [[six-agent-split]]. Current sizes: CLAUDE.md

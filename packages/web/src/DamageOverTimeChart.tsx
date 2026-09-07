@@ -1,4 +1,5 @@
 import { convertUptimeToTeamDamage, type DamageTrajectoryPoint } from "@pogo-analyzer/engine";
+import { niceStep, formatTick } from "./chartAxisUtils.js";
 
 export interface DamageOverTimeSeries {
   name: string;
@@ -85,21 +86,6 @@ export function teamContributionAt(series: DamageOverTimeSeries, t: number, team
 
 export function totalAt(series: DamageOverTimeSeries, t: number, teammateDps: number, partySize: number, matchingTeammateCount: number): number {
   return ownDamageAt(series.ownDamageTrajectory, t) + teamContributionAt(series, t, teammateDps, partySize, matchingTeammateCount);
-}
-
-/** Chooses a "nice" step (1/2/5 x a power of 10) for axis ticks, similar to most charting libraries' default tick spacing. */
-function niceStep(range: number, targetTicks: number): number {
-  if (range <= 0) return 1;
-  const rawStep = range / targetTicks;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const normalized = rawStep / magnitude;
-  const niceNormalized = normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
-  return niceNormalized * magnitude;
-}
-
-function formatTick(value: number): string {
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}k`;
-  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { TeamRaidOutcome, TeamRaidSlotResult } from "@pogo-analyzer/engine";
+import { niceStep, formatTick } from "./chartAxisUtils.js";
 
 interface Props {
   /** Flat, chronological list across every cycle — TeamRaidResult.slots as-is. */
@@ -14,20 +15,6 @@ const HEIGHT = 300;
 const PAD = { top: 16, right: 16, bottom: 40, left: 70 };
 const AXIS_TICKS = 6;
 const EPS = 1e-9;
-
-function niceStep(range: number, targetTicks: number): number {
-  if (range <= 0) return 1;
-  const rawStep = range / targetTicks;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-  const normalized = rawStep / magnitude;
-  const niceNormalized = normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
-  return niceNormalized * magnitude;
-}
-
-function formatTick(value: number): string {
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}k`;
-  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
-}
 
 /**
  * Team-raid analogue of DamageOverTimeChart.tsx: ONE cumulative team-damage
