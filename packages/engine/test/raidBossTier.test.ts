@@ -180,7 +180,7 @@ describe("defaultRaidTierForSpecies: rarity-keyed fallback (replaces the old bla
     expect(defaultRaidTierForSpecies(species)).toBe(DEFAULT_REAL_RAID_TIER);
   });
 
-  it("a real mega/primal species (species.boost set) resolves to Mega Raids regardless of its (base-species) rarity", () => {
+  it("a real mega/primal species of a non-Legendary rarity (species.boost set) resolves to Mega Raids", () => {
     const standardMega: SpeciesDefinition = {
       id: "standard-mega-species",
       name: "Standard Mega Species",
@@ -188,6 +188,10 @@ describe("defaultRaidTierForSpecies: rarity-keyed fallback (replaces the old bla
       boost: { multiplier: 1.3, boostedType: "normal" },
       ...baseFields,
     };
+    expect(defaultRaidTierForSpecies(standardMega)).toBe("Mega Raids");
+  });
+
+  it("a real mega/primal species of Legendary rarity (species.boost set) resolves to Legendary Mega Raids (six-star), not Mega Raids", () => {
     const legendaryMega: SpeciesDefinition = {
       id: "legendary-mega-species",
       name: "Legendary Mega Species",
@@ -195,8 +199,7 @@ describe("defaultRaidTierForSpecies: rarity-keyed fallback (replaces the old bla
       boost: { multiplier: 1.3, boostedType: "normal" },
       ...baseFields,
     };
-    expect(defaultRaidTierForSpecies(standardMega)).toBe("Mega Raids");
-    expect(defaultRaidTierForSpecies(legendaryMega)).toBe("Mega Raids");
+    expect(defaultRaidTierForSpecies(legendaryMega)).toBe("Legendary Mega Raids");
   });
 
   it("bossEffectiveStats/bossEffectiveHp actually resolve through defaultRaidTierForSpecies end-to-end when no tier is supplied", () => {

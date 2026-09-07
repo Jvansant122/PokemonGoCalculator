@@ -111,17 +111,17 @@ export const DEFAULT_REAL_RAID_TIER: RaidTier = "5-Star Raids";
  * far more often than right.
  *
  * Priority order:
- * 1. A real, non-hypothetical mega/primal form (`species.boost` set) ->
- *    "Mega Raids". Real mega/primal species never actually raid at 3-star or
- *    5-star, so branching on their (base-species) `rarity` alone would still
- *    be wrong — `boost` is a strictly better signal here, already on every
- *    synced mega/primal SpeciesDefinition (scripts/sync-data.ts). Note this
- *    can't further distinguish "Mega Raids" from "Legendary Mega
- *    Raids"/"Primal Raids"/"Super Mega Raids" (all four share the same 0.79
- *    attackDefenseMultiplier, differing only in HP pool) — SpeciesDefinition
- *    has no clean signal for that today, so "Mega Raids" (the most common
- *    mega-tier raid) is the single best guess, not a fully solved case.
- * 2. Otherwise, `species.rarity`: STANDARD -> "3-Star Raids" (the common
+ * 1. A real, non-hypothetical mega/primal form of a LEGENDARY-rarity species
+ *    (`species.boost` set AND `species.rarity === "LEGENDARY"`) ->
+ *    "Legendary Mega Raids" — mega legendaries (Mega Rayquaza, Mega Diancie,
+ *    etc.) and primal formes raid at six-star, not four-star. "Legendary Mega
+ *    Raids" and "Primal Raids" share identical stats (22500 HP, 0.79
+ *    multiplier — see RAID_TIER_TABLE), so this single branch is correct for
+ *    both without needing to separately detect primal vs. mega.
+ * 2. A real, non-hypothetical mega/primal form of any OTHER rarity
+ *    (`species.boost` set, rarity not LEGENDARY) -> "Mega Raids" (four-star),
+ *    the ordinary mega tier (Mega Charizard, Mega Gyarados, etc.).
+ * 3. Otherwise, `species.rarity`: STANDARD -> "3-Star Raids" (the common
  *    case), LEGENDARY -> "5-Star Raids". MYTHIC/ULTRA_BEAST and
  *    missing/undefined rarity data (neither Mythic nor Ultra Beast has
  *    historically been a standard raid-boss category, and undefined means
@@ -136,7 +136,7 @@ export const DEFAULT_REAL_RAID_TIER: RaidTier = "5-Star Raids";
  * fixtures), which short-circuit before ever reaching this function.
  */
 export function defaultRaidTierForSpecies(species: SpeciesDefinition): RaidTier {
-  if (species.boost) return "Mega Raids";
+  if (species.boost) return species.rarity === "LEGENDARY" ? "Legendary Mega Raids" : "Mega Raids";
   switch (species.rarity) {
     case "STANDARD":
       return "3-Star Raids";
