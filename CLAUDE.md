@@ -39,6 +39,19 @@ The handful of product-level calls that must survive no matter which agent touch
   species picker, which was never the intent. Replacements live under
   `packages/engine/test/fixtures/` only, never re-exported from `packages/engine/src/index.ts` —
   keep it that way. Don't casually change their stats either; `engine-developer` owns why/how.
+  **Correction (2026-09-06, same day):** Mega Raichu X/Y is NOT hypothetical — Raichu got a real
+  Mega Evolution via *Pokémon Legends: Z-A*'s "Mega Dimension" DLC, and it already debuted in
+  Pokémon GO on 2026-07-18 via a Super Mega Raid Day. It was wrongly assumed fan-made when the 4
+  fixtures above were deleted; the assumption was wrong, not the deletion (getting fabricated
+  stats out of the live picker was still correct) — the fix is real synced data, not restoring the
+  hand-authored fixture. It's absent from the picker only because it fell through a real gap:
+  pogoapi.net's `mega_pokemon.json` hasn't added it, and it's no longer a *currently active* raid
+  (one-day event, already over) so the existing GAME_MASTER gap-fill — gated on "is this raid live
+  right now" — never fires for it. `data-sync` is adding it as real data (GAME_MASTER already has
+  well-formed stats for it: Mega X 277/203/155 atk/def/sta, Mega Y 339/157/155, both pure Electric,
+  300 first-time/60 subsequent mega energy). Mega Skarmory and Primal Kyogre were never actually
+  affected by this mistake — both already flow through as real species via the normal
+  mega_pokemon.json/GAME_MASTER pipeline independent of their same-named test fixtures.
 - **The mega/primal team-wide damage boost never reaches the boosting Pokémon's own party** — only
   *other trainers* simultaneously in the same raid lobby (confirmed via Niantic's own official
   guide plus two independent community sources, 2026-09-06). A solo trainer only ever has one

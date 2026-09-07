@@ -1,0 +1,162 @@
+name: Check mega/primal roster gaps vs Bulbapedia
+
+# Advisory-only, read-only check. This workflow NEVER touches data/,
+# NEVER modifies scripts/sync-data.ts, and can never block/fail the
+# deploy workflow (deploy.yml) — it is entirely separate infrastructure.
+# See scripts/check-mega-gaps.ts for what it actually compares.
+
+on:
+  schedule:
+    # Every Monday at 13:00 UTC. Weekly cadence is plenty — Bulbapedia's GO
+    # mega-release table and this project's own roster both change far less
+    # often than daily, and a scheduled Actions cron is best-effort anyway
+    # (GitHub may delay it under load).
+    - cron: "0 13 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run mega/primal gap check
+        id: gap_check
+        run: npm run check-mega-gaps
+        # Don't let a non-zero exit (scrape/parse failure) stop the workflow
+        # before we've had a chance to report on it clearly below — but we DO
+        # want the job to end up failed/visibly-red in that case, so we record
+        # the outcome and fail explicitly in a later step instead.
+        continue-on-error: true
+
+      - name: Read gap report summary
+        id: read_report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const reportPath = path.join(process.env.RUNNER_TEMP, 'mega-gap-report.json');
+
+            if (!fs.existsSync(reportPath)) {
+              core.setFailed(
+                `check-mega-gaps.ts did not produce a report at ${reportPath} — treat as a broken check, not "no gap found".`,
+              );
+              return;
+            }
+
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+            core.setOutput('status', report.status);
+            core.setOutput('gapCount', String(report.gapCount ?? 0));
+            core.setOutput('reportJson', JSON.stringify(report));
+
+            if (report.status === 'error') {
+              core.setFailed(`check-mega-gaps.ts reported an error: ${report.error}`);
+            }
+
+      - name: Fail job if the check itself was broken
+        if: steps.gap_check.outcome == 'failure' && steps.read_report.outputs.status != 'error'
+        run: |
+          echo "check-mega-gaps.ts exited non-zero but didn't report status=error in its own summary — treating as a broken check that needs investigation."
+          exit 1
+
+      - name: Create or update gap-tracking issue
+        if: steps.read_report.outputs.status == 'ok' && steps.read_report.outputs.gapCount != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const report = JSON.parse('${{ steps.read_report.outputs.reportJson }}');
+            const label = 'mega-gap-check';
+
+            const gapLines = report.gaps
+              .map((g) => `- **${g.name}** — released ${g.releaseDate}`)
+              .join('\n');
+
+            const body = [
+              'This project\'s modeled mega/primal roster (`data/normalized/species.json` entries with a `.boost` field set) is missing one or more Mega Evolutions/Primal Reversions that Bulbapedia\'s Pokémon-GO-specific tracking page confirms have actually been released in Pokémon GO:',
+              '',
+              gapLines,
+              '',
+              `Checked at: ${report.checkedAt}`,
+              `Source: ${report.sourceUrl}`,
+              `(${report.releasedCount} released per Bulbapedia vs. ${report.ownRosterCount} currently modeled here.)`,
+              '',
+              'This is advisory only — nothing has been auto-changed. A human should review and, if confirmed real, add the missing species via the normal data-sync pipeline (`npm run sync-data`, extending its GAME_MASTER-fallback/allowlist mega-gap handling the same way Mega Raichu X/Y and Mega Skarmory were added).',
+              '',
+              'This issue is automatically updated by `.github/workflows/check-mega-gaps.yml` on its weekly run and will be auto-closed once the gap is no longer detected.',
+            ].join('\n');
+
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+
+            if (existingIssues.length > 0) {
+              const issue = existingIssues[0];
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body,
+              });
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `Gap check re-run ${report.checkedAt}: still open, ${report.gapCount} gap(s) — see updated issue body.`,
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: 'Mega/primal roster gap(s) vs Bulbapedia',
+                body,
+                labels: [label],
+              });
+            }
+
+      - name: Close stale gap-tracking issue if the gap is resolved
+        if: steps.read_report.outputs.status == 'ok' && steps.read_report.outputs.gapCount == '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const label = 'mega-gap-check';
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: label,
+            });
+
+            for (const issue of existingIssues) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: 'This project\'s mega/primal roster now matches Bulbapedia\'s released-in-Pokémon-GO list with no detected gap — closing automatically.',
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+            }

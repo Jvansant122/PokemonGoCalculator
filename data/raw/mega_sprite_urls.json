@@ -48,5 +48,16 @@
   "diancie-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10075.png",
   "kyogre-primal": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10077.png",
   "mewtwo-mega-y": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10044.png",
-  "skarmory-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png"
+  "skarmory-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png",
+  "raichu-mega-x": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10304.png",
+  "raichu-mega-y": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10305.png",
+  "victreebel-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10279.png",
+  "dragonite-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10281.png",
+  "malamar-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10297.png",
+  "falinks-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10303.png",
+  "mewtwo-mega-x": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10043.png",
+  "starmie-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10280.png",
+  "chesnaught-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10292.png",
+  "delphox-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10293.png",
+  "greninja-mega": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10294.png"
 }

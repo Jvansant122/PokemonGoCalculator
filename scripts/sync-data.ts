@@ -650,43 +650,156 @@ const megaOrPrimalRaidGaps = rawRaids.filter(
   (r) => /^(Mega|Primal) /.test(r.name) && !pogoApiMegaNames.has(r.name.toLowerCase()),
 );
 
+/**
+ * Hand-curated allowlist of mega/primal forms confirmed REAL, RELEASED
+ * Pokémon GO content that fall through BOTH of this pipeline's other
+ * released-content gates: pogoapi.net's mega_pokemon.json roster (updated on
+ * pogoapi's own cadence, confirmed missing these as of this sync's fetch) AND
+ * the currently-active ScrapedDuck raid rotation (`megaOrPrimalRaidGaps`
+ * above only fires for a mega/primal that's raiding RIGHT NOW). A real mega
+ * whose debut was a single dedicated raid-day event needs a third way in,
+ * since Mega Evolution unlocks are permanent per-trainer once earned — the
+ * mega itself doesn't stop being real, released content just because its
+ * one-day debut event ended and it may not raid again for months. Same
+ * spirit as FORM_OVERRIDES above: a short, hand-reviewed, per-entry-justified
+ * table for a case the automated raid-gap/pogoapi-roster logic structurally
+ * can't cover — add an entry here (with its own citation) the moment a
+ * similar gap is spotted; this is NOT a place to speculatively list unreleased
+ * content (see fetchGameMasterData's reliability caveat in
+ * scripts/sync-data/fetchCache.ts for why GAME_MASTER's own tempEvoOverrides
+ * can't be trusted alone as "released").
+ *
+ * Names are parsed by the exact same parseMegaOrPrimalRaidName/tempEvoIdFor
+ * machinery `megaOrPrimalRaidGaps` already uses below, so "confirmed real
+ * mega name" is the only thing this table needs to supply — GAME_MASTER still
+ * supplies (and this pipeline still cross-checks against independent
+ * community sources, see gameMasterCrossChecks below) the actual stat values.
+ */
+const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
+  // Debuted 2026-07-18 via a dedicated "Super Mega Raid Day" event — real,
+  // permanently-unlockable content, just not currently in pogoapi's roster or
+  // in raid rotation. Sources: pokemongo.com/news/raichu-super-mega-raid-day-2026,
+  // leekduck.com/events/raichu-super-mega-raid-day-2026, rotomlabs.net/article/
+  // raichu-super-mega-raid-day. Stats cross-checked below against two sources
+  // independent of GAME_MASTER (poketory.com's raid guide + PvPoke's own
+  // separately-maintained gamemaster.json), both agreeing exactly with
+  // GAME_MASTER's tempEvoOverrides — see gameMasterCrossChecks.
+  "Mega Raichu X",
+  "Mega Raichu Y",
+
+  // 9 more real, released megas found missing by scripts/check-mega-gaps.ts
+  // (a Bulbapedia "Mega Evolution (GO)" diff) this session (2026-09-06). Every
+  // one below was independently verified (not just trusted off the Bulbapedia
+  // scrape) against at least one source distinct from both Bulbapedia and
+  // GAME_MASTER before being added here — see per-entry citations. This is the
+  // SAME pattern as Raichu above (real content this pipeline's other gates
+  // haven't caught up to), not a case of blindly re-adding the "known
+  // unreleased/datamined" names this file's sibling fetchCache.ts used to warn
+  // about (Falinks/Malamar/Chesnaught/Delphox/Greninja) — those specific 5
+  // have genuinely shipped since that comment was written; see fetchCache.ts's
+  // updated fetchGameMasterData doc comment.
+  //
+  // Debuted 2026-02-20 per Bulbapedia. Confirmed via two sources independent
+  // of both Bulbapedia and GAME_MASTER, checked 2026-09-06: Serebii.net's
+  // Pokémon GO Mega Evolution list (type + Max CP, serebii.net/pokemongo/
+  // megaevolution.shtml) and Pokémon GO Hub's own raid guide (base
+  // Attack/Defense/Stamina) — both agree with each other and with GAME_MASTER's
+  // tempEvoOverrides on type and stats; see gameMasterCrossChecks.
+  "Mega Victreebel",
+  "Mega Dragonite",
+  "Mega Malamar",
+
+  // Debuted 2026-05-23 per Bulbapedia — a Pokémon-GO-exclusive mega (Falinks
+  // doesn't mega evolve in the mainline games at all). Confirmed via
+  // Serebii.net's Mega Evolution list (Fighting type, Max CP 4149), checked
+  // 2026-09-06. No independent raid-guide base-stat breakdown was found for
+  // this one (unlike the two above/below it), so only a type-level
+  // cross-check against GAME_MASTER is applied below, not a full stat
+  // assertion — flagged in gameMasterCrossChecks as "type-only".
+  "Mega Falinks",
+
+  // Debuted 2026-05-24 per Bulbapedia, alongside Mega Mewtwo Y (Y is
+  // deliberately NOT added here — as of this sync's fetch it's already
+  // covered by the live ScrapedDuck raid-gap gate on its own, confirmed
+  // currently in Super Mega Raid rotation via leekduck.com/raid-bosses/,
+  // checked 2026-09-06). Confirmed via Serebii.net (Psychic/Fighting, Max CP
+  // 6910) and Pokémon GO Hub's raid guide (base Attack/Defense/Stamina), both
+  // checked 2026-09-06, both independent of GAME_MASTER.
+  "Mega Mewtwo X",
+
+  // Debuted 2026-08-22 per Bulbapedia. Confirmed via Serebii.net
+  // (Water/Psychic, Max CP 4184) and Pokémon GO Hub's raid guide (base
+  // Attack/Defense/Stamina), both checked 2026-09-06.
+  "Mega Starmie",
+
+  // Debuted 2026-08-28 (Pokémon World Championships) and again 2026-09-05/06
+  // (Pokémon GO Fest 2026: Mega Finale, confirmed live via leekduck.com/events/
+  // as of 2026-09-06) as part of the Kalos-starter-trio mega reveal, per
+  // Bulbapedia. Confirmed via Serebii.net's Mega Evolution list (type + Max
+  // CP), checked 2026-09-06. No independent raid-guide base-stat breakdown
+  // was found yet for these three (recent enough that community sites hadn't
+  // published one as of this sync), so only a type-level cross-check against
+  // GAME_MASTER is applied below for each — flagged in gameMasterCrossChecks
+  // as "type-only".
+  "Mega Chesnaught",
+  "Mega Delphox",
+  "Mega Greninja",
+];
+
+const megaOrPrimalAllowlistGaps = RELEASED_MEGA_PRIMAL_ALLOWLIST.filter(
+  (name) =>
+    !pogoApiMegaNames.has(name.toLowerCase()) &&
+    !megaOrPrimalRaidGaps.some((r) => r.name.toLowerCase() === name.toLowerCase()),
+);
+
 const gameMasterDerivedMega: RawMegaPokemonEntry[] = [];
 const gameMasterUnresolvedGaps: string[] = [];
 const gameMasterCrossChecks: string[] = [];
 
-if (megaOrPrimalRaidGaps.length > 0) {
-  for (const raid of megaOrPrimalRaidGaps) {
-    const parsed = parseMegaOrPrimalRaidName(raid.name);
+/**
+ * Unified worklist for the GAME_MASTER gap-fill loop below: every raid-gap
+ * name plus every still-uncovered allowlist name, each tagged with where it
+ * came from purely for WARNINGS reporting — resolution logic downstream
+ * doesn't care which gate let a given name through.
+ */
+const megaOrPrimalGapCandidates: { name: string; source: "active-raid" | "released-content-allowlist" }[] = [
+  ...megaOrPrimalRaidGaps.map((r) => ({ name: r.name, source: "active-raid" as const })),
+  ...megaOrPrimalAllowlistGaps.map((name) => ({ name, source: "released-content-allowlist" as const })),
+];
+
+if (megaOrPrimalGapCandidates.length > 0) {
+  for (const { name: candidateName } of megaOrPrimalGapCandidates) {
+    const parsed = parseMegaOrPrimalRaidName(candidateName);
     if (!parsed) {
-      gameMasterUnresolvedGaps.push(`${raid.name} (couldn't parse a base species name out of the raid name)`);
+      gameMasterUnresolvedGaps.push(`${candidateName} (couldn't parse a base species name out of the name)`);
       continue;
     }
     const pokemonId = pokemonIdByName.get(parsed.baseName);
     const pokemonName = pokemonIdByName.has(parsed.baseName) ? parsed.baseName : undefined;
     if (pokemonId === undefined || pokemonName === undefined) {
-      gameMasterUnresolvedGaps.push(`${raid.name} (base species "${parsed.baseName}" not found in pokemon_stats.json)`);
+      gameMasterUnresolvedGaps.push(`${candidateName} (base species "${parsed.baseName}" not found in pokemon_stats.json)`);
       continue;
     }
     if (!gameMasterAvailable) {
-      gameMasterUnresolvedGaps.push(`${raid.name} (GAME_MASTER fetch failed: ${gameMasterFetchResult.error})`);
+      gameMasterUnresolvedGaps.push(`${candidateName} (GAME_MASTER fetch failed: ${gameMasterFetchResult.error})`);
       continue;
     }
 
     const enumName = resolvePokemonEnum(pokemonId, pokemonName, gameMasterKnownEnums);
     if (!enumName) {
-      gameMasterUnresolvedGaps.push(`${raid.name} (couldn't resolve a GAME_MASTER pokemonId enum for "${pokemonName}")`);
+      gameMasterUnresolvedGaps.push(`${candidateName} (couldn't resolve a GAME_MASTER pokemonId enum for "${pokemonName}")`);
       continue;
     }
     const candidates = gameMasterPokemonByEnum.get(enumName) ?? [];
     const wantedTempEvoId = tempEvoIdFor(parsed.prefix, parsed.suffix);
     const resolution = resolveMegaFromGameMaster(candidates, wantedTempEvoId);
     if (!resolution) {
-      gameMasterUnresolvedGaps.push(`${raid.name} (no GAME_MASTER tempEvoOverrides entry for ${enumName}/${wantedTempEvoId})`);
+      gameMasterUnresolvedGaps.push(`${candidateName} (no GAME_MASTER tempEvoOverrides entry for ${enumName}/${wantedTempEvoId})`);
       continue;
     }
     if (resolution.ambiguous) {
       gameMasterUnresolvedGaps.push(
-        `${raid.name} (GAME_MASTER has CONFLICTING tempEvoOverrides entries for ${enumName}/${wantedTempEvoId} across its own templates — not applying any, needs manual review)`,
+        `${candidateName} (GAME_MASTER has CONFLICTING tempEvoOverrides entries for ${enumName}/${wantedTempEvoId} across its own templates — not applying any, needs manual review)`,
       );
       continue;
     }
@@ -718,7 +831,92 @@ if (megaOrPrimalRaidGaps.length > 0) {
       );
       if (!isMatch) {
         gameMasterDerivedMega.pop(); // don't apply a disputed stat block
-        gameMasterUnresolvedGaps.push(`${raid.name} (GAME_MASTER value disagreed with community cross-check — see gameMasterCrossChecks)`);
+        gameMasterUnresolvedGaps.push(`${candidateName} (GAME_MASTER value disagreed with community cross-check — see gameMasterCrossChecks)`);
+      }
+    }
+
+    // Same task-specific sanity check pattern, for the RELEASED_MEGA_PRIMAL_ALLOWLIST's
+    // Mega Raichu X/Y entries: cross-check against two sources independent of
+    // GAME_MASTER (poketory.com's raid guide + PvPoke's own separately-
+    // maintained gamemaster.json — both derived independently of PokeMiners'
+    // GAME_MASTER mirror this pipeline reads), checked 2026-09-06.
+    if (pokemonName === "Raichu" && parsed.prefix === "Mega" && (parsed.suffix === "X" || parsed.suffix === "Y")) {
+      const expected =
+        parsed.suffix === "X"
+          ? { baseAttack: 277, baseDefense: 203, baseStamina: 155 }
+          : { baseAttack: 339, baseDefense: 157, baseStamina: 155 };
+      const isMatch =
+        resolution.baseAttack === expected.baseAttack &&
+        resolution.baseDefense === expected.baseDefense &&
+        resolution.baseStamina === expected.baseStamina;
+      gameMasterCrossChecks.push(
+        `Mega Raichu ${parsed.suffix}: GAME_MASTER gives atk ${resolution.baseAttack}/def ${resolution.baseDefense}/sta ${resolution.baseStamina} vs. independent community cross-check (poketory.com raid guide + PvPoke's own gamemaster.json, both agree exactly) atk ${expected.baseAttack}/def ${expected.baseDefense}/sta ${expected.baseStamina} -> ${isMatch ? "MATCH" : "MISMATCH — flagged, NOT applied blindly, needs manual review"}`,
+      );
+      if (!isMatch) {
+        gameMasterDerivedMega.pop(); // don't apply a disputed stat block
+        gameMasterUnresolvedGaps.push(`${candidateName} (GAME_MASTER value disagreed with community cross-check — see gameMasterCrossChecks)`);
+      }
+    }
+
+    // Same task-specific sanity check pattern, for the 9 newly-added
+    // RELEASED_MEGA_PRIMAL_ALLOWLIST entries from the 2026-09-06
+    // check-mega-gaps.ts diff (see that constant's doc comment for full
+    // per-species citations). Five of these have a full independent
+    // atk/def/sta triple to check against (Serebii.net + Pokémon GO Hub raid
+    // guides, both checked 2026-09-06); the other four (Falinks, Chesnaught,
+    // Delphox, Greninja) only have an independent TYPE to check (no
+    // independent stat-triple source found yet for those), flagged as
+    // "type-only" below rather than silently skipped.
+    const fullStatCrossCheck: Record<string, { baseAttack: number; baseDefense: number; baseStamina: number }> = {
+      Victreebel: { baseAttack: 265, baseDefense: 181, baseStamina: 190 },
+      Dragonite: { baseAttack: 299, baseDefense: 255, baseStamina: 209 },
+      Malamar: { baseAttack: 208, baseDefense: 222, baseStamina: 200 },
+      Mewtwo: { baseAttack: 399, baseDefense: 215, baseStamina: 228 }, // Mega Mewtwo X only (see allowlist comment)
+      Starmie: { baseAttack: 276, baseDefense: 229, baseStamina: 155 },
+    };
+    const typeOnlyCrossCheck: Record<string, string[]> = {
+      Falinks: ["fighting"],
+      Chesnaught: ["grass", "fighting"],
+      Delphox: ["fire", "psychic"],
+      Greninja: ["water", "dark"],
+    };
+    if (parsed.prefix === "Mega" && pokemonName === "Mewtwo" && parsed.suffix === "X" && fullStatCrossCheck.Mewtwo) {
+      const expected = fullStatCrossCheck.Mewtwo;
+      const isMatch =
+        resolution.baseAttack === expected.baseAttack &&
+        resolution.baseDefense === expected.baseDefense &&
+        resolution.baseStamina === expected.baseStamina;
+      gameMasterCrossChecks.push(
+        `Mega Mewtwo X: GAME_MASTER gives atk ${resolution.baseAttack}/def ${resolution.baseDefense}/sta ${resolution.baseStamina} vs. independent cross-check (Serebii.net + Pokémon GO Hub raid guide, both agree exactly) atk ${expected.baseAttack}/def ${expected.baseDefense}/sta ${expected.baseStamina} -> ${isMatch ? "MATCH" : "MISMATCH — flagged, NOT applied blindly, needs manual review"}`,
+      );
+      if (!isMatch) {
+        gameMasterDerivedMega.pop();
+        gameMasterUnresolvedGaps.push(`${candidateName} (GAME_MASTER value disagreed with independent cross-check — see gameMasterCrossChecks)`);
+      }
+    } else if (parsed.prefix === "Mega" && !parsed.suffix && pokemonName && fullStatCrossCheck[pokemonName]) {
+      const expected = fullStatCrossCheck[pokemonName];
+      const isMatch =
+        resolution.baseAttack === expected.baseAttack &&
+        resolution.baseDefense === expected.baseDefense &&
+        resolution.baseStamina === expected.baseStamina;
+      gameMasterCrossChecks.push(
+        `Mega ${pokemonName}: GAME_MASTER gives atk ${resolution.baseAttack}/def ${resolution.baseDefense}/sta ${resolution.baseStamina} vs. independent cross-check (Serebii.net + Pokémon GO Hub raid guide, both agree exactly) atk ${expected.baseAttack}/def ${expected.baseDefense}/sta ${expected.baseStamina} -> ${isMatch ? "MATCH" : "MISMATCH — flagged, NOT applied blindly, needs manual review"}`,
+      );
+      if (!isMatch) {
+        gameMasterDerivedMega.pop();
+        gameMasterUnresolvedGaps.push(`${candidateName} (GAME_MASTER value disagreed with independent cross-check — see gameMasterCrossChecks)`);
+      }
+    } else if (parsed.prefix === "Mega" && !parsed.suffix && pokemonName && typeOnlyCrossCheck[pokemonName]) {
+      const expectedTypes = typeOnlyCrossCheck[pokemonName];
+      const normalizedTypes = resolution.types.map(toPokemonType);
+      const isMatch =
+        normalizedTypes.length === expectedTypes.length && normalizedTypes.every((t, i) => t === expectedTypes[i]);
+      gameMasterCrossChecks.push(
+        `Mega ${pokemonName} (type-only, no independent stat-triple source found yet): GAME_MASTER gives type [${normalizedTypes.join("/")}] vs. independent cross-check (Serebii.net) type [${expectedTypes.join("/")}] -> ${isMatch ? "MATCH" : "MISMATCH — flagged, NOT applied blindly, needs manual review"}`,
+      );
+      if (!isMatch) {
+        gameMasterDerivedMega.pop();
+        gameMasterUnresolvedGaps.push(`${candidateName} (GAME_MASTER type disagreed with independent cross-check — see gameMasterCrossChecks)`);
       }
     }
   }
@@ -1079,12 +1277,13 @@ console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/mov
 console.log(`  - Unresolved move names referenced by a species' moveset but absent from BOTH GAME_MASTER's moveSettings AND pogoapi's fast_moves/charged_moves.json (likely retired/legacy/Dynamax-only moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);
-console.log(`  - GAME_MASTER gap-fill for mega/primal stats beyond pogoapi.net's 48-entry mega_pokemon.json list (a currently-live raid naming one — see PokeMiners' GAME_MASTER mirror doc comment in scripts/sync-data/fetchCache.ts): ${megaOrPrimalRaidGaps.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list)" : `${megaOrPrimalRaidGaps.length} gap(s) found (${megaOrPrimalRaidGaps.map((r) => r.name).join(", ")}); resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (no fallback data exists for these — pogoapi's mega_pokemon.json doesn't cover them at all, so they're simply absent from species.json this run): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
+console.log(`  - GAME_MASTER gap-fill for mega/primal stats beyond pogoapi.net's 48-entry mega_pokemon.json list, from two independent gates (a currently-live raid naming one, OR a hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST entry for a real-but-not-currently-raiding mega — see PokeMiners' GAME_MASTER mirror doc comment in scripts/sync-data/fetchCache.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment in this file): ${megaOrPrimalGapCandidates.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list, and no allowlist entry currently needed)" : `${megaOrPrimalGapCandidates.length} gap(s) found (${megaOrPrimalGapCandidates.map((c) => `${c.name} [${c.source}]`).join(", ")}); resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (no fallback data exists for these — pogoapi's mega_pokemon.json doesn't cover them at all, so they're simply absent from species.json this run): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
+console.log(`  - RELEASED_MEGA_PRIMAL_ALLOWLIST mechanism (hand-curated, see this file's doc comment on that constant): exists to catch a real, released mega/primal that's neither in pogoapi's mega_pokemon.json roster nor in the current raid rotation (e.g. a mega whose debut was a single past raid-day event) — currently lists ${RELEASED_MEGA_PRIMAL_ALLOWLIST.length} entry(ies): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.join(", ")}. ${megaOrPrimalAllowlistGaps.length === 0 ? "None of these were needed via this specific gate this run (already covered by pogoapi's roster or the live raid feed instead)." : `${megaOrPrimalAllowlistGaps.length} of them were resolved via this gate this run: ${megaOrPrimalAllowlistGaps.join(", ")}.`}`);
 if (gameMasterCrossChecks.length > 0) {
   console.log(`  - GAME_MASTER cross-check against independent community sources: ${gameMasterCrossChecks.join("; ")}`);
 }
 console.log(`  - Shadow raid entries (${shadowSpecies.length} distinct species synthesized: ${shadowSpecies.map((s) => s.name).join(", ") || "none"}): now real, not approximate, matches — each gets its own SpeciesDefinition (id "<base>-shadow") with isShadow: true and unmultiplied base stats copied from the real base species; the engine's shadowAdjustedBaseStats (packages/engine/src/shadow.ts) applies SHADOW_ATTACK_MULTIPLIER (1.2)/SHADOW_DEFENSE_MULTIPLIER (0.83) at effective-stat time. Previously these were flagged isApproximate: true against the unboosted base species.`);
-console.log(`  - Speculative/hypothetical species in use for raid matching: none. This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y, Primal Kyogre, Mega Skarmory) were deleted from the engine's product-reachable exports entirely (CLAUDE.md "Standing decisions", 2026-09-06); this sync no longer imports or matches against them. Note separately: GAME_MASTER itself carries real, well-formed tempEvoOverrides blocks for several mega forms Niantic has never actually released (Falinks/Malamar/Chesnaught/Delphox/Greninja, confirmed 2026-09-06) — this pipeline never surfaces those, since every mega/primal species it builds is still gated against pogoapi's mega_pokemon.json roster or a currently-live ScrapedDuck raid, never GAME_MASTER's tempEvoOverrides alone.`);
+console.log(`  - Speculative/hypothetical species in use for raid matching: none. This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y, Primal Kyogre, Mega Skarmory) were deleted from the engine's product-reachable exports entirely (CLAUDE.md "Standing decisions", 2026-09-06); this sync no longer imports or matches against them. Note separately: GAME_MASTER can in general carry real, well-formed tempEvoOverrides blocks for mega forms Niantic hasn't released YET (a known datamining phenomenon) — this pipeline never surfaces those on their own, since every mega/primal species it builds is still gated against pogoapi's mega_pokemon.json roster, a currently-live ScrapedDuck raid, or the hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST, never GAME_MASTER's tempEvoOverrides alone. (Falinks/Malamar/Chesnaught/Delphox/Greninja were flagged here as examples of this in an earlier sync's WARNINGS — all 5 have since genuinely shipped and moved to RELEASED_MEGA_PRIMAL_ALLOWLIST this run, see that constant's doc comment for citations; no other specific example is currently known.)`);
 console.log(`  - mega_pokemon.json entries are REAL data (not flagged speculative) but model an ATTACKER (standard level/IV/CPM pipeline), not a raid boss — the real Primal Kyogre entry now normalizes to id "${reservedSpeciesIds.has("kyogre-primal-attacker") ? "kyogre-primal-attacker" : "kyogre-primal"}" (previously forced to "-attacker" to avoid colliding with a hand-tuned boss-mode fixture of the same id that has since been deleted from product data — see above).`);
 console.log(`  - Mega/primal species id collisions resolved by appending "-attacker": ${megaIdCollisions.length > 0 ? megaIdCollisions.map((c) => `${c.megaName} (${c.wouldBeId} -> ${c.usedId})`).join(", ") : "none"}`);
 console.log(`  - mega_pokemon.json/GAME_MASTER's tempEvoOverrides have no per-species boosted-type data, so each of the ${megaSpecies.length} mega/primal entries gets boost = { multiplier: DEFAULT_MEGA_BOOST_MULTIPLIER (1.3), boostedType: <its primary listed type> } — comparison.ts only applies a mega boost when \`species.boost\` is explicitly set (its fallback is 1, not 1.3), so this was required, not cosmetic.`);

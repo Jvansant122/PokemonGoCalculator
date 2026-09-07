@@ -211,21 +211,37 @@ export interface GameMasterFetchResult {
  *   base species' type2" — see GameMasterTempEvoOverrideRecord's doc comment
  *   in rawShapes.ts for the Mega Aggron cross-check that caught this.
  *
- * IMPORTANT reliability caveat (confirmed live 2026-09-06, carried over from
- * the narrower mega-only version this replaces): GAME_MASTER carries
- * tempEvoOverrides stat blocks for mega forms Niantic has coded client-side
- * but NEVER actually released or put into rotation — e.g. Mega Falinks/
- * Malamar/Chesnaught/Delphox/Greninja all have real, well-formed
- * tempEvoOverrides entries despite not existing in pogoapi.net's list, not
- * appearing in any current or past raid rotation, and (for the non-Kalos-
- * starter cases) not being real Mega Evolutions in the mainline games at all
- * — Niantic's client preloading data for unannounced future content, a known
+ * IMPORTANT reliability caveat (general risk, still real as of 2026-09-06):
+ * GAME_MASTER can carry tempEvoOverrides stat blocks for mega forms Niantic
+ * has coded client-side but NOT YET actually released or put into rotation —
+ * Niantic's client preloading data for unannounced future content, a known
  * datamining phenomenon. This is exactly why sync-data.ts still gates every
  * mega/primal species it builds against a RELEASED-content allowlist
  * (pogoapi's mega_pokemon.json, plus the ScrapedDuck active-raids feed for
- * gap-filling) rather than surfacing every tempEvoOverrides block GAME_MASTER
+ * gap-filling, plus a hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST for real
+ * content that's missed both of those — see that constant's doc comment in
+ * sync-data.ts) rather than surfacing every tempEvoOverrides block GAME_MASTER
  * happens to carry — this function itself does no such gating, it's a pure
  * extraction step.
+ *
+ * UPDATE 2026-09-06: this comment previously named Mega Falinks/Malamar/
+ * Chesnaught/Delphox/Greninja specifically as examples of tempEvoOverrides
+ * blocks for content Niantic had coded but never released. All 5 have
+ * genuinely shipped since that was written (Victreebel/Dragonite/Malamar
+ * 2026-02-20, Falinks 2026-05-23, Mewtwo X/Y 2026-05-24, Starmie 2026-08-22,
+ * and the Kalos-starter trio Chesnaught/Delphox/Greninja 2026-08-28 at the
+ * Pokémon World Championships, reprised 2026-09-05/06 at Pokémon GO Fest 2026:
+ * Mega Finale — independently confirmed via Bulbapedia's "Mega Evolution (GO)"
+ * page, Serebii.net's Mega Evolution list, and (for 5 of the 9) Pokémon GO
+ * Hub's own raid guides; see RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment in
+ * sync-data.ts for full per-species citations and cross-checks) — so they no
+ * longer belong in this "known unreleased" category and have been added to
+ * that allowlist instead. The GENERAL caveat above (GAME_MASTER can carry
+ * real tempEvoOverrides for content that hasn't shipped YET, for some OTHER
+ * species) remains true and is not specific to these 5 anymore — there is no
+ * currently-known named example of it as of this update; treat any future
+ * tempEvoOverrides-only mega with the same "verify before trusting" rigor
+ * these 9 got, not as an automatic red flag.
  */
 export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFetchResult> {
   try {
