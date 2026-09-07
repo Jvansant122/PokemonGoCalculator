@@ -24,15 +24,15 @@
     "bytes": 6706
   },
   "raids.json": {
-    "fetchedAt": "2026-09-07T05:01:03.776Z",
-    "bytes": 12433
+    "fetchedAt": "2026-09-07T14:07:00.318Z",
+    "bytes": 12296
   },
   "mega_pokemon.json": {
-    "fetchedAt": "2026-09-07T05:01:03.539Z",
+    "fetchedAt": "2026-09-07T14:07:00.041Z",
     "bytes": 19958
   },
   "game_master.json": {
-    "fetchedAt": "2026-09-07T05:01:04.534Z",
+    "fetchedAt": "2026-09-07T14:07:00.683Z",
     "bytes": 1325023
   }
 }

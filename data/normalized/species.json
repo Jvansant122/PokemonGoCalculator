@@ -81642,7 +81642,8 @@
       "boostedType": "dark"
     },
     "rarity": "STANDARD",
-    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10066.png"
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10066.png",
+    "lastKnownRaidTier": "Mega Raids"
   },
   {
     "id": "mawile-mega",
@@ -81753,7 +81754,8 @@
       "boostedType": "steel"
     },
     "rarity": "STANDARD",
-    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10052.png"
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10052.png",
+    "lastKnownRaidTier": "Mega Raids"
   },
   {
     "id": "aggron-mega",
@@ -83891,7 +83893,8 @@
       "boostedType": "normal"
     },
     "rarity": "STANDARD",
-    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10069.png"
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10069.png",
+    "lastKnownRaidTier": "Mega Raids"
   },
   {
     "id": "diancie-mega",
@@ -84096,62 +84099,121 @@
     "lastKnownRaidTier": "Super Mega Raids"
   },
   {
-    "id": "skarmory-mega",
-    "name": "Mega Skarmory",
+    "id": "raichu-mega-y",
+    "name": "Mega Raichu Y",
     "types": [
-      "steel",
-      "flying"
+      "electric"
     ],
-    "baseAttack": 273,
-    "baseDefense": 228,
-    "baseStamina": 163,
+    "baseAttack": 339,
+    "baseDefense": 157,
+    "baseStamina": 155,
     "fastMoves": [
       {
-        "id": "STEEL_WING_FAST",
-        "name": "Steel Wing",
-        "type": "steel",
-        "power": 14,
-        "energyGain": 8,
+        "id": "VOLT_SWITCH_FAST",
+        "name": "Volt Switch",
+        "type": "electric",
+        "power": 13,
+        "energyGain": 20,
         "energyCost": 0,
-        "durationSeconds": 1,
-        "vulnerableWindowSeconds": 1
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
       },
       {
-        "id": "AIR_SLASH_FAST",
-        "name": "Air Slash",
-        "type": "flying",
-        "power": 12,
-        "energyGain": 8,
+        "id": "SPARK_FAST",
+        "name": "Spark",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 6,
         "energyCost": 0,
-        "durationSeconds": 1,
-        "vulnerableWindowSeconds": 1
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "CHARM_FAST",
+        "name": "Charm",
+        "type": "fairy",
+        "power": 20,
+        "energyGain": 11,
+        "energyCost": 0,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "THUNDER_SHOCK_FAST",
+        "name": "Thunder Shock",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
       }
     ],
     "chargedMoves": [
       {
-        "id": "BRAVE_BIRD",
-        "name": "Brave Bird",
-        "type": "flying",
-        "power": 130,
+        "id": "BRICK_BREAK",
+        "name": "Brick Break",
+        "type": "fighting",
+        "power": 40,
         "energyGain": 0,
-        "energyCost": 100,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "THUNDER_PUNCH",
+        "name": "Thunder Punch",
+        "type": "electric",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
       },
       {
-        "id": "SKY_ATTACK",
-        "name": "Sky Attack",
-        "type": "flying",
-        "power": 80,
+        "id": "WILD_CHARGE",
+        "name": "Wild Charge",
+        "type": "electric",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "SKULL_BASH",
+        "name": "Skull Bash",
+        "type": "normal",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "TRAILBLAZE",
+        "name": "Trailblaze",
+        "type": "grass",
+        "power": 65,
         "energyGain": 0,
         "energyCost": 50,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
       },
       {
-        "id": "FLASH_CANNON",
-        "name": "Flash Cannon",
-        "type": "steel",
+        "id": "SURF",
+        "name": "Surf",
+        "type": "water",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "THUNDER",
+        "name": "Thunder",
+        "type": "electric",
         "power": 100,
         "energyGain": 0,
         "energyCost": 100,
@@ -84159,13 +84221,13 @@
         "vulnerableWindowSeconds": 2.5
       }
     ],
+    "lastKnownRaidTier": "Mega Raids",
     "boost": {
       "multiplier": 1.3,
-      "boostedType": "steel"
+      "boostedType": "electric"
     },
     "rarity": "STANDARD",
-    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png",
-    "lastKnownRaidTier": "Mega Raids"
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10305.png"
   },
   {
     "id": "raichu-mega-x",
@@ -84297,137 +84359,6 @@
     },
     "rarity": "STANDARD",
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10304.png"
-  },
-  {
-    "id": "raichu-mega-y",
-    "name": "Mega Raichu Y",
-    "types": [
-      "electric"
-    ],
-    "baseAttack": 339,
-    "baseDefense": 157,
-    "baseStamina": 155,
-    "fastMoves": [
-      {
-        "id": "VOLT_SWITCH_FAST",
-        "name": "Volt Switch",
-        "type": "electric",
-        "power": 13,
-        "energyGain": 20,
-        "energyCost": 0,
-        "durationSeconds": 1.5,
-        "vulnerableWindowSeconds": 1.5
-      },
-      {
-        "id": "SPARK_FAST",
-        "name": "Spark",
-        "type": "electric",
-        "power": 4,
-        "energyGain": 6,
-        "energyCost": 0,
-        "durationSeconds": 0.5,
-        "vulnerableWindowSeconds": 0.5
-      },
-      {
-        "id": "CHARM_FAST",
-        "name": "Charm",
-        "type": "fairy",
-        "power": 20,
-        "energyGain": 11,
-        "energyCost": 0,
-        "durationSeconds": 1.5,
-        "vulnerableWindowSeconds": 1.5
-      },
-      {
-        "id": "THUNDER_SHOCK_FAST",
-        "name": "Thunder Shock",
-        "type": "electric",
-        "power": 4,
-        "energyGain": 7,
-        "energyCost": 0,
-        "durationSeconds": 0.5,
-        "vulnerableWindowSeconds": 0.5
-      }
-    ],
-    "chargedMoves": [
-      {
-        "id": "BRICK_BREAK",
-        "name": "Brick Break",
-        "type": "fighting",
-        "power": 40,
-        "energyGain": 0,
-        "energyCost": 33,
-        "durationSeconds": 1.5,
-        "vulnerableWindowSeconds": 1.5
-      },
-      {
-        "id": "THUNDER_PUNCH",
-        "name": "Thunder Punch",
-        "type": "electric",
-        "power": 50,
-        "energyGain": 0,
-        "energyCost": 33,
-        "durationSeconds": 2,
-        "vulnerableWindowSeconds": 2
-      },
-      {
-        "id": "WILD_CHARGE",
-        "name": "Wild Charge",
-        "type": "electric",
-        "power": 90,
-        "energyGain": 0,
-        "energyCost": 50,
-        "durationSeconds": 2.5,
-        "vulnerableWindowSeconds": 2.5
-      },
-      {
-        "id": "SKULL_BASH",
-        "name": "Skull Bash",
-        "type": "normal",
-        "power": 130,
-        "energyGain": 0,
-        "energyCost": 100,
-        "durationSeconds": 3,
-        "vulnerableWindowSeconds": 3
-      },
-      {
-        "id": "TRAILBLAZE",
-        "name": "Trailblaze",
-        "type": "grass",
-        "power": 65,
-        "energyGain": 0,
-        "energyCost": 50,
-        "durationSeconds": 2,
-        "vulnerableWindowSeconds": 2
-      },
-      {
-        "id": "SURF",
-        "name": "Surf",
-        "type": "water",
-        "power": 60,
-        "energyGain": 0,
-        "energyCost": 50,
-        "durationSeconds": 1.5,
-        "vulnerableWindowSeconds": 1.5
-      },
-      {
-        "id": "THUNDER",
-        "name": "Thunder",
-        "type": "electric",
-        "power": 100,
-        "energyGain": 0,
-        "energyCost": 100,
-        "durationSeconds": 2.5,
-        "vulnerableWindowSeconds": 2.5
-      }
-    ],
-    "lastKnownRaidTier": "Super Mega Raids",
-    "boost": {
-      "multiplier": 1.3,
-      "boostedType": "electric"
-    },
-    "rarity": "STANDARD",
-    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10305.png"
   },
   {
     "id": "victreebel-mega",
@@ -85431,6 +85362,78 @@
     },
     "rarity": "STANDARD",
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10294.png"
+  },
+  {
+    "id": "skarmory-mega",
+    "name": "Mega Skarmory",
+    "types": [
+      "steel",
+      "flying"
+    ],
+    "baseAttack": 273,
+    "baseDefense": 228,
+    "baseStamina": 163,
+    "fastMoves": [
+      {
+        "id": "STEEL_WING_FAST",
+        "name": "Steel Wing",
+        "type": "steel",
+        "power": 14,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "AIR_SLASH_FAST",
+        "name": "Air Slash",
+        "type": "flying",
+        "power": 12,
+        "energyGain": 8,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "BRAVE_BIRD",
+        "name": "Brave Bird",
+        "type": "flying",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "SKY_ATTACK",
+        "name": "Sky Attack",
+        "type": "flying",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "FLASH_CANNON",
+        "name": "Flash Cannon",
+        "type": "steel",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "lastKnownRaidTier": "Mega Raids",
+    "boost": {
+      "multiplier": 1.3,
+      "boostedType": "steel"
+    },
+    "rarity": "STANDARD",
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/10284.png"
   },
   {
     "id": "slowpoke-shadow",

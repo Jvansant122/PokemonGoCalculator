@@ -6,27 +6,27 @@
     "isApproximate": false
   },
   {
-    "raidName": "Mega Steelix",
+    "raidName": "Mega Raichu Y",
     "tier": "Mega Raids",
-    "speciesId": "steelix-mega",
+    "speciesId": "raichu-mega-y",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Skarmory",
+    "raidName": "Mega Sableye",
     "tier": "Mega Raids",
-    "speciesId": "skarmory-mega",
+    "speciesId": "sableye-mega",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Aggron",
+    "raidName": "Mega Mawile",
     "tier": "Mega Raids",
-    "speciesId": "aggron-mega",
+    "speciesId": "mawile-mega",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Glalie",
+    "raidName": "Mega Audino",
     "tier": "Mega Raids",
-    "speciesId": "glalie-mega",
+    "speciesId": "audino-mega",
     "isApproximate": false
   },
   {

@@ -807,6 +807,35 @@ const RELEASED_MEGA_PRIMAL_ALLOWLIST: { name: string; lastKnownRaidTier?: RaidTi
   { name: "Mega Chesnaught" },
   { name: "Mega Delphox" },
   { name: "Mega Greninja" },
+
+  // Added 2026-09-07 after a real regression this specific gap-fill mechanism
+  // exists to prevent: today's ScrapedDuck rotation flipped away from the
+  // "Mega Ascension" raid set (Mega Steelix/Skarmory/Aggron/Glalie) to a new
+  // set (Mega Raichu Y/Sableye/Mawile/Audino), and Mega Skarmory dropped out
+  // of species.json entirely — it is absent from pogoapi.net's
+  // mega_pokemon.json roster (confirmed missing as of this sync's fetch) and,
+  // once the rotation ended, was no longer a currently-live raid either, so it
+  // fell through BOTH of this pipeline's other released-content gates
+  // simultaneously. It is real, released content regardless: this pipeline's
+  // OWN cached data/raw/raids.json from earlier the same day (2026-09-07,
+  // 05:01 UTC fetch, i.e. this project's own first-hand live-feed
+  // observation, not a third-party claim) lists "Mega Skarmory | Mega Raids"
+  // — it was raiding just hours before this rotation. Previously reachable
+  // only through the raid gate (megaOrPrimalRaidGaps), never through this
+  // allowlist, which is exactly why it silently vanished the moment the raid
+  // gate stopped firing for it.
+  //
+  // No further independent cross-check beyond the stat cross-check already
+  // wired up in the gap-fill loop below (see the "Mega Skarmory" branch in
+  // gameMasterCrossChecks, comparing against Dittobase + Pokémon GO Hub DB,
+  // both agreeing exactly, checked 2026-09-06) — that check already runs for
+  // every mega-gap candidate regardless of which gate let it through, so it
+  // still applies here.
+  //
+  // lastKnownRaidTier "Mega Raids": this pipeline's own 2026-09-07 live-feed
+  // observation (data/raw/raids.json, "Mega Skarmory | Mega Raids") — a real
+  // observation, not a guess.
+  { name: "Mega Skarmory", lastKnownRaidTier: "Mega Raids" },
 ];
 
 const megaOrPrimalAllowlistGaps = RELEASED_MEGA_PRIMAL_ALLOWLIST.filter(
@@ -1318,6 +1347,52 @@ if (existsSync(raidsOutPath)) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// lastKnownRaidTier carry-forward (precedence step 3 of 4 — see
+// SpeciesDefinition.lastKnownRaidTier's doc comment in packages/engine/src/
+// types.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment above for steps
+// 1/2). Without this, lastKnownRaidTier is rebuilt from scratch every run
+// from only (1) this run's own live-raid observation and (2) the
+// hand-researched allowlist — so a species that was observed raiding in some
+// EARLIER run, is not in the allowlist, and isn't raiding again THIS run
+// silently loses the field the moment it rotates out (a real regression
+// caught 2026-09-07: steelix-mega/aggron-mega/glalie-mega lost "Mega Raids"
+// on the very rotation this field exists to survive). Fix: carry forward the
+// PREVIOUS run's species.json value for any species this run produced no
+// fresher signal for. Precedence (highest wins, matches the field's doc
+// comment and the mega-build-loop comment above it):
+//   1. This run's own live-raid-feed observation (already applied above,
+//      both in the mega-build loop's post-allowlist overwrite and in the
+//      raid-matching loop) — freshest evidence, already wins by construction
+//      since it's applied before this step ever runs.
+//   2. RELEASED_MEGA_PRIMAL_ALLOWLIST's hand-researched tier (already applied
+//      in the mega-build loop, before this step).
+//   3. THIS carry-forward: the previous species.json's own lastKnownRaidTier,
+//      reused verbatim if this run set neither 1 nor 2.
+//   4. Nothing — left undefined, so raidBoss.ts's defaultRaidTierForSpecies()
+//      falls through to its rarity/boost heuristic rather than guessing.
+// Reuses `previousSpecies` (already loaded above for diffSpecies/diffRaids)
+// rather than a second read of species.json. A first-ever run (previousSpecies
+// null, no existing species.json) simply carries forward nothing — no crash.
+// ---------------------------------------------------------------------------
+
+const previousLastKnownRaidTierById = new Map<string, RaidTier>();
+if (previousSpecies) {
+  for (const p of previousSpecies) {
+    if (p.lastKnownRaidTier) previousLastKnownRaidTierById.set(p.id, p.lastKnownRaidTier);
+  }
+}
+const lastKnownRaidTierCarriedForward: { id: string; tier: RaidTier }[] = [];
+for (const s of species) {
+  if (s.lastKnownRaidTier === undefined) {
+    const carried = previousLastKnownRaidTierById.get(s.id);
+    if (carried) {
+      s.lastKnownRaidTier = carried;
+      lastKnownRaidTierCarriedForward.push({ id: s.id, tier: carried });
+    }
+  }
+}
+
 const speciesDiffs = diffSpecies(previousSpecies, species);
 const raidDiffs = diffRaids(previousRaids, activeRaids);
 
@@ -1388,6 +1463,9 @@ console.log(`  - GAME_MASTER gap-fill for mega/primal stats beyond pogoapi.net's
 console.log(`  - RELEASED_MEGA_PRIMAL_ALLOWLIST mechanism (hand-curated, see this file's doc comment on that constant): exists to catch a real, released mega/primal that's neither in pogoapi's mega_pokemon.json roster nor in the current raid rotation (e.g. a mega whose debut was a single past raid-day event) — currently lists ${RELEASED_MEGA_PRIMAL_ALLOWLIST.length} entry(ies): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.map((e) => e.name).join(", ")}. ${megaOrPrimalAllowlistGaps.length === 0 ? "None of these were needed via this specific gate this run (already covered by pogoapi's roster or the live raid feed instead)." : `${megaOrPrimalAllowlistGaps.length} of them were resolved via this gate this run: ${megaOrPrimalAllowlistGaps.join(", ")}.`}`);
 console.log(
   `  - lastKnownRaidTier backfill (2026-09-07 research pass, see RELEASED_MEGA_PRIMAL_ALLOWLIST's per-entry citations): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e) => e.lastKnownRaidTier !== undefined).map((e) => `${e.name} -> "${e.lastKnownRaidTier}"`).join(", ") || "none"}. Left unset after genuine research effort (falls through to the rarity/boost heuristic instead of a guess): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e) => e.lastKnownRaidTier === undefined).map((e) => e.name).join(", ") || "none"}.`,
+);
+console.log(
+  `  - lastKnownRaidTier carried forward from the previous species.json (precedence step 3 — this run set neither a fresh live-raid observation nor an allowlist tier for these, see the doc comment above the carry-forward step in this file): ${lastKnownRaidTierCarriedForward.length === 0 ? "none" : lastKnownRaidTierCarriedForward.map((c) => `${c.id} -> "${c.tier}"`).join(", ")}.`,
 );
 if (gameMasterCrossChecks.length > 0) {
   console.log(`  - GAME_MASTER cross-check against independent community sources: ${gameMasterCrossChecks.join("; ")}`);
