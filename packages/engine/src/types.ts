@@ -24,6 +24,33 @@ export interface IVSpread {
  */
 export type PokemonRarity = "STANDARD" | "LEGENDARY" | "MYTHIC" | "ULTRA_BEAST";
 
+/**
+ * Real Pokémon GO raid difficulty tiers, keyed by the exact label strings this
+ * project's live raid feed already uses (data/normalized/activeRaids.json's
+ * `tier` field, sourced from ScrapedDuck via scripts/sync-data.ts) — confirmed
+ * by direct grep to only ever emit "1-Star Raids"/"3-Star Raids"/"Mega Raids"/
+ * "5-Star Raids"/"Super Mega Raids" today. "Legendary Mega Raids" (six-star)
+ * and "Primal Raids" are included for completeness per the Bulbapedia
+ * Difficulty table even though the live feed has never emitted either label
+ * yet — real Primal/six-star raids are current-game content, just not present
+ * in this project's current raid-feed snapshot.
+ *
+ * Lives here (not raidBoss.ts, which is its primary consumer) so that
+ * SpeciesDefinition.lastKnownRaidTier below can reference it without
+ * types.ts importing back from raidBoss.ts (raidBoss.ts already imports
+ * SpeciesDefinition from this file, so the reverse import would be
+ * circular). raidBoss.ts re-exports this type for backward compatibility
+ * with every existing `from "./raidBoss.js"` import site.
+ */
+export type RaidTier =
+  | "1-Star Raids"
+  | "3-Star Raids"
+  | "Mega Raids"
+  | "5-Star Raids"
+  | "Legendary Mega Raids"
+  | "Super Mega Raids"
+  | "Primal Raids";
+
 export interface FastMove {
   id: string;
   name: string;
@@ -150,6 +177,26 @@ export interface SpeciesDefinition {
    * candidate/attacker, same scoping as statsArePrecomputed above.
    */
   rarity?: PokemonRarity;
+  /**
+   * The most-recently-confirmed REAL raid tier this species has actually
+   * been observed/verified to raid at (e.g. a species that debuted in
+   * 5-Star Raids and was later confirmed rotated to 3-Star) — distinct from
+   * packages/web's registry.ts's `raidTierForSpeciesId()`, which answers "is
+   * this species a CURRENTLY active raid target right now" from the live
+   * feed. This field is a slower-moving, hand/data-maintained fact about a
+   * species' raid history, not a live signal; it has no data-sync producer
+   * as of 2026-09-07 (no upstream source currently supplies this), so it's
+   * undefined for every synced species today, but the field exists so a
+   * future data source (or hand-authored override) can set it.
+   *
+   * Consumed by raidBoss.ts's `defaultRaidTierForSpecies` as the FIRST
+   * priority — preferred over the rarity/boost-keyed heuristic there,
+   * since an actually-confirmed real tier is strictly better evidence than
+   * a guess derived from rarity/boost. Only meaningful for a real
+   * (non-precomputed) boss; irrelevant to `statsArePrecomputed` species and
+   * to a species used in the candidate/attacker role.
+   */
+  lastKnownRaidTier?: RaidTier;
 }
 
 export interface EffectiveStats {

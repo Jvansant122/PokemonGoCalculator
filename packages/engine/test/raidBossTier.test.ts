@@ -202,6 +202,48 @@ describe("defaultRaidTierForSpecies: rarity-keyed fallback (replaces the old bla
     expect(defaultRaidTierForSpecies(legendaryMega)).toBe("Legendary Mega Raids");
   });
 
+  it("lastKnownRaidTier, when set, wins over the boost heuristic (a STANDARD-rarity mega confirmed at Super Mega Raids does NOT fall back to the heuristic's Mega Raids)", () => {
+    const standardMegaWithConfirmedTier: SpeciesDefinition = {
+      id: "standard-mega-confirmed-tier",
+      name: "Standard Mega Confirmed Tier",
+      rarity: "STANDARD",
+      boost: { multiplier: 1.3, boostedType: "normal" },
+      lastKnownRaidTier: "Super Mega Raids",
+      ...baseFields,
+    };
+    expect(defaultRaidTierForSpecies(standardMegaWithConfirmedTier)).toBe("Super Mega Raids");
+  });
+
+  it("lastKnownRaidTier, when set, wins over the plain rarity heuristic too (a STANDARD-rarity species confirmed at 5-Star Raids does NOT fall back to 3-Star)", () => {
+    const standardSpeciesWithConfirmedTier: SpeciesDefinition = {
+      id: "standard-confirmed-tier",
+      name: "Standard Confirmed Tier",
+      rarity: "STANDARD",
+      lastKnownRaidTier: "5-Star Raids",
+      ...baseFields,
+    };
+    expect(defaultRaidTierForSpecies(standardSpeciesWithConfirmedTier)).toBe("5-Star Raids");
+  });
+
+  it("a species WITHOUT lastKnownRaidTier set falls back to the existing heuristic with zero behavior change", () => {
+    const standardMegaNoConfirmedTier: SpeciesDefinition = {
+      id: "standard-mega-no-confirmed-tier",
+      name: "Standard Mega No Confirmed Tier",
+      rarity: "STANDARD",
+      boost: { multiplier: 1.3, boostedType: "normal" },
+      ...baseFields,
+    };
+    expect(defaultRaidTierForSpecies(standardMegaNoConfirmedTier)).toBe("Mega Raids");
+
+    const plainStandardSpecies: SpeciesDefinition = {
+      id: "plain-standard-no-confirmed-tier",
+      name: "Plain Standard No Confirmed Tier",
+      rarity: "STANDARD",
+      ...baseFields,
+    };
+    expect(defaultRaidTierForSpecies(plainStandardSpecies)).toBe("3-Star Raids");
+  });
+
   it("bossEffectiveStats/bossEffectiveHp actually resolve through defaultRaidTierForSpecies end-to-end when no tier is supplied", () => {
     const standardSpecies: SpeciesDefinition = { id: "standard-e2e", name: "Standard E2E", rarity: "STANDARD", ...baseFields };
     const legendarySpecies: SpeciesDefinition = { id: "legendary-e2e", name: "Legendary E2E", rarity: "LEGENDARY", ...baseFields };

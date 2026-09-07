@@ -18,3 +18,4 @@
 - [Dead-code audit 2026-09-06](dead_code_audit_2026_09_06.md) — deleted Combatant/accumulateEnergy/EnergyEvent/energyFromFastMove; kept+documented runComparison/simulateOpeningBurst cluster as intentional acceptance-pin
 - [Rarity-keyed raid-tier default](feature_rarity_keyed_raid_tier_default.md) — SpeciesDefinition.rarity, raidBoss.ts's defaultRaidTierForSpecies (boost->Mega Raids, then rarity), IvBreakpointsView.tsx follow-up flagged for web-developer
 - [Attack/Defense breakpoint grid](feature_attack_defense_breakpoint_grid.md) — breakpoints.ts's attackDamageGrid/defenseDamageGrid, full unfiltered iv x level grid, shared damageGrid role-flag helper
+- [lastKnownRaidTier field](feature_last_known_raid_tier.md) — SpeciesDefinition.lastKnownRaidTier, RaidTier moved types.ts<-raidBoss.ts to break a cycle, verified export* re-export doesn't collide

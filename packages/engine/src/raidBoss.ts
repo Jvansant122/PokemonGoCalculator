@@ -1,4 +1,14 @@
-import type { SpeciesDefinition } from "./types.js";
+import type { RaidTier, SpeciesDefinition } from "./types.js";
+
+/**
+ * RaidTier itself now lives in types.ts (see that file's doc comment for
+ * why: SpeciesDefinition.lastKnownRaidTier needs to reference it, and
+ * types.ts can't import back from this file without a cycle, since this
+ * file already imports SpeciesDefinition from types.ts). Re-exported here
+ * so every existing `import ... from "./raidBoss.js"` / `"../src/raidBoss.js"`
+ * site across this package keeps working unchanged.
+ */
+export type { RaidTier };
 
 /**
  * Raid bosses don't level up or roll IVs the way trainer-owned Pokémon do — Niantic
@@ -29,26 +39,6 @@ export const RAID_BOSS_IVS = { attack: 0, defense: 0, stamina: 0 } as const;
  * already-final hand-tuned/precomputed boss fixtures.
  */
 export const REAL_RAID_BOSS_IV = 15;
-
-/**
- * Real Pokémon GO raid difficulty tiers, keyed by the exact label strings this
- * project's live raid feed already uses (data/normalized/activeRaids.json's
- * `tier` field, sourced from ScrapedDuck via scripts/sync-data.ts) — confirmed
- * by direct grep to only ever emit "1-Star Raids"/"3-Star Raids"/"Mega Raids"/
- * "5-Star Raids"/"Super Mega Raids" today. "Legendary Mega Raids" (six-star)
- * and "Primal Raids" are included for completeness per the Bulbapedia
- * Difficulty table (see the fact file above) even though the live feed has
- * never emitted either label yet — real Primal/six-star raids are current-game
- * content, just not present in this project's current raid-feed snapshot.
- */
-export type RaidTier =
-  | "1-Star Raids"
-  | "3-Star Raids"
-  | "Mega Raids"
-  | "5-Star Raids"
-  | "Legendary Mega Raids"
-  | "Super Mega Raids"
-  | "Primal Raids";
 
 export interface RaidTierStats {
   /**
@@ -111,17 +101,25 @@ export const DEFAULT_REAL_RAID_TIER: RaidTier = "5-Star Raids";
  * far more often than right.
  *
  * Priority order:
- * 1. A real, non-hypothetical mega/primal form of a LEGENDARY-rarity species
+ * 1. `species.lastKnownRaidTier`, if set — the most-recently-confirmed REAL
+ *    tier this species has actually been observed/verified to raid at (see
+ *    SpeciesDefinition.lastKnownRaidTier's doc comment in types.ts). This is
+ *    strictly better evidence than any heuristic below and always wins when
+ *    present, even when rarity/boost would otherwise suggest a different
+ *    tier (e.g. a STANDARD-rarity mega with lastKnownRaidTier set to "Super
+ *    Mega Raids" resolves to Super Mega Raids, not the boost heuristic's
+ *    "Mega Raids").
+ * 2. A real, non-hypothetical mega/primal form of a LEGENDARY-rarity species
  *    (`species.boost` set AND `species.rarity === "LEGENDARY"`) ->
  *    "Legendary Mega Raids" — mega legendaries (Mega Rayquaza, Mega Diancie,
  *    etc.) and primal formes raid at six-star, not four-star. "Legendary Mega
  *    Raids" and "Primal Raids" share identical stats (22500 HP, 0.79
  *    multiplier — see RAID_TIER_TABLE), so this single branch is correct for
  *    both without needing to separately detect primal vs. mega.
- * 2. A real, non-hypothetical mega/primal form of any OTHER rarity
+ * 3. A real, non-hypothetical mega/primal form of any OTHER rarity
  *    (`species.boost` set, rarity not LEGENDARY) -> "Mega Raids" (four-star),
  *    the ordinary mega tier (Mega Charizard, Mega Gyarados, etc.).
- * 3. Otherwise, `species.rarity`: STANDARD -> "3-Star Raids" (the common
+ * 4. Otherwise, `species.rarity`: STANDARD -> "3-Star Raids" (the common
  *    case), LEGENDARY -> "5-Star Raids". MYTHIC/ULTRA_BEAST and
  *    missing/undefined rarity data (neither Mythic nor Ultra Beast has
  *    historically been a standard raid-boss category, and undefined means
@@ -136,6 +134,7 @@ export const DEFAULT_REAL_RAID_TIER: RaidTier = "5-Star Raids";
  * fixtures), which short-circuit before ever reaching this function.
  */
 export function defaultRaidTierForSpecies(species: SpeciesDefinition): RaidTier {
+  if (species.lastKnownRaidTier) return species.lastKnownRaidTier;
   if (species.boost) return species.rarity === "LEGENDARY" ? "Legendary Mega Raids" : "Mega Raids";
   switch (species.rarity) {
     case "STANDARD":

@@ -121,8 +121,10 @@ import {
   fromGameMasterMove,
   speciesIdFor,
   DEFAULT_MEGA_BOOST_MULTIPLIER,
+  isKnownRaidTier,
   type PokemonType,
   type PokemonRarity,
+  type RaidTier,
   type SpeciesDefinition,
   type FastMove,
   type ChargedMove,
@@ -674,8 +676,20 @@ const megaOrPrimalRaidGaps = rawRaids.filter(
  * mega name" is the only thing this table needs to supply — GAME_MASTER still
  * supplies (and this pipeline still cross-checks against independent
  * community sources, see gameMasterCrossChecks below) the actual stat values.
+ *
+ * Each entry also optionally carries `lastKnownRaidTier` — this form's REAL
+ * confirmed historical/debut raid tier (2026-09-07 research pass, see
+ * per-entry citations below), written onto the resulting SpeciesDefinition's
+ * `lastKnownRaidTier` field (see the mega-species build loop below) so
+ * raidBoss.ts's defaultRaidTierForSpecies() has a real observation to prefer
+ * over its rarity/boost-keyed guess (which would otherwise assign every
+ * STANDARD-rarity mega here the generic "Mega Raids" tier — wrong for a form
+ * that actually debuted at the harder "Super Mega Raids" tier). Left
+ * `undefined` for a form no confirmed tier was found for after genuine
+ * research effort — an absent field honestly falls through to the existing
+ * heuristic; a wrong guess would not be honest.
  */
-const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
+const RELEASED_MEGA_PRIMAL_ALLOWLIST: { name: string; lastKnownRaidTier?: RaidTier }[] = [
   // Debuted 2026-07-18 via a dedicated "Super Mega Raid Day" event — real,
   // permanently-unlockable content, just not currently in pogoapi's roster or
   // in raid rotation. Sources: pokemongo.com/news/raichu-super-mega-raid-day-2026,
@@ -684,8 +698,13 @@ const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
   // independent of GAME_MASTER (poketory.com's raid guide + PvPoke's own
   // separately-maintained gamemaster.json), both agreeing exactly with
   // GAME_MASTER's tempEvoOverrides — see gameMasterCrossChecks.
-  "Mega Raichu X",
-  "Mega Raichu Y",
+  //
+  // lastKnownRaidTier "Super Mega Raids": directly confirmed by
+  // leekduck.com/events/raichu-super-mega-raid-day-2026 ("Mega Raichu X and
+  // Mega Raichu Y will make their Pokémon GO debut in Super Mega Raids"),
+  // re-checked 2026-09-07.
+  { name: "Mega Raichu X", lastKnownRaidTier: "Super Mega Raids" },
+  { name: "Mega Raichu Y", lastKnownRaidTier: "Super Mega Raids" },
 
   // 9 more real, released megas found missing by scripts/check-mega-gaps.ts
   // (a Bulbapedia "Mega Evolution (GO)" diff) this session (2026-09-06). Every
@@ -705,9 +724,24 @@ const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
   // megaevolution.shtml) and Pokémon GO Hub's own raid guide (base
   // Attack/Defense/Stamina) — both agree with each other and with GAME_MASTER's
   // tempEvoOverrides on type and stats; see gameMasterCrossChecks.
-  "Mega Victreebel",
-  "Mega Dragonite",
-  "Mega Malamar",
+  //
+  // lastKnownRaidTier "Super Mega Raids" for all three (2026-09-07 research
+  // pass): pokemongohub.net's per-species raid guides state this explicitly —
+  // "Mega Dragonite is a Dragon and Flying type Super Mega Raid boss" (also:
+  // "Super Mega Dragonite Raids require a minimum of 10 Trainers"),
+  // "Super Mega Raids require a minimum of 8 trainers to defeat them" (Mega
+  // Victreebel's guide), "Mega Malamar is a Dark and Psychic type Super Mega
+  // Raid boss." (pokemongohub.net/post/raid-guide/mega-{dragonite,victreebel,
+  // malamar}-raid-guide/, all checked 2026-09-07). Note: leekduck.com's own
+  // "Mega Ascension" event page, fetched the same day, only says "Mega Raids
+  // will make up the majority of raids during the Mega Ascension event" in
+  // generic terms and doesn't call out these three specifically — not treated
+  // as contradicting the three explicit, per-species Pokémon GO Hub quotes
+  // above, since it's a generic event-wide summary line, not a per-boss tier
+  // list.
+  { name: "Mega Victreebel", lastKnownRaidTier: "Super Mega Raids" },
+  { name: "Mega Dragonite", lastKnownRaidTier: "Super Mega Raids" },
+  { name: "Mega Malamar", lastKnownRaidTier: "Super Mega Raids" },
 
   // Debuted 2026-05-23 per Bulbapedia — a Pokémon-GO-exclusive mega (Falinks
   // doesn't mega evolve in the mainline games at all). Confirmed via
@@ -716,7 +750,15 @@ const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
   // this one (unlike the two above/below it), so only a type-level
   // cross-check against GAME_MASTER is applied below, not a full stat
   // assertion — flagged in gameMasterCrossChecks as "type-only".
-  "Mega Falinks",
+  //
+  // lastKnownRaidTier left UNSET (2026-09-07 research pass): no
+  // pokemongohub.net raid guide exists for Mega Falinks (search returned "No
+  // posts to display"), and no other independent source naming a specific
+  // raid tier for it was found after a genuine search (leekduck.com's events
+  // list has no Falinks-named event at all, Bing search returned nothing
+  // relevant). Left unset rather than guessed — falls through to the
+  // rarity/boost heuristic (STANDARD-rarity mega -> "Mega Raids").
+  { name: "Mega Falinks" },
 
   // Debuted 2026-05-24 per Bulbapedia, alongside Mega Mewtwo Y (Y is
   // deliberately NOT added here — as of this sync's fetch it's already
@@ -725,12 +767,23 @@ const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
   // checked 2026-09-06). Confirmed via Serebii.net (Psychic/Fighting, Max CP
   // 6910) and Pokémon GO Hub's raid guide (base Attack/Defense/Stamina), both
   // checked 2026-09-06, both independent of GAME_MASTER.
-  "Mega Mewtwo X",
+  //
+  // lastKnownRaidTier "Super Mega Raids" (2026-09-07 research pass):
+  // pokemongohub.net/post/raid-guide/mega-mewtwo-x-raid-guide/ states "Mega
+  // Mewtwo X is a Psychic and Fighting type Super Mega Raid boss." — matches
+  // sibling Mega Mewtwo Y's own currently-live "Super Mega Raids" tier
+  // (leekduck.com/raid-bosses/, checked 2026-09-07), consistent with both X
+  // and Y debuting together per the comment above.
+  { name: "Mega Mewtwo X", lastKnownRaidTier: "Super Mega Raids" },
 
   // Debuted 2026-08-22 per Bulbapedia. Confirmed via Serebii.net
   // (Water/Psychic, Max CP 4184) and Pokémon GO Hub's raid guide (base
   // Attack/Defense/Stamina), both checked 2026-09-06.
-  "Mega Starmie",
+  //
+  // lastKnownRaidTier "Super Mega Raids" (2026-09-07 research pass):
+  // pokemongohub.net/post/raid-guide/mega-starmie-raid-guide/ states "Mega
+  // Starmie is a Water and Psychic type Super Mega Raid boss."
+  { name: "Mega Starmie", lastKnownRaidTier: "Super Mega Raids" },
 
   // Debuted 2026-08-28 (Pokémon World Championships) and again 2026-09-05/06
   // (Pokémon GO Fest 2026: Mega Finale, confirmed live via leekduck.com/events/
@@ -741,15 +794,32 @@ const RELEASED_MEGA_PRIMAL_ALLOWLIST: string[] = [
   // published one as of this sync), so only a type-level cross-check against
   // GAME_MASTER is applied below for each — flagged in gameMasterCrossChecks
   // as "type-only".
-  "Mega Chesnaught",
-  "Mega Delphox",
-  "Mega Greninja",
+  //
+  // lastKnownRaidTier left UNSET for all three (2026-09-07 research pass):
+  // leekduck.com/events/pokemon-go-fest-2026-mega-finale/ (checked 2026-09-07)
+  // describes these three as obtained via GO Pass progression — "Trainers can
+  // choose Chespin, Fennekin, or Froakie to begin a Mega Evolution–focused
+  // journey leading to Mega Evolving them into Mega Chesnaught, Mega Delphox,
+  // or Mega Greninja" — not via a raid encounter at all, so there is no
+  // confirmed raid tier to record for their debut. No pokemongohub.net raid
+  // guide exists for any of the three either. Left unset rather than
+  // guessed — falls through to the rarity/boost heuristic.
+  { name: "Mega Chesnaught" },
+  { name: "Mega Delphox" },
+  { name: "Mega Greninja" },
 ];
 
 const megaOrPrimalAllowlistGaps = RELEASED_MEGA_PRIMAL_ALLOWLIST.filter(
-  (name) =>
-    !pogoApiMegaNames.has(name.toLowerCase()) &&
-    !megaOrPrimalRaidGaps.some((r) => r.name.toLowerCase() === name.toLowerCase()),
+  (entry) =>
+    !pogoApiMegaNames.has(entry.name.toLowerCase()) &&
+    !megaOrPrimalRaidGaps.some((r) => r.name.toLowerCase() === entry.name.toLowerCase()),
+).map((entry) => entry.name);
+
+/** Per-mega-name lookup of the researched lastKnownRaidTier above (case-insensitive on `mega_name`, the same string this pipeline already matches raid/allowlist names on elsewhere) — consulted once the mega-species build loop below has a `mega_name` in hand. */
+const allowlistTierByMegaName = new Map(
+  RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e): e is { name: string; lastKnownRaidTier: RaidTier } => e.lastKnownRaidTier !== undefined).map(
+    (e) => [e.name.toLowerCase(), e.lastKnownRaidTier],
+  ),
 );
 
 const gameMasterDerivedMega: RawMegaPokemonEntry[] = [];
@@ -1017,6 +1087,19 @@ for (const m of rawMegaPokemonCombined) {
   }
   definition.id = finalId;
   definition.name = m.mega_name;
+  // Task 2 of the 2026-09-07 lastKnownRaidTier work: apply the hand-researched
+  // tier from RELEASED_MEGA_PRIMAL_ALLOWLIST, if this mega_name has one (see
+  // that constant's per-entry citations) — a real, specifically-confirmed
+  // historical/debut tier, strictly better evidence than the rarity/boost
+  // heuristic defaultRaidTierForSpecies() would otherwise fall back to. May be
+  // overwritten below by the active-raid-matching loop's own live-feed
+  // observation (Task 1) if this exact mega happens to also be raiding RIGHT
+  // NOW under a possibly-different tier — that's intentional: a live
+  // observation from THIS run is strictly fresher evidence than a historical
+  // debut record, matching this file's documented "whatever this run observed
+  // most recently wins" scope for lastKnownRaidTier.
+  const allowlistTier = allowlistTierByMegaName.get(m.mega_name.toLowerCase());
+  if (allowlistTier) definition.lastKnownRaidTier = allowlistTier;
   // Every real mega/primal Pokémon gets the same-type mega-boost multiplier in
   // the live game. comparison.ts reads this per-species (`species.boost?.multiplier
   // ?? 1`, both for the candidate's own damage output and for team-boost math in
@@ -1146,6 +1229,30 @@ for (const raid of rawRaids) {
   }
 
   if (!speciesId) unmatchedRaidCount++;
+
+  // Live-feed tier capture (Task 1 of the 2026-09-07 lastKnownRaidTier work):
+  // whenever a species is successfully matched against a raid entry (exact
+  // mega, exact normalized, Shadow-variant synthesis, OR the approximate
+  // prefix-stripped fallback above — every branch that assigns speciesId),
+  // persist that raid entry's own real `tier` string onto the matched
+  // species' `lastKnownRaidTier` field, so raidBoss.ts's
+  // defaultRaidTierForSpecies() has a real observation to prefer over its
+  // rarity/boost-keyed guess next time this species isn't in the live feed.
+  // Only a `tier` string this project's RaidTier union actually recognizes is
+  // written (isKnownRaidTier) — an unrecognized/new tier label from the feed
+  // is left alone rather than silently widening the type. No run-over-run
+  // history is kept: if the same species is matched at two different tiers
+  // within this one run (e.g. two separate raid entries), whichever one this
+  // loop reaches LAST wins — "whatever this run observed most recently" is
+  // the documented scope, not a full history log.
+  if (speciesId && isKnownRaidTier(raid.tier)) {
+    // speciesById only has ordinary/mega species built before this loop
+    // started; a freshly-synthesized Shadow variant (keyed in
+    // shadowSpeciesByBaseId by its BASE species id, not its own "-shadow" id)
+    // needs a value lookup instead.
+    const matchedSpecies = speciesById.get(speciesId) ?? [...shadowSpeciesByBaseId.values()].find((s) => s.id === speciesId);
+    if (matchedSpecies) matchedSpecies.lastKnownRaidTier = raid.tier;
+  }
 
   activeRaids.push({
     raidName: raid.name,
@@ -1278,7 +1385,10 @@ console.log(`  - Unresolved move names referenced by a species' moveset but abse
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);
 console.log(`  - GAME_MASTER gap-fill for mega/primal stats beyond pogoapi.net's 48-entry mega_pokemon.json list, from two independent gates (a currently-live raid naming one, OR a hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST entry for a real-but-not-currently-raiding mega — see PokeMiners' GAME_MASTER mirror doc comment in scripts/sync-data/fetchCache.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment in this file): ${megaOrPrimalGapCandidates.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list, and no allowlist entry currently needed)" : `${megaOrPrimalGapCandidates.length} gap(s) found (${megaOrPrimalGapCandidates.map((c) => `${c.name} [${c.source}]`).join(", ")}); resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (no fallback data exists for these — pogoapi's mega_pokemon.json doesn't cover them at all, so they're simply absent from species.json this run): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
-console.log(`  - RELEASED_MEGA_PRIMAL_ALLOWLIST mechanism (hand-curated, see this file's doc comment on that constant): exists to catch a real, released mega/primal that's neither in pogoapi's mega_pokemon.json roster nor in the current raid rotation (e.g. a mega whose debut was a single past raid-day event) — currently lists ${RELEASED_MEGA_PRIMAL_ALLOWLIST.length} entry(ies): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.join(", ")}. ${megaOrPrimalAllowlistGaps.length === 0 ? "None of these were needed via this specific gate this run (already covered by pogoapi's roster or the live raid feed instead)." : `${megaOrPrimalAllowlistGaps.length} of them were resolved via this gate this run: ${megaOrPrimalAllowlistGaps.join(", ")}.`}`);
+console.log(`  - RELEASED_MEGA_PRIMAL_ALLOWLIST mechanism (hand-curated, see this file's doc comment on that constant): exists to catch a real, released mega/primal that's neither in pogoapi's mega_pokemon.json roster nor in the current raid rotation (e.g. a mega whose debut was a single past raid-day event) — currently lists ${RELEASED_MEGA_PRIMAL_ALLOWLIST.length} entry(ies): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.map((e) => e.name).join(", ")}. ${megaOrPrimalAllowlistGaps.length === 0 ? "None of these were needed via this specific gate this run (already covered by pogoapi's roster or the live raid feed instead)." : `${megaOrPrimalAllowlistGaps.length} of them were resolved via this gate this run: ${megaOrPrimalAllowlistGaps.join(", ")}.`}`);
+console.log(
+  `  - lastKnownRaidTier backfill (2026-09-07 research pass, see RELEASED_MEGA_PRIMAL_ALLOWLIST's per-entry citations): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e) => e.lastKnownRaidTier !== undefined).map((e) => `${e.name} -> "${e.lastKnownRaidTier}"`).join(", ") || "none"}. Left unset after genuine research effort (falls through to the rarity/boost heuristic instead of a guess): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e) => e.lastKnownRaidTier === undefined).map((e) => e.name).join(", ") || "none"}.`,
+);
 if (gameMasterCrossChecks.length > 0) {
   console.log(`  - GAME_MASTER cross-check against independent community sources: ${gameMasterCrossChecks.join("; ")}`);
 }
