@@ -524,6 +524,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             </p>
           )}
 
+          <div style={{ overflowX: "auto" }}>
           <table className="time-series-table">
             <thead>
               <tr>
@@ -582,6 +583,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               })}
             </tbody>
           </table>
+          </div>
         </section>
       )}
 

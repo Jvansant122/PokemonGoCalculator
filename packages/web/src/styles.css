@@ -44,6 +44,12 @@ h1 {
   gap: 8px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--border);
+  /* Five tab labels don't fit a 375px viewport (page overflows to ~480px
+     without this). Scroll the nav horizontally within itself rather than
+     wrapping to a second row or letting the overflow propagate up to <html>
+     — see the mobile-overflow fix notes in agent memory. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tab-button {
@@ -54,6 +60,8 @@ h1 {
   padding: 8px 4px;
   font-size: 0.95rem;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-button.active {
