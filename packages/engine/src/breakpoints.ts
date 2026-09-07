@@ -49,6 +49,114 @@ export function findFastMoveBreakpoints(params: {
   return breakpoints;
 }
 
+export interface DamageGridCell {
+  /** The swept IV (0-15) — Attack IV for attacker-role, Defense IV for defender-role. */
+  iv: number;
+  level: number;
+  /** The swept side's own effective stat at this iv/level (Attack for attacker-role, Defense for defender-role). */
+  stat: number;
+  damage: number;
+}
+
+type DamageGridRole = "attacker" | "defender";
+
+/**
+ * Shared sweep underneath both attackDamageGrid and defenseDamageGrid — a
+ * FULL, unfiltered iv x level grid (every cell populated, unlike
+ * findFastMoveBreakpoints above which only records changes). Both roles are
+ * thin wrappers around this single loop/formula so they can never drift
+ * apart: `role` only decides which side of calculateDamage's atk/def pair
+ * the swept `stat` plugs into, the fixed opposing stat plugs into the other
+ * side, and both route through the exact same calculateDamage call.
+ */
+function damageGrid(params: {
+  role: DamageGridRole;
+  baseStat: number;
+  fixedOpposingStat: number;
+  power: number;
+  damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+  ivRange?: number[];
+  levels?: number[];
+}): DamageGridCell[] {
+  const { role, baseStat, fixedOpposingStat, power, damageModifiers } = params;
+  const ivRange = params.ivRange ?? ALL_IVS;
+  const levels = params.levels ?? ALL_LEVELS;
+
+  const cells: DamageGridCell[] = [];
+  for (const iv of ivRange) {
+    for (const level of levels) {
+      const cpm = CPM_TABLE[level];
+      if (cpm === undefined) {
+        throw new Error(`No CPM entry for level ${level}`);
+      }
+      const stat = effectiveStat(baseStat, iv, cpm);
+      const damage = calculateDamage({
+        power,
+        attackerAttackStat: role === "attacker" ? stat : fixedOpposingStat,
+        defenderDefenseStat: role === "attacker" ? fixedOpposingStat : stat,
+        ...damageModifiers,
+      });
+      cells.push({ iv, level, stat, damage });
+    }
+  }
+  return cells;
+}
+
+/**
+ * Full attacker-role iv x level damage grid: sweeps the attacking Pokémon's
+ * own Attack IV (0-15 by default) x level against a FIXED opposing Defense
+ * stat (the caller resolves that from the boss's effective Defense — see
+ * bossEffectiveStats in comparison.ts). Every cell is populated, unlike
+ * findFastMoveBreakpoints which only records changes — this backs the
+ * Attack Breakpoints spreadsheet tab, which needs every cell to render a row.
+ */
+export function attackDamageGrid(params: {
+  baseAttack: number;
+  defenderDefenseStat: number;
+  power: number;
+  damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+  ivRange?: number[];
+  levels?: number[];
+}): DamageGridCell[] {
+  return damageGrid({
+    role: "attacker",
+    baseStat: params.baseAttack,
+    fixedOpposingStat: params.defenderDefenseStat,
+    power: params.power,
+    damageModifiers: params.damageModifiers,
+    ivRange: params.ivRange,
+    levels: params.levels,
+  });
+}
+
+/**
+ * Full defender-role iv x level damage grid: sweeps the defending Pokémon's
+ * own Defense IV (0-15 by default) x level, against a FIXED opposing Attack
+ * stat (the boss's effective Attack — the boss's own IV/level don't vary
+ * here, only the defender's do). Same calculateDamage primitive as
+ * attackDamageGrid above, just with attack/defense roles swapped — see
+ * damageGrid, the one shared loop both route through. Backs the Defense
+ * Breakpoints spreadsheet tab (damage the chosen Pokémon RECEIVES).
+ */
+export function defenseDamageGrid(params: {
+  baseDefense: number;
+  attackerAttackStat: number;
+  power: number;
+  damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+  ivRange?: number[];
+  levels?: number[];
+}): DamageGridCell[] {
+  return damageGrid({
+    role: "defender",
+    baseStat: params.baseDefense,
+    fixedOpposingStat: params.attackerAttackStat,
+    power: params.power,
+    damageModifiers: params.damageModifiers,
+    ivRange: params.ivRange,
+    levels: params.levels,
+  });
+}
+
 /** Damage taken while successfully dodging is reduced to this fraction of full damage. */
 export const DODGE_DAMAGE_MULTIPLIER = 0.25;
 

@@ -1,22 +1,24 @@
 import { useState } from "react";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
+import { AttackDefenseBreakpointsView } from "./AttackDefenseBreakpointsView.js";
 import { ComparatorView } from "./ComparatorView.js";
 import { IvBreakpointsView } from "./IvBreakpointsView.js";
 import { SpeciesReportView } from "./SpeciesReportView.js";
 import { TeamRaidView } from "./TeamRaidView.js";
 
-/** The app's four views. */
-export type AppTab = "comparator" | "team-raid" | "species-report" | "iv-breakpoints";
+/** The app's five views. */
+export type AppTab = "comparator" | "team-raid" | "species-report" | "iv-breakpoints" | "attack-defense-breakpoints";
 
 /**
  * Which tab a shared link should land on. Deliberately a SEPARATE query param
  * from any view's own scenario param (`s` for Scenario, `ts` for TeamScenario,
- * `sr` for SpeciesReportScenario, `ivc` for IvBreakpointsScenario) — a URL can
- * only ever be "about" one tab's scenario at a time, but the four scenario
- * encodings themselves stay fully independent so this file never has to know
- * their shapes. Every view's own "Build link" button additionally stamps this
- * param onto its generated URL so reloading a shared link restores the same
- * tab it was built from, not whatever tab happened to be open last.
+ * `sr` for SpeciesReportScenario, `ivc` for IvBreakpointsScenario, `adb` for
+ * AttackDefenseBreakpointsScenario) — a URL can only ever be "about" one
+ * tab's scenario at a time, but the five scenario encodings themselves stay
+ * fully independent so this file never has to know their shapes. Every
+ * view's own "Build link" button additionally stamps this param onto its
+ * generated URL so reloading a shared link restores the same tab it was
+ * built from, not whatever tab happened to be open last.
  */
 function initialTab(): AppTab {
   if (typeof window === "undefined") return "comparator";
@@ -27,7 +29,9 @@ function initialTab(): AppTab {
       ? "species-report"
       : requested === "iv-breakpoints"
         ? "iv-breakpoints"
-        : "comparator";
+        : requested === "attack-defense-breakpoints"
+          ? "attack-defense-breakpoints"
+          : "comparator";
 }
 
 /**
@@ -88,6 +92,15 @@ export function App() {
         >
           IV Breakpoints
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "attack-defense-breakpoints"}
+          className={`tab-button${tab === "attack-defense-breakpoints" ? " active" : ""}`}
+          onClick={() => setTab("attack-defense-breakpoints")}
+        >
+          Attack/Defense Breakpoints
+        </button>
       </nav>
       {tab === "comparator" ? (
         <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
@@ -95,8 +108,10 @@ export function App() {
         <TeamRaidView />
       ) : tab === "species-report" ? (
         <SpeciesReportView onCompare={handleCompareFromSpeciesReport} />
-      ) : (
+      ) : tab === "iv-breakpoints" ? (
         <IvBreakpointsView />
+      ) : (
+        <AttackDefenseBreakpointsView />
       )}
     </div>
   );

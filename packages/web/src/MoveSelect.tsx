@@ -1,4 +1,5 @@
 import type { ChargedMove, FastMove } from "@pogo-analyzer/engine";
+import { TYPE_COLORS, typeLabel } from "./typeStyles.js";
 
 type Move = FastMove | ChargedMove;
 
@@ -22,6 +23,12 @@ function chargedEfficiency(move: ChargedMove): number {
 
 function optionLabel(move: Move, kind: "fast" | "charged"): string {
   const dps = approximateDps(move).toFixed(1);
+  // Bracketed type tag up front so the type is visible even inside a closed
+  // native <select>'s dropdown list, where a background-color fill on the
+  // <option> itself would be unreliable across browsers (see typeStyles.ts's
+  // own doc comment) — this is the per-option half of that requirement, the
+  // swatch on the wrapping field below is the "closed control" half.
+  const typeTag = `[${typeLabel(move.type)}]`;
   // Real synced move data (see gamemaster.ts's fromGameMasterMove) sets BOTH
   // energyGain and energyCost on every move object — whichever doesn't apply
   // is just 0 — so which field to show can't be sniffed from the object's
@@ -30,14 +37,14 @@ function optionLabel(move: Move, kind: "fast" | "charged"): string {
   if (kind === "charged") {
     const chargedMove = move as ChargedMove;
     const efficiency = chargedEfficiency(chargedMove).toFixed(1);
-    return `${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS), ${chargedMove.energyCost} energy cost, Efficiency: ${efficiency} (DPS×DPE)`;
+    return `${typeTag} ${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS), ${chargedMove.energyCost} energy cost, Efficiency: ${efficiency} (DPS×DPE)`;
   }
   const fastMove = move as FastMove;
   // Energy Per Second: how quickly this fast move refills the energy meter —
   // shown alongside DPS since a fast move's value is a tradeoff between the
   // two (the highest-DPS fast moves are often the worst energy generators).
   const eps = move.durationSeconds > 0 ? (fastMove.energyGain / move.durationSeconds).toFixed(1) : "0.0";
-  return `${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS, ~${eps} EPS), +${fastMove.energyGain} energy`;
+  return `${typeTag} ${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS, ~${eps} EPS), +${fastMove.energyGain} energy`;
 }
 
 interface Props {
@@ -55,7 +62,14 @@ interface Props {
  * so no need for SpeciesPicker's search combobox. Each option's text encodes
  * approximate DPS + duration + energy + damage directly, so the stats stay
  * visible without a second UI dependency (this project's "no charting/UI
- * library beyond React" convention — see SpeciesPicker.tsx).
+ * library beyond React" convention — see SpeciesPicker.tsx). Also shows the
+ * CURRENTLY SELECTED move's type as a colored left-border swatch on the
+ * wrapping field (native <select>/<option> background styling is unreliable
+ * cross-browser for a per-option fill), plus a bracketed type tag prefixed
+ * onto every option's own text (see optionLabel) so the type is visible both
+ * on the closed control and distinguishable per-option in the open list —
+ * shared by every move picker across every tab, since they all route through
+ * this one component.
  */
 export function MoveSelect({ idPrefix, label, moves, kind, value, onChange }: Props) {
   if (moves.length === 0) {
@@ -67,8 +81,14 @@ export function MoveSelect({ idPrefix, label, moves, kind, value, onChange }: Pr
     );
   }
   const resolvedId = (value && moves.some((m) => m.id === value) ? value : moves[0]!.id);
+  const resolvedMove = moves.find((m) => m.id === resolvedId);
+  const swatchColor = resolvedMove ? TYPE_COLORS[resolvedMove.type] : undefined;
   return (
-    <div className="field">
+    <div
+      className="field move-select-field"
+      style={swatchColor ? { borderLeft: `3px solid ${swatchColor}`, paddingLeft: 8 } : undefined}
+      title={resolvedMove ? `${typeLabel(resolvedMove.type)}-type move` : undefined}
+    >
       <label htmlFor={idPrefix}>{label}</label>
       <select id={idPrefix} value={resolvedId} onChange={(e) => onChange(e.target.value)}>
         {moves.map((move) => (

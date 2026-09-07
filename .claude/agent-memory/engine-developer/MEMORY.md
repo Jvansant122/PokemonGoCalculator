@@ -17,3 +17,4 @@
 - [CPM table extended to level 50](fact_cpm_table_extended_to_50.md) — cpm.ts's CPM_TABLE 1-50, values pre-verified by pogo-researcher (not re-derived), 50.5+ deliberately excluded
 - [Dead-code audit 2026-09-06](dead_code_audit_2026_09_06.md) — deleted Combatant/accumulateEnergy/EnergyEvent/energyFromFastMove; kept+documented runComparison/simulateOpeningBurst cluster as intentional acceptance-pin
 - [Rarity-keyed raid-tier default](feature_rarity_keyed_raid_tier_default.md) — SpeciesDefinition.rarity, raidBoss.ts's defaultRaidTierForSpecies (boost->Mega Raids, then rarity), IvBreakpointsView.tsx follow-up flagged for web-developer
+- [Attack/Defense breakpoint grid](feature_attack_defense_breakpoint_grid.md) — breakpoints.ts's attackDamageGrid/defenseDamageGrid, full unfiltered iv x level grid, shared damageGrid role-flag helper

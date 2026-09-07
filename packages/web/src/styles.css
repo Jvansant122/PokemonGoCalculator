@@ -489,3 +489,75 @@ p.species-picker-hint {
   border-radius: 6px;
   font-size: 0.9rem;
 }
+
+/* Attack/Defense Breakpoints tab: MoveSelect.tsx's per-move type swatch — a
+   colored left border on the wrapping field, keyed off the currently
+   resolved move's type (see typeStyles.ts). Applies to every move dropdown
+   across every tab, not just this one, since MoveSelect.tsx is shared. */
+.move-select-field {
+  border-radius: 4px;
+  transition: border-color 0.15s ease;
+}
+
+/* Attack/Defense Breakpoints tab: the two (fast/charged) sheets for whichever
+   mode is active, side by side when there's room, stacked on narrow viewports. */
+.breakpoint-sheet-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.breakpoint-sheet {
+  flex: 1;
+  min-width: 320px;
+}
+
+.breakpoint-sheet h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.breakpoint-table {
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.breakpoint-table th,
+.breakpoint-table td {
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.breakpoint-table thead th {
+  background: #0d0f14;
+  color: var(--muted);
+  font-weight: 500;
+  position: sticky;
+  top: 0;
+}
+
+.breakpoint-corner,
+.breakpoint-row-label {
+  position: sticky;
+  left: 0;
+  background: #0d0f14;
+  color: var(--muted);
+  text-align: left;
+  z-index: 1;
+}
+
+.breakpoint-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* A cell whose damage differs from the same IV row's previous (0.5-lower)
+   scanned level — a real breakpoint, not just an arbitrary cell. */
+.breakpoint-cell-changed {
+  background: rgba(91, 157, 255, 0.18);
+  font-weight: 700;
+  color: var(--accent-x);
+}
