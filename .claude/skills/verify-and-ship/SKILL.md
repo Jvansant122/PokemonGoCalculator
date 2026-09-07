@@ -51,16 +51,20 @@ diagnose and — worse — is live-deployed if it happens to pass a step you ski
    permission to push, it just describes what to do once permission exists.
 
 7. **Watch the deploy.** This repo has no `gh` CLI installed, but it's a public repo so the
-   GitHub REST API works unauthenticated:
+   GitHub REST API works unauthenticated. **Scope the query to `deploy.yml`** — this repo has a
+   second workflow (`check-mega-gaps.yml`, a weekly scheduled Bulbapedia diff), so an unscoped
+   `actions/runs?per_page=1` can hand you that run instead and you'll report the wrong
+   conclusion:
    ```bash
-   curl -s "https://api.github.com/repos/Jvansant122/PokemonGoCalculator/actions/runs?per_page=1"
+   curl -s "https://api.github.com/repos/Jvansant122/PokemonGoCalculator/actions/workflows/deploy.yml/runs?per_page=1"
    ```
-   Poll this every ~15s (a short `sleep 15` loop, or the `Monitor`/`ScheduleWakeup` tooling if
-   available) until the run whose `head_sha` matches your just-pushed commit shows
+   Poll until the run whose `head_sha` matches your just-pushed commit shows
    `"status": "completed"`, then report its `"conclusion"`. A run can sit at `queued` for a bit
    before moving to `in_progress` — that's normal, keep polling rather than assuming it's stuck.
-   If `conclusion` isn't `"success"`, say so plainly; don't report "pushed" as if that means
-   "deployed."
+   **Never poll with a foreground `sleep` loop** — it blocks the session for the whole deploy.
+   Use `Monitor` with an until-condition, or a `run_in_background` Bash poll, so the user can
+   still interject while it runs. If `conclusion` isn't `"success"`, say so plainly; don't report
+   "pushed" as if that means "deployed."
 
 ## What "done" looks like
 

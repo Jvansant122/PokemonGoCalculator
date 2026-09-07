@@ -18,14 +18,23 @@ Vite + React + TypeScript, client-side rendering only, all engine calculations r
 browser, game data bundled at build time from `data/normalized/`. **No charting library** — every
 chart is hand-rolled inline SVG (see `DamageOverTimeChart.tsx`); don't add one without asking.
 
-**As of 2026-09-06, `App.tsx` is a thin tab shell, not the app itself.** It holds only the
-`view=` query-param-backed tab state and a `.tab-switcher` nav; the original two-candidate
-comparator's full logic lives in `ComparatorView.tsx` now (extracted verbatim). Two more tabs
-exist alongside it: `TeamRaidView.tsx` (+ `TeamAssumptionPanel.tsx`/`TeamDamageChart.tsx`/
-`TeamRaidBreakdownTable.tsx`) and `SpeciesReportView.tsx`. Each tab has its own shareable state
-type and its own query param (`Scenario`/`?s=`, `TeamScenario`/`?ts=`, `SpeciesReportScenario`/
-`?sr=`) — don't conflate them, and reuse the existing `.tab-switcher` scaffold rather than
-inventing a second routing mechanism if a future tab is added.
+**`App.tsx` is a thin tab shell, not the app itself.** It holds only the `view=`
+query-param-backed tab state and a `.tab-switcher` nav; the original two-candidate comparator's
+full logic lives in `ComparatorView.tsx`. There are five tabs (`AppTab` in `App.tsx`), each with
+its own view component, its own shareable state type, and its own query param:
+
+| Tab (`view=`)                 | View component                       | State type / param                    |
+| :---------------------------- | :----------------------------------- | :------------------------------------ |
+| `comparator`                  | `ComparatorView.tsx`                 | `Scenario` / `?s=`                    |
+| `team-raid`                   | `TeamRaidView.tsx`                   | `TeamScenario` / `?ts=`               |
+| `species-report`              | `SpeciesReportView.tsx`              | `SpeciesReportScenario` / `?sr=`      |
+| `iv-breakpoints`              | `IvBreakpointsView.tsx`              | `IvBreakpointsScenario` / `?ivc=`     |
+| `attack-defense-breakpoints`  | `AttackDefenseBreakpointsView.tsx`   | `AttackDefenseBreakpointsScenario` / `?adb=` |
+
+Don't conflate the scenario types — they're deliberately separate, not one unified shape — and
+reuse the existing `.tab-switcher` scaffold rather than inventing a second routing mechanism if a
+future tab is added. `view=` is a separate param from any tab's own scenario param, so a shared
+link restores both the tab and its inputs.
 
 ## UI requirements specific to this project
 
@@ -43,16 +52,20 @@ These are not cosmetic; they are the point of the product:
   charted run's own `representativeRun.faintedAtSeconds`, not the distribution's mean survival —
   those are different numbers and the chart must use the one that matches what it's actually
   plotting.
-- **Speculative/approximate data is labeled.** Any species carrying `isHypothetical: true`, or a
-  raid entry carrying `isApproximate: true`, renders with a visible badge wherever it appears —
-  see `SpeciesPicker.tsx`'s existing badge handling, reuse it rather than inventing a new marker.
+- **Speculative/approximate/shadow data is labeled.** Any species carrying `isHypothetical: true`
+  or `isShadow: true`, and any raid entry carrying `isApproximate: true`, renders with a visible
+  badge wherever it appears. Reuse the existing markers rather than inventing one: `SpeciesBadges.tsx`
+  for a species name/header, `SpeciesPicker.tsx`'s own inline `badge` option prop for dropdown
+  options.
 - **Scenarios serialize to the URL.** The full input set encodes into a shareable link and
   restores exactly on load — test round-tripping. **Any new user-facing setting you add must be
-  threaded through the full checklist**, not just given a UI control: `Assumptions` (this
-  package), both directions of `assumptionsToScenario`/`scenarioToAssumptions` in `App.tsx` (with
-  `?? default` on decode so an old shared link doesn't surface `undefined`), `DEFAULT_ASSUMPTIONS`,
-  and — if it should affect the actual result, not just display — the `runSustainedComparison`
-  call. Use the `add-scenario-assumption` skill for this; it exists specifically because this
+  threaded through the full checklist**, not just given a UI control: the owning view's
+  `Assumptions` type, both directions of its `assumptionsToScenario`/`scenarioToAssumptions` (with
+  `?? default` on decode so an old shared link doesn't surface `undefined`), its
+  `DEFAULT_ASSUMPTIONS`, and — if it should affect the actual result, not just display — its
+  engine call (`runSustainedComparison` for the comparator; each tab has its own). All four live
+  in the tab's own view component, not in `App.tsx`, which only owns tab state.
+  Use the `add-scenario-assumption` skill for this; it exists specifically because this
   bug (a setting that works live but silently reverts on a shared link) has recurred more than
   once. If the setting needs a new `Scenario` field, that's `engine-developer`'s call, not yours.
 - **Move pickers show real stats.** `MoveSelect.tsx`'s options encode approximate DPS

@@ -1,65 +1,37 @@
 ---
 name: project-config-shape
-description: The shape of this repo's Claude Code config as of the 2026-09-05 six-agent audit — which agents/skills/hooks exist, what each covers, and sizes.
+description: Current shape of this repo's Claude Code config — 9 agents, 2 skills, 1 hook, 1 permission rule — plus the deliberate settings behind them and where sizes actually matter (snapshot 2026-09-07).
 metadata:
   type: project
 ---
 
-**Update (2026-09-06):** CLAUDE.md's "Repo layout" packages/web bullet and the `skeptic` bullet
-both said "three tabs"/`s`/`ts`/`sr` after a 4th tab (**IV Breakpoints**, `ivc` param,
-`ivBreakpointsScenario.ts`) had already shipped and been added to App.tsx's own comment —
-code-simplifier caught it, fixed same-day. Recurring pattern: CLAUDE.md's tab count/param list
-lags app changes; re-grep for "three tab"/"tabs" and the query-param list whenever a new
-tab/Scenario-family type ships.
+**Snapshot 2026-09-07.** Nine agents in `.claude/agents/`: `data-sync`, `engine-developer`,
+`engine-verifier`, `web-developer`, `site-builder`, `code-simplifier`, `skeptic`,
+`pogo-researcher`, `meta-architect`. Per-agent audits: [[six-agent-split]],
+[[pogo-researcher-addition]], [[skeptic-addition]], [[code-simplifier-addition]].
 
-**Update (2026-09-05, later same day):** split from 4 to 6 agents — `engine-developer` and
-`web-developer` added, `site-builder` narrowed to build/deploy, CLAUDE.md rewritten around an
-overseer/router role. Full audit of the split: [[six-agent-split]]. Current sizes: CLAUDE.md
-6,772 bytes (~1,693 tokens, down from the 17,803/~4,450 tokens measured below); agent files —
-`data-sync.md` 5,253B, `engine-developer.md` 14,044B, `engine-verifier.md` 2,854B,
-`meta-architect.md` 6,791B, `site-builder.md` 2,884B, `web-developer.md` 6,043B; description-field
-sum 2,276 chars (~569 tokens) across all 6. The section below is the pre-split (4-agent) snapshot,
-kept for history.
+Sizes (measured 2026-09-07): agent bodies ~66 KB total; description-field sum **4,099 chars
+(~1,025 tokens)** across all 9 — far under Claude Code's ~15k-token warning, so descriptions are
+never the lever worth pulling here. CLAUDE.md is the expensive surface (loaded into the main
+conversation *and* every non-Explore/Plan subagent) — measure it before touching descriptions.
 
-Four project agents in `.claude/agents/`, no routing overlap between them (pre-split, 2026-09-05
-morning):
-- `data-sync` — fetches raw pogoapi.net/ScrapedDuck data into `data/raw/`. Never touches
-  hypothetical species (those are hand-authored in `packages/engine/src/fixtures/scenarioA.ts`,
-  registered via `registerHypothetical`, not fetched — this section was fixed 2026-09-04, see
-  [[agent-doc-fossilization]]). As of 2026-09-05: its body still never instructs it to run
-  `npm run sync-data` after the raw fetch — see [[data-sync-normalize-gap]], flagged not fixed.
-- `engine-verifier` — read-only (`disallowedTools: Write, Edit`), runs `packages/engine`'s vitest
-  suite, reports only failures. Anchor tests are Scenario A's spec-pinned numbers only (10.0s
-  survival, 190/221 damage, 130 HP, fast-move 4/5) — deliberately excludes Scenario B's
-  empirically-derived thresholds. As of 2026-09-05, its reactive trigger ("after any change to
-  stat/damage/energy/breakpoint code") is now largely automated by `.claude/settings.json`'s
-  hook — see [[engine-verifier-hook-overlap]].
-- `site-builder` — builds/ships `packages/web`, must ask before any `git push`/deploy/visibility
-  change. Read-only toward `packages/engine`. Guardrail is prompt-only — see
-  [[site-builder-push-guardrail]] (re-flagged 2026-09-05: the "no settings.json exists yet"
-  reason not to add a permission rule no longer applies).
-- `meta-architect` — this agent, self-referential, `model: inherit`, `memory: project`.
+Deliberate settings, don't relitigate:
+- `engine-verifier`: `disallowedTools: Write, Edit`. Its overlap with the test hook is by design —
+  see [[engine-verifier-hook-overlap]].
+- `code-simplifier` / `skeptic` / `pogo-researcher`: `Write` granted **only** for their own memory
+  file; each body states this explicitly, which is what makes the grant justifiable.
+- `meta-architect`: `model: inherit`, `memory: project`.
+- `.claude/settings.json`: one `PostToolUse` hook on `Edit|Write` rerunning `npm run test:engine`
+  for `packages/engine/src/**/*.ts` (Node-based `node -e`; no `jq` in this environment), plus a
+  `permissions.ask` rule on `git push:*` ([[site-builder-push-guardrail]]).
+- `.claude/skills/`: `verify-and-ship`, `add-scenario-assumption`. Both correctly filed as skills
+  (procedures needing the live conversation's context), not agents.
+- `.claude/launch.json` + `run-web.bat` are the browser-preview launch config `skeptic` depends on
+  (config name `"web"`, port 5173). `.claude/scheduled_tasks.lock` is a runtime artifact. No
+  `.mcp.json` exists.
 
-Config surfaces added 2026-09-05 (all new, none existed at the 2026-09-04 audit):
-- `.claude/skills/verify-and-ship/SKILL.md` (4760 bytes) — test→typecheck×2→build→commit→push→
-  watch-deploy pipeline, cleanly cross-references CLAUDE.md and `engine-verifier`'s reasoning
-  rather than restating it.
-- `.claude/skills/add-scenario-assumption/SKILL.md` (5120 bytes) — 7-step checklist for wiring a
-  new UI setting through `Scenario`/`Assumptions`/`App.tsx`/tests. Correctly filed as a skill, not
-  an agent (it's a procedure that needs the current conversation's file-edit context, not a job
-  whose output should be summarized away).
-- `.claude/settings.json` (1183 bytes) — one `PostToolUse` hook on `Edit|Write`, Node-based
-  (`node -e`, no `jq` available in this environment), reruns `npm run test:engine` when the edited
-  file is under `packages/engine/src/**/*.ts`, exit 2 + stderr on failure. Measured real runtime
-  of the full suite: ~2.4s wall clock (50 tests, 12 files) — well under the hook's 60s timeout,
-  not a cost concern even if it fires many times in one session.
-
-CLAUDE.md is 17,803 bytes (~4,450 tokens) as of 2026-09-05, loaded into the main conversation and
-all 4 project subagents (none Explore/Plan) — up to ~22k tokens/session in the worst case just for
-CLAUDE.md. Grew from 12,509 bytes (first commit with real content) to a peak of 18,094 committed
-bytes; a prior interrupted meta-architect pass had already trimmed ~290 bytes of it (uncommitted,
-matches [[claude-md-changelog-drift]] exactly) by the time of this audit. Description-field token
-cost across all 4 agents: 709 chars (~177 tokens) — trivial, not a lever worth pulling.
-
-`.claude/launch.json`, `.claude/run-web.bat` are VS Code debug-launch helpers, unrelated to Claude
-Code config. `.claude/scheduled_tasks.lock` is a runtime lock artifact. No `.mcp.json` exists.
+**Recurring drift — tab counts and the scenario query-param list.** Every restatement of "N tabs"
+and `s`/`ts`/`sr`/`ivc`/`adb` lags the app. Caught in CLAUDE.md 2026-09-06 (4th tab, IV
+Breakpoints) and across three agent bodies 2026-09-07 (5th tab, Attack/Defense Breakpoints).
+Whenever a new tab or `Scenario`-family type ships, re-grep `tabs`/`view=`/the param list across
+`.claude/agents/*.md` and CLAUDE.md. `AppTab` in `packages/web/src/App.tsx` is the authority.

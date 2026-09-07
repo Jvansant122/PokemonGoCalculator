@@ -1,6 +1,6 @@
 ---
 name: engine-developer
-description: Implements and extends the Pokémon GO combat engine (packages/engine/src) — stats, damage, energy, type chart, raid bosses, combat/breakpoints/uptime/comparison math, the stepwise simulator, scenario serialization, the GameMaster data loader, and the hand-authored hypothetical fixtures. Use for any change to combat mechanics, formulas, engine-side data models, or fixture stats — writes and updates its own tests in packages/engine/test alongside the implementation, not after the fact.
+description: Implements and extends the Pokémon GO combat engine (packages/engine/src) — stats, damage, energy, type chart, raid bosses, combat/breakpoints/uptime/comparison math, the stepwise simulator, scenario serialization, the GameMaster data loader, and the hand-authored test-only fixtures. Use for any change to combat mechanics, formulas, engine-side data models, or fixture stats — writes and updates its own tests in packages/engine/test alongside the implementation, not after the fact.
 tools: Read, Write, Edit, Bash, Grep, Glob
 model: sonnet
 memory: project
@@ -38,9 +38,12 @@ off, check here first before anywhere else.
   base stats are already its effective stats (`iv=0`, `RAID_BOSS_CPM=1.0`) — only the hand-tuned
   test-only fixtures (see "Fixtures" below) use this path. Every **real synced species** used as a
   live raid target goes through real per-tier math instead: `RAID_TIER_TABLE` gives a fixed HP pool
-  and an Attack/Defense multiplier per tier (1-star through Primal — literal Bulbapedia wikitext
-  quote, 3 independent fetches agree: HP 600/3600/9000/15000/22500/25000, multiplier
-  0.5974/0.73/0.79). Attack/Defense go through the normal `effectiveStat(base, 15, tierMultiplier)`
+  and an Attack/Defense multiplier per **seven** tiers (literal Bulbapedia wikitext quote, 3
+  independent fetches agree): 1-Star 600 / 3-Star 3600 / Mega 9000 / 5-Star 15000 / Legendary Mega
+  22500 / Super Mega 25000 / Primal 22500, multiplier 0.5974 for 1-Star, 0.73 for 3-Star, 0.79 for
+  the rest. Note Legendary Mega and Primal are deliberately identical (22500 / 0.79) — that's real,
+  not a copy-paste bug, and `raidBoss.ts` has a single branch covering both because of it. Read
+  `RAID_TIER_TABLE` itself rather than trusting this list if you're pinning a number. Attack/Defense go through the normal `effectiveStat(base, 15, tierMultiplier)`
   pipeline (raid bosses carry perfect IV 15) — reuse it, don't duplicate. **HP does NOT go through
   `effectiveStat` at all** — it's the tier table's fixed value directly, never derived from
   `baseStamina`. This asymmetry is easy to get wrong; there's a regression test guarding it
@@ -60,8 +63,10 @@ off, check here first before anywhere else.
   and once caused degenerate all-zero sustained-fight output. This path is **not used by the live
   web UI**, only by tests (it backs the pinned Scenario A acceptance numbers below) — the UI
   always runs the sustained/stepwise path.
-- **`breakpoints.ts`**: `findFastMoveBreakpoints` (damage breakpoint table) and
-  `timeToFaint`/`timeToFaintTable` (survivability, with a `DodgeBehavior` model).
+- **`breakpoints.ts`**: `findFastMoveBreakpoints` (damage breakpoint table),
+  `timeToFaint`/`timeToFaintTable` (survivability, with a `DodgeBehavior` model), and
+  `attackDamageGrid`/`defenseDamageGrid` (the IV x level per-hit damage grids backing the web
+  Attack/Defense Breakpoints tab).
   `DODGE_WINDOW_SECONDS = 0.7` — a dodge is a timed action, not a standing shield.
   `DodgeBehavior` (`none`/`perfect`/`percentage-missed`) governs the boss's **CHARGED** attacks
   only; dodging fast attacks is a separate plain boolean (`dodgeFastAttacks`, no
@@ -71,8 +76,10 @@ off, check here first before anywhere else.
   no attempt (and no cost) happens while mid-own-animation. `dodgeMultiplierForHit` also takes an
   optional `moveIsDodgeable` (default `true`) — forced to `1` regardless of `DodgeBehavior.kind`
   when `false`, sourced from the boss's selected charged move's `ChargedMove.perfectlyDodgeable`.
-  That field is undefined/`true` on every real synced move (pogoapi.net has no frame-level
-  "damage window" timing at all, so there's no data basis to mark any of them `false`) — only
+  That field is undefined/`true` on every real synced move (no source this project syncs carries
+  frame-level "damage window" timing — the cached GAME_MASTER move slice keeps only
+  power/energyDelta/durationMs, and pogoapi's move JSONs have none either — so there's no data
+  basis to mark any of them `false`) — only
   ever hand-set `false` on a specific fixture once actually identified as undodgeable, the same
   way `vulnerableWindowSeconds` is hand-authored.
 - **`uptime.ts`**: `convertUptimeToTeamDamage` (default mega boost `1.3` — **load-bearing**, at
@@ -120,19 +127,18 @@ off, check here first before anywhere else.
   — no separate logic needed for that.
 - **`types.ts`** / **`gamemaster.ts`**: `SpeciesDefinition.imageUrl?` — sprite URLs from the
   PokeAPI sprites mirror on GitHub. Real Normal-form species use their national-dex id directly
-  (no extra request); real mega/primal species and the 4 hypothetical fixtures each need a
-  PokeAPI name-slug lookup, since mega forms have their own internal PokeAPI id not derivable
-  from the dex number — that fetch is entirely `data-sync`'s job (`scripts/sync-data.ts`'s
-  `fetchMegaSpriteUrls`), not this package's, since the engine has no I/O. The 4 hypothetical
-  fixtures' `imageUrl` values are hand-set directly in `scenarioA.ts` rather than fetched, using
-  urls `data-sync` already resolved once — **surprisingly, PokeAPI has real sprite data even for
-  these unreleased/hypothetical forms** (`raichu-mega-x`/`raichu-mega-y`/`skarmory-mega`/
-  `kyogre-primal` all resolve). If you rename a fixture's `id` to dodge a collision (see
-  `kyogre-primal-attacker` below), do NOT re-derive its sprite lookup from the new id — PokeAPI
-  has never heard of the renamed one; keep whichever `imageUrl` was already resolved against the
-  natural pre-collision name.
+  (no extra request); real mega/primal species each need a PokeAPI name-slug lookup, since mega
+  forms have their own internal PokeAPI id not derivable from the dex number — that fetch is
+  entirely `data-sync`'s job (`fetchMegaSpriteUrls` in `scripts/sync-data/fetchCache.ts`), not
+  this package's, since the engine has no I/O. Nothing in this package hand-sets an `imageUrl`
+  any more; if you ever add a species id that gets renamed to dodge a collision, do NOT re-derive
+  its sprite lookup from the new id — PokeAPI has never heard of the renamed one; keep whichever
+  `imageUrl` was already resolved against the natural pre-collision name.
 - **`gamemaster.ts`**: `fromGameMaster`/`fromGameMasterMove` are the one on-ramp from
-  pogoapi.net-shaped JSON into a `SpeciesDefinition`/move — `fromGameMasterMove` sets BOTH `energyGain` and
+  raw-record JSON into a `SpeciesDefinition`/move. Their input types are pogoapi-shaped and were
+  deliberately left that way through the 2026-09-06 GAME_MASTER switch — `scripts/sync-data/
+  adapters.ts` translates real GAME_MASTER records into that shape before calling in, so there is
+  still exactly one on-ramp; don't grow a second one for GAME_MASTER. `fromGameMasterMove` sets BOTH `energyGain` and
   `energyCost` on every move object regardless of which one actually applies (whichever doesn't
   is just `0`) — never assume you can tell fast from charged by which of those fields is present;
   a caller has to know which movepool it's looking at.
@@ -161,12 +167,19 @@ off, check here first before anywhere else.
   move yet is a computed fact (`bossChargedMoveReadySeconds`), not a mode to pick — don't
   reintroduce a phase toggle if asked; push back and ask what the request is really trying to
   express (this was a deliberate, explicit product decision, not an oversight).
+- Present but not detailed above — read the file rather than assuming: `cpm.ts`
+  (`CPM_TABLE`/`cpmForLevel`), `stats.ts` (see "single most important invariant"), `shadow.ts`
+  (`SHADOW_ATTACK_MULTIPLIER = 1.2` / `SHADOW_DEFENSE_MULTIPLIER = 5/6`, applied via
+  `shadowAdjustedBaseStats`), `weather.ts` (`WEATHER_BOOSTED_TYPES`/`isWeatherBoosted`), and
+  `ivComparison.ts` (`compareIvSpreads`, backing the web IV Breakpoints tab).
 
 ## Fixtures (`test/fixtures/hypotheticalDuo.ts`)
 
-**As of 2026-09-06, the original 4 product-level hypothetical fixtures (Mega Raichu X/Y, Primal
-Kyogre, Mega Skarmory — formerly `src/fixtures/scenarioA.ts`) were deleted at the user's explicit
-request** — they were reachable from `packages/web`'s species picker, which was never the intent.
+**The 4 hand-authored fixtures this package used to ship from `src/fixtures/scenarioA.ts` were
+deleted 2026-09-06 at the user's explicit request** — living under `src/` made them reachable from
+`packages/web`'s species picker, which was never the intent. That directory is now empty; don't
+repopulate it. Their namesakes (Mega Raichu X/Y, Mega Skarmory, Primal Kyogre) are all **real
+released species** and arrive as real synced data via `data-sync` — don't re-author them here.
 If you're looking for pinned-acceptance-number derivations styled like the old ones (level/IV
 sweeps, exact survival-time/damage pins), that logic now lives in `test/scenarioA.test.ts`/
 `test/scenarioB.test.ts` directly, backed by a **test-only** fixture module,
@@ -179,10 +192,13 @@ verified by actually running the engine's own code (a throwaway vitest/tsx scrat
 after use — see `verification_without_browser_tool.md` in `web-developer`'s memory for the
 technique), not hand arithmetic, same discipline as the original fixtures.
 
-All 4 test-only bosses/candidates need `statsArePrecomputed: true` (see the `raidBoss.ts` bullet
-above) so they keep using already-final hand-tuned stats — omitting it would silently route them
-through the real per-tier math instead, which would change their numbers and break every pinned
-test that depends on them. If you hand-author a **new** boss-shaped `SpeciesDefinition` anywhere
+The two test-only **bosses** (`BOSS_TIDE`/`BOSS_GALE`) carry `statsArePrecomputed: true` (see the
+`raidBoss.ts` bullet above) so they keep using already-final hand-tuned stats — omitting it would
+silently route them through the real per-tier math instead, which would change their numbers and
+break every pinned test that depends on them. The two **candidates**
+(`CANDIDATE_ALPHA`/`CANDIDATE_BETA`) deliberately do not carry it: they're attackers, so their
+base stats go through the normal `effectiveStat(base, iv, cpm)` pipeline. If you hand-author a
+**new** boss-shaped `SpeciesDefinition` anywhere
 (tests or otherwise) and mean for its `baseAttack`/`baseDefense`/`baseStamina` to be literal
 already-effective combat stats rather than real base stats needing tier math, set this flag
 explicitly — it does not default to the old fixtures' behavior.

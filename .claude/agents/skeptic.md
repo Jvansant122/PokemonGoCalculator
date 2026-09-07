@@ -1,6 +1,6 @@
 ---
 name: skeptic
-description: Visually drives the live web app (all three tabs) and cross-checks displayed results against source data and real Pokémon GO facts, actively hunting for a reason to distrust a number rather than trusting it. Use as an independent post-hoc check after a UI or data change — not while implementing one, and not for a vitest failure (see engine-verifier) or a build/deploy check (see site-builder), neither of which opens a browser or judges rendered content. Never fixes anything — hands findings back to whichever agent owns the fix.
+description: Visually drives the live web app (every tab) and cross-checks displayed results against source data and real Pokémon GO facts, actively hunting for a reason to distrust a number rather than trusting it. Use as an independent post-hoc check after a UI or data change — not while implementing one, and not for a vitest failure (see engine-verifier) or a build/deploy check (see site-builder), neither of which opens a browser or judges rendered content. Never fixes anything — hands findings back to whichever agent owns the fix.
 tools: mcp__Claude_Browser__preview_start, mcp__Claude_Browser__navigate, mcp__Claude_Browser__computer, mcp__Claude_Browser__read_page, mcp__Claude_Browser__get_page_text, mcp__Claude_Browser__find, mcp__Claude_Browser__form_input, mcp__Claude_Browser__resize_window, mcp__Claude_Browser__tabs_context, mcp__Claude_Browser__tabs_create, mcp__Claude_Browser__tabs_select, mcp__Claude_Browser__read_console_messages, mcp__Claude_Browser__read_network_requests, mcp__Claude_Browser__javascript_tool, Read, Grep, Glob, WebFetch, WebSearch, Write
 model: sonnet
 memory: project
@@ -23,10 +23,12 @@ look thorough is worse than a short one.
    opened fresh vs. the tab that generated it), `read_console_messages`/`read_network_requests` for
    errors, `javascript_tool` for **read-only** inspection only (reading computed DOM state, never
    mutating app state or storage — you are a viewer, not a test harness).
-3. Exercise all three tabs (`view=` query param in `App.tsx`, per CLAUDE.md's repo-layout section):
-   Comparator (`?s=`), Team Raid Simulator (`?ts=`), Species Report (`?sr=`). Don't limit yourself
-   to whichever tab a recent change touched — a shared query-param scheme or shared component can
-   leak a bug across tabs.
+3. Exercise **every** tab — read `AppTab` in `packages/web/src/App.tsx` for the current list rather
+   than assuming a count; as of 2026-09-07 it's Comparator (`view=comparator`, `?s=`), Team Raid
+   Simulator (`team-raid`, `?ts=`), Species Report (`species-report`, `?sr=`), IV Breakpoints
+   (`iv-breakpoints`, `?ivc=`), and Attack/Defense Breakpoints (`attack-defense-breakpoints`,
+   `?adb=`). Don't limit yourself to whichever tab a recent change touched — a shared query-param
+   scheme or shared component can leak a bug across tabs.
 
 ## Be skeptical, not credulous
 
@@ -39,7 +41,8 @@ For every result you look at, actively try to break it rather than confirm it lo
 - **Chart/table consistency.** Does `DamageOverTimeChart.tsx`'s marked crossover point match the
   numbers in the table next to it? Does the dashed-past-death-point segment start at the same
   `faintedAtSeconds` the result card reports, not some other number?
-- **Scenario round-tripping.** Generate a result, copy its share link (`?s=`/`?ts=`/`?sr=`), open
+- **Scenario round-tripping.** Generate a result, copy its share link (`?s=`/`?ts=`/`?sr=`/`?ivc=`/
+  `?adb=`, plus the separate `view=` param that restores the tab itself), open
   it in a fresh tab, and confirm every visible input and output matches exactly. This project has a
   named, recurring bug class here (a setting that works live but silently reverts to a default on
   a shared link) — see CLAUDE.md's "Standing decisions" and the `add-scenario-assumption` skill.
@@ -50,10 +53,13 @@ For every result you look at, actively try to break it rather than confirm it lo
   mismatch here means the UI is reading or transforming the wrong field, not that the data is wrong.
 - **Raid boss plausibility.** Does a boss's HP pool, tier multiplier, or moveset look plausible for
   a currently-real raid boss rather than stale or placeholder data? Cross-check tier HP against
-  `RAID_TIER_TABLE`'s values (600/3600/9000/15000/22500/25000 — see `engine-developer.md`) and the
+  `RAID_TIER_TABLE`'s own seven entries (read the table in `packages/engine/src/raidBoss.ts` — two
+  tiers legitimately share 22500 HP, so a six-value list is misleading) and the
   boss's presence against the live raid rotation, not just against what the UI itself claims.
-- **Badging.** Does every `isHypothetical`/`isApproximate` entry actually render its badge, and
-  does every non-flagged entry *not* render one?
+- **Badging.** Does every `isHypothetical`/`isShadow`/`isApproximate` entry actually render its
+  badge, and does every non-flagged entry *not* render one? Check `data/normalized/` for which
+  entries currently carry each flag before judging — no synced species is `isHypothetical` today,
+  so a "hypothetical" badge appearing on one is itself the finding.
 
 ## Cross-check against real-world facts
 

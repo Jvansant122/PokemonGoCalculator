@@ -3,6 +3,250 @@
 Last updated: 2026-09-07. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
+## 2026-09-07, later still: code review, live audit, and two real bugs found
+
+A `skeptic` pass over the live app plus my own correctness review. **Two confirmed user-facing
+bugs were found and fixed, and running the data sync exposed two further regressions** — details
+in the two subsections below. In both cases the reported root cause turned out to be incomplete or
+wrong, and verifying it directly rather than accepting it changed the fix:
+
+- **Mobile: the whole page scrolls horizontally, on every tab.** Never checked before — the app
+  went from 2 tabs to 5 across four desktop-only sessions. `skeptic` attributed it solely to
+  `.tab-switcher`. Measuring it myself at 375px found **two independent causes**: the tab nav
+  (`display: flex`, no `flex-wrap`, no `overflow-x` — last button's right edge at 480px on every
+  tab) *and*, separately, `.time-series-table` rendering ~600px wide as a direct child of `.panel`
+  with `overflow-x: visible` all the way to `<body>` (Team Raid worst at 639px). Fixing only the
+  nav would have left Team Raid broken. The Attack/Defense tab's 51-column `.breakpoint-table` is
+  **not** at fault — it already has a scoped scroll container, and is the pattern the fix copies.
+  **Fixed**: `.tab-switcher` gained `overflow-x: auto`, `.tab-button` gained
+  `white-space: nowrap; flex-shrink: 0`, and the two `.time-series-table` call sites that lacked a
+  wrapper (`TeamRaidBreakdownTable.tsx`, `SpeciesReportView.tsx`) got the same wrapper div the
+  other four call sites already used. Deliberately **not** `overflow-x: auto` on `.panel` — setting
+  one axis to `auto` forces the other from `visible` to `auto`, which would clip the species-picker
+  dropdowns.
+  **Measured by the overseer in the browser afterwards**, because `web-developer` reported plainly
+  that it had no browser tool and could not confirm the rendered numbers — a gap worth respecting
+  rather than papering over. All five tabs at 375px now report `scrollWidth === clientWidth === 375`
+  (Team Raid 639 → 375). The nav scrolls within itself (335 visible / 804 content) instead of
+  dragging the page, the Attack/Defense tab's inner mode toggle — which also uses `.tab-switcher`,
+  so it inherited the fix — scrolls rather than clipping, and desktop is unchanged (nav fits at
+  1060/1060, no page overflow). Dev server logs and console are clean on a fresh start.
+- **The Species Report was showing last week's mega raid bosses.** `skeptic` called this a
+  "mega-raid ingestion" bug scoped to that part of the feed. It isn't: I checked
+  `data/raw/raids.json` against a live upstream fetch and found normalized output matching raw
+  *exactly*. Ingestion is correct — the data was simply **stale**, since the rotation flipped
+  after the 05:01 UTC sync. The fix was to run `npm run sync-data`, not to change any code. Worth
+  remembering as a diagnostic habit: before believing a transform is wrong, check whether its
+  input was just old.
+
+### Running the sync then exposed two genuine regressions — both now fixed
+
+Neither was caused by the sync — both were latent, and the first real rotation since `8d6fd08`
+surfaced them. Both were fixed in `scripts/sync-data.ts` and the data regenerated:
+
+1. **`lastKnownRaidTier` never actually persisted, which was its entire purpose.** `steelix-mega`,
+   `aggron-mega` and `glalie-mega` all went `"Mega Raids"` → `undefined` the moment they rotated
+   out. `8d6fd08` was built expressly "so this data isn't lost again once a species rotates out,"
+   and it failed at that on its first real rotation: the field is only ever written from a live
+   observation or the hand-researched allowlist, and **nothing carries forward the previous run's
+   value**, so each sync rebuilds it from scratch. (`raichu-mega-y` going "Super Mega Raids" →
+   "Mega Raids" is *correct* and documented — a live observation legitimately outranks a
+   historical debut record. Don't "fix" that one.)
+   **Fix**: a carry-forward step, inserted after `previousSpecies` is loaded (reusing the read
+   `diffSpecies` already does) and before the diff runs. Precedence is now
+   **live-this-run > allowlist > carried-forward > undefined**, with every carry-forward reported
+   in `WARNINGS` rather than happening silently. A first-ever run with no previous file is a
+   no-op, not a crash.
+2. **`skarmory-mega` silently disappeared** — species count 1092 → 1091. It was reaching the
+   picker *only* through the live-raid gate, so the rotation ending deleted a real, released
+   species from the app. This is exactly the blind spot `RELEASED_MEGA_PRIMAL_ALLOWLIST` exists to
+   cover. It also falsified a `CLAUDE.md` standing-decision claim that Skarmory "already flows
+   through as real species via the normal mega_pokemon.json/GAME_MASTER pipeline" — it never did.
+   That line is now corrected, with the general lesson attached: **a species being visible today
+   tells you nothing about which gate is carrying it.**
+   **Fix**: a `Mega Skarmory` allowlist entry, cited to this pipeline's own 05:01 UTC cached
+   `raids.json` observation — first-hand evidence from our own feed, independent of GAME_MASTER,
+   which satisfies the allowlist's own cross-check rule.
+
+**Verified independently by the overseer**, not taken from the agent's report: 1092 species (0
+added, 0 removed vs. the committed file), `skarmory-mega` back with `"Mega Raids"`,
+`steelix-mega`/`aggron-mega`/`glalie-mega` all **retaining** `"Mega Raids"` instead of going
+`undefined`, `sableye-mega`/`mawile-mega`/`audino-mega` picking up `"Mega Raids"` fresh from the
+live feed, and — checked across every species and every field — **`lastKnownRaidTier` is the only
+field that moved anywhere in the file.** Also confirmed live in the browser: the Species Report
+now lists Sableye and Mawile and no longer lists Steelix.
+
+One process note worth keeping: the sync had already overwritten `species.json` with the buggy
+output before the fix existed, so the carry-forward had no correct baseline left to read. The
+recovery was `git show HEAD:<path> > <path>` to restore the committed state first, then re-run.
+Committed data is the backup that makes a regenerable artifact safely regenerable — which is an
+argument for committing a good sync promptly, not sitting on it.
+
+### Correctness review of the engine, data layer, and round-trips
+
+Verification baseline afterwards: **174/174
+engine tests** (up from 150), both packages type-check clean, production build succeeds in **both**
+modes — plain (`base: "/"`) and `GITHUB_PAGES=true` (`base: "/PokemonGoCalculator/"`, the one that
+actually matters for deploy, and which a plain local build does *not* reproduce).
+
+**Verified sound, by reading the code rather than trusting the tests:**
+
+- `stats.ts`'s `effectiveStat` floors exactly once, at `(base + iv) * cpm`, and `shadow.ts`'s
+  multipliers are applied to the **raw** base stat before that single floor — so the project's
+  documented "nested FLOOR()" failure mode is genuinely avoided, not just commented about.
+- `damage.ts` implements `floor(0.5 · power · atk/def · modifiers) + 1` correctly, with every
+  modifier a named input and no inline magic numbers.
+- `ENERGY_PER_DAMAGE_TAKEN = 0.5`, `MAX_ENERGY = 100`, and the type chart's 1.6 / 0.625 /
+  0.390625 all match real current-generation Pokémon GO values.
+- `ownBoostMultiplier` correctly gates the mega/primal self-boost on the move's type matching the
+  boost's `boostedType`, and `resolveBoost` is the single choke point so the disable toggle can't
+  be partially applied.
+- Both non-null assertions in `simulate.ts` (lines 329, 335) are properly guarded — the
+  `nextBossChargedMoveAt !== null` branch is only reachable when `boss.chargedMove` exists.
+- Zero `TODO`/`FIXME`/`@ts-ignore`/`as any` anywhere in `packages/engine/src`, `packages/web/src`,
+  or `scripts/`. One `eslint-disable` (`ComparatorView.tsx:270`), deliberate.
+
+**Data layer independently validated** (script over `data/normalized/`, not the sync script's own
+self-report): 1092 species, **0** duplicate ids, 0 with non-positive stats, 0 missing types, 0
+missing fast or charged moves, 0 moves with bad duration/power. All 61 mega/primal forms carry a
+`boost` field — the 2026-09-04 bug where 48 megas synced with no boost (silently simulating at 1x)
+would be caught by this check today. The only boost multiplier present anywhere is `1.3`, the
+load-bearing value. All 14 active raids resolve to a real species, all tiers valid.
+
+**The recurring Scenario bug class is currently clean, checked statically across all five tabs.**
+Extracted every field of each tab's `Assumptions` interface and confirmed each one appears in both
+`assumptionsToScenario` and `scenarioToAssumptions`: Comparator 26 fields, Team Raid 18, Species
+Report 12, IV Breakpoints 10, Attack/Defense 9 — **75 total, none missing in either direction.**
+
+That check is now a permanent repo script rather than a one-off: `npm run
+check-scenario-roundtrip` (`scripts/check-scenario-roundtrip.mjs`), wired into the
+`add-scenario-assumption` skill's finish step as the mechanical half of its checklist. It was
+validated by deliberately deleting the Attack/Defense tab's `mode` field from
+`assumptionsToScenario` and confirming it failed with exit 1 naming that exact field, then
+restoring the file to a byte-identical state — a checker that has only ever passed proves nothing.
+It's a name-level smoke test, not a type check (it proves a field is *mentioned* in both
+directions, not that it's mapped correctly), and it's deliberately dependency-free plain Node so
+it can't rot. Note it is currently the **only** automated coverage of the three web-only Scenario
+types, since `packages/web` has no vitest setup.
+
+**Gap found and closed:** `gamemaster.ts` — `fromGameMaster` / `fromGameMasterMove` /
+`speciesIdFor`, the single on-ramp `scripts/sync-data.ts` uses to build all 1092 species — had
+**zero test coverage**, with no `gamemaster.test.ts` at all. The least-guarded load-bearing path in
+the engine, and materially more important since `5887d69` moved the pipeline onto GAME_MASTER.
+`engine-developer` added 24 tests (`packages/engine/test/gamemaster.test.ts`), pinning the energy
+sign convention, `toPokemonType` normalization, form-suffix id/name rules, `SpeciesRegistry`
+behavior, and — deliberately, using a non-integer stat like `270.5` — that `fromGameMaster` applies
+**no** rounding of its own, so a second floor can never creep in outside `stats.ts`. No `src/` file
+was changed. Verified independently: 174/174 green, and the new file is substantive, not padding.
+
+**Two findings recorded, deliberately not acted on:**
+
+1. **`vulnerableWindowSeconds` is dead.** It's a **required** field on `FastMove`/`ChargedMove`
+   (`types.ts:78`), set by `fromGameMasterMove` to the move's full duration, and supplied at ~40
+   test sites — but **no production code anywhere reads it**. The "died mid-animation" failure mode
+   it was meant to model is really implemented via `simulate.ts`'s
+   `diedDuringOwnChargedMoveAnimation`. So this is mandatory ceremony with no consumer: either wire
+   it up or drop it and make the ~40 fixtures simpler. `code-simplifier`/`engine-developer` call —
+   not touched here because removing a required field edits the type and every fixture, which is
+   well beyond a review.
+2. **`speciesIdFor` doesn't hyphenate a multi-word form** — `form: "Mega X"` yields
+   `"raichu-mega x"`, with a literal space. Harmless today and confirmed so: every real `form`
+   value in the pipeline is a bare single-word suffix, and every synced id in
+   `data/normalized/species.json` is clean. It's latent, not live; now pinned by a test so the
+   behavior can't change unnoticed.
+
+## 2026-09-07, later: documentation reconciliation pass (no product code changed)
+
+The user asked for a review of the repo's `.md` specs. No engine, web, or data code was touched;
+150/150 engine tests, both type-checks, and the production build were re-run afterwards and are
+all green. What the review found:
+
+- **⚠️ `6a698e7` is committed locally but was never pushed.** Confirmed with a real `git fetch`:
+  local `main` is 1 ahead of `origin/main`, and `deploy.yml` has no run for that SHA. The
+  Power-Up Optimizer research and `PLAN_login_and_roster_persistence.md` therefore exist **only
+  on this machine** — they are not on GitHub and not backed up anywhere. Nothing is broken (it's
+  a docs-only commit, so the deployed site is correct), but this is the first thing to resolve
+  next session.
+- **`HANDOFF.md` had skipped five shipped commits entirely** — backfilled as its own section
+  below (`5435935`, `6507695`, `5887d69`, `b4e5999`, `d9d5447`). The biggest of these,
+  `5887d69`, moved the whole species pipeline off pogoapi.net onto live GAME_MASTER, which
+  nothing in the docs reflected.
+- **`CLAUDE.md` still said "four tab-switched views"** — there are five (`adb` / Attack-Defense
+  Breakpoints shipped in `6507695`). Fixed, along with the `data/` section, which still implied
+  pogoapi was the primary source.
+- **The founding build spec is actively misleading now, and `CLAUDE.md` pointed at it with no
+  caveat.** `Downloads/pogo-analyzer-spec.md` still instructs building the combat-phase toggle
+  (removed at the user's explicit, repeated request), still pins acceptance tests to the four
+  deleted hypothetical fixtures, and still asks for a data layer that accepts user-defined
+  species — the exact thing that got those fixtures deleted. The spec file itself was left
+  untouched (it's the user's own founding artifact); instead `CLAUDE.md` now opens with a table
+  of precisely where the spec has been overridden, and says this file wins on conflict.
+- **`PLAN_attack_defense_breakpoints.md` was deleted** — it shipped in full as `6507695`, and
+  every one of its "open questions to resolve during implementation" was in fact resolved and
+  documented in the code itself (`AttackDefenseBreakpointsView.tsx`'s caveats panel and
+  `attackDefenseBreakpointsScenario.ts`'s doc comment): no dodge control (each cell *is* one hit,
+  so there's no "over time" for dodge to apply to), no mega/primal own-boost multiplier (same
+  stance the IV Breakpoints tab takes), and breakpoint cells highlighted by background color.
+  Since every `PLAN_*.md` opens with "self-contained plan for a fresh session," leaving a shipped
+  one at the root reads as pending work — `CLAUDE.md` now states the delete-on-ship rule.
+- **`add-scenario-assumption` was still a Comparator-only checklist**, pointing at `App.tsx` for
+  round-trip functions that have since moved into per-tab `*View.tsx` files. Rewritten with a
+  five-tab routing table up front. It also now names an unflattering fact instead of hiding it:
+  three of the five Scenario types (`speciesReportScenario`, `ivBreakpointsScenario`,
+  `attackDefenseBreakpointsScenario`) are web-only and have **no tests at all**, since
+  `packages/web` has no vitest setup — a real hole in exactly the bug class that skill exists to
+  prevent. The skill now requires a manual share-link round-trip and an explicit statement that
+  no test covered it.
+- **`verify-and-ship` had a genuine bug**: its deploy-watch step polls
+  `actions/runs?per_page=1`, but this repo grew a second workflow (`check-mega-gaps.yml`,
+  weekly), so an unscoped query can return that run and report the wrong conclusion. Now scoped
+  to `workflows/deploy.yml/runs`, verified working against the live API. Its "short `sleep 15`
+  loop" suggestion was also replaced with background polling, matching the user's standing
+  preference against blocking sleep loops.
+- **Bundle size re-measured: 1,457.67 kB raw / 184.97 kB gzipped**, up from the ~1.16 MB figure
+  this file still carried. Recorded in `PLAN_login_and_roster_persistence.md`'s step 5, since
+  that's the number the "lazy-load Firebase?" decision starts from.
+- **`PLAN_login_and_roster_persistence.md` gained two pinned product-level constraints** rather
+  than leaving them to be discovered mid-implementation: signed-out must stay fully functional on
+  every tab (this is a zero-account calculator and a shared link must work for a recipient who
+  never signs in — so roster UI runs on local state with Firestore syncing *on top*, never as its
+  state store), and storing user data means owning its deletion (sign-out is not delete; a real
+  delete path and a plain statement of what's stored ship with it). Also corrected: Firebase
+  authorized-domains takes a bare domain, not an origin, and `localhost` is authorized by default
+  — which is exactly why that gotcha only bites after the first deploy.
+- **`meta-architect` swept all nine agent bodies** (routed per `CLAUDE.md`, since `.claude/` is
+  its domain); 7 of 9 needed corrections, `meta-architect.md` and `pogo-researcher.md` verified
+  clean. The severe one, **independently re-verified by the overseer against
+  `test/scenarioA.test.ts` rather than taken on the agent's word**: `engine-verifier.md`'s
+  "anchor tests" — the numbers that are its entire reason to exist, and which it is instructed to
+  treat as real regressions rather than stale expectations — still pinned the *deleted* fixtures'
+  values (10.0s / 190 / 221 / 130 HP). The real assertions are 7.5s / 171 / 189 / 150 HP against
+  `test/fixtures/hypotheticalDuo.ts`. A verifier with wrong anchors reports **false regressions
+  on a healthy engine**, which is worse than no verifier; it had been wrong since 2026-09-06.
+  Also fixed: three agents still routed work to the deleted `src/fixtures/scenarioA.ts`, three
+  hardcoded a stale tab count, `data-sync.md`'s entire "Source" section still presented pogoapi
+  as primary (including one row, `type_effectiveness`, that was never fetched at all — the type
+  chart is hardcoded in `typeChart.ts`), and `engine-developer.md` claimed all four test fixtures
+  carry `statsArePrecomputed: true` when only the two bosses do.
+- **Three follow-ups the agent flagged but deliberately left, closed afterwards** (each verified
+  against source first): `RAID_TIER_TABLE` was enumerated in two agent bodies as six HP values for
+  "1-star through Primal" when there are **seven** tiers — Legendary Mega and Primal legitimately
+  share 22500/0.79, so a six-value list silently loses a tier; `data-sync.md` never mentioned
+  `check-mega-gaps.ts` or its weekly workflow at all despite owning them, and now documents the
+  structural blind spot they exist to cover plus the two hard rules for
+  `RELEASED_MEGA_PRIMAL_ALLOWLIST` (independent cross-check, never speculative); and
+  `packages/web/src/registry.ts:53` still claimed "no real synced species carries `isShadow` yet"
+  when 8 do (verified by counting `data/normalized/species.json`) — a one-line comment fix, done
+  directly rather than delegated.
+- Leftover empty directory `packages/engine/src/fixtures/` removed (git doesn't track empty dirs,
+  so it was a local-only artifact of the 2026-09-06 fixture deletion).
+
+**The pattern worth carrying forward**: every one of these is the same failure — a doc describing
+a world that no longer exists, surviving because nothing re-reads it against source. Two files
+(`engine-verifier.md`'s anchors, `verify-and-ship`'s deploy poll) were not merely stale but
+actively wrong in a way that would have produced a confident false report. Docs in this repo need
+the same "verify against real numbers before concluding" discipline the code already gets.
+
 ## 2026-09-07: raid-tier reconciliation shipped; Power-Up Optimizer researched; login/persistence spec written for next session
 
 - **`lastKnownRaidTier` shipped** (`8d6fd08`, deployed, confirmed via GitHub Actions API): a real
@@ -16,8 +260,8 @@ this file is the point-in-time "what's done, what's next."
   of generic "Mega Raids") was found blocking this work and committed standalone first (`28bad88`) —
   see the code's own commit history for how that was resolved (preserved, not discarded, per this
   session's git-safety practice). 150/150 engine tests, clean typecheck both packages, clean build.
-- **`pogo-researcher` fleshed out the "Power-Up Optimizer" idea in `IDEAS.md`** (untracked, not yet
-  committed — this session left it that way, same as every session touching it so far): real
+- **`pogo-researcher` fleshed out the "Power-Up Optimizer" idea in `IDEAS.md`** (committed in
+  `6a698e7` along with the login plan — it is tracked now, unlike in earlier sessions): real
   stardust/candy cost data exists at pogoapi.net's `pokemon_powerup_requirements.json` (not yet
   fetched by `sync-data.ts` — real `data-sync` work needed, not a hand-typed table), and a sharper
   mechanical argument than "team DPS > raw CP" in the abstract — damage is floored to an integer per
@@ -38,6 +282,52 @@ this file is the point-in-time "what's done, what's next."
 - `IDEAS.md` updated to point at the new plan from the Optimizer's own step list (sequenced before
   the Optimizer's roster-data-model step, not folded into it — login is app-wide infra, not
   Optimizer-specific).
+
+## 2026-09-06, later the same day: five commits this file never recorded (backfilled 2026-09-07)
+
+A documentation-reconciliation pass on 2026-09-07 found this file had **skipped five shipped
+commits entirely** — it jumped from the "two new tabs" session below straight to the 2026-09-07
+entry above. All five are on `main` and deployed. Backfilled here so the continuity record
+matches `git log`; each is summarized from its own commit message and diff, not re-derived:
+
+- **`5435935` — per-rarity raid-tier default.** `DEFAULT_REAL_RAID_TIER` had been modeling *every*
+  real species of unknown tier as a Legendary-tier boss. Replaced with a rarity-keyed default
+  (Standard → 3-Star, mega/primal → Mega Raids, 5-Star kept for Legendary and as the last-resort
+  fallback for Mythic/Ultra Beast/unknown). This is the guess that `8d6fd08`'s `lastKnownRaidTier`
+  later learned to override with a real observation.
+- **`6507695` — the Attack/Defense Breakpoints tab (the fifth tab).** Implements
+  `PLAN_attack_defense_breakpoints.md` in full; that plan file was deleted on 2026-09-07 as
+  superseded (see the section above this one for the resolutions it recorded). Full IV × level
+  damage grids (0-15 IV × levels 50→25, 51 columns), split into fast/charged sheets, in both an
+  Attack and a Defense mode, with its own `adb` query param. Also shipped app-wide in the same
+  commit: type-colored swatches on every move dropdown, via the one shared `MoveSelect`.
+- **`5887d69` — the species pipeline moved off pogoapi.net onto live GAME_MASTER.** This is the
+  single biggest change in this batch and the one most likely to trip a future session that still
+  assumes pogoapi is the source of truth. Base stats/types/movesets/rarity now come from
+  PokeMiners' GAME_MASTER mirror, fetched fresh every run; pogoapi's cached endpoints stay on only
+  as the released-content roster/allowlist plus a per-species/per-move fallback, and
+  `pokemon_rarity.json` is gone (GAME_MASTER's own `pokemonClass` replaces it exactly).
+  Cross-validated against the previous pogoapi values across all 1024 species and 48 mega/primal
+  entries with **zero** stat/type mismatches, species count unchanged at 1081 — and it immediately
+  recovered real data the old path was missing (Mewtwo's legacy Counter). `scripts/sync-data.ts`'s
+  header comment documents the resulting split authoritatively; prefer it over any summary.
+- **`b4e5999` — 11 real megas that had fallen through every gate, plus a scheduled detector.**
+  Mega Raichu X/Y and 9 others (Victreebel, Dragonite, Malamar, Falinks, Mewtwo X, Starmie,
+  Chesnaught, Delphox, Greninja) were real released content missing from the picker because
+  `mega_pokemon.json` lacked them *and* none were in the live raid rotation. Added via
+  `RELEASED_MEGA_PRIMAL_ALLOWLIST`, each entry cross-checked against a source independent of
+  GAME_MASTER. The durable half is the new weekly `.github/workflows/check-mega-gaps.yml`, which
+  diffs this roster against Bulbapedia and opens/updates a tracking issue — so the next gap is
+  caught automatically instead of waiting for the user to notice. This commit is also where
+  `CLAUDE.md` got its Mega-Raichu-isn't-hypothetical correction.
+- **`d9d5447` — general Shadow toggle on every attacker picker.** A Shadow species previously only
+  existed in the registry when it happened to be a live Shadow raid target, so a trainer's own
+  Shadow Pokémon was unselectable the rest of the time. Now a checkbox on all four attacker
+  pickers, disabled when the species already carries a mega/primal boost (mutually exclusive in
+  the real game), round-tripping through each tab's own Scenario type. **This also silently
+  resolved the open question logged in the 2026-09-05 section below**: the Shadow defense
+  multiplier is now `5 / 6` in `shadow.ts`, not the previously-chosen `0.83`, matching the
+  external calculator this project cross-checked against.
 
 ## 2026-09-06: two new tabs (Team Raid Simulator, Species Report), a real boss-stats bug fixed, hypothetical fixtures deleted
 
@@ -168,9 +458,9 @@ good or bad.
 - **Numbers cross-checked against an external source**: formula, STAB/type-effectiveness/weather/
   mega-boost constants, and Mewtwo's real move data (Psycho Cut, Psystrike) all independently
   confirmed correct and current against a public raid-DPS calculator's own written methodology.
-  One small real discrepancy found and **not yet resolved**: that source's Shadow defense penalty
-  is 5/6≈0.8333 vs this project's `0.83` — worth a quick decision (tighten to match, or keep `0.83`
-  as the deliberately-chosen value; both are defensible, it's not officially pinned either way).
+  One small real discrepancy found: that source's Shadow defense penalty is 5/6≈0.8333 vs this
+  project's `0.83`. **Resolved since** — `shadow.ts` now uses `5 / 6` (landed as part of `d9d5447`,
+  see the 2026-09-06 backfill section above).
 - **Second ideation pass** (3 more proposals) uncovered a real architectural gap while being
   routed: `packages/web/src/sensitivity.ts` was running on the engine's *deterministic*
   `runComparison` path, where boss-charged-move dodging is documented as inert and boss cadence
@@ -428,13 +718,25 @@ mismatches, off-spec boost multipliers, raid-to-species matching) — nothing el
 
 ## Not yet done / candidates for next session
 
-1. Mobile-width visual check still hasn't been done (only desktop verified, this session and last).
-2. Bundle size is ~1.16MB now (species.json + the growing engine surface) — still just a build
-   warning, not an error, but worth revisiting if it keeps growing.
+1. ~~Mobile-width visual check~~ — **done 2026-09-07**, and it found a real page-level horizontal
+   scroll on all five tabs (see the code-review section above). Now fixed and measured at 375px.
+   Note what was *not* covered: only the 375px width and only the overflow axis were checked. Touch
+   targets, the charts' behavior at narrow widths, and landscape were not examined.
+2. **Bundle size is now 1.46 MB raw / 185 kB gzipped** (measured 2026-09-07, up from ~1.16 MB —
+   species.json plus the growing engine surface). Still a warning, not an error, and the gzipped
+   figure is what users actually download, so this is not urgent. It *is* directly relevant to
+   `PLAN_login_and_roster_persistence.md`'s step 5, which asks whether to lazy-load the Firebase
+   SDK: the answer starts from this number, not the old one.
 3. The "Teambuilding Analyzer" idea (multi-trainer mega staggering across a raid, since the mega
    boost doesn't stack) is explicitly out of scope for this tool — a separate future project.
-4. Regional/costume forms and real Shadow-form stat multipliers are still not modeled in the data
-   layer (only Normal-form + mega/primal are synced; Shadow raids use a documented approximation).
+4. Regional/costume forms are still not modeled in the data layer (only Normal-form + mega/primal
+   are synced). Shadow *is* modeled properly now — real multipliers in `shadow.ts` (1.2x Attack,
+   5/6 Defense) plus a general toggle on every attacker picker as of `d9d5447`; the old
+   "documented approximation" caveat no longer applies to attackers.
+5. `uptime.ts`'s `findCrossoverPartySize` — the engine's own dedicated party-size crossover
+   function, described in its own doc comment as "the headline output of Phase 3" — still has zero
+   call sites in `packages/web`. Carried over unresolved from the 2026-09-05 section below, where
+   the reasoning for not swapping `sensitivity.ts` onto it is written out. Worth a look someday.
 
 ## Preferences / gotchas for whoever picks this up
 

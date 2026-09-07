@@ -54,7 +54,7 @@ default pick:
 ## This does NOT change the existing Scenario/query-param pattern — it adds to it
 
 `CLAUDE.md`'s standing decision ("every user-facing assumption must round-trip through
-`Scenario`") is about **shareable state on a URL**, and stays exactly as-is for all four
+`Scenario`") is about **shareable state on a URL**, and stays exactly as-is for all five
 existing tabs. Login solves a *different* problem — "remember my stuff without a link" — not
 a replacement for shareability. The Power-Up Optimizer (and anything else building on this)
 should support **both**, not choose one:
@@ -67,6 +67,25 @@ should support **both**, not choose one:
 
 Don't let "we have real persistence now" become an excuse to skip the Scenario round-trip
 for this tab — it's still a real, independent requirement.
+
+## Two product-level constraints, decided up front (overseer call, 2026-09-07)
+
+Neither of these is an implementation detail to settle mid-task; both follow from what this
+app already is, so they're settled here:
+
+- **Signed-out must stay fully functional, on every tab, forever.** This tool is a
+  zero-account, client-side calculator today, and a shared link has to work for a recipient
+  who has never signed in and never will. Auth is strictly additive — "remember my stuff"
+  layered on top, never a gate in front of a calculation. If any part of the design starts
+  requiring an account to see a number, that's the wrong design, not a missing login prompt.
+  Concretely: the Optimizer's roster UI must work against local component state alone, with
+  Firestore wired in as an *optional* sync on top, not as its state store.
+- **Storing a user's data means owning its deletion.** Signing out is not deleting. Whatever
+  ships must include a visible way to delete the stored roster document(s) from Firestore —
+  not just clear them locally — and the sign-in UI should say plainly what is stored (roster
+  contents; whatever the Google profile hands over, which is name/email/avatar). This is a
+  small amount of work if designed in from the start and an awkward retrofit if not, which
+  is the only reason it's pinned here rather than left to step 3.
 
 ## Data model
 
@@ -135,9 +154,12 @@ Hand the user this checklist:
    (`apiKey`/`authDomain`/`projectId`/`storageBucket`/`messagingSenderId`/`appId`).
 5. Under **Firestore → Rules**, paste the security rule above (or the implementer's
    refined version) and publish it.
-6. Add the deployed GitHub Pages origin (`https://jvansant122.github.io`) to
-   **Authentication → Settings → Authorized domains** — Google Sign-In will silently fail
-   on an unauthorized domain, a common first-run gotcha worth calling out up front.
+6. Add the deployed GitHub Pages host to **Authentication → Settings → Authorized domains**.
+   Enter it as a bare domain — `jvansant122.github.io`, no `https://` and no path — since
+   that field takes a domain, not an origin or URL. Google Sign-In fails silently on an
+   unauthorized domain, so this is worth getting right up front. `localhost` is already on
+   that list by default, so local dev works before this step is done — which is exactly why
+   this gotcha usually surfaces only after the first deploy.
 
 Hand the copied config back to whichever agent/session does step 2.
 
@@ -187,8 +209,11 @@ Optimizer's engine/UI work.
   cleanly).
 - `npm run build --workspace=packages/web` — confirm bundle size impact (Firebase's SDK is
   not tiny; check whether it's worth code-splitting/lazy-loading behind the sign-in button
-  rather than bundling it into the initial page load, given the existing >500kB chunk-size
-  warning this project already has).
+  rather than bundling it into the initial page load). **Baseline measured 2026-09-07:
+  1,457.67 kB raw / 184.97 kB gzipped, single chunk**, already over Vite's 500 kB warning
+  threshold. Compare against that number, and weigh it in gzipped terms — that's what a user
+  actually downloads, and it's the figure that decides whether lazy-loading is worth the
+  complexity here.
 - Manually exercise sign-in/sign-out and the vertical-slice round-trip live in the browser
   (see step 3) — this repo's convention is not to claim a UI feature works without actually
   driving it.
@@ -207,6 +232,6 @@ Optimizer's engine/UI work.
   overkill for v1 and a single implicit roster per user could ship faster).
 - Whether to lazy-load the Firebase SDK behind the sign-in button (bundle size) — decide
   during step 5's build-size check, not speculatively now.
-- Whether any of the other three tabs should eventually gain "save my usual assumptions"
+- Whether any of the other five tabs should eventually gain "save my usual assumptions"
   using this same auth layer — explicitly out of scope for this plan; note it as a
   possibility for `IDEAS.md` if it comes up, don't build toward it here.

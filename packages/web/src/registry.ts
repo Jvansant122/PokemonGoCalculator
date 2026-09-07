@@ -50,7 +50,7 @@ export interface SpeciesOption {
   id: string;
   name: string;
   isHypothetical?: boolean;
-  /** See SpeciesDefinition.isShadow — no real synced species carries this yet (data-sync's follow-up), but the picker badge is wired ahead of that data landing. */
+  /** See SpeciesDefinition.isShadow — 8 real synced species carry this (Shadow raid targets synthesized from the live feed); separately, every attacker picker has a general Shadow toggle that applies the multipliers to any species. */
   isShadow?: boolean;
   imageUrl?: string;
 }

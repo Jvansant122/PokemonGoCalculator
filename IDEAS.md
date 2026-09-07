@@ -2,7 +2,9 @@
 
 Not-yet-scheduled feature ideas, kept separate from `HANDOFF.md` (in-progress session state)
 and `CLAUDE.md` (standing decisions). Barebones step lists only — expand into a real plan
-before starting implementation.
+before starting implementation. An idea promoted to a `PLAN_*.md` is a plan, not an idea:
+leave the pointer here, but the plan file owns the detail from then on, and gets deleted once
+the feature ships (see `CLAUDE.md`'s "For session continuity").
 
 ## Power-Up Optimizer
 
@@ -66,9 +68,16 @@ than quietly assume it's fine.
 
 Revised steps:
 
-1. **Data**: `data-sync` fetches/normalizes pogoapi.net's
-   `pokemon_powerup_requirements.json` (levels 1-50, candy/xl_candy/stardust) into
-   `data/normalized/` — a small, likely rarely-changing static table, not a live feed.
+1. **Data**: `data-sync` fetches/normalizes a levels-1-50 candy/XL-candy/stardust cost table
+   into `data/normalized/` — small and rarely-changing, not a live feed. **Check GAME_MASTER
+   first, before reaching for pogoapi.** The 2026-09-06 pipeline switch (`5887d69`) made
+   GAME_MASTER this project's primary source, and `data/raw/game_master.json` is only a
+   *slice* — `fetchGameMasterData` keeps `pokemonSettings` and `moveSettings` and discards
+   every other template, so the absence of upgrade-cost fields in that cached file proves
+   nothing about the upstream dump. If GAME_MASTER carries the costs, take them from there
+   for consistency with everything else; pogoapi's
+   `pokemon_powerup_requirements.json` (confirmed to exist, 2026-09-07) is the fallback, and
+   either way this is real `data-sync` work, not a hand-authored table.
 2. **Login + persistence infrastructure** — see
    [`PLAN_login_and_roster_persistence.md`](PLAN_login_and_roster_persistence.md), a
    standalone plan (Firebase Auth + Firestore). Land and verify that plan's minimal
@@ -91,7 +100,9 @@ Revised steps:
    candy are not fungible resources for a real player, don't collapse them into one
    score. Group zero-delta intermediate steps under "cost to next real breakpoint."
 7. UI: new tab, its own query param, roster entry UI, ranked efficiency table.
-8. *(Only if step 2 resolves toward real auth)* sign-in flow, roster persistence UI.
+8. Sign-in flow + roster persistence UI, on top of step 2's `useAuth()`/`useRoster()`. Note
+   that plan's two pinned constraints: signed-out must stay fully functional (roster UI runs
+   on local state, Firestore syncs on top), and stored data needs a real delete path.
 9. Testing: engine tests for the new breakpoint-crossing-cost math and the
    stardust/candy efficiency ranking, plus this project's usual
    test → typecheck → build → ship pipeline.
