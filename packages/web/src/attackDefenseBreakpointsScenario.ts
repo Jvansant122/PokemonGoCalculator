@@ -46,6 +46,17 @@ export interface AttackDefenseBreakpointsScenario {
   weather: WeatherCondition;
   /** Attack Breakpoints (this species' own output) vs Defense Breakpoints (damage this species takes) — must round-trip like any other user-facing setting. */
   mode: AttackDefenseBreakpointsMode;
+  /**
+   * "Treat this species as Shadow" — applies shadow.ts's
+   * SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER to its raw base stats
+   * in BOTH modes (Attack mode uses the adjusted baseAttack, Defense mode
+   * uses the adjusted baseDefense — same toggle, same species, just a
+   * different one of the two adjusted numbers consumed). Mutually exclusive
+   * with a mega/primal boost — forced back to false whenever the selected
+   * species carries a `boost`, see AttackDefenseBreakpointsView's
+   * normalizeAssumptions.
+   */
+  isShadow: boolean;
 }
 
 export function encodeAttackDefenseBreakpointsScenario(scenario: AttackDefenseBreakpointsScenario): string {

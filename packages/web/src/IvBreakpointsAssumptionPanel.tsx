@@ -7,6 +7,7 @@ import {
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import type { IvBreakpointsAssumptions } from "./IvBreakpointsView.js";
+import { shadowToggleUiState } from "./shadowToggle.js";
 
 // Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx/
 // SpeciesReportView.tsx — duplicated rather than imported, matching the
@@ -92,6 +93,21 @@ export function IvBreakpointsAssumptionPanel({
                 value={assumptions.chargedMoveId}
                 onChange={(id) => setAssumptions({ ...assumptions, chargedMoveId: id })}
               />
+              {(() => {
+                const shadowState = shadowToggleUiState(species);
+                return (
+                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={shadowState.forcedOn || assumptions.isShadow}
+                      disabled={shadowState.disabled}
+                      onChange={(e) => setAssumptions({ ...assumptions, isShadow: e.target.checked })}
+                      title={shadowState.title}
+                    />{" "}
+                    Shadow (applies to both spreads — same species)
+                  </label>
+                );
+              })()}
             </>
           )}
         </div>

@@ -34,6 +34,8 @@ import {
   parseIvBreakpointsScenarioFromUrl,
   type IvBreakpointsScenario,
 } from "./ivBreakpointsScenario.js";
+import { SpeciesBadges } from "./SpeciesBadges.js";
+import { applyShadowToggle, effectiveIsShadow } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
 import {
   allSpeciesOptions,
@@ -64,6 +66,8 @@ export interface IvBreakpointsAssumptions {
   bossFastMoveId: string | null;
   dodge: DodgeBehavior;
   weather: WeatherCondition;
+  /** See IvBreakpointsScenario.isShadow — one shared toggle for both spreads (same species/moveset). */
+  isShadow: boolean;
 }
 
 const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
@@ -76,6 +80,7 @@ const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
   bossFastMoveId: null,
   dodge: { kind: "none" },
   weather: "none",
+  isShadow: false,
 };
 
 function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpointsScenario {
@@ -89,6 +94,7 @@ function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpointsScenar
     bossFastMoveId: a.bossFastMoveId,
     dodgeModel: a.dodge,
     weather: a.weather,
+    isShadow: a.isShadow,
   };
 }
 
@@ -106,13 +112,21 @@ function scenarioToAssumptions(s: IvBreakpointsScenario): IvBreakpointsAssumptio
     // App.tsx's/SpeciesReportView's scenarioToAssumptions.
     dodge: s.dodgeModel ?? DEFAULT_ASSUMPTIONS.dodge,
     weather: s.weather ?? DEFAULT_ASSUMPTIONS.weather,
+    isShadow: s.isShadow ?? DEFAULT_ASSUMPTIONS.isShadow,
   };
+}
+
+/** Forces isShadow back to false whenever the currently-selected species carries a mega/primal boost — same discipline as ComparatorView's normalizeAssumptions/TeamRaidView's normalizeTeamAssumptions. */
+function normalizeAssumptions(a: IvBreakpointsAssumptions): IvBreakpointsAssumptions {
+  const sp = resolveSpecies(a.speciesId);
+  if (!sp?.boost || !a.isShadow) return a;
+  return { ...a, isShadow: false };
 }
 
 function initialAssumptions(): IvBreakpointsAssumptions {
   if (typeof window === "undefined") return DEFAULT_ASSUMPTIONS;
   const fromUrl = parseIvBreakpointsScenarioFromUrl(window.location.href);
-  return fromUrl ? scenarioToAssumptions(fromUrl) : DEFAULT_ASSUMPTIONS;
+  return fromUrl ? normalizeAssumptions(scenarioToAssumptions(fromUrl)) : DEFAULT_ASSUMPTIONS;
 }
 
 function resolveSpecies(id: string): SpeciesDefinition | null {
@@ -151,8 +165,12 @@ function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
  * uses internally, rather than re-deriving type effectiveness by hand.
  */
 export function IvBreakpointsView() {
-  const [assumptions, setAssumptions] = useState<IvBreakpointsAssumptions>(initialAssumptions);
+  const [assumptions, setAssumptionsRaw] = useState<IvBreakpointsAssumptions>(initialAssumptions);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+
+  function setAssumptions(next: IvBreakpointsAssumptions) {
+    setAssumptionsRaw(normalizeAssumptions(next));
+  }
 
   const speciesOptions = useMemo(() => candidatePickerOptions(), []);
   const targetOptions = useMemo(() => targetPickerOptions(), []);
@@ -162,6 +180,14 @@ export function IvBreakpointsView() {
   const species = useMemo(() => resolveSpecies(assumptions.speciesId), [assumptions.speciesId]);
   const boss = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
   const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
+
+  // `species` above stays the RAW registry object at all times — used by the
+  // picker/movepool/STAB-check/badge logic throughout this component. The
+  // Shadow toggle is applied ONLY here, at the boundary into compareIvSpreads
+  // (both the single-target `result` and the all-active-bosses `sweepAggregate`
+  // below both use this, never the raw `species`) — see shadowToggle.ts's
+  // file doc comment for why this split avoids a self-locking checkbox bug.
+  const attackerForCalc = useMemo(() => applyShadowToggle(species, assumptions.isShadow), [species, assumptions.isShadow]);
 
   // The attacker's resolved fast/charged move objects — shared by the
   // single-target `result` computation below AND the all-active-bosses sweep
@@ -181,7 +207,7 @@ export function IvBreakpointsView() {
   // target's incoming damage as its fast move landing repeatedly, forever,
   // with no charged-move combat modeled on either side of the matchup.
   const result = useMemo(() => {
-    if (!species || !boss) return { data: null as IvComparisonResult | null, error: null as string | null };
+    if (!species || !boss || !attackerForCalc) return { data: null as IvComparisonResult | null, error: null as string | null };
     try {
       if (!resolvedAttackerMoves) throw new Error(`${species.name} needs at least one fast move and one charged move.`);
       const { fastMove, chargedMove } = resolvedAttackerMoves;
@@ -208,7 +234,7 @@ export function IvBreakpointsView() {
 
       return {
         data: compareIvSpreads({
-          species,
+          species: attackerForCalc,
           fastMove,
           chargedMove,
           ivA: assumptions.ivA,
@@ -230,6 +256,7 @@ export function IvBreakpointsView() {
     }
   }, [
     species,
+    attackerForCalc,
     boss,
     bossRaidTier,
     resolvedAttackerMoves,
@@ -268,7 +295,7 @@ export function IvBreakpointsView() {
       byTier: [],
       tier4Plus: { total: 0, countA: 0, countB: 0, ties: 0 },
     };
-    if (!species || !resolvedAttackerMoves) return empty;
+    if (!species || !attackerForCalc || !resolvedAttackerMoves) return empty;
     const { fastMove, chargedMove } = resolvedAttackerMoves;
     let totalComputed = 0;
     let errorCount = 0;
@@ -314,7 +341,7 @@ export function IvBreakpointsView() {
         };
 
         const cmp = compareIvSpreads({
-          species,
+          species: attackerForCalc,
           fastMove,
           chargedMove,
           ivA: assumptions.ivA,
@@ -361,7 +388,16 @@ export function IvBreakpointsView() {
       .map(([tier, bucket]) => ({ tier, tierNumeric: RAID_TIER_NUMERIC[tier], ...bucket }))
       .sort((a, b) => a.tierNumeric - b.tierNumeric);
     return { totalComputed, errorCount, countA, countB, ties, byTier, tier4Plus };
-  }, [species, resolvedAttackerMoves, allTargetOptions, assumptions.ivA, assumptions.ivB, assumptions.dodge, assumptions.weather]);
+  }, [
+    species,
+    attackerForCalc,
+    resolvedAttackerMoves,
+    allTargetOptions,
+    assumptions.ivA,
+    assumptions.ivB,
+    assumptions.dodge,
+    assumptions.weather,
+  ]);
 
   function handleShare() {
     const url = new URL(buildIvBreakpointsScenarioUrl(getBaseUrl(), assumptionsToScenario(assumptions)));
@@ -392,6 +428,7 @@ export function IvBreakpointsView() {
         {species ? (
           <>
             <SpeciesIcon s={species} /> {speciesLabel(species)}
+            <SpeciesBadges isHypothetical={species.isHypothetical} isShadow={effectiveIsShadow(species, assumptions.isShadow)} />
           </>
         ) : (
           "Pick a Pokémon"

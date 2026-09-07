@@ -33,6 +33,16 @@ export interface IvBreakpointsScenario {
   dodgeModel: DodgeBehavior;
   /** Active weather, applied per-move to both sides — see weather.ts. */
   weather: WeatherCondition;
+  /**
+   * "Treat this species as Shadow" — applies shadow.ts's
+   * SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER to its raw base stats
+   * for BOTH spreads (this tab compares two IV spreads of the SAME
+   * species/moveset, so there is only one Shadow toggle, not one per
+   * spread). Mutually exclusive with a mega/primal boost — forced back to
+   * false whenever the selected species carries a `boost`, see
+   * IvBreakpointsView's normalizeAssumptions.
+   */
+  isShadow: boolean;
 }
 
 export function encodeIvBreakpointsScenario(scenario: IvBreakpointsScenario): string {

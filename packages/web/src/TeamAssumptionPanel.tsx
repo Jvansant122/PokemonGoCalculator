@@ -2,6 +2,7 @@ import { MAX_TEAM_RAID_SLOTS, WEATHER_BOOSTED_TYPES, type DodgeBehavior, type Sp
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
+import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 
 const WEATHER_LABELS: Record<WeatherCondition, string> = {
   none: "None",
@@ -33,10 +34,18 @@ export interface TeamSlotAssumption {
   chargedMoveId: string | null;
   /** At most one slot across the roster may set this true — enforced both here (radio-exclusivity) and by the engine (runTeamRaid throws on a violation). */
   isMega: boolean;
+  /**
+   * "Treat this slot's species as Shadow" — independent per slot, unlike
+   * isMega above (which is exclusive across the whole roster). Mutually
+   * exclusive with THIS slot's own species carrying a `boost` (see
+   * shadow.ts's shadowAdjustedBaseStats) — forced back to false whenever
+   * that's the case, see TeamRaidView's normalizeTeamAssumptions.
+   */
+  isShadow: boolean;
 }
 
 export function emptyTeamSlot(): TeamSlotAssumption {
-  return { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false };
+  return { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false };
 }
 
 export interface TeamAssumptions {
@@ -156,7 +165,7 @@ export function TeamAssumptionPanel({
               <div className="team-slot-header">
                 <strong>
                   Slot {i + 1}
-                  <SpeciesBadges isHypothetical={species?.isHypothetical} isShadow={species?.isShadow} />
+                  <SpeciesBadges isHypothetical={species?.isHypothetical} isShadow={effectiveIsShadow(species, slot.isShadow)} />
                 </strong>
                 <div className="team-slot-order-buttons">
                   <button type="button" onClick={() => moveSlot(i, -1)} disabled={i === 0} title="Fights earlier">
@@ -220,6 +229,21 @@ export function TeamAssumptionPanel({
                     />{" "}
                     Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
                   </label>
+                  {(() => {
+                    const shadowState = shadowToggleUiState(species);
+                    return (
+                      <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                        <input
+                          type="checkbox"
+                          checked={shadowState.forcedOn || slot.isShadow}
+                          disabled={shadowState.disabled}
+                          onChange={(e) => updateSlot(i, { isShadow: e.target.checked })}
+                          title={shadowState.title}
+                        />{" "}
+                        Shadow
+                      </label>
+                    );
+                  })()}
                 </>
               )}
             </div>

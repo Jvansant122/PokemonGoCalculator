@@ -12,6 +12,7 @@ import {
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
+import { applyShadowToggle } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 
@@ -27,12 +28,12 @@ const DEFAULT_TARGET_ID = "tyranitar-mega";
 
 const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   slots: [
-    { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true },
-    { speciesId: "garchomp", fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: "dragonite", fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: "kartana", fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: "tyranitar", fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: "rayquaza", fastMoveId: null, chargedMoveId: null, isMega: false },
+    { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, isShadow: false },
+    { speciesId: "garchomp", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+    { speciesId: "dragonite", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+    { speciesId: "kartana", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+    { speciesId: "tyranitar", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+    { speciesId: "rayquaza", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
   ],
   targetId: DEFAULT_TARGET_ID,
   bossFastMoveId: null,
@@ -53,9 +54,38 @@ const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   reviveCostSeconds: 0,
 };
 
-function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenario {
+/**
+ * Extends the engine's own `TeamScenario`/`TeamScenarioSlot` with a per-slot
+ * Shadow toggle that neither declares (see this feature's AFFECTS note to
+ * engine-developer — folding this in properly there is their call, not
+ * something web-developer should force by editing packages/engine).
+ * `encodeTeamScenario`/`decodeTeamScenario` are pure JSON.stringify/parse
+ * pass-throughs with no field enumeration, so this extra per-slot field
+ * round-trips through the exact same shared base64url transport
+ * (buildTeamScenarioUrl/parseTeamScenarioFromUrl) without any
+ * packages/engine change — see ComparatorScenario in ComparatorView.tsx for
+ * the identical pattern applied to the two-candidate Scenario.
+ */
+interface TeamScenarioSlotWithShadow {
+  speciesId: string | null;
+  fastMoveId: string | null;
+  chargedMoveId: string | null;
+  isMega: boolean;
+  isShadow: boolean;
+}
+interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
+  slots: TeamScenarioSlotWithShadow[];
+}
+
+function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
   return {
-    slots: a.slots.map((s) => ({ speciesId: s.speciesId, fastMoveId: s.fastMoveId, chargedMoveId: s.chargedMoveId, isMega: s.isMega })),
+    slots: a.slots.map((s) => ({
+      speciesId: s.speciesId,
+      fastMoveId: s.fastMoveId,
+      chargedMoveId: s.chargedMoveId,
+      isMega: s.isMega,
+      isShadow: s.isShadow,
+    })),
     target: a.targetId,
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
@@ -74,12 +104,17 @@ function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenario {
   };
 }
 
-function teamScenarioToAssumptions(s: TeamScenario): TeamAssumptions {
+function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssumptions {
   const slots: TeamSlotAssumption[] = s.slots.map((slot) => ({
     speciesId: slot.speciesId ?? null,
     fastMoveId: slot.fastMoveId ?? null,
     chargedMoveId: slot.chargedMoveId ?? null,
     isMega: slot.isMega ?? false,
+    // `??` guards a scenario URL encoded before this field existed (it isn't
+    // even declared on the engine's own TeamScenarioSlot — see
+    // TeamScenarioWithShadow above) rather than surfacing `undefined` into
+    // the checkbox below.
+    isShadow: slot.isShadow ?? false,
   }));
   // Defensive pad/truncate in case an older or hand-edited link has a
   // different slot count than MAX_TEAM_RAID_SLOTS.
@@ -127,18 +162,31 @@ function resolveSpecies(id: string | null): SpeciesDefinition | null {
 function normalizeTeamAssumptions(a: TeamAssumptions): TeamAssumptions {
   let megaClaimed = false;
   const slots = a.slots.map((s) => {
-    if (!s.isMega) return s;
     const hasBoost = !!resolveSpecies(s.speciesId)?.boost;
-    if (!hasBoost || megaClaimed) return { ...s, isMega: false };
-    megaClaimed = true;
-    return s;
+    let isMega = s.isMega;
+    if (isMega) {
+      if (!hasBoost || megaClaimed) isMega = false;
+      else megaClaimed = true;
+    }
+    // Shadow and mega/primal boost are mutually exclusive (shadow.ts's
+    // shadowAdjustedBaseStats throws if both are set on the same species) —
+    // force this slot's Shadow toggle off whenever ITS OWN species carries a
+    // boost, independent of isMega above (a boost-carrying species is never
+    // eligible for the Shadow toggle even if this particular slot isn't the
+    // one flagged isMega for the raid).
+    const isShadow = hasBoost ? false : s.isShadow;
+    return { ...s, isMega, isShadow };
   });
   return { ...a, slots };
 }
 
 function initialTeamAssumptions(): TeamAssumptions {
   if (typeof window === "undefined") return DEFAULT_TEAM_ASSUMPTIONS;
-  const fromUrl = parseTeamScenarioFromUrl(window.location.href);
+  // Cast: parseTeamScenarioFromUrl's return type is the engine's own
+  // (narrower) TeamScenario — the actual decoded object still carries each
+  // slot's isShadow at runtime if the link was built by this version of the
+  // app, see TeamScenarioWithShadow above.
+  const fromUrl = parseTeamScenarioFromUrl(window.location.href) as TeamScenarioWithShadow | null;
   return fromUrl ? normalizeTeamAssumptions(teamScenarioToAssumptions(fromUrl)) : DEFAULT_TEAM_ASSUMPTIONS;
 }
 
@@ -210,8 +258,13 @@ export function TeamRaidView() {
     if (!bossSpecies) return { data: null, error: null as string | null };
     try {
       const data = runTeamRaid({
+        // Each slot's species stays RAW everywhere else in this component
+        // (slotSpecies above, used for the panel's movepool/badge/boost
+        // checks) — the Shadow toggle is applied ONLY here, at the boundary
+        // into runTeamRaid, same convention as ComparatorView's
+        // shadowAdjustedCandidates (see shadowToggle.ts's file doc comment).
         slots: assumptions.slots.map((s) => ({
-          species: resolveSpecies(s.speciesId),
+          species: applyShadowToggle(resolveSpecies(s.speciesId), s.isShadow),
           fastMoveId: s.fastMoveId,
           chargedMoveId: s.chargedMoveId,
           isMega: s.isMega,

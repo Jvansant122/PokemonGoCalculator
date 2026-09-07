@@ -17,6 +17,7 @@ import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { computeSensitivity } from "./sensitivity.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
+import { applyShadowToggle, effectiveIsShadow } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 
@@ -40,6 +41,7 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
   bossFastMoveId: null,
   bossChargedMoveId: null,
   candidateMegaBoostDisabled: [false, false],
+  candidateShadow: [false, false],
   level: 35,
   ivAttack: 15,
   ivDefense: 15,
@@ -57,7 +59,22 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
   weather: "none",
 };
 
-function assumptionsToScenario(a: Assumptions): Scenario {
+/**
+ * Extends the engine's own `Scenario` with a per-candidate Shadow toggle that
+ * `Scenario` doesn't declare (see this feature's AFFECTS note to
+ * engine-developer — folding this in properly is their call, not something
+ * web-developer should force by editing packages/engine). `encodeScenario`/
+ * `decodeScenario` are pure JSON.stringify/parse pass-throughs with no field
+ * enumeration, so this extra field round-trips through the exact same shared
+ * base64url transport (buildScenarioUrl/parseScenarioFromUrl) without any
+ * packages/engine change — every call site below that needs to read or write
+ * it goes through this local type instead of an ad hoc cast.
+ */
+interface ComparatorScenario extends Scenario {
+  candidateShadow: [boolean, boolean];
+}
+
+function assumptionsToScenario(a: Assumptions): ComparatorScenario {
   return {
     candidates: [a.candidateAId, a.candidateBId],
     candidateFastMoveIds: [a.candidateAFastMoveId, a.candidateBFastMoveId],
@@ -66,6 +83,7 @@ function assumptionsToScenario(a: Assumptions): Scenario {
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
     candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
+    candidateShadow: a.candidateShadow,
     level: a.level,
     ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
     dodgeModel: a.dodge,
@@ -82,7 +100,7 @@ function assumptionsToScenario(a: Assumptions): Scenario {
   };
 }
 
-function scenarioToAssumptions(s: Scenario): Assumptions {
+function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
   return {
     candidateAId: s.candidates[0] ?? DEFAULT_CANDIDATE_A_ID,
     candidateBId: s.candidates[1] ?? DEFAULT_CANDIDATE_B_ID,
@@ -98,6 +116,10 @@ function scenarioToAssumptions(s: Scenario): Assumptions {
     // `??` guards a scenario URL encoded before this field existed rather than
     // surfacing `undefined` into the checkboxes above.
     candidateMegaBoostDisabled: s.candidateMegaBoostDisabled ?? [false, false],
+    // `??` guards a scenario URL encoded before this field existed (it isn't
+    // even declared on the engine's own Scenario type — see ComparatorScenario
+    // above) rather than surfacing `undefined` into the checkboxes below.
+    candidateShadow: s.candidateShadow ?? [false, false],
     level: s.level,
     ivAttack: s.ivs.attack,
     ivDefense: s.ivs.defense,
@@ -142,7 +164,11 @@ function initialAssumptions(prefill: ComparatorPrefill | null): Assumptions {
     };
   }
   if (typeof window === "undefined") return DEFAULT_ASSUMPTIONS;
-  const fromUrl = parseScenarioFromUrl(window.location.href);
+  // Cast: parseScenarioFromUrl's return type is the engine's own (narrower)
+  // Scenario — the actual decoded object still carries candidateShadow at
+  // runtime if the link was built by this version of the app (JSON.parse
+  // doesn't know or care about TypeScript's field list), see ComparatorScenario.
+  const fromUrl = parseScenarioFromUrl(window.location.href) as ComparatorScenario | null;
   return fromUrl ? scenarioToAssumptions(fromUrl) : DEFAULT_ASSUMPTIONS;
 }
 
@@ -176,6 +202,31 @@ function resolveSpecies(id: string): SpeciesDefinition {
   return speciesRegistry.get(id);
 }
 
+/** Same as resolveSpecies but never throws — for normalization checks that need to run even when the id might be stale/invalid. */
+function tryResolveSpecies(id: string): SpeciesDefinition | null {
+  return speciesRegistry.has(id) ? speciesRegistry.get(id) : null;
+}
+
+/**
+ * Forces candidateShadow[i] back to false whenever candidate i's currently
+ * selected species carries a mega/primal boost — same "never let the two
+ * coexist even transiently" discipline as TeamRaidView's
+ * normalizeTeamAssumptions, run on every state update (not just decode), so
+ * picking a mega/primal species into a slot that previously had Shadow
+ * toggled on immediately clears it rather than leaving a stale, merely
+ * UI-hidden true value sitting in state.
+ */
+function normalizeAssumptions(a: Assumptions): Assumptions {
+  const speciesA = tryResolveSpecies(a.candidateAId);
+  const speciesB = tryResolveSpecies(a.candidateBId);
+  const candidateShadow: [boolean, boolean] = [
+    speciesA?.boost ? false : a.candidateShadow[0],
+    speciesB?.boost ? false : a.candidateShadow[1],
+  ];
+  if (candidateShadow[0] === a.candidateShadow[0] && candidateShadow[1] === a.candidateShadow[1]) return a;
+  return { ...a, candidateShadow };
+}
+
 /**
  * Resolves what boost (if any) is actually active for a candidate in the UI,
  * mirroring the engine's own resolveBoost (comparison.ts) — `disabled` (the
@@ -204,8 +255,12 @@ interface ComparatorViewProps {
  * behavior is the optional `prefill` hand-off from the Species Report tab.
  */
 export function ComparatorView({ prefill = null, onConsumedPrefill }: ComparatorViewProps) {
-  const [assumptions, setAssumptions] = useState<Assumptions>(() => initialAssumptions(prefill));
+  const [assumptions, setAssumptionsRaw] = useState<Assumptions>(() => normalizeAssumptions(initialAssumptions(prefill)));
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+
+  function setAssumptions(next: Assumptions) {
+    setAssumptionsRaw(normalizeAssumptions(next));
+  }
 
   // Runs once, immediately after mount — this component fully unmounts
   // whenever another tab is active, so "mount" and "just received a fresh
@@ -238,6 +293,20 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
       return { candidates: null, boss: null, error: (err as Error).message };
     }
   }, [assumptions.candidateAId, assumptions.candidateBId, assumptions.targetId]);
+
+  // `species.candidates` above stays the RAW registry object at all times —
+  // used by the picker/movepool/badge logic throughout this component. The
+  // Shadow toggle is applied ONLY here, at the boundary into the three engine
+  // calls below (runSustainedComparison/compareAcrossBossChargedMoves/
+  // computeSensitivity) — see shadowToggle.ts's file doc comment for why this
+  // split avoids a self-locking checkbox bug.
+  const shadowAdjustedCandidates = useMemo(() => {
+    if (!species.candidates) return null;
+    return species.candidates.map((c, i) => applyShadowToggle(c, assumptions.candidateShadow[i] ?? false)) as [
+      SpeciesDefinition,
+      SpeciesDefinition,
+    ];
+  }, [species.candidates, assumptions.candidateShadow]);
 
   // Which real raid tier the selected target counts as, if it's currently a
   // live active-raid entry — feeds bossEffectiveStats/bossEffectiveHp so a
@@ -289,11 +358,11 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   // a period where the boss hasn't thrown a charged move yet, governed by
   // bossReadySeconds above. That period isn't a separate mode to pick.
   const results = useMemo(() => {
-    if (!species.candidates || !species.boss) return { candidates: null, error: null as string | null };
+    if (!shadowAdjustedCandidates || !species.boss) return { candidates: null, error: null as string | null };
     try {
       return {
         candidates: runSustainedComparison({
-          candidates: species.candidates,
+          candidates: shadowAdjustedCandidates,
           candidateFastMoveIds: [assumptions.candidateAFastMoveId, assumptions.candidateBFastMoveId],
           candidateChargedMoveIds: [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId],
           boss: species.boss,
@@ -316,7 +385,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
       return { candidates: null, error: (err as Error).message };
     }
   }, [
-    species.candidates,
+    shadowAdjustedCandidates,
     species.boss,
     bossRaidTier,
     assumptions.candidateAFastMoveId,
@@ -350,13 +419,13 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   const chartMaxSeconds = Math.max(naturalFightLengthSeconds ?? 1, assumptions.minFightLengthSeconds);
 
   const sensitivity = useMemo(() => {
-    if (!species.candidates || !species.boss) return [];
+    if (!shadowAdjustedCandidates || !species.boss) return [];
     try {
-      return computeSensitivity(species.candidates, species.boss, assumptions, bossRaidTier);
+      return computeSensitivity(shadowAdjustedCandidates, species.boss, assumptions, bossRaidTier);
     } catch {
       return [];
     }
-  }, [species.candidates, species.boss, assumptions, bossRaidTier]);
+  }, [shadowAdjustedCandidates, species.boss, assumptions, bossRaidTier]);
 
   // Only meaningful when the boss actually has 2+ known charged moves — a
   // real raid boss instance is locked to whichever one it rolled for its
@@ -365,11 +434,11 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   // to sweep, so this stays null (BossMovesetSweep is never rendered) rather
   // than showing a pointless one-row table.
   const bossMovesetSweep = useMemo(() => {
-    if (!species.candidates || !species.boss) return null;
+    if (!shadowAdjustedCandidates || !species.boss) return null;
     if (species.boss.chargedMoves.length < 2) return null;
     try {
       return compareAcrossBossChargedMoves({
-        candidates: species.candidates,
+        candidates: shadowAdjustedCandidates,
         candidateFastMoveIds: [assumptions.candidateAFastMoveId, assumptions.candidateBFastMoveId],
         candidateChargedMoveIds: [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId],
         boss: species.boss,
@@ -389,7 +458,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
       return null;
     }
   }, [
-    species.candidates,
+    shadowAdjustedCandidates,
     species.boss,
     bossRaidTier,
     assumptions.candidateAFastMoveId,
@@ -515,7 +584,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                       {species.candidates?.[i] && <SpeciesIcon s={species.candidates[i]} />} {c.name}
                       <SpeciesBadges
                         isHypothetical={species.candidates?.[i]?.isHypothetical}
-                        isShadow={species.candidates?.[i]?.isShadow}
+                        isShadow={effectiveIsShadow(species.candidates?.[i], assumptions.candidateShadow[i] ?? false)}
                       />
                     </h3>
                     <dl>

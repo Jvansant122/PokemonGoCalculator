@@ -1,6 +1,7 @@
 import { WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { shadowToggleUiState } from "./shadowToggle.js";
 
 /**
  * Human-readable labels for the select below, built from weather.ts's own
@@ -48,6 +49,19 @@ export interface Assumptions {
    * disable. No-op for a candidate that has no `boost` at all already.
    */
   candidateMegaBoostDisabled: [boolean, boolean];
+  /**
+   * Per-candidate "treat this species as Shadow", matched by index to
+   * [candidateAId, candidateBId] — applies shadow.ts's
+   * SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER to that candidate's
+   * raw base stats. Mutually exclusive with a mega/primal boost (a Shadow
+   * Pokémon can't Mega Evolve without being Purified first — shadow.ts's
+   * shadowAdjustedBaseStats throws if both are set), so this is forced back
+   * to false whenever that candidate's species carries a `boost` — see
+   * ComparatorView's normalizeAssumptions. No-op for a species that's
+   * ALREADY isShadow from the registry (a synthesized "Shadow X" raid-target
+   * variant) — see shadowToggle.ts's applyShadowToggle.
+   */
+  candidateShadow: [boolean, boolean];
   level: number;
   ivAttack: number;
   ivDefense: number;
@@ -208,6 +222,23 @@ export function AssumptionPanel({
                   Disable mega/primal boost (fair DPS comparison vs. non-mega)
                 </label>
               )}
+              {(() => {
+                const shadowState = shadowToggleUiState(candidateSpecies[0]);
+                return (
+                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={shadowState.forcedOn || value.candidateShadow[0]}
+                      disabled={shadowState.disabled}
+                      onChange={(e) =>
+                        onChange({ ...value, candidateShadow: [e.target.checked, value.candidateShadow[1]] })
+                      }
+                      title={shadowState.title}
+                    />{" "}
+                    Shadow
+                  </label>
+                );
+              })()}
             </>
           )}
         </div>
@@ -255,6 +286,23 @@ export function AssumptionPanel({
                   Disable mega/primal boost (fair DPS comparison vs. non-mega)
                 </label>
               )}
+              {(() => {
+                const shadowState = shadowToggleUiState(candidateSpecies[1]);
+                return (
+                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={shadowState.forcedOn || value.candidateShadow[1]}
+                      disabled={shadowState.disabled}
+                      onChange={(e) =>
+                        onChange({ ...value, candidateShadow: [value.candidateShadow[0], e.target.checked] })
+                      }
+                      title={shadowState.title}
+                    />{" "}
+                    Shadow
+                  </label>
+                );
+              })()}
             </>
           )}
         </div>

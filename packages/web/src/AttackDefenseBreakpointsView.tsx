@@ -13,7 +13,9 @@ import {
 } from "@pogo-analyzer/engine";
 import { BreakpointSheet } from "./BreakpointSheet.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
+import { effectiveIsShadow, shadowToggleUiState, shadowToggledBaseStats } from "./shadowToggle.js";
 import { IVS_0_TO_15, LEVELS_25_TO_50 } from "./attackDefenseBreakpointsHelpers.js";
 import {
   buildAttackDefenseBreakpointsScenarioUrl,
@@ -69,6 +71,8 @@ export interface AttackDefenseBreakpointsAssumptions {
   bossChargedMoveId: string | null;
   weather: WeatherCondition;
   mode: AttackDefenseBreakpointsMode;
+  /** See AttackDefenseBreakpointsScenario.isShadow. */
+  isShadow: boolean;
 }
 
 const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
@@ -80,6 +84,7 @@ const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
   bossChargedMoveId: null,
   weather: "none",
   mode: "attack",
+  isShadow: false,
 };
 
 function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsScenario {
@@ -92,6 +97,7 @@ function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): AttackDe
     bossChargedMoveId: a.bossChargedMoveId,
     weather: a.weather,
     mode: a.mode,
+    isShadow: a.isShadow,
   };
 }
 
@@ -108,13 +114,21 @@ function scenarioToAssumptions(s: AttackDefenseBreakpointsScenario): AttackDefen
     bossChargedMoveId: s.bossChargedMoveId ?? DEFAULT_ASSUMPTIONS.bossChargedMoveId,
     weather: s.weather ?? DEFAULT_ASSUMPTIONS.weather,
     mode: s.mode ?? DEFAULT_ASSUMPTIONS.mode,
+    isShadow: s.isShadow ?? DEFAULT_ASSUMPTIONS.isShadow,
   };
+}
+
+/** Forces isShadow back to false whenever the currently-selected species carries a mega/primal boost — same discipline as the other three tabs' normalizeAssumptions/normalizeTeamAssumptions. */
+function normalizeAssumptions(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsAssumptions {
+  const sp = resolveSpecies(a.speciesId);
+  if (!sp?.boost || !a.isShadow) return a;
+  return { ...a, isShadow: false };
 }
 
 function initialAssumptions(): AttackDefenseBreakpointsAssumptions {
   if (typeof window === "undefined") return DEFAULT_ASSUMPTIONS;
   const fromUrl = parseAttackDefenseBreakpointsScenarioFromUrl(window.location.href);
-  return fromUrl ? scenarioToAssumptions(fromUrl) : DEFAULT_ASSUMPTIONS;
+  return fromUrl ? normalizeAssumptions(scenarioToAssumptions(fromUrl)) : DEFAULT_ASSUMPTIONS;
 }
 
 function resolveSpecies(id: string): SpeciesDefinition | null {
@@ -161,8 +175,12 @@ interface Grids {
  * IV Breakpoints tab's identical stance on the boost multiplier.
  */
 export function AttackDefenseBreakpointsView() {
-  const [assumptions, setAssumptions] = useState<AttackDefenseBreakpointsAssumptions>(initialAssumptions);
+  const [assumptions, setAssumptionsRaw] = useState<AttackDefenseBreakpointsAssumptions>(initialAssumptions);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+
+  function setAssumptions(next: AttackDefenseBreakpointsAssumptions) {
+    setAssumptionsRaw(normalizeAssumptions(next));
+  }
 
   const speciesOptions = useMemo(() => candidatePickerOptions(), []);
   const targetOptions = useMemo(() => targetPickerOptions(), []);
@@ -172,9 +190,21 @@ export function AttackDefenseBreakpointsView() {
   const boss = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
   const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
 
+  // `species` above stays the RAW registry object at all times — used by the
+  // picker/movepool/badge logic below. attackDamageGrid/defenseDamageGrid
+  // (breakpoints.ts) take a raw baseAttack/baseDefense NUMBER, not a whole
+  // SpeciesDefinition, and never look at isShadow at all — unlike the other
+  // three tabs, this one can't apply the toggle by cloning the species
+  // object; it must call shadowAdjustedBaseStats directly instead (wrapped
+  // here as shadowToggledBaseStats, same guard logic as applyShadowToggle).
+  const adjustedBaseStats = useMemo(
+    () => (species ? shadowToggledBaseStats(species, assumptions.isShadow) : null),
+    [species, assumptions.isShadow],
+  );
+
   const result = useMemo<{ attack: Grids | null; defense: Grids | null; error: string | null }>(() => {
     const empty = { attack: null, defense: null, error: null as string | null };
-    if (!species || !boss) return empty;
+    if (!species || !boss || !adjustedBaseStats) return empty;
     try {
       // There is no user-selectable combat phase here either, same standing
       // decision as every other tab — moot anyway, since this tab has no
@@ -187,7 +217,7 @@ export function AttackDefenseBreakpointsView() {
         const { defense: bossDefenseStat } = bossEffectiveStats(boss, bossRaidTier);
 
         const fast = attackDamageGrid({
-          baseAttack: species.baseAttack,
+          baseAttack: adjustedBaseStats.baseAttack,
           defenderDefenseStat: bossDefenseStat,
           power: fastMove.power,
           damageModifiers: {
@@ -199,7 +229,7 @@ export function AttackDefenseBreakpointsView() {
           levels: LEVELS_25_TO_50,
         });
         const charged = attackDamageGrid({
-          baseAttack: species.baseAttack,
+          baseAttack: adjustedBaseStats.baseAttack,
           defenderDefenseStat: bossDefenseStat,
           power: chargedMove.power,
           damageModifiers: {
@@ -220,7 +250,7 @@ export function AttackDefenseBreakpointsView() {
       const { attack: bossAttackStat } = bossEffectiveStats(boss, bossRaidTier);
 
       const fast = defenseDamageGrid({
-        baseDefense: species.baseDefense,
+        baseDefense: adjustedBaseStats.baseDefense,
         attackerAttackStat: bossAttackStat,
         power: bossFastMove.power,
         damageModifiers: {
@@ -232,7 +262,7 @@ export function AttackDefenseBreakpointsView() {
         levels: LEVELS_25_TO_50,
       });
       const charged = defenseDamageGrid({
-        baseDefense: species.baseDefense,
+        baseDefense: adjustedBaseStats.baseDefense,
         attackerAttackStat: bossAttackStat,
         power: bossChargedMove.power,
         damageModifiers: {
@@ -251,6 +281,7 @@ export function AttackDefenseBreakpointsView() {
     species,
     boss,
     bossRaidTier,
+    adjustedBaseStats,
     assumptions.mode,
     assumptions.fastMoveId,
     assumptions.chargedMoveId,
@@ -272,6 +303,7 @@ export function AttackDefenseBreakpointsView() {
         {species ? (
           <>
             <SpeciesIcon s={species} /> {speciesLabel(species)}
+            <SpeciesBadges isHypothetical={species.isHypothetical} isShadow={effectiveIsShadow(species, assumptions.isShadow)} />
           </>
         ) : (
           "Pick a Pokémon"
@@ -321,6 +353,22 @@ export function AttackDefenseBreakpointsView() {
                 setAssumptions({ ...assumptions, speciesId: id, fastMoveId: null, chargedMoveId: null })
               }
             />
+            {species &&
+              (() => {
+                const shadowState = shadowToggleUiState(species);
+                return (
+                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                    <input
+                      type="checkbox"
+                      checked={shadowState.forcedOn || assumptions.isShadow}
+                      disabled={shadowState.disabled}
+                      onChange={(e) => setAssumptions({ ...assumptions, isShadow: e.target.checked })}
+                      title={shadowState.title}
+                    />{" "}
+                    Shadow (applies to both Attack and Defense modes)
+                  </label>
+                );
+              })()}
             {species && assumptions.mode === "attack" && (
               <>
                 <MoveSelect
