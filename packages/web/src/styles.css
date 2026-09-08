@@ -569,3 +569,65 @@ p.species-picker-hint {
   font-weight: 700;
   color: var(--accent-x);
 }
+
+/*
+ * Species Report "past/inactive raid" badges. Deliberately NOT reusing
+ * .badge-hypothetical for the researched variant: in this project that orange
+ * badge means "this species' data itself is speculative," and every past-raid
+ * row is a real, released species — "researched" here qualifies how its TIER
+ * was sourced, never whether the Pokémon is real. Conflating those two is the
+ * exact confusion that got 4 hand-authored fixtures deleted (see CLAUDE.md's
+ * standing decisions), so these get their own neutral slate hue instead.
+ * The two variants share that hue and differ only in emphasis — weaker
+ * evidence reads dimmer, with the label text carrying the actual distinction.
+ */
+.badge-past {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+  border: 1px solid #94a3b8;
+}
+
+.badge-past-researched {
+  background: rgba(148, 163, 184, 0.08);
+  color: #94a3b8;
+  border: 1px dashed #64748b;
+}
+
+/*
+ * "past (archive)" — a genuinely different provenance claim from both of the
+ * above, deliberately given its own hue rather than a third shade of slate:
+ * this row IS a real, sourced historical encounter. Three sources share this
+ * one badge/hue (registry.ts's RawRaidHistoryEntry "pogoapi-previous",
+ * "bulbapedia-archive" — added 2026-09-07 alongside the era-HP backfill
+ * task — and "pokebattler-legacy" — added 2026-09-08): pogoapi's
+ * raid_bosses.json `previous` archive, Bulbapedia's raid-boss-change pages,
+ * and Pokebattler's own historical archive respectively. All three make the
+ * same kind of claim (stronger evidence than "researched-tier"'s hand-typed
+ * citation, but weaker than "live-feed" in a different way — this pipeline
+ * never saw any of them happen, and none of the three archives carries a
+ * real date), so they're deliberately NOT split into separate badges/hues
+ * here — see registry.ts's resolvePastRaidTier and SpeciesReportView.tsx's
+ * badge title text for where the distinction still matters (recordedTier
+ * trust, and the badge's hover text naming all three sources) without
+ * needing a whole extra visual variant per source. Green reads as
+ * "verified/real" without colliding with badge-hypothetical's orange ("this
+ * species' data itself is speculative" — not true here), badge-persists'
+ * blue (already the mega-boost-info badge), or badge-shadow's purple.
+ */
+.badge-past-archive {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border: 1px solid #22c55e;
+}
+
+/*
+ * Species Report sweep-debounce indicator (SpeciesReportView.tsx's
+ * isSweepPending) — the results table's own opacity dip already signals
+ * "this data is stale," so this badge just names WHY in the heading itself
+ * rather than leaving that to be inferred from a dimmed table alone.
+ */
+.badge-pending {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}

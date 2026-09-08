@@ -439,7 +439,11 @@ export function TeamRaidView() {
           reset just because the trainer swapped Pokémon or briefly returned to the lobby to heal.
           swapCostSeconds/reviveCostSeconds have no confirmed real value from any official or community source —
           both default to 0 (fastest-possible play) rather than a fabricated "realistic" number; a labeled ~13s
-          community estimate is offered as an optional preset for reviveCostSeconds only.
+          community estimate is offered as an optional preset for reviveCostSeconds only. A boss badged
+          "approximate" in the target picker is one the live raid feed named but whose exact form this data layer
+          couldn't resolve, so a documented stand-in species' stats are used — treat those runs as directional.
+          The other four tabs already spelled this out; this one didn't, which is the only reason it's stated here
+          rather than being left to the badge alone.
         </p>
       </section>
     </>

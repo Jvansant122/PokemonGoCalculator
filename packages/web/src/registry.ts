@@ -1,5 +1,6 @@
 import {
   SpeciesRegistry,
+  defaultRaidTierForSpecies,
   isKnownRaidTier,
   type RaidTier,
   type SpeciesDefinition,
@@ -14,6 +15,7 @@ import {
 // matching allowances).
 import speciesData from "../../../data/normalized/species.json";
 import activeRaidsData from "../../../data/normalized/activeRaids.json";
+import raidHistoryData from "../../../data/normalized/raidHistory.json";
 
 export interface RawActiveRaidEntry {
   raidName: string;
@@ -22,8 +24,76 @@ export interface RawActiveRaidEntry {
   isApproximate: boolean;
 }
 
+/**
+ * One row of the accumulate-only raid-history log data-sync started writing
+ * 2026-09-07 — see raidHistory.json's own generation in scripts/sync-data.ts.
+ * `source` is provenance, not decoration — never flatten these three into a
+ * single label (see pastRaidBossOptions' badge guidance):
+ *
+ * - "live-feed": this pipeline actually observed the raid in the live feed
+ *   at some point — firstSeenAt/lastSeenAt are real dates.
+ * - "researched-tier": seeded from a hand-researched `lastKnownRaidTier`
+ *   citation, never actually seen live by this pipeline.
+ * - "pogoapi-previous": a real, sourced historical encounter pulled from
+ *   pogoapi's raid_bosses.json `previous` archive block — a genuine past
+ *   raid boss, but never observed live BY THIS PIPELINE, and carrying no
+ *   date information at all (pogoapi's archive doesn't record when a past
+ *   raid was active). Do not assume firstSeenAt/lastSeenAt on one of these
+ *   rows means anything chronological — see pastRaidBossOptions' sort
+ *   comment.
+ * - "bulbapedia-archive": added 2026-09-07 alongside the era-HP backfill
+ *   task — a real, sourced historical encounter parsed from Bulbapedia's
+ *   "List of Raid Boss changes" archive pages. Same evidentiary shape as
+ *   "pogoapi-previous" (a genuine past encounter, never observed live by
+ *   this pipeline, no real date — see the same identical-placeholder-
+ *   timestamp caveat) and treated identically everywhere below
+ *   (resolvePastRaidTier, pastRaidBossOptions' sort, and the UI's "past
+ *   (archive)" badge) rather than given a third parallel branch, since the
+ *   two sources make the same kind of claim about the same kind of fact.
+ *   data-sync's own union-resolution step picks whichever of the two
+ *   sources reports the HIGHER (more historically-accurate) tier per
+ *   species when both exist for it — see sync-data.ts's
+ *   archiveUnionResolved — so a given species is never double-listed under
+ *   both sources here.
+ * - "pokebattler-legacy": added 2026-09-08 (65 rows) — a real past raid
+ *   appearance recorded in Pokebattler's own historical archive. Same
+ *   evidentiary shape as "pogoapi-previous"/"bulbapedia-archive" (a genuine
+ *   past encounter, never observed live by this pipeline, no real date) and
+ *   folded into the same archive handling everywhere below for that reason.
+ *   Where it differs from those two: Pokebattler re-maps its history onto
+ *   TODAY's tier labels rather than preserving the tier/HP that was actually
+ *   live at the time, so it carries neither a real date NOR a usable
+ *   `eraHp` — confirmed 0 of 65 rows have one. Its `tier` is still trusted
+ *   as the recorded fact for this encounter (see resolvePastRaidTier), but
+ *   there is no historical-HP claim to pass through, so `eraHp` is simply
+ *   never set for these rows (falls through to the engine's ordinary
+ *   tier-based HP, same as any archive row that lacks one).
+ *
+ * `eraHp` (added 2026-09-07, era-HP backfill task): the real historical max
+ * HP for THIS specific recorded encounter, when a source could resolve one
+ * — currently only ever set by "pogoapi-previous"/"bulbapedia-archive" rows
+ * (neither "live-feed"/"researched-tier" has ever supplied one, and
+ * "pokebattler-legacy" structurally can't — see above; see
+ * RaidHistoryEntry.eraHp's own doc comment in scripts/sync-data.ts for the
+ * full provenance). Absent (never `0`/`null`) means no source recorded a
+ * usable HP for this row — see PastRaidBossOption.eraHp for how that
+ * absence is handled downstream (never defaulted to a current-tier guess
+ * here; that's the caller's job, and only at the one point it actually
+ * needs a number to hand the engine).
+ */
+export interface RawRaidHistoryEntry {
+  speciesId: string;
+  raidName: string;
+  tier: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  source: "live-feed" | "researched-tier" | "pogoapi-previous" | "bulbapedia-archive" | "pokebattler-legacy";
+  eraHp?: number;
+}
+
 const RAW_SPECIES = speciesData as unknown as SpeciesDefinition[];
 const RAW_ACTIVE_RAIDS = activeRaidsData as unknown as RawActiveRaidEntry[];
+const RAW_RAID_HISTORY = raidHistoryData as unknown as RawRaidHistoryEntry[];
 
 /**
  * Single memoized registry for the whole app: every real species from the
@@ -87,6 +157,187 @@ export function activeRaidBossOptions(): RaidBossOption[] {
     isApproximate: r.isApproximate,
     imageUrl: speciesRegistry.get(r.speciesId).imageUrl,
   }));
+}
+
+export interface PastRaidBossOption {
+  id: string;
+  raidName: string;
+  /**
+   * The tier this boss will actually be SIMULATED at, and the same value the
+   * tier checkbox filter matches against and the table renders — that
+   * three-way invariant (filtered-on tier === displayed tier === simulated
+   * tier) holds for every row here regardless of source. HOW it's resolved
+   * differs by source, and that split is deliberate, not an inconsistency:
+   *
+   * - "live-feed" / "researched-tier": resolved through the engine's own
+   *   defaultRaidTierForSpecies, i.e. the identical value every OTHER tab
+   *   (IV Breakpoints / Attack-Defense / Comparator / Team Raid) lands on
+   *   for this same species today. Deliberately NOT raidHistory.json's own
+   *   stored tier string — see recordedTier. Those two agree today, but they
+   *   are independently maintained and can permanently diverge: sync-data.ts's
+   *   history seed step skips any species already present (`if
+   *   (raidHistoryById.has(s.id)) continue`), so a "researched-tier" row is
+   *   frozen at whatever lastKnownRaidTier said the day it was first written
+   *   and is never refreshed, while species.lastKnownRaidTier keeps tracking
+   *   a corrected allowlist citation. Trusting the frozen string would make
+   *   the Species Report simulate a boss at a different tier than every
+   *   other tab uses for that same boss right now — and tier drives raid HP
+   *   (9000 vs 25000) and the attack/defense multiplier, so that would be a
+   *   large silent disagreement, not a rounding difference. Resolving it
+   *   here keeps every tab in agreement by construction.
+   *
+   * - "pogoapi-previous" / "bulbapedia-archive" / "pokebattler-legacy": the
+   *   OPPOSITE reasoning applies, on purpose. All three sources each model
+   *   one specific real historical encounter (pulled from pogoapi's
+   *   raid_bosses.json `previous` archive, parsed from Bulbapedia's
+   *   raid-boss-change pages, or pulled from Pokebattler's own historical
+   *   archive) — the RECORDED tier IS the fact being modelled (a species
+   *   that was a 3-Star boss in that encounter should simulate at 3,600 HP,
+   *   not whatever tier the species happens to default to today). So this
+   *   branch trusts `recordedTier` directly (falling back to
+   *   defaultRaidTierForSpecies only if the raw tier string is somehow one
+   *   this engine doesn't recognize — a defensive fallback, not the expected
+   *   path). See resolvePastRaidTier. Confirmed this isn't cosmetic for ANY
+   *   of the three, not just assumed: a one-off check against the real data
+   *   found 203/470 "pogoapi-previous" rows, 32/75 "bulbapedia-archive"
+   *   rows, and 26/65 "pokebattler-legacy" rows actually disagree with
+   *   defaultRaidTierForSpecies today — all real, load-bearing divergence
+   *   rates, not theoretically-different code that happens to always agree.
+   *
+   *   A DOCUMENTED consequence of this split: one of these rows' `tier` can
+   *   legitimately differ from what the IV Breakpoints/Attack-Defense/
+   *   Comparator/Team Raid tabs show for the SAME species today — because
+   *   those tabs answer "what tier is this species right now," while a row
+   *   here answers "what tier was THIS PAST ENCOUNTER." Two different
+   *   questions that happen to share a species. That is an intentional
+   *   divergence, not a bug to "fix" by unifying it with the other two
+   *   sources' resolution — don't be tempted to simplify this branch away
+   *   later.
+   */
+  tier: RaidTier;
+  /**
+   * The raw tier string raidHistory.json recorded when this boss was last
+   * observed/seeded — provenance only. For "live-feed"/"researched-tier" this
+   * is never fed to the simulation (kept only so a divergence from `tier`
+   * stays visible rather than silently discarded); for "pogoapi-previous"/
+   * "bulbapedia-archive"/"pokebattler-legacy" it IS what `tier` resolves to
+   * (see above), so the two agree by construction for all three of those
+   * archive sources.
+   */
+  recordedTier: string;
+  /**
+   * The real historical max HP for THIS specific recorded encounter, passed
+   * straight through from RawRaidHistoryEntry.eraHp with zero interpretation
+   * — see that field's own doc comment for exactly which sources ever set
+   * it. Absent (never `0`/`null`) means no source recorded a usable HP for
+   * this encounter; the correct handling of that absence is "no override at
+   * all" (letting the engine's ordinary tier-based HP apply), decided by
+   * SpeciesReportView.tsx at the one point it actually calls the engine —
+   * NEVER defaulted to a raidTierStats value here, which would launder
+   * today's guessed number as if it had been sourced, exactly the failure
+   * mode this field exists to avoid. Named `eraHp`, not e.g. `bossMaxHp` or
+   * `hp`, specifically so it reads as obviously distinct from `tier`/
+   * `recordedTier` above — this is a raw HP number, not a tier label, and
+   * per the engine's own bossMaxHpOverride contract it affects ONLY the
+   * boss's max HP, never the attack/defense multiplier `tier` drives.
+   */
+  eraHp?: number;
+  lastSeenAt: string;
+  source: "live-feed" | "researched-tier" | "pogoapi-previous" | "bulbapedia-archive" | "pokebattler-legacy";
+  imageUrl?: string;
+}
+
+/**
+ * Resolves the tier one raid-history row should be simulated/filtered/
+ * displayed at — see PastRaidBossOption.tier for the full two-branch
+ * reasoning this implements. Split into its own function (rather than
+ * inlined in the `.map` below) so the source-dependent branch is the one
+ * place this logic lives, not duplicated at every call site.
+ */
+function resolvePastRaidTier(entry: RawRaidHistoryEntry): RaidTier {
+  if (
+    (entry.source === "pogoapi-previous" || entry.source === "bulbapedia-archive" || entry.source === "pokebattler-legacy") &&
+    isKnownRaidTier(entry.tier)
+  ) {
+    return entry.tier;
+  }
+  return defaultRaidTierForSpecies(speciesRegistry.get(entry.speciesId));
+}
+
+/**
+ * Bosses this pipeline has RECORDED before and that are NOT part of the
+ * currently-active roster right now — i.e. "raids that recently rotated out,
+ * were seeded from research, or appear in a historical archive, that this
+ * tool still has usable stat data for." Five provenance tiers coexist here,
+ * from strongest to weakest evidence (see RawRaidHistoryEntry's `source` doc
+ * comment for the full per-value description):
+ *
+ * - "live-feed": this pipeline's own live raid feed actually observed it,
+ *   accumulating since 2026-09-07 only. Has real firstSeenAt/lastSeenAt dates.
+ * - "pogoapi-previous" / "bulbapedia-archive" / "pokebattler-legacy": real,
+ *   sourced historical encounters backfilled from pogoapi's
+ *   raid_bosses.json `previous` archive, Bulbapedia's raid-boss-change
+ *   pages, and Pokebattler's own historical archive respectively — together
+ *   these are what make this list roughly comprehensive (~500+ entries)
+ *   rather than the live-feed-only ~15. None of the three carries real date
+ *   information (all stamp every row with the sync run's own placeholder
+ *   timestamp), and all exclude EX Raids (no modern tier equivalent exists
+ *   to simulate them at). Most "pogoapi-previous"/"bulbapedia-archive" rows
+ *   also carry a real `eraHp` — "pokebattler-legacy" never does, since
+ *   Pokebattler re-maps its history onto today's tier labels rather than
+ *   preserving the HP that was actually live at the time — see
+ *   PastRaidBossOption.eraHp.
+ * - "researched-tier": seeded from a hand-researched lastKnownRaidTier
+ *   citation — never observed live and not present in any archive either
+ *   (typically a very recent mega/primal debut no source has caught up to
+ *   yet).
+ *
+ * A gap in this list (a species that really was a past boss but isn't here
+ * at all) means none of these five sources ever recorded it — not "it was
+ * never a real raid boss."
+ *
+ * Same defensive filtering as activeRaidBossOptions — a resync could produce
+ * a speciesId this registry no longer has, and that must never crash the
+ * app — plus the additional filter against the CURRENT active roster, so a
+ * boss that is live right now is never double-listed as also "past."
+ */
+const DATELESS_RAID_HISTORY_SOURCES = new Set<RawRaidHistoryEntry["source"]>([
+  "pogoapi-previous",
+  "bulbapedia-archive",
+  "pokebattler-legacy",
+]);
+
+export function pastRaidBossOptions(): PastRaidBossOption[] {
+  const activeIds = new Set(activeRaidBossOptions().map((r) => r.id));
+  return RAW_RAID_HISTORY.filter((r) => speciesRegistry.has(r.speciesId) && !activeIds.has(r.speciesId))
+    .sort((a, b) => {
+      // All archive sources carry no real chronology (see the doc comment
+      // above) — sorting them by lastSeenAt would either be meaningless (if
+      // data-sync fills in some placeholder timestamp) or, worse, would
+      // interleave them among the genuinely-dated live-feed/researched-tier
+      // rows as if their date were comparable. Instead: real-dated rows sort
+      // first (newest lastSeenAt first, today's behavior, unchanged), then
+      // every dateless archive row after them, ordered alphabetically by raid
+      // name for a stable, readable list rather than an arbitrary one.
+      const aDated = !DATELESS_RAID_HISTORY_SOURCES.has(a.source);
+      const bDated = !DATELESS_RAID_HISTORY_SOURCES.has(b.source);
+      if (aDated !== bDated) return aDated ? -1 : 1;
+      if (aDated) return new Date(b.lastSeenAt).getTime() - new Date(a.lastSeenAt).getTime();
+      return a.raidName.localeCompare(b.raidName);
+    })
+    .map((r) => ({
+      id: r.speciesId,
+      raidName: r.raidName,
+      tier: resolvePastRaidTier(r),
+      recordedTier: r.tier,
+      // Passed through as-is — never defaulted here (see the field's own doc
+      // comment on why "absent" must stay absent all the way to the one call
+      // site that turns it into an engine override).
+      eraHp: r.eraHp,
+      lastSeenAt: r.lastSeenAt,
+      source: r.source,
+      imageUrl: speciesRegistry.get(r.speciesId).imageUrl,
+    }));
 }
 
 /** Active raid entries with no usable stat data yet — shown disabled, never selectable. */

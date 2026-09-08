@@ -42,6 +42,22 @@ export interface SpeciesReportScenario {
   bossChargedMoveFrequencySeconds: number;
   /** Which column the results table is sorted by — see SpeciesReportSortMode. */
   sortMode: SpeciesReportSortMode;
+  /**
+   * Raid tiers to include in the sweep, keyed by the raw feed/history tier
+   * label (e.g. "5-Star Raids"). `null` means "every tier" — including one
+   * that only appears in the feed LATER, after this link was shared — and is
+   * therefore the default; an array is an explicit allow-list a user checked
+   * off in the tier filter. Deliberately not an exclusion list: inverting it
+   * would silently drop a future tier the sharer never saw or opted out of.
+   */
+  includedTiers: string[] | null;
+  /**
+   * Whether to also sweep bosses this pipeline has recorded before but that
+   * are not part of the currently-active raid roster (see registry.ts's
+   * pastRaidBossOptions) alongside the always-included active roster.
+   * Defaults to false, i.e. today's "currently-active only" behavior.
+   */
+  includePastRaids: boolean;
 }
 
 export function encodeSpeciesReportScenario(scenario: SpeciesReportScenario): string {

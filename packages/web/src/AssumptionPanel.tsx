@@ -507,7 +507,7 @@ export function AssumptionPanel({
             min={1}
             value={value.bossChargedMoveFrequencySeconds}
             onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
-            title="Mean seconds between the boss's charged moves once it's ready to use them (randomized +/-40% per run)."
+            title="Mean seconds between the boss's charged moves once it's ready to use them (randomized +/-40% per run). Below the boss charged-move duration (commonly 2-3s) its attacks overlap, so dodging cannot help and the dodge setting stops affecting results entirely."
           />
         </div>
 
