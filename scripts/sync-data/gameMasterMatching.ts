@@ -233,7 +233,8 @@ export function resolveMegaFromGameMaster(
         `${override.baseAttack}/${override.baseDefense}/${override.baseStamina}/${override.typeOverride1 ?? ""}/${override.typeOverride2 ?? ""}/${override.hasTypeOverride}`,
     ),
   );
-  const { record, override } = matches[0];
+  // matches.length === 0 returned above, so matches[0] is provably present here.
+  const { record, override } = matches[0]!;
   const types = override.hasTypeOverride
     ? [override.typeOverride1, override.typeOverride2].filter((t): t is string => Boolean(t))
     : [record.type, record.type2].filter((t): t is string => Boolean(t));

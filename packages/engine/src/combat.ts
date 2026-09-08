@@ -141,7 +141,7 @@ export function simulateOpeningBurst(
   attacker: AttackerProfile,
   boss: BossProfile,
   maxSeconds = 30,
-  dodge: DodgeBehavior = { kind: "none" },
+  _dodge: DodgeBehavior = { kind: "none" },
   dodgeFastAttacks = false,
 ): OpeningBurstResult {
   const bossEvents: number[] = [];

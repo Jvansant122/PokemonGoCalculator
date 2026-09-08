@@ -1,0 +1,18 @@
+{
+  "// purpose": "Analysis-only project for `npm run unused-exports`. Spans every TS consumer in the repo (engine src+tests, web src, scripts) so an engine export used only by packages/web or by a script is NOT reported as unused. Never used for building.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "packages/engine/src",
+    "packages/engine/test",
+    "packages/web/src",
+    "packages/web/e2e",
+    "scripts",
+    "data/normalized/*.json"
+  ]
+}

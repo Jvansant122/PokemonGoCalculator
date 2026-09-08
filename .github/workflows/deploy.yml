@@ -3,6 +3,8 @@ name: Deploy web to GitHub Pages
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
@@ -15,7 +17,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  # The same gate `npm run verify` runs locally: engine + web + scripts tests, both
+  # type-checks, lint, the four check scripts, and the production build. Nothing reaches
+  # Pages unless every one of them is green. On a pull_request this job is the whole
+  # workflow (deploy is push-only).
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,14 +30,24 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web
-        run: npm run build --workspace=packages/web
+      - name: Verify (tests, type-checks, lint, checks, build)
+        run: npm run verify
+        env:
+          GITHUB_PAGES: "true"
+
+      - name: Install Playwright browsers
+        if: hashFiles('packages/web/playwright.config.ts') != ''
+        run: npx --workspace=packages/web playwright install --with-deps chromium
+
+      - name: Browser smoke tests
+        if: hashFiles('packages/web/playwright.config.ts') != ''
+        run: npm run test:e2e
         env:
           GITHUB_PAGES: "true"
 
@@ -44,7 +60,8 @@ jobs:
           path: packages/web/dist
 
   deploy:
-    needs: build
+    if: github.event_name != 'pull_request'
+    needs: verify
     runs-on: ubuntu-latest
     environment:
       name: github-pages

@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  bossChargedMoveReadySeconds,
   buildScenarioUrl,
-  compareAcrossBossChargedMoves,
   convertUptimeToTeamDamage,
   parseScenarioFromUrl,
-  runSustainedComparison,
   type Scenario,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
@@ -16,11 +13,11 @@ import { BossMovesetSweep } from "./BossMovesetSweep.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { SensitivityView } from "./SensitivityView.js";
-import { computeSensitivity } from "./sensitivity.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
-import { applyShadowToggle, effectiveIsShadow } from "./shadowToggle.js";
+import { effectiveIsShadow } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
-import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { resolveBoost, runComparatorScenario } from "./run/runComparator.js";
 
 // Default matchup shown on a fresh page load with no URL param. This is just
 // the initial UI state (not a pinned engine acceptance-test fixture — those
@@ -29,9 +26,8 @@ import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPi
 const DEFAULT_CANDIDATE_A_ID = "kartana";
 const DEFAULT_CANDIDATE_B_ID = "rayquaza";
 const DEFAULT_TARGET_ID = "latios-mega";
-const MAX_ENERGY = 100;
 
-const DEFAULT_ASSUMPTIONS: Assumptions = {
+export const DEFAULT_ASSUMPTIONS: Assumptions = {
   candidateAId: DEFAULT_CANDIDATE_A_ID,
   candidateBId: DEFAULT_CANDIDATE_B_ID,
   targetId: DEFAULT_TARGET_ID,
@@ -72,7 +68,7 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
  * packages/engine change — every call site below that needs to read or write
  * it goes through this local type instead of an ad hoc cast.
  */
-interface ComparatorScenario extends Scenario {
+export interface ComparatorScenario extends Scenario {
   candidateShadow: [boolean, boolean];
   /**
    * Same "extend rather than edit packages/engine" reasoning as
@@ -87,7 +83,7 @@ interface ComparatorScenario extends Scenario {
   bossChargedMoveCadence?: BossChargedMoveCadence;
 }
 
-function assumptionsToScenario(a: Assumptions): ComparatorScenario {
+export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
   return {
     candidates: [a.candidateAId, a.candidateBId],
     candidateFastMoveIds: [a.candidateAFastMoveId, a.candidateBFastMoveId],
@@ -114,7 +110,7 @@ function assumptionsToScenario(a: Assumptions): ComparatorScenario {
   };
 }
 
-function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
+export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
   return {
     candidateAId: s.candidates[0] ?? DEFAULT_CANDIDATE_A_ID,
     candidateBId: s.candidates[1] ?? DEFAULT_CANDIDATE_B_ID,
@@ -215,12 +211,7 @@ function OwnTeamShareBar({ own, team, accent }: { own: number; team: number; acc
   );
 }
 
-/** Resolves a species id from the registry, surfacing a lookup failure as a normal error result rather than a crash — a stale/shared URL can reference an id that no longer exists after a future data resync. */
-function resolveSpecies(id: string): SpeciesDefinition {
-  return speciesRegistry.get(id);
-}
-
-/** Same as resolveSpecies but never throws — for normalization checks that need to run even when the id might be stale/invalid. */
+/** Same as runComparatorScenario's own internal resolution, but never throws — for normalization checks that need to run even when the id might be stale/invalid. */
 function tryResolveSpecies(id: string): SpeciesDefinition | null {
   return speciesRegistry.has(id) ? speciesRegistry.get(id) : null;
 }
@@ -234,7 +225,7 @@ function tryResolveSpecies(id: string): SpeciesDefinition | null {
  * toggled on immediately clears it rather than leaving a stale, merely
  * UI-hidden true value sitting in state.
  */
-function normalizeAssumptions(a: Assumptions): Assumptions {
+export function normalizeAssumptions(a: Assumptions): Assumptions {
   const speciesA = tryResolveSpecies(a.candidateAId);
   const speciesB = tryResolveSpecies(a.candidateBId);
   const candidateShadow: [boolean, boolean] = [
@@ -243,20 +234,6 @@ function normalizeAssumptions(a: Assumptions): Assumptions {
   ];
   if (candidateShadow[0] === a.candidateShadow[0] && candidateShadow[1] === a.candidateShadow[1]) return a;
   return { ...a, candidateShadow };
-}
-
-/**
- * Resolves what boost (if any) is actually active for a candidate in the UI,
- * mirroring the engine's own resolveBoost (comparison.ts) — `disabled` (the
- * per-candidate candidateMegaBoostDisabled toggle) or a genuinely non-mega
- * species (no `boost` field at all) both collapse to `undefined`, never `1`.
- * `undefined` must propagate all the way to convertUptimeToTeamDamage's
- * boostMultiplier (see uptime.ts) — passing `1` there is NOT equivalent, it
- * still credits the off-type bonus to a candidate with no boost mechanic.
- */
-function resolveBoost(species: SpeciesDefinition | null | undefined, disabled: boolean): SpeciesDefinition["boost"] | undefined {
-  if (!species || disabled) return undefined;
-  return species.boost;
 }
 
 interface ComparatorViewProps {
@@ -292,218 +269,24 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   const targetOptions = useMemo(() => targetPickerOptions(), []);
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
 
-  const ivs = useMemo(
-    () => ({ attack: assumptions.ivAttack, defense: assumptions.ivDefense, stamina: assumptions.ivStamina }),
-    [assumptions.ivAttack, assumptions.ivDefense, assumptions.ivStamina],
-  );
-
-  const species = useMemo(() => {
-    try {
-      return {
-        candidates: [resolveSpecies(assumptions.candidateAId), resolveSpecies(assumptions.candidateBId)] as [
-          SpeciesDefinition,
-          SpeciesDefinition,
-        ],
-        boss: resolveSpecies(assumptions.targetId),
-        error: null as string | null,
-      };
-    } catch (err) {
-      return { candidates: null, boss: null, error: (err as Error).message };
-    }
-  }, [assumptions.candidateAId, assumptions.candidateBId, assumptions.targetId]);
-
-  // `species.candidates` above stays the RAW registry object at all times —
-  // used by the picker/movepool/badge logic throughout this component. The
-  // Shadow toggle is applied ONLY here, at the boundary into the three engine
-  // calls below (runSustainedComparison/compareAcrossBossChargedMoves/
-  // computeSensitivity) — see shadowToggle.ts's file doc comment for why this
-  // split avoids a self-locking checkbox bug.
-  const shadowAdjustedCandidates = useMemo(() => {
-    if (!species.candidates) return null;
-    return species.candidates.map((c, i) => applyShadowToggle(c, assumptions.candidateShadow[i] ?? false)) as [
-      SpeciesDefinition,
-      SpeciesDefinition,
-    ];
-  }, [species.candidates, assumptions.candidateShadow]);
-
-  // Which real raid tier the selected target counts as, if it's currently a
-  // live active-raid entry — feeds bossEffectiveStats/bossEffectiveHp so a
-  // real (non-precomputed) boss uses its correct per-tier attack/defense
-  // instead of always falling back to the engine's default assumption. null
-  // (not a currently-active raid target, or a hypothetical fixture) lets
-  // runSustainedComparison/compareAcrossBossChargedMoves fall back to their
-  // own DEFAULT_REAL_RAID_TIER — see registry.ts's raidTierForSpeciesId for
-  // why this isn't a separate Scenario field.
-  const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
-
-  // Energy the boss begins the fight with, in absolute units (0 unless the
-  // "starts primed" toggle is on) — feeds the comparison call below, and the
-  // displayed "boss ready at ~Xs" line, from the single source of truth
-  // (bossChargedMoveReadySeconds) rather than multiple places reimplementing it.
-  // The selected boss/candidate charged moves, resolved the same way the
-  // engine's resolveMove does (id match, else the species' first move) — used
-  // by the three derived values below so they agree with what actually feeds
-  // runSustainedComparison, not always index 0.
-  const selectedBossChargedMove = useMemo(() => {
-    if (!species.boss) return undefined;
-    return species.boss.chargedMoves.find((m) => m.id === assumptions.bossChargedMoveId) ?? species.boss.chargedMoves[0];
-  }, [species.boss, assumptions.bossChargedMoveId]);
-
-  const bossStartingEnergy = useMemo(() => {
-    if (!assumptions.bossStartsPrimed || !species.boss) return 0;
-    const cost = selectedBossChargedMove?.energyCost ?? 0;
-    return assumptions.bossStartingEnergyFraction * cost;
-  }, [assumptions.bossStartsPrimed, assumptions.bossStartingEnergyFraction, species.boss, selectedBossChargedMove]);
-
-  const bossReadySeconds = useMemo(() => {
-    if (!species.boss) return null;
-    const fastMove = species.boss.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? species.boss.fastMoves[0];
-    if (!fastMove || !selectedBossChargedMove) return null;
-    return bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, bossStartingEnergy);
-  }, [species.boss, assumptions.bossFastMoveId, selectedBossChargedMove, bossStartingEnergy]);
-
-  const energyBuffers = useMemo(() => {
-    if (!species.candidates) return [];
-    const chargedMoveIds = [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId];
-    return species.candidates.map((c, i) => {
-      const chargedMove = c.chargedMoves.find((m) => m.id === chargedMoveIds[i]) ?? c.chargedMoves[0];
-      return { name: c.name, buffer: MAX_ENERGY - (chargedMove?.energyCost ?? MAX_ENERGY) };
-    });
-  }, [species.candidates, assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId]);
-
-  // There is no user-selectable "combat phase" — the fight is one continuous
-  // simulation (runSustainedComparison), which already naturally starts with
-  // a period where the boss hasn't thrown a charged move yet, governed by
-  // bossReadySeconds above. That period isn't a separate mode to pick.
-  const results = useMemo(() => {
-    if (!shadowAdjustedCandidates || !species.boss) return { candidates: null, error: null as string | null };
-    try {
-      return {
-        candidates: runSustainedComparison({
-          candidates: shadowAdjustedCandidates,
-          candidateFastMoveIds: [assumptions.candidateAFastMoveId, assumptions.candidateBFastMoveId],
-          candidateChargedMoveIds: [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId],
-          boss: species.boss,
-          bossRaidTier,
-          bossFastMoveId: assumptions.bossFastMoveId,
-          bossChargedMoveId: assumptions.bossChargedMoveId,
-          level: assumptions.level,
-          ivs,
-          dodge: assumptions.dodge,
-          dodgeFastAttacks: assumptions.dodgeFastAttacks,
-          holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
-          bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
-          // See bossCadence.tsx — "energy-driven" makes the mean-interval
-          // field just above stop mattering entirely (the engine ignores it
-          // outright rather than blending the two models). AFFECTS: this
-          // field doesn't exist on SustainedComparisonInputs yet as of
-          // 2026-09-08 — see this feature's own AFFECTS note at the end of
-          // this session's report.
-          bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
-          bossStartingEnergy,
-          weather: assumptions.weather,
-          candidateMegaBoostDisabled: assumptions.candidateMegaBoostDisabled,
-        }),
-        error: null as string | null,
-      };
-    } catch (err) {
-      return { candidates: null, error: (err as Error).message };
-    }
-  }, [
-    shadowAdjustedCandidates,
-    species.boss,
-    bossRaidTier,
-    assumptions.candidateAFastMoveId,
-    assumptions.candidateAChargedMoveId,
-    assumptions.candidateBFastMoveId,
-    assumptions.candidateBChargedMoveId,
-    assumptions.bossFastMoveId,
-    assumptions.bossChargedMoveId,
-    assumptions.level,
-    ivs,
-    assumptions.dodge,
-    assumptions.dodgeFastAttacks,
-    assumptions.holdChargedMoveUntilSafe,
-    assumptions.bossChargedMoveFrequencySeconds,
-    assumptions.bossChargedMoveCadence,
-    bossStartingEnergy,
-    assumptions.weather,
-    assumptions.candidateMegaBoostDisabled,
-  ]);
-
-  // The chart's window is auto-computed from the longer-mean-surviving
-  // candidate (never a free-typed input, so a too-small value can't reproduce
-  // the degenerate all-zero-output bug this project hit once already) — the
-  // user can only stretch it further via minFightLengthSeconds, never shrink
-  // it below this real, computed outcome.
-  const naturalFightLengthSeconds = useMemo(() => {
-    const raw = results.candidates?.map((c) => c.meanSecondsSurvived);
-    if (!raw || raw.length === 0) return null;
-    return Math.max(1, Math.ceil(Math.max(...raw) * 1.1 * 10) / 10);
-  }, [results.candidates]);
-
-  const chartMaxSeconds = Math.max(naturalFightLengthSeconds ?? 1, assumptions.minFightLengthSeconds);
-
-  const sensitivity = useMemo(() => {
-    if (!shadowAdjustedCandidates || !species.boss) return [];
-    try {
-      return computeSensitivity(shadowAdjustedCandidates, species.boss, assumptions, bossRaidTier);
-    } catch {
-      return [];
-    }
-  }, [shadowAdjustedCandidates, species.boss, assumptions, bossRaidTier]);
-
-  // Only meaningful when the boss actually has 2+ known charged moves — a
-  // real raid boss instance is locked to whichever one it rolled for its
-  // whole lifetime, so this shows whether the ranking between the two
-  // candidates depends on that roll. A single-charged-move boss has nothing
-  // to sweep, so this stays null (BossMovesetSweep is never rendered) rather
-  // than showing a pointless one-row table.
-  const bossMovesetSweep = useMemo(() => {
-    if (!shadowAdjustedCandidates || !species.boss) return null;
-    if (species.boss.chargedMoves.length < 2) return null;
-    try {
-      return compareAcrossBossChargedMoves({
-        candidates: shadowAdjustedCandidates,
-        candidateFastMoveIds: [assumptions.candidateAFastMoveId, assumptions.candidateBFastMoveId],
-        candidateChargedMoveIds: [assumptions.candidateAChargedMoveId, assumptions.candidateBChargedMoveId],
-        boss: species.boss,
-        bossRaidTier,
-        bossFastMoveId: assumptions.bossFastMoveId,
-        level: assumptions.level,
-        ivs,
-        dodge: assumptions.dodge,
-        dodgeFastAttacks: assumptions.dodgeFastAttacks,
-        holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
-        bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
-        bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
-        bossStartingEnergy,
-        weather: assumptions.weather,
-        candidateMegaBoostDisabled: assumptions.candidateMegaBoostDisabled,
-      });
-    } catch {
-      return null;
-    }
-  }, [
-    shadowAdjustedCandidates,
-    species.boss,
-    bossRaidTier,
-    assumptions.candidateAFastMoveId,
-    assumptions.candidateAChargedMoveId,
-    assumptions.candidateBFastMoveId,
-    assumptions.candidateBChargedMoveId,
-    assumptions.bossFastMoveId,
-    assumptions.level,
-    ivs,
-    assumptions.dodge,
-    assumptions.dodgeFastAttacks,
-    assumptions.holdChargedMoveUntilSafe,
-    assumptions.bossChargedMoveFrequencySeconds,
-    assumptions.bossChargedMoveCadence,
-    bossStartingEnergy,
-    assumptions.weather,
-    assumptions.candidateMegaBoostDisabled,
-  ]);
+  // The entire engine-facing computation (species resolution, Shadow
+  // application, boss tier/energy/readiness, the sustained-comparison
+  // simulation, the chart window, sensitivity, and the boss-moveset sweep)
+  // lives in runComparatorScenario (run/runComparator.ts) — a pure, React-free
+  // function shared with the run-scenario CLI and this tab's own vitest smoke
+  // test, so neither can silently drift from what's rendered below. Aliased
+  // back to their original names so the render code below (and
+  // SensitivityView/DamageOverTimeChart/BossMovesetSweep's props) needs no
+  // changes at all.
+  const runResult = useMemo(() => runComparatorScenario(assumptions, speciesRegistry), [assumptions]);
+  const species = { candidates: runResult.candidates, boss: runResult.boss, error: runResult.speciesError };
+  const bossReadySeconds = runResult.bossReadySeconds;
+  const energyBuffers = runResult.energyBuffers;
+  const results = { candidates: runResult.results, error: runResult.resultsError };
+  const naturalFightLengthSeconds = runResult.naturalFightLengthSeconds;
+  const chartMaxSeconds = runResult.chartMaxSeconds;
+  const sensitivity = runResult.sensitivity;
+  const bossMovesetSweep = runResult.bossMovesetSweep;
 
   function handleShare() {
     // Also pins `view=comparator` so reloading/sharing this link doesn't land

@@ -1,72 +1,58 @@
 ---
 name: verify-and-ship
-description: Runs this repo's full verification pipeline (engine tests, type-checks, web build) before committing/pushing a change to the Pokémon GO Scenario Comparator, then watches the GitHub Pages deploy through to completion. Use this whenever you're about to commit and push a change to this repo, whenever the user asks to "verify", "ship", "deploy", or "make sure everything passes" before pushing, or as the last step after any code change the user has approved for commit — don't invent a different ad-hoc sequence of test/build commands when this one already exists.
+description: Runs this repo's single local gate (`npm run verify` — all three vitest suites, type-checks, lint, every checker, production build) before committing/pushing a change to the Pokémon GO Scenario Comparator, then watches the GitHub Pages deploy through to completion. Use whenever you're about to commit and push, whenever the user asks to "verify", "ship", "deploy", or "make sure everything passes", or as the last step after any code change the user has approved for commit — don't invent an ad-hoc subset of test/build commands when this one already exists.
 ---
 
 # Verify and ship
 
-This is the exact sequence that's been run by hand after every commit in this repo so far. Each
-step gates the next — don't skip ahead on a failure, and don't declare success until the deploy
-workflow itself reports `success`. A green local build with a red deploy is not "shipped."
-
-## Why this order matters
-
-Type-checking catches interface drift the tests won't (e.g. a field renamed in one package but
-not updated at a call site in the other, since `packages/web` imports `packages/engine` straight
-from its TS source). The production build is a separate, stricter pass from either (Vite/Rollup
-can fail on things `tsc --noEmit` alone doesn't catch, and it's the actual artifact GitHub Pages
-serves). Pushing before any of these are clean just moves the failure to CI, where it's slower to
-diagnose and — worse — is live-deployed if it happens to pass a step you skipped locally.
+Each step gates the next — don't skip ahead on a failure, and don't declare success until the
+deploy workflow itself reports `success`. A green local build with a red deploy is not "shipped."
 
 ## Steps
 
-1. **Node on PATH.** Fresh shell processes in this environment often don't have Node/npm on PATH.
-   Bash: `export PATH="/c/Program Files/nodejs:$PATH"`. PowerShell:
-   `$env:PATH = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")`.
-   If `node -v` or `npm -v` fails after this, stop and report it — don't guess at another fix.
+1. **`npm run verify`** from the repo root. It runs `test` (engine + web + scripts vitest) →
+   `typecheck` (engine, web, scripts) → `lint` → `check` (scenario round-trip, raid-history
+   sources, mega gates, docs drift) → the production web build, stopping at the first failure.
+   CI's `verify` job runs the identical command on every push and pull request, so a local pass
+   is a real prediction of a green deploy. Node is on PATH via the SessionStart hook; if `npm -v`
+   fails anyway, `export PATH="/c/Program Files/nodejs:$PATH"` and retry once, then stop and
+   report.
 
-2. **Engine tests** — from the repo root: `npm run test:engine`. This is the fast, deterministic
-   gate; if anything here is red, stop. Do not proceed to type-checking or the build with failing
-   tests, and do not weaken an assertion to make it pass without understanding *why* it broke —
-   see CLAUDE.md's "single most important invariant" framing for how easy it is to introduce a
-   subtle regression here that looks like an unrelated failure elsewhere.
+   If a step is red, fix the cause rather than routing around it. Don't weaken an assertion to
+   make a test pass without understanding why it broke — engine pins are regression gates. A type
+   error in `packages/web` naming an `@pogo-analyzer/engine` export usually means the engine's
+   surface changed and every consumer needs the update, not just the one `tsc` pointed at. A
+   `check-docs-drift` failure names the stale doc — fix the doc, not the checker. A chunk-size
+   warning from the build is expected; an actual build error is not.
 
-3. **Type-check both packages** — `npx tsc --noEmit -p tsconfig.json` from inside
-   `packages/engine`, then again from inside `packages/web`. Both must be silent (no output). A
-   type error in `packages/web` referencing an `@pogo-analyzer/engine` export is usually a sign
-   `packages/engine`'s public surface changed without updating every consumer — grep for the
-   symbol across `packages/web/src` rather than just patching the one error tsc points at first.
+2. **`npm run verify:full`** after any UI change — `verify` plus the Playwright suite
+   (`npm run test:e2e`, against the built `dist`). Skip it for engine-only, data-only, or
+   docs-only changes, and say that you did.
 
-4. **Production build** — `npm run build --workspace=packages/web`. This must succeed (a chunk
-   size warning is fine and expected; an actual build error is not). This is the step that
-   verifies the Vite `base` path and the `data/normalized/*.json` imports resolve correctly for
-   the real GitHub Pages deploy, not just local dev.
+3. **Commit** — only if the user has actually asked for a commit (never assume). Follow the
+   project's git conventions (the top-level Claude Code instructions for message/attribution
+   format), not this skill's.
 
-5. **Commit** — only if the user has actually asked for a commit (never assume). Follow the
-   project's own git conventions (see the top-level Claude Code instructions for commit message
-   / attribution format) rather than this skill's.
+4. **Push** — `git push origin main`, only with explicit user go-ahead; `.claude/settings.json`
+   asks before any push regardless. This skill doesn't grant permission to push, it describes
+   what to do once permission exists.
 
-6. **Push** — `git push origin main`. Again, only with explicit user go-ahead for a push, same as
-   any other git-safety rule already in force for this session — this skill doesn't grant new
-   permission to push, it just describes what to do once permission exists.
-
-7. **Watch the deploy.** Use the **`watch-github-actions`** skill — don't hand-write a `curl`
-   poll loop here. The unauthenticated API budget is 60 requests/hour, and once it's spent every
-   request returns a 403 with no `status` field, so an ad-hoc loop spins for 15+ minutes instead
-   of reporting anything. That skill's script is bounded, scopes the query to `deploy.yml` (this
-   repo's second workflow, `check-mega-gaps.yml`, will otherwise hand you the wrong run and the
-   wrong conclusion), and always exits with a meaningful code:
+5. **Watch the deploy** with the **`watch-github-actions`** skill — never a hand-written poll
+   loop. The unauthenticated API budget is 60 requests/hour, and once it's spent every request
+   is a 403 with no `status` field, which a naive loop spins on for 15+ minutes. Scope to
+   `deploy.yml`; this repo's other workflow, `check-mega-gaps.yml`, will otherwise hand you the
+   wrong run:
 
    ```bash
-   export PATH="/c/Program Files/nodejs:$PATH"; node .claude/skills/watch-github-actions/scripts/gha-watch.mjs --workflow deploy.yml
+   node .claude/skills/watch-github-actions/scripts/gha-watch.mjs --workflow deploy.yml
    ```
 
    Run it with `run_in_background: true` so the user can still interject. Only exit code `0`
    means deployed — read that skill for what `1`/`2`/`3` mean. If the conclusion isn't
-   `success`, say so plainly; don't report "pushed" as if that means "deployed."
+   `success`, say so plainly; "pushed" is not "deployed."
 
 ## What "done" looks like
 
-Report the outcome of each of the four local gates (tests/typecheck×2/build) and the final deploy
-conclusion — not just "all good." If you skipped a step because it wasn't applicable (e.g. no
-commit was requested), say so explicitly rather than silently omitting it.
+Report `verify`'s result (and `verify:full`'s, if run), whether a commit and push happened, and
+the deploy conclusion — not just "all good." If a step was skipped because it wasn't applicable,
+say so explicitly rather than silently omitting it.

@@ -100,18 +100,21 @@ structural blind spot — **a mega whose debut was a one-day event is missing fr
 being real, permanently-unlockable content. Eleven real megas (Mega Raichu X/Y among them) sat
 missing from the picker this way until a user noticed.
 
-`RELEASED_MEGA_PRIMAL_ALLOWLIST` in `scripts/sync-data.ts` is the escape hatch: a short,
-hand-reviewed table where each entry carries its own source citation and an optional
-`lastKnownRaidTier`. Adding to it is your job, under two hard rules — every entry must be
-cross-checked against at least one source **independent of both GAME_MASTER and whatever
-suggested it**, and it is never a place to speculatively list datamined or unreleased content
+`RELEASED_MEGA_PRIMAL_ALLOWLIST` in `scripts/sync-data/releasedMegaPrimalAllowlist.ts` is the
+escape hatch: a short, hand-reviewed table where each entry carries its own source citation and
+an optional `lastKnownRaidTier`. Adding to it is your job (the `add-mega-allowlist-entry` skill
+is the checklist), under two hard rules: every entry must be cross-checked against at least one
+source **independent of both GAME_MASTER and whatever suggested it**, and it is never a place to
+speculatively list datamined or unreleased content
+
 (GAME_MASTER's own `tempEvoOverrides` carries forms Niantic has never shipped; that's exactly why
 the released-content gates exist). Leave `lastKnownRaidTier` undefined rather than guessing — an
 absent field falls through to the existing heuristic honestly, a wrong one doesn't.
 
 `npm run check-mega-gaps` (`scripts/check-mega-gaps.ts`) is the detector: it diffs this project's
 mega/primal roster against Bulbapedia's Pokémon-GO release tracking. `.github/workflows/
-check-mega-gaps.yml` runs it weekly and opens/updates a tracking issue on a hit — so the next gap
+check-mega-gaps.yml` runs it daily (alongside `check-mega-gates.ts` and a staleness check
+against a fresh in-runner sync) and opens/updates a tracking issue on a hit — so the next gap
 should reach you as an issue rather than as a user complaint. Treat a hit as a research task, not
 an auto-add: it's a *candidate* list, and the cross-check rules above still apply to every name.
 
@@ -131,6 +134,19 @@ Report what the raw data has and let that agent decide how — or whether — to
   the CPM table covers all levels the engine requests including half levels.
 - Report a diff on completion: what changed since the last sync, with anything affecting an
   existing saved scenario called out separately.
+- **`npm run diff-normalized` before committing data.** It reports what a sync changed per
+  normalized file (`--strict` fails if `raidHistory.json` lost a row — it is accumulate-only);
+  use its summary for your `CHANGED` line rather than describing the diff from memory.
+- **`npm run test:scripts` before you report.** `scripts/sync-data/test/` unit-tests the
+  adapters, parsers and archive resolvers, and `normalizedGolden.test.ts` pins independently
+  cited sentinel values over the *committed* `data/normalized/*.json`. A sentinel failing on a
+  legitimate data change (a real stat rebalance, a new form) is expected — update it
+  deliberately with the new cited value, never by loosening it. A sentinel failing on a pipeline
+  change with no real-world cause is a regression.
+- **`npm run typecheck:scripts` is the only type gate for `scripts/`.** Everything there runs
+  under tsx, which never type-checks, so a type error only surfaces at runtime unless you run it
+  (`npm run verify` includes it).
+
 
 ## Output format
 

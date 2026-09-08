@@ -1,6 +1,6 @@
 ---
 name: add-scenario-assumption
-description: Checklist for adding a new user-facing assumption/setting to any tab of the Pokémon GO Scenario Comparator's web UI (a new toggle, slider, number input, or dropdown — on the Comparator, Team Raid Simulator, Species Report, IV Breakpoints, or Attack/Defense Breakpoints tab). Use this whenever the user asks to add a new setting, control, toggle, slider, or assumption to any of those tabs — this project has a documented recurring bug where a new field gets wired into the simulation but not into that tab's shareable Scenario type, so a shared link silently reverts it to a default instead of restoring what was shared. Don't skip straight to just adding a UI control.
+description: Checklist for adding a new user-facing assumption/setting to any tab of the Pokémon GO Scenario Comparator's web UI (a new toggle, slider, number input, or dropdown — on the Comparator, Team Raid Simulator, Species Report, IV Breakpoints, Attack/Defense Breakpoints, or Power-Up Optimizer tab). Use this whenever the user asks to add a new setting, control, toggle, slider, or assumption to any of those tabs — this project has a documented recurring bug where a new field gets wired into the simulation but not into that tab's shareable Scenario type, so a shared link silently reverts it to a default instead of restoring what was shared. Don't skip straight to just adding a UI control.
 ---
 
 # Add a scenario assumption
@@ -75,10 +75,15 @@ Two asymmetries that matter:
    anything in some states.
 
 6. **Wire it into whatever computes the result** — if this assumption should actually affect the
-   numbers (not just be a display-only setting), thread it into your tab's engine call:
-   `runSustainedComparison` (Comparator), `runTeamRaid` (Team Raid), `runSpeciesReverseLookup`
-   (Species Report), `compareIvSpreads` (IV Breakpoints), or the damage-grid functions in
-   `breakpoints.ts` (Attack/Defense Breakpoints). If it's a pure engine parameter, check whether
+   numbers (not just be a display-only setting), thread it into your tab's pure run function in
+   `packages/web/src/run/run<Tab>.ts` (`runComparatorScenario`, `runTeamRaidScenario`,
+   `runSpeciesReportScenario`, `runIvBreakpointsScenario`, `runAttackDefenseBreakpointsScenario`,
+   `runPowerUpOptimizerScenario`). The view calls that function through `useMemo`, and
+   `scripts/run-scenario.ts` and `run/run.smoke.test.ts` call the same one — so the field goes
+   into the run module, never inline in the view, or the CLI and the UI drift apart. From there
+   it reaches the engine call (`runSustainedComparison`, `runTeamRaid`, `runSpeciesReverseLookup`,
+   `compareIvSpreads`, or the damage-grid functions in `breakpoints.ts`). If it's a pure engine
+   parameter, check whether
    that function's own inputs interface needs the field too, and whether it needs to flow further
    down into `simulate.ts`'s `StepwiseAttacker`/`StepwiseBoss`. Not every UI setting reaches this
    deep (some are purely for the chart/display layer) — but if you skip this step for a setting
@@ -89,27 +94,24 @@ Two asymmetries that matter:
    value. A test that only checks the default value round-trips wouldn't have caught either of the
    two real times this bug happened — the point is specifically to prove a *changed* value
    survives.
-   - Comparator and Team Raid: add it to `packages/engine/test/scenario.test.ts` or
-     `teamScenario.test.ts`, matching the existing pattern (e.g. "round-trips a non-default
+   - Every tab: add the field, with a non-default value, to your tab's `describe` in
+     `packages/web/src/scenarioRoundtrip.test.ts` — the "fully populated non-default scenario"
+     case. That file covers all six codecs at value level.
+   - Comparator and Team Raid only: the codec itself is engine-owned, so if you changed
+     `scenario.ts`/`teamScenario.ts`, also extend `packages/engine/test/scenario.test.ts` /
+     `teamScenario.test.ts` in the same style ("round-trips a non-default
      `matchingTeammateCount` rather than silently reverting to the full party").
-   - **The other four tabs have no scenario tests at all today** — `speciesReportScenario.ts`,
-     `ivBreakpointsScenario.ts`, `attackDefenseBreakpointsScenario.ts` and
-     `powerUpOptimizerScenario.ts` are web-only and untested, and `packages/web` has no vitest
-     setup. That is a real hole in exactly the bug class this skill exists to prevent. Don't let
-     it silently excuse skipping step 7: at minimum,
-     manually verify the round-trip by building a share link with a non-default value, opening it
-     in a fresh tab, and confirming the control comes back set. Say so explicitly in your report
-     rather than implying a test covered it.
 
 ## Finish
 
-Run `npm run check-scenario-roundtrip` from the repo root **first** — it's the mechanical version
-of step 3, extracting every field of each tab's `Assumptions` interface and asserting the name
-appears in both round-trip directions across all six tabs. It exits non-zero and names the
-offending field if you missed one. It's a name-level smoke test, not a type check: it proves a
-field is *mentioned* in both functions, not that it's mapped correctly — so it does not replace
-step 7's test or the manual share-link check.
+The name-level check runs itself: the `PostToolUse` hook fires `npm run check-scenario-roundtrip`
+after any edit to a `*Scenario.ts`, `*AssumptionPanel.tsx`, or `*View.tsx`, extracting every
+field of each tab's `Assumptions` interface and asserting the name appears in both round-trip
+directions across all six tabs; a miss surfaces in the conversation naming the field. It proves a
+field is *mentioned* in both functions, not that it's mapped correctly — step 7's value-level test
+is what proves that.
 
-Then run `npm run test:engine` from the repo root. All existing tests plus your new one should pass.
-If you have the `verify-and-ship` skill available and the user wants to commit this, use it for
-the rest of the pipeline (type-check, build, deploy) rather than improvising a shorter check.
+Then `npm run test:web` from the repo root (and `npm run test:engine` if you touched an engine
+codec). All existing tests plus your new one should pass. If the user wants this committed, use
+the `verify-and-ship` skill for the rest of the pipeline rather than improvising a shorter check.
+

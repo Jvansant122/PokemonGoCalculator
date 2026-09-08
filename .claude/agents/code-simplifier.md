@@ -31,9 +31,12 @@ you report findings and hand them to whichever agent owns the file.
      year-old TODO with no follow-up commit is worth flagging; one from last week probably isn't.
    - `npx tsc --noEmit` (from inside the relevant package) as a sanity pass only — it will not
      find dead code by itself, but a file it flags as having unreachable branches is worth a look.
-   - This repo has no `ts-prune`/`knip`/similar installed (checked `package.json` — only
-     `typescript`/`tsx` as devDependencies). Don't assume one is available; do the export/usage
-     cross-reference by hand with Grep instead of inventing a tool call that will fail.
+   - Start from the tools that already exist: `npm run lint` (root `eslint.config.js`; unused
+     vars/imports are errors, so a hit there is a confirmed finding, not a candidate) and
+     `npm run unused-exports` (`ts-unused-exports` over `tsconfig.unused-exports.json`, advisory —
+     it can't see dynamic use or the web→engine boundary, so confirm each hit with Grep before
+     flagging). `knip` does not run on this machine; don't reach for it.
+
 4. For `packages/web`, also look for copy-pasted JSX/markup patterns across components (repeated
    card layouts, repeated badge-rendering blocks, repeated share-link-building snippets) that could
    collapse into one shared component — but only flag it if there are genuinely multiple call

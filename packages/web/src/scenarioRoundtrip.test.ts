@@ -1,0 +1,412 @@
+import { describe, expect, it } from "vitest";
+import { buildScenarioUrl, buildTeamScenarioUrl, parseScenarioFromUrl, parseTeamScenarioFromUrl } from "@pogo-analyzer/engine";
+import {
+  assumptionsToScenario as comparatorAssumptionsToScenario,
+  DEFAULT_ASSUMPTIONS as COMPARATOR_DEFAULTS,
+  scenarioToAssumptions as comparatorScenarioToAssumptions,
+  type ComparatorScenario,
+} from "./ComparatorView.js";
+import type { Assumptions } from "./AssumptionPanel.js";
+import {
+  assumptionsToTeamScenario,
+  DEFAULT_TEAM_ASSUMPTIONS,
+  teamScenarioToAssumptions,
+  type TeamScenarioWithShadow,
+} from "./TeamRaidView.js";
+import type { TeamAssumptions } from "./TeamAssumptionPanel.js";
+import {
+  assumptionsToScenario as speciesReportAssumptionsToScenario,
+  DEFAULT_ASSUMPTIONS as SPECIES_REPORT_DEFAULTS,
+  scenarioToAssumptions as speciesReportScenarioToAssumptions,
+  type SpeciesReportAssumptions,
+} from "./SpeciesReportView.js";
+import { buildSpeciesReportScenarioUrl, parseSpeciesReportScenarioFromUrl, type SpeciesReportScenario } from "./speciesReportScenario.js";
+import {
+  assumptionsToScenario as ivAssumptionsToScenario,
+  DEFAULT_ASSUMPTIONS as IV_DEFAULTS,
+  scenarioToAssumptions as ivScenarioToAssumptions,
+  type IvBreakpointsAssumptions,
+} from "./IvBreakpointsView.js";
+import { buildIvBreakpointsScenarioUrl, parseIvBreakpointsScenarioFromUrl, type IvBreakpointsScenario } from "./ivBreakpointsScenario.js";
+import {
+  assumptionsToScenario as adbAssumptionsToScenario,
+  DEFAULT_ASSUMPTIONS as ADB_DEFAULTS,
+  scenarioToAssumptions as adbScenarioToAssumptions,
+  type AttackDefenseBreakpointsAssumptions,
+} from "./AttackDefenseBreakpointsView.js";
+import {
+  buildAttackDefenseBreakpointsScenarioUrl,
+  parseAttackDefenseBreakpointsScenarioFromUrl,
+  type AttackDefenseBreakpointsScenario,
+} from "./attackDefenseBreakpointsScenario.js";
+import {
+  assumptionsToScenario as puAssumptionsToScenario,
+  DEFAULT_ASSUMPTIONS as PU_DEFAULTS,
+  scenarioToAssumptions as puScenarioToAssumptions,
+} from "./PowerUpOptimizerView.js";
+import type { PowerUpOptimizerAssumptions } from "./PowerUpOptimizerAssumptionPanel.js";
+import { buildPowerUpOptimizerScenarioUrl, parsePowerUpOptimizerScenarioFromUrl, type PowerUpOptimizerScenario } from "./powerUpOptimizerScenario.js";
+
+// This is the VALUE-level round-trip check scripts/check-scenario-roundtrip.mjs
+// explicitly says it isn't (it only checks field NAMES appear in both
+// directions): build a fully-populated, entirely non-default scenario, run it
+// through encode -> URL -> parse -> decode, and assert deep equality with the
+// original. Every tab also gets a "garbage/old link" case: a minimal scenario
+// carrying only the fields that were never optional (i.e. predate this
+// project's add-scenario-assumption discipline), confirming every OTHER field
+// decodes to its documented default rather than surfacing `undefined` or
+// throwing.
+
+describe("ComparatorScenario round-trip", () => {
+  const nonDefault: Assumptions = {
+    candidateAId: "rayquaza",
+    candidateBId: "kartana",
+    targetId: "kyogre-primal",
+    candidateAFastMoveId: "dragon-tail",
+    candidateAChargedMoveId: "outrage",
+    candidateBFastMoveId: "air-slash",
+    candidateBChargedMoveId: "leaf-blade",
+    bossFastMoveId: "waterfall",
+    bossChargedMoveId: "origin-pulse",
+    candidateMegaBoostDisabled: [true, false],
+    candidateShadow: [false, true],
+    level: 42.5,
+    ivAttack: 10,
+    ivDefense: 11,
+    ivStamina: 12,
+    dodge: { kind: "percentage-missed", missedFraction: 0.3 },
+    dodgeFastAttacks: true,
+    holdChargedMoveUntilSafe: true,
+    minFightLengthSeconds: 25,
+    bossChargedMoveFrequencySeconds: 20,
+    bossChargedMoveCadence: "energy-driven",
+    partySize: 6,
+    teammateDps: 33.3,
+    matchingTeammateCount: 2,
+    bossStartsPrimed: true,
+    bossStartingEnergyFraction: 0.75,
+    weather: "rainy",
+  };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = comparatorAssumptionsToScenario(nonDefault);
+    const url = buildScenarioUrl("http://example.test/", scenario);
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    const roundTripped = comparatorScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = {
+      candidates: ["kartana", "rayquaza"],
+      target: "latios-mega",
+      level: 35,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodgeModel: { kind: "none" },
+      partySize: 4,
+      teammateDps: 26.5,
+    } as unknown as ComparatorScenario;
+    let result: Assumptions | undefined;
+    expect(() => {
+      result = comparatorScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual({
+      ...COMPARATOR_DEFAULTS,
+      candidateAId: "kartana",
+      candidateBId: "rayquaza",
+      targetId: "latios-mega",
+      level: 35,
+      ivAttack: 15,
+      ivDefense: 15,
+      ivStamina: 15,
+      dodge: { kind: "none" },
+      partySize: 4,
+      teammateDps: 26.5,
+    });
+  });
+});
+
+describe("TeamScenario round-trip", () => {
+  const nonDefault: TeamAssumptions = {
+    slots: [
+      { speciesId: "rayquaza", fastMoveId: "dragon-tail", chargedMoveId: "outrage", isMega: false, isShadow: true },
+      { speciesId: "kartana", fastMoveId: "air-slash", chargedMoveId: "leaf-blade", isMega: false, isShadow: false },
+      { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, isShadow: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+    ],
+    targetId: "kyogre-primal",
+    bossFastMoveId: "waterfall",
+    bossChargedMoveId: "origin-pulse",
+    level: 47.5,
+    ivAttack: 3,
+    ivDefense: 4,
+    ivStamina: 5,
+    dodge: { kind: "percentage-missed", missedFraction: 0.6 },
+    dodgeFastAttacks: true,
+    holdChargedMoveUntilSafe: true,
+    weather: "windy",
+    bossChargedMoveFrequencySeconds: 22,
+    bossChargedMoveCadence: "energy-driven",
+    bossStartsPrimed: true,
+    bossStartingEnergyFraction: 0.4,
+    raidTimerSeconds: 180,
+    swapCostSeconds: 3,
+    reviveCostSeconds: 13,
+  };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = assumptionsToTeamScenario(nonDefault);
+    const url = buildTeamScenarioUrl("http://example.test/", scenario);
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    const roundTripped = teamScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = {
+      slots: [],
+      target: "tyranitar-mega",
+      level: 40,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodgeModel: { kind: "none" },
+    } as unknown as TeamScenarioWithShadow;
+    let result: TeamAssumptions | undefined;
+    expect(() => {
+      result = teamScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual({
+      ...DEFAULT_TEAM_ASSUMPTIONS,
+      slots: DEFAULT_TEAM_ASSUMPTIONS.slots.map(() => ({
+        speciesId: null,
+        fastMoveId: null,
+        chargedMoveId: null,
+        isMega: false,
+        isShadow: false,
+      })),
+      targetId: "tyranitar-mega",
+      level: 40,
+      ivAttack: 15,
+      ivDefense: 15,
+      ivStamina: 15,
+      dodge: { kind: "none" },
+    });
+  });
+});
+
+describe("SpeciesReportScenario round-trip", () => {
+  const nonDefault: SpeciesReportAssumptions = {
+    speciesId: "rayquaza",
+    fastMoveId: "dragon-tail",
+    chargedMoveId: "outrage",
+    level: 33.5,
+    ivAttack: 1,
+    ivDefense: 2,
+    ivStamina: 3,
+    dodge: { kind: "perfect" },
+    dodgeFastAttacks: true,
+    weather: "snow",
+    bossChargedMoveFrequencySeconds: 9,
+    bossChargedMoveCadence: "energy-driven",
+    sortMode: "typeMatchup",
+    includedTiers: ["5-Star Raids", "Mega Raids"],
+    includePastRaids: true,
+  };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = speciesReportAssumptionsToScenario(nonDefault);
+    const url = buildSpeciesReportScenarioUrl("http://example.test/", scenario);
+    const decoded = parseSpeciesReportScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    const roundTripped = speciesReportScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = {
+      speciesId: "kartana",
+      level: 40,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodgeModel: { kind: "none" },
+    } as unknown as SpeciesReportScenario;
+    let result: SpeciesReportAssumptions | undefined;
+    expect(() => {
+      result = speciesReportScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual({
+      ...SPECIES_REPORT_DEFAULTS,
+      speciesId: "kartana",
+      level: 40,
+      ivAttack: 15,
+      ivDefense: 15,
+      ivStamina: 15,
+      dodge: { kind: "none" },
+    });
+  });
+});
+
+describe("IvBreakpointsScenario round-trip", () => {
+  const nonDefault: IvBreakpointsAssumptions = {
+    speciesId: "rayquaza",
+    fastMoveId: "dragon-tail",
+    chargedMoveId: "outrage",
+    ivA: { attack: 0, defense: 1, stamina: 2 },
+    ivB: { attack: 15, defense: 14, stamina: 13 },
+    targetId: "kyogre-primal",
+    bossFastMoveId: "waterfall",
+    dodge: { kind: "perfect" },
+    weather: "cloudy",
+    isShadow: true,
+  };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = ivAssumptionsToScenario(nonDefault);
+    const url = buildIvBreakpointsScenarioUrl("http://example.test/", scenario);
+    const decoded = parseIvBreakpointsScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    const roundTripped = ivScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = { speciesId: "delphox", targetId: "steelix-mega" } as unknown as IvBreakpointsScenario;
+    let result: IvBreakpointsAssumptions | undefined;
+    expect(() => {
+      result = ivScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual({ ...IV_DEFAULTS, speciesId: "delphox", targetId: "steelix-mega" });
+  });
+});
+
+describe("AttackDefenseBreakpointsScenario round-trip", () => {
+  const nonDefault: AttackDefenseBreakpointsAssumptions = {
+    speciesId: "rayquaza",
+    fastMoveId: "dragon-tail",
+    chargedMoveId: "outrage",
+    targetId: "kyogre-primal",
+    bossFastMoveId: "waterfall",
+    bossChargedMoveId: "origin-pulse",
+    weather: "fog",
+    mode: "defense",
+    isShadow: true,
+  };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = adbAssumptionsToScenario(nonDefault);
+    const url = buildAttackDefenseBreakpointsScenarioUrl("http://example.test/", scenario);
+    const decoded = parseAttackDefenseBreakpointsScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    const roundTripped = adbScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = { speciesId: "delphox", targetId: "steelix-mega" } as unknown as AttackDefenseBreakpointsScenario;
+    let result: AttackDefenseBreakpointsAssumptions | undefined;
+    expect(() => {
+      result = adbScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual({ ...ADB_DEFAULTS, speciesId: "delphox", targetId: "steelix-mega" });
+  });
+});
+
+describe("PowerUpOptimizerScenario round-trip", () => {
+  const nonDefault: PowerUpOptimizerAssumptions = {
+    slots: [
+      {
+        speciesId: "rayquaza",
+        fastMoveId: "dragon-tail",
+        chargedMoveId: "outrage",
+        isMega: false,
+        isShadow: true,
+        isPurified: false,
+        isLucky: true,
+        level: 27.5,
+        ivAttack: 1,
+        ivDefense: 2,
+        ivStamina: 3,
+        candyOnHand: 40,
+        xlCandyOnHand: 5,
+      },
+      {
+        speciesId: "latios-mega",
+        fastMoveId: null,
+        chargedMoveId: null,
+        isMega: true,
+        isShadow: false,
+        isPurified: false,
+        isLucky: false,
+        level: 30,
+        ivAttack: 15,
+        ivDefense: 15,
+        ivStamina: 15,
+        candyOnHand: 0,
+        xlCandyOnHand: 0,
+      },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+    ],
+    stardustOnHand: 12345,
+    targetId: "kyogre-primal",
+    bossFastMoveId: "waterfall",
+    bossChargedMoveId: "origin-pulse",
+    dodge: { kind: "perfect" },
+    dodgeFastAttacks: true,
+    holdChargedMoveUntilSafe: true,
+    weather: "partly_cloudy",
+    bossChargedMoveFrequencySeconds: 11,
+    bossChargedMoveCadence: "energy-driven",
+    bossStartsPrimed: true,
+    bossStartingEnergyFraction: 0.9,
+    raidTimerSeconds: 180,
+    swapCostSeconds: 2,
+    reviveCostSeconds: 14,
+    rankBy: "candy",
+  };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = puAssumptionsToScenario(nonDefault);
+    const url = buildPowerUpOptimizerScenarioUrl("http://example.test/", scenario);
+    const decoded = parsePowerUpOptimizerScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    const roundTripped = puScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = {
+      slots: [],
+      target: "tyranitar-mega",
+      dodgeModel: { kind: "none" },
+    } as unknown as PowerUpOptimizerScenario;
+    let result: PowerUpOptimizerAssumptions | undefined;
+    expect(() => {
+      result = puScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual({
+      ...PU_DEFAULTS,
+      slots: PU_DEFAULTS.slots.map(() => ({
+        speciesId: null,
+        fastMoveId: null,
+        chargedMoveId: null,
+        isMega: false,
+        isShadow: false,
+        isPurified: false,
+        isLucky: false,
+        level: 20,
+        ivAttack: 15,
+        ivDefense: 15,
+        ivStamina: 15,
+        candyOnHand: 0,
+        xlCandyOnHand: 0,
+      })),
+      targetId: "tyranitar-mega",
+      dodge: { kind: "none" },
+    });
+  });
+});

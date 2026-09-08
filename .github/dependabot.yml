@@ -1,0 +1,23 @@
+# Keeps the Actions runners and npm devDependencies on supported versions via PRs, so the
+# next "deprecated Node runtime" notice (see commit 5dba8c1) arrives as a reviewable diff
+# instead of a surprise. Grouped weekly so it never floods the PR list.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+    ignore:
+      # Major bumps of the build/test toolchain are a deliberate, hand-run migration.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

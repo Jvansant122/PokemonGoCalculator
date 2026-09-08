@@ -153,7 +153,12 @@ export function parseBulbapediaRaidRows(pages: Record<string, string>): ParseBul
     for (const line of lines) {
       const headMatch = line.match(HEAD_RE);
       if (headMatch) {
-        const token0 = headMatch[1].split("|")[0].trim();
+        // headMatch[1] is HEAD_RE's sole capture group `([^}]*)` — mandatory
+        // (not inside an optional quantifier), so always present whenever
+        // headMatch itself is truthy. String.prototype.split always returns
+        // an array of at least one element, even for "" or no delimiter
+        // found, so index 0 is always present too.
+        const token0 = headMatch[1]!.split("|")[0]!.trim();
         if (/^(mega|primal)$/i.test(token0)) {
           bucket = "mega";
           normalTier = null;
@@ -169,7 +174,9 @@ export function parseBulbapediaRaidRows(pages: Record<string, string>): ParseBul
       }
       const rowMatch = line.match(ROW_RE);
       if (rowMatch && bucket) {
-        const { positional, named } = parseTemplateArgs(rowMatch[1]);
+        // rowMatch[1] is ROW_RE's sole mandatory capture group `([^}]*)` —
+        // always present whenever rowMatch itself is truthy.
+        const { positional, named } = parseTemplateArgs(rowMatch[1]!);
         const name = positional[1];
         if (!name) continue;
         let form = named.form && named.form.length > 0 ? named.form : undefined;
@@ -220,7 +227,9 @@ export function parseBulbapediaShadowRaidPage(wikitext: string): BulbapediaShado
   for (const line of stripComments(wikitext).split("\n")) {
     const rowMatch = line.match(ROW_RE);
     if (!rowMatch) continue;
-    const { positional } = parseTemplateArgs(rowMatch[1]);
+    // rowMatch[1] is ROW_RE's sole mandatory capture group `([^}]*)` —
+    // always present whenever rowMatch itself is truthy.
+    const { positional } = parseTemplateArgs(rowMatch[1]!);
     const name = positional[1];
     if (name) rows.push({ name: normalizeApostrophe(name) });
   }
@@ -277,13 +286,16 @@ export function buildBaseNameIndex(species: Pick<SpeciesDefinition, "id" | "name
   for (const s of species) {
     const qualified = normalizeApostrophe(s.name).toLowerCase();
     byQualifiedName.set(qualified, s.id);
-    const base = normalizeApostrophe(s.name).split("(")[0].trim().toLowerCase();
+    // String.prototype.split always returns an array of at least one
+    // element, even for a string with no "(" present, so index 0 is always defined.
+    const base = normalizeApostrophe(s.name).split("(")[0]!.trim().toLowerCase();
     if (!baseNameCandidates.has(base)) baseNameCandidates.set(base, []);
     baseNameCandidates.get(base)!.push(s.id);
   }
   const byUniqueBaseName = new Map<string, string>();
   for (const [base, ids] of baseNameCandidates) {
-    if (ids.length === 1) byUniqueBaseName.set(base, ids[0]);
+    // The length check just above guarantees index 0 exists.
+    if (ids.length === 1) byUniqueBaseName.set(base, ids[0]!);
   }
   return { byQualifiedName, byUniqueBaseName };
 }
@@ -330,7 +342,9 @@ export function resolveBulbapediaRow(
     // one wrinkle: a costume-mega row (Mega Lopunny's flower-crown event) hid
     // an HTML `<br>` inside the form text, so anything after it is stripped.
     if (!row.form) return null;
-    const megaName = normalizeApostrophe(row.form).split(/<br\s*\/?>/i)[0].trim();
+    // String.prototype.split always returns an array of at least one
+    // element, even when the <br> pattern never matches, so index 0 is always defined.
+    const megaName = normalizeApostrophe(row.form).split(/<br\s*\/?>/i)[0]!.trim();
     const speciesId = index.byQualifiedName.get(megaName.toLowerCase());
     if (!speciesId) return null;
     const species = speciesById.get(speciesId);

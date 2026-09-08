@@ -329,7 +329,9 @@ export function resolvePokebattlerPokemonId(
   const megaMatch = rawId.match(/^(.+)_(MEGA_X|MEGA_Y|MEGA|PRIMAL)$/);
   if (megaMatch) {
     const [, baseEnum, suffix] = megaMatch;
-    const baseName = ctx.enumToPogoapiName.get(baseEnum);
+    // baseEnum is this regex's mandatory first capture group `(.+)` — always
+    // present whenever megaMatch itself is truthy.
+    const baseName = ctx.enumToPogoapiName.get(baseEnum!);
     if (!baseName) return null;
     const megaName =
       suffix === "PRIMAL"
@@ -439,7 +441,9 @@ export function pokebattlerDisplayNameForCrossCheck(
   const megaMatch = rawId.match(/^(.+)_(MEGA_X|MEGA_Y|MEGA|PRIMAL)$/);
   if (megaMatch) {
     const [, baseEnum, suffix] = megaMatch;
-    const baseName = enumToPogoapiName.get(baseEnum);
+    // baseEnum is this regex's mandatory first capture group `(.+)` — always
+    // present whenever megaMatch itself is truthy.
+    const baseName = enumToPogoapiName.get(baseEnum!);
     if (!baseName) return null;
     return suffix === "PRIMAL"
       ? `Primal ${baseName}`

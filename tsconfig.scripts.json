@@ -1,0 +1,13 @@
+{
+  "// purpose": "Type-check-only project for scripts/ (`npm run typecheck:scripts`). The scripts run under tsx, which never type-checks, so without this a type error in sync-data.ts only surfaces at runtime, mid-sync. `.ts` import extensions are allowed because that is how tsx resolves them.",
+  "// jsx": "run-scenario.ts reaches into packages/web/src's .tsx View files for their exported (React-free) constants/functions — jsx must be set here for THIS project to type-check those files too, matching packages/web/tsconfig.json's own setting. Purely a type-checking concern (noEmit is already set); does not affect Vite's build, which uses packages/web/tsconfig.json's own jsx setting regardless.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["scripts", "data/normalized/*.json"]
+}

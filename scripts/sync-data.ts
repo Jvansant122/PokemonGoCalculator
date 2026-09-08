@@ -119,7 +119,6 @@ import { dirname, join } from "node:path";
 import {
   fromGameMaster,
   fromGameMasterMove,
-  speciesIdFor,
   DEFAULT_MEGA_BOOST_MULTIPLIER,
   isKnownRaidTier,
   RAID_TIER_TABLE,
@@ -189,7 +188,13 @@ import {
   pokemonClassToRarity,
   guessMovementIdForDisplayName,
 } from "./sync-data/gameMasterMatching.ts";
-import { megaSpeciesIdFor, parseMegaOrPrimalRaidName, tempEvoIdFor } from "./sync-data/megaPrimalParsing.ts";
+import {
+  megaSpeciesIdFor,
+  parseMegaOrPrimalRaidName,
+  tempEvoIdFor,
+  resolveMegaSpeciesIdCollision,
+  spriteLookupIdFor,
+} from "./sync-data/megaPrimalParsing.ts";
 import { getOrCreateShadowVariant } from "./sync-data/shadowVariant.ts";
 import { diffSpecies, diffRaids } from "./sync-data/diff.ts";
 import { RELEASED_MEGA_PRIMAL_ALLOWLIST } from "./sync-data/releasedMegaPrimalAllowlist.ts";
@@ -1419,8 +1424,8 @@ for (const m of rawMegaPokemonCombined) {
   );
 
   const naturalId = megaSpeciesIdFor(m.pokemon_name, m.mega_name);
-  const finalId = reservedSpeciesIds.has(naturalId) ? `${naturalId}-attacker` : naturalId;
-  if (finalId !== naturalId) {
+  const { finalId, collided } = resolveMegaSpeciesIdCollision(naturalId, reservedSpeciesIds);
+  if (collided) {
     megaIdCollisions.push({ megaName: m.mega_name, wouldBeId: naturalId, usedId: finalId });
   }
   definition.id = finalId;
@@ -1467,10 +1472,10 @@ for (const m of rawMegaPokemonCombined) {
 // existing hypothetical fixture (e.g. "kyogre-primal-attacker") — the rename
 // is purely an internal disambiguation, PokeAPI has never heard of it.
 const collisionRenames = new Map(megaIdCollisions.map((c) => [c.usedId, c.wouldBeId]));
-const spriteLookupIds = megaSpecies.map((m) => collisionRenames.get(m.id) ?? m.id);
+const spriteLookupIds = megaSpecies.map((m) => spriteLookupIdFor(m.id, collisionRenames));
 const megaSpriteUrls = await fetchMegaSpriteUrls(RAW_DIR, spriteLookupIds);
 for (const m of megaSpecies) {
-  const lookupId = collisionRenames.get(m.id) ?? m.id;
+  const lookupId = spriteLookupIdFor(m.id, collisionRenames);
   const url = megaSpriteUrls[lookupId];
   if (url) m.imageUrl = url;
 }
@@ -1655,7 +1660,6 @@ for (const baseId of shadowSeedAllBaseIds) {
 const shadowSeedDurableCount = shadowSpeciesByBaseId.size;
 
 const activeRaids: ActiveRaidEntry[] = [];
-let unmatchedRaidCount = 0;
 
 for (const raid of rawRaids) {
   let speciesId: string | null = null;
@@ -1730,8 +1734,6 @@ for (const raid of rawRaids) {
     }
   }
 
-  if (!speciesId) unmatchedRaidCount++;
-
   // Live-feed tier capture (Task 1 of the 2026-09-07 lastKnownRaidTier work):
   // whenever a species is successfully matched against a raid entry (exact
   // mega, exact normalized, Shadow-variant synthesis, OR the approximate
@@ -1789,7 +1791,6 @@ for (const s of species) {
 }
 
 const rawCpm = readJson<{ level: number; multiplier: number }[]>("cp_multiplier.json");
-const levels = new Set(rawCpm.map((c) => c.level));
 // Sanity check only (cpm.ts is the engine's own hand-verified table, not consumed here).
 const hasHalfLevels = rawCpm.some((c) => !Number.isInteger(c.level));
 if (!hasHalfLevels) {
@@ -2506,8 +2507,13 @@ for (const [speciesId, { resolution, source }] of archiveUnionResolved) {
   // existing.source is "pogoapi-previous" or "bulbapedia-archive" (an earlier
   // run's own archive entry) — accumulate-only: upgrade in place if this
   // run's union resolved a strictly higher tier, otherwise leave untouched.
-  // Never downgrades, never deletes.
-  if (RAID_TIER_TABLE[resolution.tier].hp > RAID_TIER_TABLE[existing.tier].hp) {
+  // Never downgrades, never deletes. existing.tier is a persisted plain
+  // string (RaidHistoryEntry's field is deliberately untyped, see its doc
+  // comment) rather than the narrower RaidTier this run's own resolution
+  // carries — isKnownRaidTier narrows it the same way the live-feed capture
+  // above does; every row this pipeline has ever written passes it in
+  // practice, so this is not expected to ever short-circuit the upgrade.
+  if (isKnownRaidTier(existing.tier) && RAID_TIER_TABLE[resolution.tier].hp > RAID_TIER_TABLE[existing.tier].hp) {
     raidHistoryArchiveUpgradedCount++;
     raidHistoryArchiveUpgraded.push(`${speciesId} ${existing.tier} -> ${resolution.tier}`);
     raidHistoryById.set(speciesId, {
@@ -2675,7 +2681,9 @@ for (const [speciesId, resolution] of pokebattlerLegacyResolvedBySpeciesId) {
     raidHistoryPokebattlerLegacySkippedEraHp.push(`${speciesId} (kept ${existing.source} "${existing.tier}", eraHp ${existing.eraHp})`);
     continue;
   }
-  if (RAID_TIER_TABLE[resolution.tier].hp > RAID_TIER_TABLE[existing.tier].hp) {
+  // existing.tier is RaidHistoryEntry's persisted plain string, narrowed via
+  // isKnownRaidTier the same way as the archive-upgrade branch above.
+  if (isKnownRaidTier(existing.tier) && RAID_TIER_TABLE[resolution.tier].hp > RAID_TIER_TABLE[existing.tier].hp) {
     raidHistoryPokebattlerLegacyUpgradedCount++;
     raidHistoryPokebattlerLegacyUpgraded.push(`${speciesId} ${existing.tier} -> ${resolution.tier}`);
     raidHistoryById.set(speciesId, {

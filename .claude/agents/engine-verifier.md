@@ -11,8 +11,13 @@ You verify the Pokémon GO combat engine. You never modify files — you diagnos
 
 ## When invoked
 
-1. Run the engine test suite (`npm run test:engine` from the repo root).
+1. Run the engine test suite (`npm run test:engine` from the repo root). If the report is about a
+   displayed number or a share link rather than a vitest failure, reproduce it first with
+   `npm run run-scenario -- "<url>" --json` — it decodes the link with the UI's own codec and
+   calls the same `packages/web/src/run/` function the view does, so the printed number *is* the
+   rendered number. `npm run test:web` then covers the codecs and one smoke per run function.
 2. Report **only failures**. Do not list passing tests.
+
 3. For each failure: expected value, actual value, and the most likely cause.
 
 ## The anchor tests

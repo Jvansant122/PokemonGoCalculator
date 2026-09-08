@@ -1,0 +1,83 @@
+import { test, expect, type ConsoleMessage, type Page } from "@playwright/test";
+import { computeExpected } from "./helpers/runViaTsx.js";
+
+/**
+ * One browser smoke pass per tab: load `?view=<tab>`, assert nothing threw
+ * (console error or uncaught page error), assert the tab's headline result
+ * region actually rendered, and assert none of the "silently broken
+ * calculation" tells (NaN/undefined/Infinity as literal rendered text) made
+ * it onto the page. Selectors are heading text, not test ids — this project
+ * has none, and every view's headline is a stable, English `<h2>` (see
+ * ComparatorView.tsx et al.).
+ */
+const TABS: { view: string; headline: RegExp; timeout?: number }[] = [
+  { view: "comparator", headline: /Fight results/ },
+  { view: "team-raid", headline: /^Raid result$/ },
+  // The sweep is debounced (300ms) and, even scoped to only currently-active
+  // raids by default, is ~200 sims per boss over ~12 bosses — generous
+  // timeout, no fixed sleep.
+  { view: "species-report", headline: /Ranked against/, timeout: 20_000 },
+  { view: "iv-breakpoints", headline: /Impact across every raid target this tool can model/ },
+  { view: "attack-defense-breakpoints", headline: /own damage output vs/ },
+  { view: "power-up-optimizer", headline: /Baseline — roster as-is/, timeout: 20_000 },
+];
+
+function attachErrorListeners(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  page.on("console", (msg: ConsoleMessage) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+  });
+  page.on("pageerror", (err) => pageErrors.push(err.message));
+  return { consoleErrors, pageErrors };
+}
+
+for (const tab of TABS) {
+  test(`${tab.view}: loads with no console/page errors, a rendered headline, and no NaN/undefined/Infinity`, async ({ page }) => {
+    const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+    await page.goto(`/?view=${tab.view}`);
+
+    await expect(page.getByRole("heading", { name: tab.headline })).toBeVisible({ timeout: tab.timeout ?? 5_000 });
+
+    const bodyText = await page.locator("body").innerText();
+    expect(bodyText, "rendered page text").not.toMatch(/\bNaN\b/);
+    expect(bodyText, "rendered page text").not.toMatch(/\bundefined\b/);
+    expect(bodyText, "rendered page text").not.toMatch(/\bInfinity\b/);
+
+    expect(consoleErrors, "console.error calls").toEqual([]);
+    expect(pageErrors, "uncaught page errors").toEqual([]);
+  });
+}
+
+// For Comparator and Team Raid, cross-check one displayed number against the
+// exact same pure run*Scenario function the view itself calls, run against
+// the same DEFAULT_ASSUMPTIONS a fresh page load uses — the point is
+// asserting UI === engine, not just "a number appeared somewhere".
+test("comparator: displayed mean survival matches runComparatorScenario", async ({ page }) => {
+  const expected = computeExpected("comparator") as { candidateName: string; meanSurvivalText: string };
+
+  await page.goto("/?view=comparator");
+  await expect(page.getByRole("heading", { name: /Fight results/ })).toBeVisible();
+
+  const firstCard = page.locator(".result-card").first();
+  await expect(firstCard.locator("h3")).toContainText(expected.candidateName);
+  const meanSurvivalDd = firstCard.locator("dt", { hasText: "Mean survival" }).locator("xpath=following-sibling::dd[1]");
+  await expect(meanSurvivalDd).toHaveText(expected.meanSurvivalText);
+});
+
+test("team-raid: displayed outcome/wipe count matches runTeamRaidScenario", async ({ page }) => {
+  const expected = computeExpected("team-raid") as { outcomeText: string; wipeCount: number };
+
+  await page.goto("/?view=team-raid");
+  const heading = page.getByRole("heading", { name: "Raid result" });
+  await expect(heading).toBeVisible();
+  // "Raid result" panel = the heading + its outcome <p> + the result-card dl,
+  // all siblings under the same <section>, not nested inside one another.
+  const raidResultSection = heading.locator("xpath=..");
+  await expect(raidResultSection).toContainText(expected.outcomeText);
+
+  const resultCard = raidResultSection.locator(".result-card").first();
+  const wipeCountDd = resultCard.locator("dt", { hasText: "Wipe count" }).locator("xpath=following-sibling::dd[1]");
+  await expect(wipeCountDd).toHaveText(String(expected.wipeCount));
+});

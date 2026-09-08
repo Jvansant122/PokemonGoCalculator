@@ -1,11 +1,8 @@
 import { useMemo, useState } from "react";
 import {
-  bossChargedMoveReadySeconds,
-  bossEffectiveHp,
   buildTeamScenarioUrl,
   MAX_TEAM_RAID_SLOTS,
   parseTeamScenarioFromUrl,
-  runTeamRaid,
   type SpeciesDefinition,
   type TeamScenario,
 } from "@pogo-analyzer/engine";
@@ -13,9 +10,9 @@ import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlot
 import type { BossChargedMoveCadence } from "./bossCadence.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
-import { applyShadowToggle } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
-import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { runTeamRaidScenario } from "./run/runTeamRaid.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates a
 // real result immediately, not an empty form — mirrors the comparator's own
@@ -27,7 +24,7 @@ import { candidatePickerOptions, raidTierForSpeciesId, speciesRegistry, targetPi
 // TeamAssumptionPanel's normalization for how a bad decoded link is handled).
 const DEFAULT_TARGET_ID = "tyranitar-mega";
 
-const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
+export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   slots: [
     { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, isShadow: false },
     { speciesId: "garchomp", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
@@ -75,7 +72,7 @@ interface TeamScenarioSlotWithShadow {
   isMega: boolean;
   isShadow: boolean;
 }
-interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
+export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
   slots: TeamScenarioSlotWithShadow[];
   /**
    * Same "extend rather than edit packages/engine" reasoning as isShadow
@@ -87,7 +84,7 @@ interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
   bossChargedMoveCadence?: BossChargedMoveCadence;
 }
 
-function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
+export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
   return {
     slots: a.slots.map((s) => ({
       speciesId: s.speciesId,
@@ -115,7 +112,7 @@ function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
   };
 }
 
-function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssumptions {
+export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssumptions {
   const slots: TeamSlotAssumption[] = s.slots.map((slot) => ({
     speciesId: slot.speciesId ?? null,
     fastMoveId: slot.fastMoveId ?? null,
@@ -175,7 +172,7 @@ function resolveSpecies(id: string | null): SpeciesDefinition | null {
  * into a slot that was previously the flagged mega) needs the same
  * correction.
  */
-function normalizeTeamAssumptions(a: TeamAssumptions): TeamAssumptions {
+export function normalizeTeamAssumptions(a: TeamAssumptions): TeamAssumptions {
   let megaClaimed = false;
   const slots = a.slots.map((s) => {
     const hasBoost = !!resolveSpecies(s.speciesId)?.boost;
@@ -231,106 +228,18 @@ export function TeamRaidView() {
   const targetOptions = useMemo(() => targetPickerOptions(), []);
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
 
-  const ivs = useMemo(
-    () => ({ attack: assumptions.ivAttack, defense: assumptions.ivDefense, stamina: assumptions.ivStamina }),
-    [assumptions.ivAttack, assumptions.ivDefense, assumptions.ivStamina],
-  );
-
-  const slotSpecies = useMemo(() => assumptions.slots.map((s) => resolveSpecies(s.speciesId)), [assumptions.slots]);
-  const bossSpecies = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
-
-  // Which real raid tier the selected target counts as, if it's currently a
-  // live active-raid entry — same derivation/precedent as ComparatorView's
-  // bossRaidTier (see registry.ts's raidTierForSpeciesId doc comment for why
-  // this isn't its own Scenario/TeamScenario field).
-  const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
-
-  const selectedBossChargedMove = useMemo(() => {
-    if (!bossSpecies) return undefined;
-    return bossSpecies.chargedMoves.find((m) => m.id === assumptions.bossChargedMoveId) ?? bossSpecies.chargedMoves[0];
-  }, [bossSpecies, assumptions.bossChargedMoveId]);
-
-  const bossStartingEnergy = useMemo(() => {
-    if (!assumptions.bossStartsPrimed || !bossSpecies) return 0;
-    const cost = selectedBossChargedMove?.energyCost ?? 0;
-    return assumptions.bossStartingEnergyFraction * cost;
-  }, [assumptions.bossStartsPrimed, assumptions.bossStartingEnergyFraction, bossSpecies, selectedBossChargedMove]);
-
-  const bossReadySeconds = useMemo(() => {
-    if (!bossSpecies) return null;
-    const fastMove = bossSpecies.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? bossSpecies.fastMoves[0];
-    if (!fastMove || !selectedBossChargedMove) return null;
-    return bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, bossStartingEnergy);
-  }, [bossSpecies, assumptions.bossFastMoveId, selectedBossChargedMove, bossStartingEnergy]);
-
-  const bossHp = useMemo(() => (bossSpecies ? bossEffectiveHp(bossSpecies, bossRaidTier) : null), [bossSpecies, bossRaidTier]);
-
-  // There is no user-selectable "combat phase" here either — same standing
-  // decision as ComparatorView. Boss HP depletion and the raid timer are read
-  // entirely as post-processing over runTeamRaid's own per-slot simulation
-  // output (see teamRaid.ts's top doc comment); nothing here reimplements
-  // combat math.
-  const result = useMemo(() => {
-    if (!bossSpecies) return { data: null, error: null as string | null };
-    try {
-      const data = runTeamRaid({
-        // Each slot's species stays RAW everywhere else in this component
-        // (slotSpecies above, used for the panel's movepool/badge/boost
-        // checks) — the Shadow toggle is applied ONLY here, at the boundary
-        // into runTeamRaid, same convention as ComparatorView's
-        // shadowAdjustedCandidates (see shadowToggle.ts's file doc comment).
-        slots: assumptions.slots.map((s) => ({
-          species: applyShadowToggle(resolveSpecies(s.speciesId), s.isShadow),
-          fastMoveId: s.fastMoveId,
-          chargedMoveId: s.chargedMoveId,
-          isMega: s.isMega,
-        })),
-        boss: bossSpecies,
-        bossRaidTier,
-        bossFastMoveId: assumptions.bossFastMoveId,
-        bossChargedMoveId: assumptions.bossChargedMoveId,
-        level: assumptions.level,
-        ivs,
-        dodge: assumptions.dodge,
-        dodgeFastAttacks: assumptions.dodgeFastAttacks,
-        holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
-        bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
-        // See bossCadence.tsx — "energy-driven" makes the mean-interval field
-        // just above stop mattering entirely. AFFECTS: this field doesn't
-        // exist on TeamRaidInputs yet as of 2026-09-08, and how boss energy
-        // carries across a slot handoff/wipe-and-revive under this mode is an
-        // engine-side design question this view has no visibility into — see
-        // this feature's own AFFECTS note.
-        bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
-        bossStartingEnergy,
-        weather: assumptions.weather,
-        raidTimerSeconds: assumptions.raidTimerSeconds,
-        swapCostSeconds: assumptions.swapCostSeconds,
-        reviveCostSeconds: assumptions.reviveCostSeconds,
-      });
-      return { data, error: null as string | null };
-    } catch (err) {
-      return { data: null, error: (err as Error).message };
-    }
-  }, [
-    assumptions.slots,
-    bossSpecies,
-    bossRaidTier,
-    assumptions.bossFastMoveId,
-    assumptions.bossChargedMoveId,
-    assumptions.level,
-    ivs,
-    assumptions.dodge,
-    assumptions.dodgeFastAttacks,
-    assumptions.holdChargedMoveUntilSafe,
-    assumptions.bossChargedMoveFrequencySeconds,
-    assumptions.bossChargedMoveCadence,
-    bossStartingEnergy,
-    assumptions.weather,
-    assumptions.raidTimerSeconds,
-    assumptions.swapCostSeconds,
-    assumptions.reviveCostSeconds,
-  ]);
+  // The entire engine-facing computation (species resolution, Shadow
+  // application, boss tier/energy/readiness/HP, and the runTeamRaid
+  // simulation itself) lives in runTeamRaidScenario (run/runTeamRaid.ts) — a
+  // pure, React-free function shared with the run-scenario CLI and this
+  // tab's own vitest smoke test. Aliased back to their original names so the
+  // render code below needs no changes at all.
+  const runResult = useMemo(() => runTeamRaidScenario(assumptions, speciesRegistry), [assumptions]);
+  const slotSpecies = runResult.slotSpecies;
+  const bossSpecies = runResult.bossSpecies;
+  const bossReadySeconds = runResult.bossReadySeconds;
+  const bossHp = runResult.bossHp;
+  const result = { data: runResult.data, error: runResult.error };
 
   function handleShare() {
     // Stamps `view=team-raid` alongside the `ts` param so reloading this

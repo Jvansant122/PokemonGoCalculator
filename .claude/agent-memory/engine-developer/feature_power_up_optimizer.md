@@ -51,3 +51,28 @@ failure means the edit broke something — check for stray node processes first.
 
 Also see the standalone `RAID_TIER_TABLE`-style precedent in `raidBoss.ts` for "verify by running
 code, cite discrepancies rather than hiding them" as the house style this follows.
+
+**2026-09-08 follow-up — noise floor added.** Measured on the default roster (202 candidates): at
+3 paired seeds 78 candidates showed a negative `deltaTeamDps`, at 40 seeds only 24 (4 with a 15s
+revive cost) — most of that spread is seed-timing noise (a level change shifts WHEN the boss's
+charged-move RNG fires), not signal, because the common-random-numbers pairing this module relies
+on is weak for this specific comparison. Added `PowerUpEncounterSummary.teamDpsPerSeed`/
+`.teamDpsStdDev` (population stddev, filled in `summarizeResults`),
+`PowerUpOptimizerResult.iterations`/`.noiseFloorTeamDps` (`2 * baseline.teamDpsStdDev *
+Math.sqrt(2 / iterations)` — deliberately treats the paired runs as if unpaired, since the pairing
+doesn't actually buy much variance reduction here; conservative = larger floor = safer), and
+`PowerUpCandidate.deltaExceedsNoise` (`Math.abs(deltaTeamDps) > noiseFloorTeamDps`).
+
+**Important asymmetry, don't conflate these two:** `deltaExceedsNoise` uses `Math.abs` (it also
+flags a significant NEGATIVE delta — useful for "this measurably hurts"), but
+`bestAffordableByDelta`/`bestAffordableByStardustEfficiency` filter on the SIGNED test
+`deltaTeamDps > noiseFloorTeamDps` directly, not on `c.deltaExceedsNoise` — a candidate that
+"exceeds noise" by getting measurably worse must never be selected as a "best" pick. Getting this
+backwards (filtering "best" on the boolean field) would silently let a significant regression win.
+
+Verified every new number via a throwaway `tsx` scratch script (`packages/engine/scratch-explore.ts`,
+deleted after use) importing the REAL test fixtures (`test/fixtures/powerUpCosts.ts`) rather than
+approximated ones, per this project's re-derive discipline — in particular the "everything
+affordable is positive but below the floor -> both bestAffordable* null" test needed real search
+(boss HP/power/mean-interval/iterations tuned by trial) to find a config where that actually
+happens; it doesn't happen for arbitrary boss/level choices.

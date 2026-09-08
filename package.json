@@ -7,17 +7,39 @@
     "packages/*"
   ],
   "scripts": {
-    "test": "npm run test --workspace=packages/engine",
+    "test": "npm run test:engine && npm run test:web && npm run test:scripts",
     "test:engine": "npm run test --workspace=packages/engine",
+    "test:web": "npm run test --workspace=packages/web --if-present",
+    "test:scripts": "vitest run --config scripts/vitest.config.ts --passWithNoTests",
+    "test:e2e": "npm run test:e2e --workspace=packages/web --if-present",
+    "bench": "npm run bench --workspace=packages/engine --if-present",
+    "typecheck": "npm run typecheck:engine && npm run typecheck:web && npm run typecheck:scripts",
+    "typecheck:engine": "tsc --noEmit -p packages/engine/tsconfig.json",
+    "typecheck:web": "tsc --noEmit -p packages/web/tsconfig.json",
+    "lint": "eslint .",
     "build": "npm run build --workspaces --if-present",
+    "verify": "npm run test && npm run typecheck && npm run lint && npm run check && npm run build --workspace=packages/web",
+    "verify:full": "npm run verify && npm run test:e2e",
+    "check": "npm run check-scenario-roundtrip && npm run check-raid-history-sources && npm run check-mega-gates && npm run check-docs-drift",
     "sync-data": "tsx scripts/sync-data.ts",
     "check-mega-gaps": "tsx scripts/check-mega-gaps.ts",
     "check-mega-gates": "tsx scripts/check-mega-gates.ts",
     "check-scenario-roundtrip": "node scripts/check-scenario-roundtrip.mjs",
-    "check-raid-history-sources": "node scripts/check-raid-history-sources.mjs"
+    "check-raid-history-sources": "node scripts/check-raid-history-sources.mjs",
+    "check-docs-drift": "node scripts/check-docs-drift.mjs",
+    "diff-normalized": "node scripts/diff-normalized.mjs",
+    "run-scenario": "tsx scripts/run-scenario.ts",
+    "unused-exports": "ts-unused-exports tsconfig.unused-exports.json --ignoreFiles=packages/engine/src/index.ts --excludePathsFromReport=fixtures;vitest.config;playwright.config",
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.10.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "ts-unused-exports": "^11.0.1",
+    "tsx": "^4.19.1",
     "typescript": "^5.6.2",
-    "tsx": "^4.19.1"
+    "typescript-eslint": "^8.70.0"
   }
 }

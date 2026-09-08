@@ -4,12 +4,8 @@ import {
   RAID_TIER_TABLE,
   WEATHER_BOOSTED_TYPES,
   defaultRaidTierForSpecies,
-  runSpeciesReverseLookup,
-  type AttackerTypeProfile,
   type DodgeBehavior,
   type SpeciesDefinition,
-  type SpeciesReportBossTarget,
-  type SpeciesReportResult,
   type SpeciesReportRow,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
@@ -29,10 +25,10 @@ import {
   activeRaidBossOptions,
   candidatePickerOptions,
   pastRaidBossOptions,
-  raidTierForSpeciesId,
   speciesRegistry,
   unmatchedActiveRaids,
 } from "./registry.js";
+import { runSpeciesReportScenario, sortRows, validEraHp } from "./run/runSpeciesReport.js";
 
 // The engine's own RAID_TIER_TABLE insertion order, reused (not re-derived)
 // so the tier checkbox group below sorts identically to every other place
@@ -59,22 +55,11 @@ function tierIsIncluded(tiers: string[] | null, tier: string): boolean {
   return tiers === null || tiers.includes(tier);
 }
 
-/**
- * Guards registry.ts's raw, unvalidated `PastRaidBossOption.eraHp` against
- * the engine's actual bossMaxHpOverride contract (comparison.ts's
- * bossEffectiveHp: a non-finite or non-positive value THROWS, killing the
- * whole sweep for every boss, not just this one row) before it's ever handed
- * to runSpeciesReverseLookup. Shouldn't ever reject a real value given
- * sync-data's own "never fabricate/launder an HP" validation on write, but
- * this reads a different pipeline's JSON output, not a compile-time
- * guarantee — degrading one bad row to "no override" is far preferable to a
- * crashed report. The SAME function also decides the table's "sourced" vs
- * "tier default" HP badge below, so the value a row is simulated with and
- * the value the UI claims is sourced can never drift apart.
- */
-function validEraHp(eraHp: number | undefined): number | undefined {
-  return typeof eraHp === "number" && Number.isFinite(eraHp) && eraHp > 0 ? eraHp : undefined;
-}
+// validEraHp now lives in run/runSpeciesReport.ts, imported above — the SAME
+// function decides both what runSpeciesReportScenario hands the engine as a
+// bossMaxHpOverride AND the table's "sourced" vs "tier default" HP badge
+// below, so the value a row is simulated with and the value the UI claims is
+// sourced can never drift apart.
 
 // Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx
 // — duplicated rather than imported, matching the precedent those two already
@@ -131,7 +116,7 @@ export interface SpeciesReportAssumptions {
   includePastRaids: boolean;
 }
 
-const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
+export const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
   speciesId: DEFAULT_SPECIES_ID,
   fastMoveId: null,
   chargedMoveId: null,
@@ -149,7 +134,7 @@ const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
   includePastRaids: false,
 };
 
-function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesReportScenario {
+export function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesReportScenario {
   return {
     speciesId: a.speciesId,
     fastMoveId: a.fastMoveId,
@@ -167,7 +152,7 @@ function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesReportScenar
   };
 }
 
-function scenarioToAssumptions(s: SpeciesReportScenario): SpeciesReportAssumptions {
+export function scenarioToAssumptions(s: SpeciesReportScenario): SpeciesReportAssumptions {
   return {
     speciesId: s.speciesId,
     fastMoveId: s.fastMoveId ?? null,
@@ -216,29 +201,8 @@ function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
   return s.imageUrl ? <img src={s.imageUrl} alt="" className="species-icon" /> : null;
 }
 
-/**
- * `typeMatchupPercentile` (a 0-1 fraction) and `offensiveTypeMatchup` (a raw
- * ~0.39-2.56 type-effectiveness multiplier) are two different scales — a
- * per-row `b.typeMatchupPercentile ?? b.offensiveTypeMatchup` fallback (the
- * bug this replaced) compares whichever one happens to be defined for EACH
- * row independently, so a row with a percentile sorts against a row without
- * one on two incompatible units and produces a nonsensical order. Decide the
- * scale once for the whole array instead: percentile only when every row in
- * it has one (i.e. a corpus was supplied for this whole run), the raw
- * multiplier for every row otherwise — never a mix.
- */
-function sortRows(rows: SpeciesReportRow[], mode: SpeciesReportSortMode): SpeciesReportRow[] {
-  const copy = rows.slice();
-  if (mode === "typeMatchup") {
-    const allHavePercentile = rows.every((r) => r.typeMatchupPercentile !== undefined);
-    copy.sort((a, b) =>
-      allHavePercentile ? b.typeMatchupPercentile! - a.typeMatchupPercentile! : b.offensiveTypeMatchup - a.offensiveTypeMatchup,
-    );
-  } else {
-    copy.sort((a, b) => b.sustained.meanTotalDamage - a.sustained.meanTotalDamage);
-  }
-  return copy;
-}
+// sortRows now lives in run/runSpeciesReport.ts, imported above — display-only
+// (never changes what runSpeciesReverseLookup computes), reused as-is here.
 
 /**
  * The raid tier the simulation ACTUALLY used for this row. `row.bossTier` is
@@ -381,121 +345,27 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
   // never look silently authoritative.
   const isSweepPending = sweepInputs !== debouncedSweepInputs;
 
-  // The species the SWEEP actually runs against — resolved from the debounced
-  // snapshot, not live `assumptions`, so a species change and its immediate
-  // fastMoveId/chargedMoveId reset (see the picker's onChange below) always
-  // arrive at the simulation TOGETHER, atomically, once the debounce settles.
-  // Never mix a live species with debounced moves (or vice versa) — a
-  // half-updated pairing could reference a move id that doesn't exist on
-  // whichever species is paired with it.
-  const sweepSpecies = useMemo(() => resolveSpecies(debouncedSweepInputs.speciesId), [debouncedSweepInputs.speciesId]);
-
-  // Every registered species' own default fast/charged move TYPES — the
-  // cheap, no-simulation corpus for the type-matchup-percentile stat (see
-  // speciesReport.ts's typeMatchupCorpus doc comment). Pure arithmetic over
-  // ~1079 entries, computed once.
-  const typeMatchupCorpus = useMemo<AttackerTypeProfile[]>(
-    () =>
-      speciesRegistry
-        .all()
-        .filter((s) => s.fastMoves.length > 0 && s.chargedMoves.length > 0)
-        .map((s) => ({ fastMoveType: s.fastMoves[0]!.type, chargedMoveType: s.chargedMoves[0]!.type })),
-    [],
+  // The entire engine-facing computation (species resolution, target-list
+  // construction from the tier filter, the type-matchup corpus, and the
+  // runSpeciesReverseLookup sweep itself) lives in runSpeciesReportScenario
+  // (run/runSpeciesReport.ts) — a pure, React-free function shared with the
+  // run-scenario CLI and this tab's own vitest smoke test. Called against
+  // `debouncedSweepInputs`, never live `assumptions` — this is the actual fix
+  // for the per-keystroke freeze: the expensive call only re-runs once inputs
+  // have settled, not on every character typed. `sortMode` is a placeholder
+  // here (runSpeciesReportScenario never reads it — see SpeciesReportAssumptions'
+  // own doc comment) specifically so this useMemo's dependency stays
+  // `debouncedSweepInputs` alone; threading the LIVE `assumptions.sortMode`
+  // in here would recompute the whole sweep on every sort-toggle click, the
+  // exact regression the debounce split was built to avoid.
+  const runResult = useMemo(
+    () => runSpeciesReportScenario({ ...debouncedSweepInputs, sortMode: "damage" }, speciesRegistry),
+    [debouncedSweepInputs],
   );
-
-  // The bosses to sweep — the currently-active raid roster (always), plus
-  // past/inactive raids too when that toggle is on, each with its own real
-  // per-tier attack/defense/HP (bossRaidTier), exactly the shape
-  // speciesReport.ts's SpeciesReportBossTarget expects. Filtered by the tier
-  // checkbox group HERE, before the simulation runs below, not on the
-  // rendered rows afterward — result is a synchronous 200-run-per-boss
-  // useMemo, so an unchecked tier has to actually remove work, not just hide
-  // it. Reads the DEBOUNCED tier/past-raid settings (not live `assumptions`)
-  // since this feeds straight into the sweep below — see the debounce block
-  // above for why the checkbox group itself still renders its checked state
-  // off live `assumptions.includedTiers` regardless.
-  const targets = useMemo<SpeciesReportBossTarget[]>(() => {
-    const activeTargets: SpeciesReportBossTarget[] = bossOptions
-      .filter((b) => tierIsIncluded(debouncedSweepInputs.includedTiers, b.tier))
-      .map((b) => ({ species: speciesRegistry.get(b.id), tier: raidTierForSpeciesId(b.id) ?? undefined }));
-
-    if (!debouncedSweepInputs.includePastRaids) return activeTargets;
-
-    // `r.tier` is already the tier the engine itself would resolve for this
-    // species (registry.ts's pastRaidBossOptions runs defaultRaidTierForSpecies
-    // rather than trusting raidHistory.json's frozen string — see
-    // PastRaidBossOption.tier for why those can diverge). Passing it through
-    // explicitly rather than leaving it undefined is what makes the tier the
-    // filter matched on, the tier rendered in the row, and the tier actually
-    // simulated provably the same value — and the same one the IV Breakpoints/
-    // Attack-Defense/Comparator/Team Raid tabs use for this same boss.
-    //
-    // `bossMaxHpOverride` is completely orthogonal to that tier invariant —
-    // per speciesReport.ts's own doc comment it overrides HP only, never the
-    // attack/defense multiplier `tier` drives, so wiring it here can't
-    // entangle the two. Active-raid targets above never get one (no sourced
-    // eraHp exists for "what's live right now" — its current tier IS the
-    // real fact, same reasoning as the tier resolution above). `validEraHp`
-    // both guards the engine's throw contract AND is the single source of
-    // truth the results table below reads to decide "sourced" vs "tier
-    // default" — see that function's own doc comment.
-    const pastTargets: SpeciesReportBossTarget[] = pastRaidOptions
-      .filter((r) => tierIsIncluded(debouncedSweepInputs.includedTiers, r.tier))
-      .map((r) => ({ species: speciesRegistry.get(r.id), tier: r.tier, bossMaxHpOverride: validEraHp(r.eraHp) }));
-
-    return [...activeTargets, ...pastTargets];
-  }, [bossOptions, pastRaidOptions, debouncedSweepInputs.includedTiers, debouncedSweepInputs.includePastRaids]);
-
-  // There is no user-selectable "combat phase" here either, same standing
-  // decision as the other two tabs — each per-boss run is one continuous
-  // runSustainedComparison call (see runSpeciesReverseLookup). Every input
-  // below comes from `debouncedSweepInputs`/`sweepSpecies`/`targets` (already
-  // debounced), never live `assumptions` — this is the actual fix for the
-  // per-keystroke freeze: the expensive call only re-runs once inputs have
-  // settled, not on every character typed.
-  const result = useMemo(() => {
-    if (!sweepSpecies) return { data: null as SpeciesReportResult | null, error: null as string | null };
-    try {
-      return {
-        data: runSpeciesReverseLookup({
-          species: sweepSpecies,
-          fastMoveId: debouncedSweepInputs.fastMoveId,
-          chargedMoveId: debouncedSweepInputs.chargedMoveId,
-          level: debouncedSweepInputs.level,
-          ivs: { attack: debouncedSweepInputs.ivAttack, defense: debouncedSweepInputs.ivDefense, stamina: debouncedSweepInputs.ivStamina },
-          dodge: debouncedSweepInputs.dodge,
-          dodgeFastAttacks: debouncedSweepInputs.dodgeFastAttacks,
-          weather: debouncedSweepInputs.weather,
-          bossChargedMoveMeanIntervalSeconds: debouncedSweepInputs.bossChargedMoveFrequencySeconds,
-          // See bossCadence.tsx — "energy-driven" makes the mean-interval
-          // field above stop mattering for every boss in this sweep. AFFECTS:
-          // this field doesn't exist on SpeciesReportInputs yet as of
-          // 2026-09-08 — see this feature's own AFFECTS note.
-          bossChargedMoveCadence: debouncedSweepInputs.bossChargedMoveCadence,
-          targets,
-          typeMatchupCorpus,
-        }),
-        error: null as string | null,
-      };
-    } catch (err) {
-      return { data: null, error: (err as Error).message };
-    }
-  }, [
-    sweepSpecies,
-    debouncedSweepInputs.fastMoveId,
-    debouncedSweepInputs.chargedMoveId,
-    debouncedSweepInputs.level,
-    debouncedSweepInputs.ivAttack,
-    debouncedSweepInputs.ivDefense,
-    debouncedSweepInputs.ivStamina,
-    debouncedSweepInputs.dodge,
-    debouncedSweepInputs.dodgeFastAttacks,
-    debouncedSweepInputs.weather,
-    debouncedSweepInputs.bossChargedMoveFrequencySeconds,
-    debouncedSweepInputs.bossChargedMoveCadence,
-    targets,
-    typeMatchupCorpus,
-  ]);
+  const targets = runResult.targets;
+  const activeTargetCount = runResult.activeTargetCount;
+  const pastTargetCount = runResult.pastTargetCount;
+  const result = { data: runResult.data, error: runResult.error };
 
   const sortedRows = useMemo(
     () => (result.data ? sortRows(result.data.rows, assumptions.sortMode) : []),
@@ -512,11 +382,9 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
   const topByDamage = useMemo(() => (result.data ? sortRows(result.data.rows, "damage")[0] : undefined), [result.data]);
   const topByType = useMemo(() => (result.data ? sortRows(result.data.rows, "typeMatchup")[0] : undefined), [result.data]);
 
-  // Split for the results heading below — how many of the actually-swept
-  // targets are the currently-active roster vs. past/inactive ones, so the
-  // heading never claims "currently-active" for a mixed sweep.
-  const pastTargetCount = useMemo(() => targets.filter((t) => pastMetaById.has(t.species.id)).length, [targets, pastMetaById]);
-  const activeTargetCount = targets.length - pastTargetCount;
+  // activeTargetCount/pastTargetCount above come straight from runResult —
+  // same split (against the same `targets`), just computed once inside
+  // runSpeciesReportScenario rather than a second time here.
 
   function handleShare() {
     // Also pins `view=species-report` so reloading/sharing this link lands on

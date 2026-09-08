@@ -12,7 +12,7 @@ is not yours — read from `@pogo-analyzer/engine`, never edit `packages/engine`
 requires a capability the engine doesn't expose (a new computed value, a new `Scenario` field),
 report that back rather than reimplementing engine math in the UI layer; that's
 `engine-developer`'s call. Building/deploying the result is `site-builder`'s job, not yours —
-you're done once the feature works in dev and the production build succeeds locally.
+you're done once the feature works in dev and `npm run verify` is green.
 
 Vite + React + TypeScript, client-side rendering only, all engine calculations run in the
 browser, game data bundled at build time from `data/normalized/`. **No charting library** — every
@@ -36,6 +36,13 @@ Don't conflate the scenario types — they're deliberately separate, not one uni
 reuse the existing `.tab-switcher` scaffold rather than inventing a second routing mechanism if a
 future tab is added. `view=` is a separate param from any tab's own scenario param, so a shared
 link restores both the tab and its inputs.
+
+**Each view's computation lives in `packages/web/src/run/run<Tab>.ts`, not in the view.**
+`run<Tab>Scenario(assumptions, …)` is a pure, React-free function; the view calls it through
+`useMemo` and renders the result. `scripts/run-scenario.ts` (the CLI `skeptic` and
+`engine-verifier` use to reproduce a share link) and `run/run.smoke.test.ts` call the same
+function, so a number the CLI prints is the number the UI shows. Put new computation in the run
+module, never inline in the view, or the two drift.
 
 ## UI requirements specific to this project
 
@@ -64,8 +71,9 @@ These are not cosmetic; they are the point of the product:
   `Assumptions` type, both directions of its `assumptionsToScenario`/`scenarioToAssumptions` (with
   `?? default` on decode so an old shared link doesn't surface `undefined`), its
   `DEFAULT_ASSUMPTIONS`, and — if it should affect the actual result, not just display — its
-  engine call (`runSustainedComparison` for the comparator; each tab has its own). All four live
-  in the tab's own view component, not in `App.tsx`, which only owns tab state.
+  run module (`packages/web/src/run/run<Tab>.ts`, which makes the engine call). The first three
+  live in the tab's own view component, the fourth in its run module — never in `App.tsx`, which
+  only owns tab state.
   Use the `add-scenario-assumption` skill for this; it exists specifically because this
   bug (a setting that works live but silently reverts on a shared link) has recurred more than
   once. If the setting needs a new `Scenario` field, that's `engine-developer`'s call, not yours.
@@ -86,8 +94,19 @@ These are not cosmetic; they are the point of the product:
 
 ## Before you call a UI change done
 
+- `npm run test:web` passes — `packages/web`'s own vitest suite: all six scenario codecs at value
+  level in `scenarioRoundtrip.test.ts`, the helper modules, `rankingFlip.ts`, and one smoke per
+  `run/` function. New helper logic gets a test next to it; a new `Scenario` field gets a
+  non-default case in `scenarioRoundtrip.test.ts`.
+- `npm run lint` has no **errors** (unused vars/imports are errors). The
+  `react-hooks/static-components` and `react-hooks/set-state-in-effect` warnings — six as of
+  2026-09-08 — are yours: don't add to them, and retire one when you're in that file anyway.
 - `npm run build --workspace=packages/web` succeeds (a chunk-size warning is fine; an actual
-  build error is not).
+  build error is not). `npm run verify` runs all of the above plus the checkers — run it before
+  reporting done.
+- Playwright (`npm run test:e2e`, `packages/web/e2e/`, against the built `dist`) covers tab
+  rendering and share-link restore. Add a case when you add a tab or change a share-link surface.
+
 - The change actually works, not just compiles — if you have a browser-preview tool available,
   use it against the dev server and click through the change rather than just reading the diff;
   if you don't, at minimum serve the production build locally and confirm it loads with no

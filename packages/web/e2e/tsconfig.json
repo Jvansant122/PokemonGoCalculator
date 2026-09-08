@@ -1,0 +1,11 @@
+{
+  "// purpose": "Editor/type-check-only project for e2e/ — NOT wired into `npm run typecheck:web` (packages/web/tsconfig.json only includes src, and eslint.config.js already ignores packages/web/e2e/**), since Playwright's own runtime transform (tsx-like, via esbuild) never type-checks either. Exists so an editor opening a spec file resolves @playwright/test's types and the .js-extension imports into ../src's .ts/.tsx sources without erroring.",
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node", "@playwright/test"],
+    "noEmit": true
+  },
+  "include": [".", "../src"]
+}

@@ -42,6 +42,12 @@ Deploy is GitHub Actions building to `packages/web/dist` and uploading it as a P
 never committed built output on a branch; the workflow also `touch`es `.nojekyll` so directories
 beginning with an underscore are served. Keep it that way.
 
+The workflow's `verify` job runs `npm run verify` — all three vitest suites, type-checks, lint,
+every checker, and the production build — and then the Playwright suite, on every push and every
+pull request; the deploy job depends on it. So a red deploy is nearly always a red gate, not a
+Pages problem: read the `verify` job's log first. Locally, `npm run verify` is the same gate and
+`npm run verify:full` adds Playwright.
+
 The build's main JS chunk is already over Vite's default 500kB warning threshold (mostly
 `data/normalized/species.json`, 2.0 MB of raw JSON on its own, plus the growing engine surface)
 — a chunk-size warning on build
@@ -51,7 +57,8 @@ larger warning limit.
 
 ## Before you propose a deploy
 
-- Production build succeeds
+- `npm run verify` is green (it includes the production build, the three test suites, lint, and every checker)
+
 - The built site loads from a local static server with the production `base` path
 - A shared scenario URL restores the same result it was generated from
 - Layout holds at mobile width — this gets read on phones during raids

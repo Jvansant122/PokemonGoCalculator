@@ -82,15 +82,18 @@ export function tallyIvSpreadWins(rows: IvComparisonRow[]): { winsA: number; win
   let winsB = 0;
   for (const row of rows) {
     if (row.ivA.fastMoveDamage !== row.ivB.fastMoveDamage) {
-      row.ivA.fastMoveDamage > row.ivB.fastMoveDamage ? winsA++ : winsB++;
+      if (row.ivA.fastMoveDamage > row.ivB.fastMoveDamage) winsA++;
+      else winsB++;
     }
     if (row.ivA.chargedMoveDamage !== row.ivB.chargedMoveDamage) {
-      row.ivA.chargedMoveDamage > row.ivB.chargedMoveDamage ? winsA++ : winsB++;
+      if (row.ivA.chargedMoveDamage > row.ivB.chargedMoveDamage) winsA++;
+      else winsB++;
     }
     const ttfA = row.ivA.timeToFaintSeconds ?? Infinity;
     const ttfB = row.ivB.timeToFaintSeconds ?? Infinity;
     if (ttfA !== ttfB) {
-      ttfA > ttfB ? winsA++ : winsB++;
+      if (ttfA > ttfB) winsA++;
+      else winsB++;
     }
   }
   return { winsA, winsB };

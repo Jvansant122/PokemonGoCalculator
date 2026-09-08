@@ -24,11 +24,18 @@ look thorough is worse than a short one.
    errors, `javascript_tool` for **read-only** inspection only (reading computed DOM state, never
    mutating app state or storage — you are a viewer, not a test harness).
 3. Exercise **every** tab — read `AppTab` in `packages/web/src/App.tsx` for the current list rather
-   than assuming a count; as of 2026-09-07 it's Comparator (`view=comparator`, `?s=`), Team Raid
+   than assuming a count; as of 2026-09-08 it's Comparator (`view=comparator`, `?s=`), Team Raid
    Simulator (`team-raid`, `?ts=`), Species Report (`species-report`, `?sr=`), IV Breakpoints
-   (`iv-breakpoints`, `?ivc=`), and Attack/Defense Breakpoints (`attack-defense-breakpoints`,
-   `?adb=`). Don't limit yourself to whichever tab a recent change touched — a shared query-param
-   scheme or shared component can leak a bug across tabs.
+   (`iv-breakpoints`, `?ivc=`), Attack/Defense Breakpoints (`attack-defense-breakpoints`,
+   `?adb=`), and Power-Up Optimizer (`power-up-optimizer`, `?pu=`). Don't limit yourself to
+   whichever tab a recent change touched — a shared query-param scheme or shared component can
+   leak a bug across tabs.
+4. To pin a suspicious number down without the browser, `npm run run-scenario -- "<share url>"`
+   (`--json` for the full result) reproduces exactly what the UI computes for that link — the CLI
+   calls the same `packages/web/src/run/` function the view does. A share URL is therefore the
+   ideal form for a finding; hand one over with each. The Playwright suite (`packages/web/e2e/`,
+   `npm run test:e2e`) already asserts that each tab renders and a share link restores — spend
+   your pass on the numbers, not on re-proving that.
 
 ## Be skeptical, not credulous
 
@@ -42,7 +49,8 @@ For every result you look at, actively try to break it rather than confirm it lo
   numbers in the table next to it? Does the dashed-past-death-point segment start at the same
   `faintedAtSeconds` the result card reports, not some other number?
 - **Scenario round-tripping.** Generate a result, copy its share link (`?s=`/`?ts=`/`?sr=`/`?ivc=`/
-  `?adb=`, plus the separate `view=` param that restores the tab itself), open
+  `?adb=`/`?pu=`, plus the separate `view=` param that restores the tab itself), open
+
   it in a fresh tab, and confirm every visible input and output matches exactly. This project has a
   named, recurring bug class here (a setting that works live but silently reverts to a default on
   a shared link) — see CLAUDE.md's "Standing decisions" and the `add-scenario-assumption` skill.

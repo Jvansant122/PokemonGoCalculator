@@ -1,17 +1,64 @@
 {
   "permissions": {
+    "allow": [
+      "Bash(npm run test:engine*)",
+      "Bash(npm run test:web*)",
+      "Bash(npm run test:scripts*)",
+      "Bash(npm run test:e2e*)",
+      "Bash(npm run bench*)",
+      "Bash(npm run typecheck*)",
+      "Bash(npm run lint*)",
+      "Bash(npm run unused-exports*)",
+      "Bash(npm run verify*)",
+      "Bash(npm run build*)",
+      "Bash(npm run check-*)",
+      "Bash(npm run run-scenario*)",
+      "Bash(npm run diff-normalized*)",
+      "Bash(npm test*)",
+      "Bash(npx tsc --noEmit*)",
+      "Bash(npx vitest run*)",
+      "Bash(npx eslint*)",
+      "Bash(npx ts-unused-exports*)",
+      "Bash(node scripts/*)",
+      "Bash(npx tsx scripts/*)",
+      "Bash(node .claude/skills/watch-github-actions/scripts/gha-watch.mjs*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git show*)",
+      "Bash(git branch*)",
+      "Bash(ls*)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(wc *)",
+      "Bash(grep *)",
+      "Bash(find *)"
+    ],
     "ask": ["Bash(git push:*)"]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"/c/Users/Jack/Documents/PokemonGoCalculator/.claude/hooks/session-start.sh\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
         "hooks": [
           {
             "type": "command",
-            "command": "export PATH=\"/c/Program Files/nodejs:$PATH\"; cd \"/c/Users/Jack/Documents/PokemonGoCalculator\" && node -e 'let data=\"\";process.stdin.on(\"data\",c=>data+=c);process.stdin.on(\"end\",()=>{let input;try{input=JSON.parse(data);}catch(e){process.exit(0);}const fp=(input.tool_input&&input.tool_input.file_path)||\"\";const bs=String.fromCharCode(92);const norm=fp.split(bs).join(\"/\");if(!(norm.indexOf(\"packages/engine/src/\")!==-1&&norm.slice(-3)===\".ts\")){process.exit(0);}const cp=require(\"child_process\");try{cp.execSync(\"npm run test:engine\",{encoding:\"utf8\",stdio:\"pipe\"});process.exit(0);}catch(e){const out=(e.stdout||\"\")+(e.stderr||\"\");process.stderr.write(\"packages/engine/src edit broke npm run test:engine (edited: \"+fp+\"):\"+String.fromCharCode(10)+String.fromCharCode(10)+out+String.fromCharCode(10));process.exit(2);}});'",
-            "timeout": 60,
-            "statusMessage": "Running engine test suite after packages/engine/src edit..."
+            "command": "export PATH=\"/c/Program Files/nodejs:$PATH\"; node \"/c/Users/Jack/Documents/PokemonGoCalculator/.claude/hooks/post-edit.mjs\"",
+            "timeout": 120,
+            "statusMessage": "Running the check that owns the edited file (engine tests / web tsc / scenario round-trip)..."
           }
         ]
       }

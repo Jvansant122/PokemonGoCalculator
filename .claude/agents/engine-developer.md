@@ -215,7 +215,15 @@ number (Scenario A/B, the dodge/energy/simulate mechanics above) is a regression
 change legitimately shifts one of `scenarioB.test.ts`'s empirically-derived thresholds, say so
 explicitly and re-derive, don't silently weaken an assertion to make it pass.
 
+`test/perf.test.ts` is a coarse performance-regression guard inside the normal suite: each hot
+path must finish within a budget set at ~10x a locally measured number, with the measurement
+recorded in the file's comments. If a change legitimately makes something slower, re-measure with
+`npm run bench` (`test/perf.bench.ts`) and raise the budget explicitly in the same commit, citing
+the new number — never by deleting the assertion, never silently. A budget tripping on a change
+that should have been free is a real finding, not noise.
+
 ## Output format
+
 
     IMPLEMENTED: <what changed, which files>
     TESTS: <new/updated test files, and the full suite's pass/fail count>

@@ -132,7 +132,10 @@ function parseBulbapediaTable(wikitext: string): BulbapediaEntry[] {
     nameLinePattern.lastIndex = 0;
     while ((match = nameLinePattern.exec(row)) !== null) {
       const prefix = match[1] as "Mega" | "Primal";
-      const baseName = match[2].trim();
+      // match[2] is the regex's second capture group `([^|}]+?)`, a mandatory
+      // (non-optional) group — it is always present whenever `match` itself
+      // is non-null, so this is provably safe under noUncheckedIndexedAccess.
+      const baseName = match[2]!.trim();
       const altText = match[3]?.trim();
       // altText looks like "Charizard X" / "Mewtwo Y" for the X/Y forms this
       // project models; anything else (e.g. Tatsugiri's "Curly Form" link
@@ -146,7 +149,10 @@ function parseBulbapediaTable(wikitext: string): BulbapediaEntry[] {
     let releaseDate: string | null;
     const realDateMatch = row.match(realDatePattern);
     if (realDateMatch) {
-      releaseDate = realDateMatch[1];
+      // realDateMatch[1] is realDatePattern's mandatory `(\d{4}-\d{2}-\d{2})`
+      // capture group — always present whenever realDateMatch itself is
+      // truthy, so the `?? null` fallback is unreachable in practice.
+      releaseDate = realDateMatch[1] ?? null;
       lastDate = releaseDate;
     } else if (placeholderDatePattern.test(row)) {
       releaseDate = null;

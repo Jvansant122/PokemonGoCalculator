@@ -1,50 +1,25 @@
 import { useMemo, useState } from "react";
 import {
-  bossEffectiveStats,
-  compareIvSpreads,
-  defaultRaidTierForSpecies,
-  isWeatherBoosted,
-  resolveMove,
-  typeEffectiveness,
   type DodgeBehavior,
   type IVSpread,
-  type IvComparisonResult,
   type IvComparisonRow,
-  type RaidTier,
   type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
 import { IvBreakpointsAssumptionPanel } from "./IvBreakpointsAssumptionPanel.js";
 import { IvPerLevelTable } from "./IvPerLevelTable.js";
 import { IvSweepReport } from "./IvSweepReport.js";
-import {
-  LEVELS_35_TO_50,
-  RAID_TIER_NUMERIC,
-  TIER_4_PLUS_LABELS,
-  bucketVerdictSentence,
-  headline,
-  ivLabel,
-  tallyIvSpreadWins,
-  type IvSweepAggregate,
-  type IvSweepBucket,
-  type IvSweepTierRow,
-} from "./ivBreakpointsHelpers.js";
+import { ivLabel } from "./ivBreakpointsHelpers.js";
 import {
   buildIvBreakpointsScenarioUrl,
   parseIvBreakpointsScenarioFromUrl,
   type IvBreakpointsScenario,
 } from "./ivBreakpointsScenario.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
-import { applyShadowToggle, effectiveIsShadow } from "./shadowToggle.js";
+import { effectiveIsShadow } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
-import {
-  allSpeciesOptions,
-  candidatePickerOptions,
-  raidTierForSpeciesId,
-  speciesRegistry,
-  targetPickerOptions,
-  unmatchedActiveRaids,
-} from "./registry.js";
+import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { runIvBreakpointsScenario } from "./run/runIvBreakpoints.js";
 
 // The motivating real case this tab was built for: a real user's two owned
 // Delphox, wondering which spread is worth the candy/stardust to power up.
@@ -70,7 +45,7 @@ export interface IvBreakpointsAssumptions {
   isShadow: boolean;
 }
 
-const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
+export const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
   speciesId: DEFAULT_SPECIES_ID,
   fastMoveId: null,
   chargedMoveId: null,
@@ -83,7 +58,7 @@ const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
   isShadow: false,
 };
 
-function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpointsScenario {
+export function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpointsScenario {
   return {
     speciesId: a.speciesId,
     fastMoveId: a.fastMoveId,
@@ -98,7 +73,7 @@ function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpointsScenar
   };
 }
 
-function scenarioToAssumptions(s: IvBreakpointsScenario): IvBreakpointsAssumptions {
+export function scenarioToAssumptions(s: IvBreakpointsScenario): IvBreakpointsAssumptions {
   return {
     speciesId: s.speciesId,
     fastMoveId: s.fastMoveId ?? null,
@@ -117,7 +92,7 @@ function scenarioToAssumptions(s: IvBreakpointsScenario): IvBreakpointsAssumptio
 }
 
 /** Forces isShadow back to false whenever the currently-selected species carries a mega/primal boost — same discipline as ComparatorView's normalizeAssumptions/TeamRaidView's normalizeTeamAssumptions. */
-function normalizeAssumptions(a: IvBreakpointsAssumptions): IvBreakpointsAssumptions {
+export function normalizeAssumptions(a: IvBreakpointsAssumptions): IvBreakpointsAssumptions {
   const sp = resolveSpecies(a.speciesId);
   if (!sp?.boost || !a.isShadow) return a;
   return { ...a, isShadow: false };
@@ -175,229 +150,19 @@ export function IvBreakpointsView() {
   const speciesOptions = useMemo(() => candidatePickerOptions(), []);
   const targetOptions = useMemo(() => targetPickerOptions(), []);
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
-  const allTargetOptions = useMemo(() => allSpeciesOptions(), []);
 
-  const species = useMemo(() => resolveSpecies(assumptions.speciesId), [assumptions.speciesId]);
-  const boss = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
-  const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
-
-  // `species` above stays the RAW registry object at all times — used by the
-  // picker/movepool/STAB-check/badge logic throughout this component. The
-  // Shadow toggle is applied ONLY here, at the boundary into compareIvSpreads
-  // (both the single-target `result` and the all-active-bosses `sweepAggregate`
-  // below both use this, never the raw `species`) — see shadowToggle.ts's
-  // file doc comment for why this split avoids a self-locking checkbox bug.
-  const attackerForCalc = useMemo(() => applyShadowToggle(species, assumptions.isShadow), [species, assumptions.isShadow]);
-
-  // The attacker's resolved fast/charged move objects — shared by the
-  // single-target `result` computation below AND the all-active-bosses sweep
-  // (`bossSweep`), so both stay derived from the exact same move resolution
-  // rather than two copies that could drift apart.
-  const resolvedAttackerMoves = useMemo(() => {
-    if (!species) return null;
-    const fastMove = resolveMove(species.fastMoves, assumptions.fastMoveId);
-    const chargedMove = resolveMove(species.chargedMoves, assumptions.chargedMoveId);
-    if (!fastMove || !chargedMove) return null;
-    return { fastMove, chargedMove };
-  }, [species, assumptions.fastMoveId, assumptions.chargedMoveId]);
-
-  // There is no user-selectable "combat phase" here either, same standing
-  // decision as every other tab — though this simplified per-level model has
-  // no phased combat at all (see the caveats section below): it treats the
-  // target's incoming damage as its fast move landing repeatedly, forever,
-  // with no charged-move combat modeled on either side of the matchup.
-  const result = useMemo(() => {
-    if (!species || !boss || !attackerForCalc) return { data: null as IvComparisonResult | null, error: null as string | null };
-    try {
-      if (!resolvedAttackerMoves) throw new Error(`${species.name} needs at least one fast move and one charged move.`);
-      const { fastMove, chargedMove } = resolvedAttackerMoves;
-      const bossFastMove = resolveMove(boss.fastMoves, assumptions.bossFastMoveId);
-      if (!bossFastMove) throw new Error(`${boss.name} has no fast move defined.`);
-
-      const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, bossRaidTier);
-
-      const fastMoveDamageModifiers = {
-        stab: species.types.includes(fastMove.type),
-        typeEffectiveness: typeEffectiveness(fastMove.type, boss.types),
-        weatherBoosted: isWeatherBoosted(fastMove.type, assumptions.weather),
-      };
-      const chargedMoveDamageModifiers = {
-        stab: species.types.includes(chargedMove.type),
-        typeEffectiveness: typeEffectiveness(chargedMove.type, boss.types),
-        weatherBoosted: isWeatherBoosted(chargedMove.type, assumptions.weather),
-      };
-      const incomingDamageModifiers = {
-        stab: boss.types.includes(bossFastMove.type),
-        typeEffectiveness: typeEffectiveness(bossFastMove.type, species.types),
-        weatherBoosted: isWeatherBoosted(bossFastMove.type, assumptions.weather),
-      };
-
-      return {
-        data: compareIvSpreads({
-          species: attackerForCalc,
-          fastMove,
-          chargedMove,
-          ivA: assumptions.ivA,
-          ivB: assumptions.ivB,
-          bossDefenseStat,
-          fastMoveDamageModifiers,
-          chargedMoveDamageModifiers,
-          bossAttackStat,
-          bossFastMovePower: bossFastMove.power,
-          bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
-          incomingDamageModifiers,
-          dodge: assumptions.dodge,
-          levels: LEVELS_35_TO_50,
-        }),
-        error: null as string | null,
-      };
-    } catch (err) {
-      return { data: null, error: (err as Error).message };
-    }
-  }, [
-    species,
-    attackerForCalc,
-    boss,
-    bossRaidTier,
-    resolvedAttackerMoves,
-    assumptions.bossFastMoveId,
-    assumptions.ivA,
-    assumptions.ivB,
-    assumptions.dodge,
-    assumptions.weather,
-  ]);
-
-  // The full-roster sweep: loops the exact same inline damage-modifier
-  // construction the single-target `result` computation above uses
-  // (STAB/type-effectiveness/weather via the same exported primitives), once
-  // per EVERY registered species (not just the currently-active raid roster —
-  // see IvSweepAggregate's doc comment), each with its OWN first fast move and
-  // per-tier effective attack/defense (falling back to the engine's own
-  // per-rarity `defaultRaidTierForSpecies` for anything not currently live —
-  // STANDARD species default to "3-Star Raids", LEGENDARY to "5-Star Raids",
-  // mega/primal-boosted to "Mega Raids", everything else to the old blanket
-  // "5-Star Raids" last resort. This tier is resolved explicitly here (unlike
-  // the single-target `result` above, which passes `?? undefined` and lets
-  // bossEffectiveStats apply the same default internally) because bucketing
-  // below needs the ACTUAL resolved tier as a map key, not `undefined`.
-  // exists for this sweep — that would be a UI control per species, which
-  // this report deliberately doesn't need. Answers "which spread wins more
-  // often across every raid target this tool can model" as a single tallied
-  // verdict, not a per-target table — see tallyIvSpreadWins's doc comment for
-  // exactly how one target's "winner" is decided.
-  const sweepAggregate = useMemo<IvSweepAggregate>(() => {
-    const empty: IvSweepAggregate = {
-      totalComputed: 0,
-      errorCount: 0,
-      countA: 0,
-      countB: 0,
-      ties: 0,
-      byTier: [],
-      tier4Plus: { total: 0, countA: 0, countB: 0, ties: 0 },
-    };
-    if (!species || !attackerForCalc || !resolvedAttackerMoves) return empty;
-    const { fastMove, chargedMove } = resolvedAttackerMoves;
-    let totalComputed = 0;
-    let errorCount = 0;
-    let countA = 0;
-    let countB = 0;
-    let ties = 0;
-    // Per-tier buckets, keyed by the SAME resolved-tier string used to build
-    // each target's boss stats below — populated lazily so only tiers that
-    // actually have at least one computed target ever appear.
-    const tierBuckets = new Map<RaidTier, IvSweepBucket>();
-    const tier4Plus: IvSweepBucket = { total: 0, countA: 0, countB: 0, ties: 0 };
-    for (const opt of allTargetOptions) {
-      const bossSpecies = resolveSpecies(opt.id);
-      if (!bossSpecies) {
-        errorCount++;
-        continue;
-      }
-      try {
-        // Live tier if this target is currently an active raid boss; otherwise
-        // the engine's own per-rarity default for this specific species (see
-        // the comment above this loop) — passing it explicitly here changes
-        // nothing about the computed stats vs. bossEffectiveStats' own
-        // internal fallback, since that's the same function.
-        const tier = raidTierForSpeciesId(opt.id) ?? defaultRaidTierForSpecies(bossSpecies);
-        const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(bossSpecies, tier);
-        const bossFastMove = resolveMove(bossSpecies.fastMoves, null);
-        if (!bossFastMove) throw new Error(`${bossSpecies.name} has no fast move defined.`);
-
-        const fastMoveDamageModifiers = {
-          stab: species.types.includes(fastMove.type),
-          typeEffectiveness: typeEffectiveness(fastMove.type, bossSpecies.types),
-          weatherBoosted: isWeatherBoosted(fastMove.type, assumptions.weather),
-        };
-        const chargedMoveDamageModifiers = {
-          stab: species.types.includes(chargedMove.type),
-          typeEffectiveness: typeEffectiveness(chargedMove.type, bossSpecies.types),
-          weatherBoosted: isWeatherBoosted(chargedMove.type, assumptions.weather),
-        };
-        const incomingDamageModifiers = {
-          stab: bossSpecies.types.includes(bossFastMove.type),
-          typeEffectiveness: typeEffectiveness(bossFastMove.type, species.types),
-          weatherBoosted: isWeatherBoosted(bossFastMove.type, assumptions.weather),
-        };
-
-        const cmp = compareIvSpreads({
-          species: attackerForCalc,
-          fastMove,
-          chargedMove,
-          ivA: assumptions.ivA,
-          ivB: assumptions.ivB,
-          bossDefenseStat,
-          fastMoveDamageModifiers,
-          chargedMoveDamageModifiers,
-          bossAttackStat,
-          bossFastMovePower: bossFastMove.power,
-          bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
-          incomingDamageModifiers,
-          dodge: assumptions.dodge,
-          levels: LEVELS_35_TO_50,
-        });
-
-        const { winsA, winsB } = tallyIvSpreadWins(cmp.rows);
-        totalComputed++;
-        let bucket = tierBuckets.get(tier);
-        if (!bucket) {
-          bucket = { total: 0, countA: 0, countB: 0, ties: 0 };
-          tierBuckets.set(tier, bucket);
-        }
-        bucket.total++;
-        const inTier4Plus = TIER_4_PLUS_LABELS.has(tier);
-        if (inTier4Plus) tier4Plus.total++;
-        if (winsA > winsB) {
-          countA++;
-          bucket.countA++;
-          if (inTier4Plus) tier4Plus.countA++;
-        } else if (winsB > winsA) {
-          countB++;
-          bucket.countB++;
-          if (inTier4Plus) tier4Plus.countB++;
-        } else {
-          ties++;
-          bucket.ties++;
-          if (inTier4Plus) tier4Plus.ties++;
-        }
-      } catch {
-        errorCount++;
-      }
-    }
-    const byTier: IvSweepTierRow[] = [...tierBuckets.entries()]
-      .map(([tier, bucket]) => ({ tier, tierNumeric: RAID_TIER_NUMERIC[tier], ...bucket }))
-      .sort((a, b) => a.tierNumeric - b.tierNumeric);
-    return { totalComputed, errorCount, countA, countB, ties, byTier, tier4Plus };
-  }, [
-    species,
-    attackerForCalc,
-    resolvedAttackerMoves,
-    allTargetOptions,
-    assumptions.ivA,
-    assumptions.ivB,
-    assumptions.dodge,
-    assumptions.weather,
-  ]);
+  // The entire engine-facing computation (species resolution, Shadow
+  // application, the single-target per-level comparison, AND the
+  // full-roster sweep aggregate) lives in runIvBreakpointsScenario
+  // (run/runIvBreakpoints.ts) — a pure, React-free function shared with the
+  // run-scenario CLI and this tab's own vitest smoke test. Aliased back to
+  // their original names so the render code below needs no changes at all.
+  const runResult = useMemo(() => runIvBreakpointsScenario(assumptions, speciesRegistry), [assumptions]);
+  const species = runResult.species;
+  const boss = runResult.boss;
+  const resolvedAttackerMoves = runResult.resolvedAttackerMoves;
+  const result = { data: runResult.data, error: runResult.error };
+  const sweepAggregate = runResult.sweepAggregate;
 
   function handleShare() {
     const url = new URL(buildIvBreakpointsScenarioUrl(getBaseUrl(), assumptionsToScenario(assumptions)));

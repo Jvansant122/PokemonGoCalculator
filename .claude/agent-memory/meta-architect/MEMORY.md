@@ -1,6 +1,8 @@
 # Meta-Architect Memory Index
 
-- [Project config shape](project-config-shape.md) — current snapshot 2026-09-07: 9 agents, 2 skills, 1 hook, description sum ~1,025 tokens; deliberate settings + the recurring tab-count/param-list drift.
+- [Project config shape](project-config-shape.md) — snapshot 2026-09-08: 9 agents, 7 skills, 2 hooks, docs-drift checker; deliberate settings + what the checker does NOT cover.
+- [Skills and gates pass](skills-and-gates-2026-09-08.md) — 2026-09-08: 4 skills added, verify-and-ship → `npm run verify`, agents pointed at new suites/CLI; CRLF + heredoc lessons.
+
 - [pogo-researcher addition](pogo-researcher-addition.md) — 2026-09-05: 7th agent, routing clean, both findings (unscoped Write, Teambuilding-Analyzer decision) fixed same day.
 - [skeptic addition](skeptic-addition.md) — 2026-09-06: 8th agent, browser-driving adversarial checker of the live app; routing distinguished from engine-verifier/site-builder/pogo-researcher; description trimmed 760→537 chars.
 - [code-simplifier addition](code-simplifier-addition.md) — 2026-09-06: 9th agent, read-only dead-code/duplication auditor for packages/engine+web/scripts, out of .claude/ scope; must cross-check CLAUDE.md Standing Decisions before flagging; no ts-prune/knip installed so relies on Grep.

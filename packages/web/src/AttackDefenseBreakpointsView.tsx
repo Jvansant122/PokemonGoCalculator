@@ -1,13 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   WEATHER_BOOSTED_TYPES,
-  attackDamageGrid,
-  bossEffectiveStats,
-  defenseDamageGrid,
-  isWeatherBoosted,
-  resolveMove,
-  typeEffectiveness,
-  type DamageGridCell,
   type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
@@ -15,7 +8,7 @@ import { BreakpointSheet } from "./BreakpointSheet.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
-import { effectiveIsShadow, shadowToggleUiState, shadowToggledBaseStats } from "./shadowToggle.js";
+import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { IVS_0_TO_15, LEVELS_25_TO_50 } from "./attackDefenseBreakpointsHelpers.js";
 import {
   buildAttackDefenseBreakpointsScenarioUrl,
@@ -24,13 +17,8 @@ import {
   type AttackDefenseBreakpointsScenario,
 } from "./attackDefenseBreakpointsScenario.js";
 import { getBaseUrl } from "./urlUtils.js";
-import {
-  candidatePickerOptions,
-  raidTierForSpeciesId,
-  speciesRegistry,
-  targetPickerOptions,
-  unmatchedActiveRaids,
-} from "./registry.js";
+import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { runAttackDefenseBreakpointsScenario } from "./run/runAttackDefenseBreakpoints.js";
 
 // Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx/
 // SpeciesReportView.tsx/IvBreakpointsAssumptionPanel.tsx — duplicated rather
@@ -75,7 +63,7 @@ export interface AttackDefenseBreakpointsAssumptions {
   isShadow: boolean;
 }
 
-const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
+export const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
   speciesId: DEFAULT_SPECIES_ID,
   fastMoveId: null,
   chargedMoveId: null,
@@ -87,7 +75,7 @@ const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
   isShadow: false,
 };
 
-function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsScenario {
+export function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsScenario {
   return {
     speciesId: a.speciesId,
     fastMoveId: a.fastMoveId,
@@ -101,7 +89,7 @@ function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): AttackDe
   };
 }
 
-function scenarioToAssumptions(s: AttackDefenseBreakpointsScenario): AttackDefenseBreakpointsAssumptions {
+export function scenarioToAssumptions(s: AttackDefenseBreakpointsScenario): AttackDefenseBreakpointsAssumptions {
   return {
     speciesId: s.speciesId,
     fastMoveId: s.fastMoveId ?? null,
@@ -119,7 +107,7 @@ function scenarioToAssumptions(s: AttackDefenseBreakpointsScenario): AttackDefen
 }
 
 /** Forces isShadow back to false whenever the currently-selected species carries a mega/primal boost — same discipline as the other three tabs' normalizeAssumptions/normalizeTeamAssumptions. */
-function normalizeAssumptions(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsAssumptions {
+export function normalizeAssumptions(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsAssumptions {
   const sp = resolveSpecies(a.speciesId);
   if (!sp?.boost || !a.isShadow) return a;
   return { ...a, isShadow: false };
@@ -141,11 +129,6 @@ function speciesLabel(s: SpeciesDefinition): string {
 
 function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
   return s.imageUrl ? <img src={s.imageUrl} alt="" className="species-icon" /> : null;
-}
-
-interface Grids {
-  fast: DamageGridCell[];
-  charged: DamageGridCell[];
 }
 
 /**
@@ -186,109 +169,16 @@ export function AttackDefenseBreakpointsView() {
   const targetOptions = useMemo(() => targetPickerOptions(), []);
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
 
-  const species = useMemo(() => resolveSpecies(assumptions.speciesId), [assumptions.speciesId]);
-  const boss = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
-  const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
-
-  // `species` above stays the RAW registry object at all times — used by the
-  // picker/movepool/badge logic below. attackDamageGrid/defenseDamageGrid
-  // (breakpoints.ts) take a raw baseAttack/baseDefense NUMBER, not a whole
-  // SpeciesDefinition, and never look at isShadow at all — unlike the other
-  // three tabs, this one can't apply the toggle by cloning the species
-  // object; it must call shadowAdjustedBaseStats directly instead (wrapped
-  // here as shadowToggledBaseStats, same guard logic as applyShadowToggle).
-  const adjustedBaseStats = useMemo(
-    () => (species ? shadowToggledBaseStats(species, assumptions.isShadow) : null),
-    [species, assumptions.isShadow],
-  );
-
-  const result = useMemo<{ attack: Grids | null; defense: Grids | null; error: string | null }>(() => {
-    const empty = { attack: null, defense: null, error: null as string | null };
-    if (!species || !boss || !adjustedBaseStats) return empty;
-    try {
-      // There is no user-selectable combat phase here either, same standing
-      // decision as every other tab — moot anyway, since this tab has no
-      // phased combat at all: every cell is one isolated hit, not a fight.
-      if (assumptions.mode === "attack") {
-        const fastMove = resolveMove(species.fastMoves, assumptions.fastMoveId);
-        const chargedMove = resolveMove(species.chargedMoves, assumptions.chargedMoveId);
-        if (!fastMove) throw new Error(`${species.name} has no fast move defined.`);
-        if (!chargedMove) throw new Error(`${species.name} has no charged move defined.`);
-        const { defense: bossDefenseStat } = bossEffectiveStats(boss, bossRaidTier);
-
-        const fast = attackDamageGrid({
-          baseAttack: adjustedBaseStats.baseAttack,
-          defenderDefenseStat: bossDefenseStat,
-          power: fastMove.power,
-          damageModifiers: {
-            stab: species.types.includes(fastMove.type),
-            typeEffectiveness: typeEffectiveness(fastMove.type, boss.types),
-            weatherBoosted: isWeatherBoosted(fastMove.type, assumptions.weather),
-          },
-          ivRange: IVS_0_TO_15,
-          levels: LEVELS_25_TO_50,
-        });
-        const charged = attackDamageGrid({
-          baseAttack: adjustedBaseStats.baseAttack,
-          defenderDefenseStat: bossDefenseStat,
-          power: chargedMove.power,
-          damageModifiers: {
-            stab: species.types.includes(chargedMove.type),
-            typeEffectiveness: typeEffectiveness(chargedMove.type, boss.types),
-            weatherBoosted: isWeatherBoosted(chargedMove.type, assumptions.weather),
-          },
-          ivRange: IVS_0_TO_15,
-          levels: LEVELS_25_TO_50,
-        });
-        return { attack: { fast, charged }, defense: null, error: null };
-      }
-
-      const bossFastMove = resolveMove(boss.fastMoves, assumptions.bossFastMoveId);
-      const bossChargedMove = resolveMove(boss.chargedMoves, assumptions.bossChargedMoveId);
-      if (!bossFastMove) throw new Error(`${boss.name} has no fast move defined.`);
-      if (!bossChargedMove) throw new Error(`${boss.name} has no charged move defined.`);
-      const { attack: bossAttackStat } = bossEffectiveStats(boss, bossRaidTier);
-
-      const fast = defenseDamageGrid({
-        baseDefense: adjustedBaseStats.baseDefense,
-        attackerAttackStat: bossAttackStat,
-        power: bossFastMove.power,
-        damageModifiers: {
-          stab: boss.types.includes(bossFastMove.type),
-          typeEffectiveness: typeEffectiveness(bossFastMove.type, species.types),
-          weatherBoosted: isWeatherBoosted(bossFastMove.type, assumptions.weather),
-        },
-        ivRange: IVS_0_TO_15,
-        levels: LEVELS_25_TO_50,
-      });
-      const charged = defenseDamageGrid({
-        baseDefense: adjustedBaseStats.baseDefense,
-        attackerAttackStat: bossAttackStat,
-        power: bossChargedMove.power,
-        damageModifiers: {
-          stab: boss.types.includes(bossChargedMove.type),
-          typeEffectiveness: typeEffectiveness(bossChargedMove.type, species.types),
-          weatherBoosted: isWeatherBoosted(bossChargedMove.type, assumptions.weather),
-        },
-        ivRange: IVS_0_TO_15,
-        levels: LEVELS_25_TO_50,
-      });
-      return { attack: null, defense: { fast, charged }, error: null };
-    } catch (err) {
-      return { attack: null, defense: null, error: (err as Error).message };
-    }
-  }, [
-    species,
-    boss,
-    bossRaidTier,
-    adjustedBaseStats,
-    assumptions.mode,
-    assumptions.fastMoveId,
-    assumptions.chargedMoveId,
-    assumptions.bossFastMoveId,
-    assumptions.bossChargedMoveId,
-    assumptions.weather,
-  ]);
+  // The entire engine-facing computation (species resolution, Shadow-adjusted
+  // base stats, and the attack/defense damage grids themselves) lives in
+  // runAttackDefenseBreakpointsScenario (run/runAttackDefenseBreakpoints.ts)
+  // — a pure, React-free function shared with the run-scenario CLI and this
+  // tab's own vitest smoke test. Aliased back to their original names so the
+  // render code below needs no changes at all.
+  const runResult = useMemo(() => runAttackDefenseBreakpointsScenario(assumptions, speciesRegistry), [assumptions]);
+  const species = runResult.species;
+  const boss = runResult.boss;
+  const result = { attack: runResult.attack, defense: runResult.defense, error: runResult.error };
 
   function handleShare() {
     const url = new URL(buildAttackDefenseBreakpointsScenarioUrl(getBaseUrl(), assumptionsToScenario(assumptions)));
