@@ -76,6 +76,23 @@ The handful of product-level calls that must survive no matter which agent touch
   Simulator (one trainer's own 6-slot roster) has zero cross-slot team-boost math — a mega slot
   only ever boosts its own damage while active. Don't reintroduce a same-roster team-boost
   calculation; that would be mechanically wrong, not just redundant.
+- **Shadow species are synthesized from recorded evidence, not from the live feed alone.**
+  `raidHistory.json` is the durable anchor (accumulate-only, never shrinks); Pokebattler's
+  `_SHADOW_LEGACY` tiers and Bulbapedia's Shadow Raid page are the backfill. Anchoring on a
+  third-party archive instead would just relocate the fragility to a different external
+  dependency. Synthesis must run BEFORE the archive-resolution passes, or shadow archive rows
+  fail to resolve for want of a species. Stats are copied RAW — the engine applies
+  1.2 / 5-6ths at effective-stat time, so pre-multiplying double-applies.
+- **A form qualifies for the roster when its stats OR its types differ from its default form.**
+  Not stats alone. Several real forms share a stat line but are typed completely differently
+  (Hisuian Sneasel is fighting/poison vs base dark/ice; Alolan Vulpix is ice vs fire; Alolan
+  Marowak is fire/ghost vs ground), and type effectiveness moves combat results far harder than
+  stat lines do — modelling Hisuian Sneasel as base Sneasel put Metagross's TDO out by +167%.
+  Forms matching on BOTH (Pikachu costumes, Vivillon patterns) stay excluded as cosmetic. A form
+  that is missing is not merely absent: the live-raid matcher silently substitutes the base form
+  and flags `isApproximate`, which reads as "no better data exists" when the exact data was
+  sitting in `data/raw/pokemon_stats.json` all along. This was narrowed to stats-only once and
+  had to be widened again — do not re-narrow it.
 - **A "Teambuilding Analyzer" (multi-trainer mega staggering across a raid, since the mega boost
   doesn't stack) is out of scope for this tool** — a separate future project, not a feature to fold
   in here. Explicitly ruled out once already; if reproposed (most likely by `pogo-researcher`
@@ -94,7 +111,9 @@ npm workspaces monorepo, two packages:
   tab-switched views as of 2026-09-07 (`App.tsx`'s `view=` query param): the original two-candidate
   **Comparator**, the **Team Raid Simulator** (one trainer's own 6-slot sequential roster vs. a
   boss's real HP pool and countdown timer, with wipe-and-revive looping), the **Species
-  Report** (one Pokémon ranked against every currently-active real raid boss), **IV
+  Report** (one Pokémon ranked against every currently-active real raid boss, plus optionally
+  every past/inactive boss recorded in `data/normalized/raidHistory.json`, filterable by raid
+  tier — the sweep is debounced because it is ~200 sims per boss over ~600 bosses), **IV
   Breakpoints** (one species/moveset compared across two IV spreads, per level, against a chosen
   raid boss — the IV/level-investment analogue of the ranking-flip thesis), and **Attack/Defense
   Breakpoints** (full IV × level damage grids, 0-15 IV × levels 50→25, for the species' own fast
@@ -108,11 +127,21 @@ npm workspaces monorepo, two packages:
   pogoapi.net; pogoapi's cached endpoints survive only as the released-content roster/allowlist
   and a per-species fallback. `scripts/sync-data.ts`'s own header comment is the authoritative
   description of that split — read it before assuming where a field comes from.
+  `data/normalized/raidHistory.json` (added 2026-09-07) is an accumulate-only log of every raid
+  boss this pipeline has ever recorded, backfilled from pogoapi's archive and Bulbapedia's 16
+  raid-boss-change pages; `live-feed` > `researched-tier` > archive sources, and it is never
+  pruned. `eraHp` on a row is that encounter's REAL historical boss HP (Bulbapedia-sourced only)
+  — raid HP per tier has changed over time, so it is not derivable from the tier label.
+  A second live raid source (Pokebattler) is cross-checked against ScrapedDuck every run and any
+  disagreement is reported loudly; ScrapedDuck stays authoritative for `activeRaids.json`.
 
 Deployed as a static site to **GitHub Pages** via `.github/workflows/deploy.yml`, live at
 https://jvansant122.github.io/PokemonGoCalculator/. There is a **second** workflow —
-`check-mega-gaps.yml`, a weekly diff of this project's mega/primal roster against Bulbapedia that
-opens/updates a tracking issue on a detected gap. Scope any Actions API query to the specific
+`check-mega-gaps.yml`, a DAILY mega/primal roster **health** check that folds three finding types
+into one tracking issue: a species missing entirely (Bulbapedia diff), a species present but
+carried ONLY by the live-raid gate and so guaranteed to vanish on rotation
+(`scripts/check-mega-gates.ts` — the Mega Skarmory / Mega Mewtwo Y failure mode), and committed
+data gone stale (both checks re-run against a fresh in-runner sync that is never committed). Scope any Actions API query to the specific
 workflow (`actions/workflows/deploy.yml/runs`); an unscoped "latest run" can be the wrong one.
 
 ## Commands
@@ -123,8 +152,21 @@ npm run test:engine                  # from repo root — runs packages/engine's
 npm run build --workspace=packages/web   # production build, verifies the deploy path
 npm run sync-data                    # from repo root — refreshes data/raw + data/normalized
 npm run check-scenario-roundtrip     # guards the "setting doesn't survive a shared link" bug class
-npm run check-mega-gaps              # diffs the mega/primal roster against Bulbapedia (CI runs it weekly)
+npm run check-mega-gaps              # diffs the mega/primal roster against Bulbapedia
+npm run check-mega-gates             # flags a mega/primal carried ONLY by the live-raid gate (fragile)
+npm run check-raid-history-sources   # raidHistory <-> roster consistency: source values known to packages/web,
+                                     #   and every shadow species anchored by a history row (not live-gate-only)
 ```
+
+`check-raid-history-sources` guards a sibling bug class: `raidHistory.json`'s `source`
+discriminator is consumed by `packages/web` in three places (the type union, the badge branch, and
+the archive-vs-live tier split), the JSON is cast with `as unknown as`, and so a new source value
+added by `sync-data.ts` type-checks fine while rows fall through every branch. That happened once
+with `"bulbapedia-archive"` (32 rows silently mis-tiered). Run it after adding a source value.
+It also asserts shadow durability: a shadow species with no raidHistory row is carried only by
+a transient source (today's feed, or a third-party archive) and will vanish when that stops —
+the Mega Skarmory failure mode, which `check-mega-gates.ts` cannot see because it filters on
+`.boost`.
 
 `check-scenario-roundtrip` is the mechanical half of the `add-scenario-assumption` skill: it
 asserts every field of all five tabs' `Assumptions` interfaces appears in both round-trip

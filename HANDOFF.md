@@ -1,8 +1,96 @@
 # Handoff
 
-Last updated: 2026-09-07. Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-08. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
+## 2026-09-08 (overnight): Species Report expansion + comprehensive audit
+
+Started as "review the Species Report tab, add raid-tier filters and past raids." Grew into a
+full audit after the user reported data-quality and calculation issues that had survived several
+previous fix attempts. Full findings: `AUDIT_2026-09-08.md` (keep it until the LOW items are
+either fixed or consciously closed).
+
+### Shipped
+
+- **Species Report**: raid-tier checkbox filter (cuts the simulated set, not just the rendered
+  rows), past/inactive raids (15 -> ~585), debounced sweep with a visible pending indicator, a
+  "Boss HP" column labelled sourced-vs-tier-default, and four provenance badges.
+- **Data layer**: `data/normalized/raidHistory.json`, accumulate-only, backfilled from pogoapi's
+  archive + Bulbapedia's 16 raid-boss-change pages. Pokebattler added as a second LIVE source,
+  cross-checked against ScrapedDuck every run.
+- **Engine**: `bossMaxHpOverride` on `SpeciesReportBossTarget`, `sustained.bossMaxHp` on results.
+  Additive; 174 -> 186 tests.
+- **Detector**: `scripts/check-mega-gates.ts` — flags a mega carried ONLY by the live-raid gate
+  while it is still present, instead of after it vanishes. `check-mega-gaps.yml` is now a daily
+  roster health check reporting missing / fragile / stale-data findings.
+
+### Two HIGH bugs found and fixed
+
+1. **The ranking-flip marker was wrong** — the product's headline output. The crossing scan
+   stopped at the FIRST lead change while `finalLeader` came from final totals, so on a
+   double-crossing the marker and its own sentence disagreed. Reproduced on the default
+   Comparator view (~5.4s marked, ~7.0s correct). Now derived from one source.
+2. **Wrong types on a live raid boss.** Hisuian Sneasel (fighting/poison) was modelled as base
+   Sneasel (dark/ice). This inverted a real ranking: Machamp 778 > Metagross 715 became
+   Metagross 1276 > Machamp 347. Root cause was form ingestion keyed on stats alone; 57 forms
+   shared a stat line but differed in typing (Alolan Vulpix fire->ice, Alolan Marowak
+   ground->fire/ghost). Rule is now stats OR types — see the standing decision in CLAUDE.md.
+
+3. **Accumulate-only history preserved a stale mis-resolution.** Found only by driving the live
+   app: Hisuian Sneasel rendered twice, the second row really being base Sneasel under the
+   Hisuian name. `raidHistory.json` never revisited rows, so the pre-fix mapping survived and
+   reintroduced the bug of (2) through the data file. Rows are now re-resolved and merged each
+   sync. Removing the two stale rows also recovered a real fact they had been masking (base
+   Sneasel's own 1-Star appearance, eraHp 1800), so the count went 604 -> 603, not 602.
+
+### Shadow durability + Pokebattler archive (2026-09-08, later)
+
+- Pokebattler's legacy archive imported: `raidHistory.json` 603 -> **764**, adding 161
+  `pokebattler-legacy` rows. Excluded Elite Raids (20000 HP has no `RaidTier` equivalent) and
+  Ultra Beast (15000 numerically matches 5-Star, but Ultra Wormhole was Special-Research-gated,
+  not standard raid-egg content — an HP coincidence is not confirmation). `eraHp` stays
+  Bulbapedia-only and held at exactly 553 throughout.
+- **Shadow species are now durable**: 8 -> **104**, species 1238 -> **1334**. Previously they
+  were synthesized only inside the active-raid loop, so each one vanished on rotation. Now
+  anchored on `raidHistory.json`. Proven by disabling both external evidence sources and
+  re-running: all 104 regenerated, `species.json` byte-identical. 96 of them are not currently
+  raiding and could not have existed before. Side benefit: shadow variants are now selectable as
+  attackers, not just bosses.
+- `check-raid-history-sources` (new) caught the `pokebattler-legacy` web-layer gap on its first
+  real use — 26 of 65 rows would have been mis-tiered (Archen et al. at 3600 HP instead of 600).
+  It now also asserts shadow durability. Both failure paths were verified by making them fail.
+- Known gap, 2 entries: `SANDSHREW_ALOLA_SHADOW_FORM` / `MAROWAK_ALOLA_SHADOW_FORM` do not
+  resolve. The base regional forms exist; shadow synthesis resolves to base species only, not to
+  regional forms. Small and deliberate to leave.
+- The era attack/defense multiplier discrepancy (~8% on ~35 old-tier-4 species) is **closed,
+  won't fix** by user decision 2026-09-08 — see AUDIT finding 2c.
+
+### Regression that started it
+
+`mewtwo-mega-y` silently vanished from `species.json` mid-session: `mega_pokemon.json` has no
+Mewtwo rows at all, so it was carried solely by the live-raid gate and dropped when its rotation
+ended — the identical Mega Skarmory failure. Allowlisted. The gate audit exists so the next one
+is caught while still visible.
+
+### Verified clean (do not re-audit without cause)
+
+Damage formula, CPM table, type chart, every modifier constant, boss stat derivation,
+Comparator-vs-Species-Report agreement (0.0), base stats 21/21 vs real GO, all five scenario
+codecs round-tripping VALUES (67 fields — the existing guard only checks name presence), and
+zero NaN/infinite/negative across 1092 attackers x 19 bosses.
+
+### Open
+
+- Pokebattler's 741-species LEGACY archive is **deliberately not imported** — deferred so the
+  audit was not run against a mountain of unverified new rows. Helpers exist in
+  `scripts/sync-data/pokebattlerRaids.ts`, unused and marked deferred.
+- Three LOW findings knowingly unfixed (atk/def flooring; STRUGGLE energyCost 0 from upstream;
+  dodge saturating below the boss charged-move duration). Reasons in the audit.
+- `raidHistory.json` has no dates on archive rows, so past bosses cannot be ordered or filtered
+  by era. Bulbapedia coverage ends 2023; nothing corroborates the 2026 roster except Pokebattler.
+- One real cross-check disagreement stands: Shadow Grubbin, ScrapedDuck only.
+
+---
 ## 2026-09-07, later still: code review, live audit, and two real bugs found
 
 A `skeptic` pass over the live app plus my own correctness review. **Two confirmed user-facing
