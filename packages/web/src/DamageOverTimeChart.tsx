@@ -162,7 +162,19 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
   // a crossing on its own: a flat tie that later jumps apart without ever
   // reversing sign means one candidate simply led throughout, which the
   // "no crossing" branch below reports correctly.
+  //
+  // Deliberately do NOT stop at the first flip found: the lead can flip more
+  // than once (one candidate briefly overtakes, the other retakes it for
+  // good), and only the LAST flip is the one that determines who is ahead by
+  // the end of the window — every earlier flip is a transient the ranking
+  // has already moved past. Keep overwriting `crossing` as later flips are
+  // found so it always ends up holding the final one. `crossingLeader` is
+  // derived from that same flip's post-flip sign (not recomputed separately
+  // from the final totals) so the marker and the "X leads by the end of this
+  // window" sentence below are structurally the same fact and can't disagree
+  // — that independent-derivation mismatch was the original bug.
   let crossing: { t: number; value: number } | null = null;
+  let crossingLeader: string | null = null;
   for (let i = 1; i < totals.length; i++) {
     const prev = totals[i - 1]!;
     const curr = totals[i]!;
@@ -174,11 +186,12 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
         t: prev.t + frac * (curr.t - prev.t),
         value: prev.x + frac * (curr.x - prev.x),
       };
-      break;
+      crossingLeader = currDelta > 0 ? x.name : y.name;
     }
   }
 
-  const finalLeader = totals[totals.length - 1]!.x >= totals[totals.length - 1]!.y ? x.name : y.name;
+  const finalLeader =
+    crossingLeader ?? (totals[totals.length - 1]!.x >= totals[totals.length - 1]!.y ? x.name : y.name);
 
   // Final tally: how much of each candidate's total came from its own
   // damage versus the team's boosted contribution — the ratio the chart's
