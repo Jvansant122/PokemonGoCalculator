@@ -124,8 +124,17 @@ export interface TeamRaidInputs {
   dodgeFastAttacks?: boolean;
   /** See simulate.ts's StepwiseAttacker.holdChargedMoveUntilSafe. Applies to every slot identically. Defaults to false. */
   holdChargedMoveUntilSafe?: boolean;
-  /** Mean seconds between the boss's charged moves once it starts using them — one continuous encounter from the boss's side, shared across every slot and every cycle. */
+  /** Mean seconds between the boss's charged moves once it starts using them — one continuous encounter from the boss's side, shared across every slot and every cycle. Only consulted when bossChargedMoveCadence is "fixed-interval" (the default); ignored under "energy-driven". */
   bossChargedMoveMeanIntervalSeconds: number;
+  /**
+   * See comparison.ts's SustainedComparisonInputs.bossChargedMoveCadence for
+   * the full model. Defaults to "fixed-interval", byte-identical to before
+   * this field existed. Applies to the boss for the WHOLE encounter (every
+   * slot, every cycle) — see this module's top doc comment and the
+   * carriedBossEnergy handling below for how boss state carries across a slot
+   * handoff and a wipe-and-revive under this mode.
+   */
+  bossChargedMoveCadence?: "fixed-interval" | "energy-driven";
   /**
    * Warmup for the boss's very FIRST charged move of the whole encounter
    * (cycle 0, slot 1 only) — defaults to simulateStepwiseBattle's own
@@ -199,6 +208,18 @@ export interface TeamRaidSlotResult {
   /** This fight's own combined fast+charged damage dealt to the boss. */
   ownDamageDealt: number;
   chargedAttacksLanded: number;
+  /**
+   * How many of the BOSS's own charged moves landed on this slot during this
+   * fight — see simulate.ts's StepwiseRunResult.bossChargedHitsTaken. Exists
+   * so a caller (or a test) can observe the energy-driven cadence's headline
+   * effect — a higher-DPS roster forcing the boss to throw more charged
+   * moves — directly through runTeamRaid's own output, not by re-deriving it
+   * from timing side effects. Same "not clipped to the clear point" caveat as
+   * chargedAttacksLanded above applies (can slightly overcount for the one
+   * fight that lands the finishing blow); doesn't affect any outcome/margin
+   * computation.
+   */
+  bossChargedHitsTaken: number;
   /**
    * Combined fast+charged cumulative TEAM damage over time — this fight's
    * own contribution stacked on top of every prior fight's already-
@@ -297,9 +318,10 @@ function validateRoster(slots: TeamRaidSlotInput[]): void {
  * wipe-and-revive as needed, and reports whether/when the team clears the
  * boss within its real, single shared countdown timer. See this module's
  * top doc comment for the mechanics this deliberately does and does not
- * model (no cross-slot mega team-boost math, boss charged-move cooldown
- * carries forward across every fight handoff including a wipe-and-revive,
- * unlimited healing items assumed for v1).
+ * model (no cross-slot mega team-boost math, boss charged-move cooldown OR
+ * accumulated energy — whichever bossChargedMoveCadence is active — carries
+ * forward across every fight handoff including a wipe-and-revive, unlimited
+ * healing items assumed for v1).
  */
 export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   const {
@@ -312,6 +334,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
     dodgeFastAttacks = false,
     holdChargedMoveUntilSafe = false,
     bossChargedMoveMeanIntervalSeconds,
+    bossChargedMoveCadence,
     bossChargedMoveWarmupSeconds,
     bossStartingEnergy = 0,
     weather = "none",
@@ -352,8 +375,26 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   // which bypasses that extra jitter roll entirely — the boss's cadence
   // doesn't restart just because the trainer swapped Pokémon or briefly
   // returned to the lobby to heal (it's still the same raid attempt).
+  //
+  // carriedNextFireInSeconds/carriedStartingEnergy are the "fixed-interval"
+  // cadence's carryover state; carriedBossEnergy (below) is the
+  // "energy-driven" cadence's equivalent — see StepwiseRunResult.
+  // bossEndingEnergy's doc comment for why a slot handoff must NOT silently
+  // reset the boss's accumulated energy (doing so would make energy-driven
+  // MORE forgiving than fixed-interval, backwards from the whole point of the
+  // model). DECISION: energy carries across a wipe-and-revive too, for the
+  // same "one continuous encounter from the boss's side" reasoning already
+  // applied to the fixed-interval cooldown above — neither
+  // carriedNextFireInSeconds nor carriedBossEnergy is ever reset at a cycle
+  // boundary, only read/written per-fight, so this falls out of the existing
+  // loop structure rather than needing special-cased wipe handling.
+  // Under "fixed-interval" (the default), carriedBossEnergy always stays
+  // undefined (StepwiseRunResult.bossEndingEnergy is null in that mode), so
+  // startingEnergy below resolves to 0 exactly as it always did — this
+  // addition is byte-identical for existing callers.
   let carriedStartingEnergy = bossStartingEnergy;
   let carriedNextFireInSeconds: number | undefined;
+  let carriedBossEnergy: number | undefined;
   let outcome: TeamRaidOutcome | null = null;
   let timeToClearSeconds: number | null = null;
   let clearingCycleIndex: number | null = null;
@@ -427,9 +468,20 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
               weatherBoosted: isWeatherBoosted(bossChargedMove.type, weather),
             }
           : undefined,
+        chargedMoveCadence: bossChargedMoveCadence,
         chargedMoveMeanIntervalSeconds: bossChargedMoveMeanIntervalSeconds,
         chargedMoveWarmupSeconds: isVeryFirstFight ? bossChargedMoveWarmupSeconds : undefined,
-        startingEnergy: isVeryFirstFight ? carriedStartingEnergy : 0,
+        // Under "fixed-interval", carriedBossEnergy is always undefined (see
+        // the doc comment above carriedStartingEnergy), so this resolves to
+        // carriedStartingEnergy/0 exactly as before. Under "energy-driven",
+        // this is the one line that actually carries the boss's accumulated
+        // energy across the handoff — chargedMoveWarmupSeconds/
+        // chargedMoveNextFireInSeconds below are both structurally inert in
+        // that mode (simulate.ts never consults them once chargedMoveCadence
+        // is "energy-driven" — see StepwiseSimulationParams' bossEnergyDriven
+        // gate), left populated only because they're harmless no-ops under
+        // "energy-driven" and still load-bearing under "fixed-interval".
+        startingEnergy: isVeryFirstFight ? carriedStartingEnergy : (carriedBossEnergy ?? 0),
         chargedMoveNextFireInSeconds: isVeryFirstFight ? undefined : carriedNextFireInSeconds,
       };
 
@@ -497,6 +549,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
         // per-point fast-vs-charged classification data StepwiseRunResult
         // doesn't expose. Doesn't affect any outcome/margin computation.
         chargedAttacksLanded: run.chargedAttacksLanded,
+        bossChargedHitsTaken: run.bossChargedHitsTaken,
         ownDamageTrajectory: clippedTrajectory.map((p) => ({
           atSeconds: startClock + p.atSeconds,
           cumulativeDamage: bossDamageAccum + p.cumulativeDamage,
@@ -515,6 +568,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
       globalClock = startClock + localEndSeconds;
       carriedNextFireInSeconds =
         run.bossChargedMoveResidualSeconds != null ? Math.max(0, run.bossChargedMoveResidualSeconds) : undefined;
+      carriedBossEnergy = run.bossEndingEnergy ?? undefined;
       carriedStartingEnergy = 0;
 
       if (run.faintedAtSeconds === null) {

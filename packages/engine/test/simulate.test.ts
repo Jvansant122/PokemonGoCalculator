@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { simulateOpeningBurst } from "../src/combat.js";
-import { isTickAlignedDuration, runStepwiseDistribution, simulateStepwiseBattle } from "../src/simulate.js";
+import {
+  boundedJitteredChargedMoveInterval,
+  isTickAlignedDuration,
+  runStepwiseDistribution,
+  simulateStepwiseBattle,
+} from "../src/simulate.js";
 import { typeEffectiveness } from "../src/typeChart.js";
 import {
   ARC_SPARK,
@@ -179,7 +184,14 @@ describe("simulateStepwiseBattle", () => {
         defenseStat: 100,
         fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 10 },
         damageOut: { stab: false },
-        chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 1, vulnerableWindowSeconds: 1 },
+        // durationSeconds deliberately kept below the mean's lowest possible
+        // jittered sample (mean=0.5 * 0.6 = 0.3) so simulate.ts's physical
+        // "can't recast before the last cast finished" floor
+        // (boundedJitteredChargedMoveInterval) never actually engages here —
+        // this test is exercising holdChargedMoveUntilSafe's timing, not that
+        // floor (see the dedicated "physically impossible cadence" describe
+        // block further down for that).
+        chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 0.2, vulnerableWindowSeconds: 0.2 },
         chargedMoveDamageOut: { stab: false },
         // The boss's first charged hit lands at chargedMoveWarmupSeconds +
         // jitteredInterval(chargedMoveMeanIntervalSeconds) — NOT at the
@@ -277,14 +289,20 @@ describe("simulateStepwiseBattle", () => {
         fastDamageOut: { stab: false },
         chargedDamageOut: { stab: false },
       };
+      // durationSeconds deliberately kept below the mean's lowest possible
+      // jittered sample (mean=0.5 * 0.6 = 0.3) so simulate.ts's physical
+      // "can't recast before the last cast finished" floor
+      // (boundedJitteredChargedMoveInterval) never engages here — this test
+      // is exercising perfectlyDodgeable's damage-multiplier override, not
+      // that floor.
       const bossChargedMove = {
         id: "boss-charged",
         name: "Boss Charged",
         type: "normal" as const,
         power: 10,
         energyCost: 1,
-        durationSeconds: 100,
-        vulnerableWindowSeconds: 100,
+        durationSeconds: 0.2,
+        vulnerableWindowSeconds: 0.2,
       };
       const boss = {
         attackStat: 100,
@@ -514,6 +532,168 @@ describe("simulateStepwiseBattle", () => {
       // The landing wasn't mid-animation (the cast finished on this exact
       // tick) — it just happened to coincide with the fatal hit.
       expect(result.diedDuringOwnChargedMoveAnimation).toBe(false);
+    });
+  });
+
+  describe("boundedJitteredChargedMoveInterval (physically impossible cadence floor)", () => {
+    // rng is injected directly here (not mulberry32) so the jitter factor
+    // (0.6 + rng()*0.8, i.e. the documented +/-40% range) is pinned exactly,
+    // rather than depending on a seed's actual output.
+    it("is a no-op when even the LOWEST possible jittered sample (mean*0.6) is already >= the floor", () => {
+      const result = boundedJitteredChargedMoveInterval(10, 5, () => 0); // raw = 10*0.6 = 6
+      expect(result.seconds).toBe(6);
+      expect(result.wasClamped).toBe(false);
+    });
+
+    it("clamps up to exactly the floor when even the HIGHEST possible jittered sample is still below it", () => {
+      const result = boundedJitteredChargedMoveInterval(1, 2, () => 1); // raw = 1*1.4 = 1.4
+      expect(result.seconds).toBe(2);
+      expect(result.wasClamped).toBe(true);
+    });
+
+    it("clamps to exactly the floor (never overshoots it) regardless of how far below the raw sample was", () => {
+      const nearFloor = boundedJitteredChargedMoveInterval(1, 2, () => 1); // raw 1.4
+      const farBelowFloor = boundedJitteredChargedMoveInterval(1, 2, () => 0); // raw 0.6
+      expect(nearFloor.seconds).toBe(2);
+      expect(farBelowFloor.seconds).toBe(2);
+      expect(farBelowFloor.wasClamped).toBe(true);
+    });
+  });
+
+  describe("physically impossible boss charged-move cadence (a boss cannot recast before its current cast finishes)", () => {
+    // A shared attacker across this whole block: fast move chips 1 damage/sec
+    // (floor(0.5*1)+1) and never contributes energy, and the attacker's own
+    // charged move has an unreachable energy cost — so nothing this attacker
+    // does complicates the boss-side timing under test. hp is set per test.
+    function chipAttacker(hp: number) {
+      return {
+        hp,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 1, vulnerableWindowSeconds: 1 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+    }
+
+    // durationSeconds=2, requested mean=1 (physically impossible: even the
+    // jitter's highest possible sample, 1*1.4=1.4, is still below the 2s cast
+    // time) — so every sampled interval is deterministically clamped up to
+    // exactly 2s, regardless of seed. warmup=2 makes the first fire land at
+    // EXACTLY t=4 (2 + 2), not somewhere in the un-clamped [2.6, 3.4] range a
+    // mean of 1 would otherwise produce — this determinism is what lets this
+    // whole describe block assert exact numbers instead of a distribution.
+    const bossShortDuration = {
+      attackStat: 100,
+      defenseStat: 100,
+      fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1 },
+      damageOut: { stab: false },
+      chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 100, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+      chargedMoveDamageOut: { stab: false },
+      chargedMoveMeanIntervalSeconds: 1,
+      chargedMoveWarmupSeconds: 2,
+    };
+
+    // A second boss with a DIFFERENT charged-move duration (4s, not 2s), so
+    // the fix is proven against more than one hardcoded duration — mean=1.5
+    // is likewise physically impossible (highest sample 1.5*1.4=2.1 < 4s),
+    // clamped deterministically to exactly 4s every time. First fire lands at
+    // EXACTLY t=7 (3 + 4).
+    const bossLongDuration = {
+      attackStat: 100,
+      defenseStat: 100,
+      fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1 },
+      damageOut: { stab: false },
+      chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 100, energyCost: 50, durationSeconds: 4, vulnerableWindowSeconds: 4 },
+      chargedMoveDamageOut: { stab: false },
+      chargedMoveMeanIntervalSeconds: 1.5,
+      chargedMoveWarmupSeconds: 3,
+    };
+
+    it("a cadence at/above the move's own duration is unaffected (never clamps) — the default 15s UI cadence against any real move duration", () => {
+      // mean=10 against a 2s cast: the lowest possible jittered sample is
+      // 10*0.6=6, comfortably above the 2s floor, so this can NEVER clamp —
+      // not just "didn't happen to clamp in this run." Swept across many
+      // seeds via runStepwiseDistribution to make that "never" claim over
+      // the actual sampling path, not just a single lucky seed.
+      const bossAboveFloor = { ...bossShortDuration, chargedMoveMeanIntervalSeconds: 10 };
+      const distribution = runStepwiseDistribution(
+        { attacker: chipAttacker(100000), boss: bossAboveFloor, maxSeconds: 60 },
+        50,
+      );
+      expect(distribution.bossChargedMoveCadenceClamped).toBe(false);
+      expect(distribution.bossChargedMoveEffectiveMinIntervalSeconds).toBe(10);
+    });
+
+    it("a cadence below the move's own duration is clamped: the boss's charged hits land durationSeconds apart, not at the requested (impossible) cadence, and the clamp is reported on the result", () => {
+      const result = simulateStepwiseBattle({
+        attacker: chipAttacker(100000), // never faints — isolates the boss's own hit timing
+        boss: bossShortDuration,
+        dodge: { kind: "none" },
+        maxSeconds: 12,
+      });
+
+      expect(result.bossChargedMoveCadenceClamped).toBe(true);
+
+      // Charged hits (undodged: floor(0.5*100)+1 = 51) are the only jumps
+      // this large — the fast-move chip is always exactly 1 damage/hit — so
+      // filtering the trajectory for 51-sized jumps recovers the boss's
+      // actual charged-move firing times.
+      const chargedHitTimes: number[] = [];
+      for (let i = 1; i < result.damageTakenTrajectory.length; i++) {
+        const jump = result.damageTakenTrajectory[i]!.cumulativeDamage - result.damageTakenTrajectory[i - 1]!.cumulativeDamage;
+        if (jump === 51) chargedHitTimes.push(result.damageTakenTrajectory[i]!.atSeconds);
+      }
+
+      // Requested cadence was 1s; the physical floor is this move's own 2s
+      // cast time. If the bug were still present, the first hit would land
+      // somewhere in the un-clamped [2.6, 3.4] window and subsequent hits
+      // would be ~1s apart — landing exactly on 2s multiples starting at t=4
+      // is only possible because of the clamp.
+      expect(chargedHitTimes).toEqual([4, 6, 8, 10, 12]);
+
+      const distribution = runStepwiseDistribution({ attacker: chipAttacker(100000), boss: bossShortDuration, maxSeconds: 12 }, 20);
+      expect(distribution.bossChargedMoveCadenceClamped).toBe(true);
+      expect(distribution.bossChargedMoveEffectiveMinIntervalSeconds).toBe(2); // max(requested 1, duration 2)
+    });
+
+    it("REGRESSION: dodge:perfect now measurably outperforms dodge:none at an impossible sub-duration cadence, across two bosses with different charged-move durations", () => {
+      // Before this fix, a cadence below the charged move's own cast time
+      // let casts overlap with no gap between them, making a dodge land
+      // during what the model treated as an already-resolved hit window —
+      // netting an identical outcome to not dodging at all. This is the
+      // exact defect reported against Regirock's 2.5s Stone Edge requested
+      // at a 2s cadence, reproduced here with two distinct synthetic
+      // durations (2s and 4s) instead of hardcoding 2.5s.
+      for (const [boss, hp, maxSeconds] of [
+        [bossShortDuration, 180, 20] as const,
+        [bossLongDuration, 100, 25] as const,
+      ]) {
+        const withoutDodge = simulateStepwiseBattle({
+          attacker: chipAttacker(hp),
+          boss,
+          dodge: { kind: "none" },
+          maxSeconds,
+        });
+        const withPerfectDodge = simulateStepwiseBattle({
+          attacker: chipAttacker(hp),
+          boss,
+          dodge: { kind: "perfect" },
+          maxSeconds,
+        });
+
+        expect(withoutDodge.bossChargedMoveCadenceClamped).toBe(true);
+        expect(withPerfectDodge.bossChargedMoveCadenceClamped).toBe(true);
+
+        // Undodged charged hits alone vastly exceed hp well before maxSeconds;
+        // perfectly-dodged charged hits (quartered) plus the 1/sec chip stay
+        // comfortably under hp for the whole window — a wide enough margin
+        // that this holds regardless of exactly which tick each hit resolves
+        // on, without needing to hand-derive the full tick-by-tick sequence.
+        expect(withoutDodge.survivedFullWindow).toBe(false);
+        expect(withPerfectDodge.survivedFullWindow).toBe(true);
+      }
     });
   });
 });

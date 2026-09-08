@@ -377,8 +377,18 @@ export interface SustainedComparisonInputs {
    * fire-immediately behavior).
    */
   holdChargedMoveUntilSafe?: boolean;
-  /** Mean seconds between the boss's charged moves once the sustained phase begins. */
+  /** Mean seconds between the boss's charged moves once the sustained phase begins. Only consulted when bossChargedMoveCadence is "fixed-interval" (the default); ignored under "energy-driven" — see that field's doc comment. */
   bossChargedMoveMeanIntervalSeconds: number;
+  /**
+   * Which model decides when the boss throws its charged move — see
+   * simulate.ts's StepwiseBoss.chargedMoveCadence for the full model and its
+   * sourcing caveats. Defaults to "fixed-interval", byte-identical to this
+   * field's absence before it existed. "energy-driven" models the boss
+   * gaining energy from damage taken (not just its own fast move), so a
+   * higher-DPS candidate makes the boss throw its charged move sooner/more
+   * often — the real feedback loop the fixed-interval model misses entirely.
+   */
+  bossChargedMoveCadence?: "fixed-interval" | "energy-driven";
   /**
    * Defaults to bossChargedMoveReadySeconds(boss's fast move, boss's charged
    * move, bossStartingEnergy) — see ComparisonInputs.openingBurstSeconds for
@@ -428,6 +438,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     dodgeFastAttacks = false,
     holdChargedMoveUntilSafe = false,
     bossChargedMoveMeanIntervalSeconds,
+    bossChargedMoveCadence,
     bossChargedMoveWarmupSeconds,
     bossStartingEnergy = 0,
     maxSeconds = DEFAULT_STEPWISE_MAX_SECONDS,
@@ -493,6 +504,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
                 weatherBoosted: isWeatherBoosted(bossChargedMove.type, weather),
               }
             : undefined,
+          chargedMoveCadence: bossChargedMoveCadence,
           chargedMoveMeanIntervalSeconds: bossChargedMoveMeanIntervalSeconds,
           chargedMoveWarmupSeconds: bossChargedMoveWarmupSeconds,
           startingEnergy: bossStartingEnergy,

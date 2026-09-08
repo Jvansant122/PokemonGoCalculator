@@ -2,7 +2,7 @@ import { bossChargedMoveReadySeconds } from "./combat.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
 import { DODGE_COST_SECONDS, DODGE_DAMAGE_MULTIPLIER, dodgeMultiplierForHit, type DodgeBehavior } from "./breakpoints.js";
 import { calculateDamage, type DamageInputs } from "./damage.js";
-import { energyFromDamageTaken, MAX_ENERGY } from "./energy.js";
+import { bossEnergyFromDamageTaken, energyFromDamageTaken, MAX_ENERGY } from "./energy.js";
 import type { ChargedMove, FastMove } from "./types.js";
 
 /**
@@ -89,6 +89,57 @@ export const DEFAULT_STEPWISE_MAX_SECONDS = 180;
 /** Boss charged-move intervals are randomized uniformly within +/-40% of the mean. */
 export const BOSS_CHARGED_MOVE_JITTER = 0.4;
 
+/**
+ * Floor guard for a physically impossible boss charged-move cadence. A boss
+ * cannot begin a new charged move before its current one has finished
+ * executing — so no sampled inter-arrival time may ever be shorter than the
+ * charged move's own `durationSeconds`. Without this, a caller-supplied
+ * `chargedMoveMeanIntervalSeconds` shorter than the move's cast time produces
+ * back-to-back/overlapping casts that silently make dodging worthless (every
+ * hit lands inside the attacker's own vulnerability window with no gap to
+ * dodge into) — a real, reported modeling defect (Regirock's 2.5s Stone Edge
+ * requested at a 2.0s cadence), not a hypothetical one.
+ *
+ * Deliberately `durationSeconds` alone, NOT duration + one boss fast-move
+ * cycle: a real boss does interleave fast attacks between charged moves, so
+ * the true minimum gap is almost certainly larger than this in practice, but
+ * there is no sourced constant for how much larger (that would depend on the
+ * boss's own energy-gain-per-fast-move and moveset, already implicitly
+ * modeled everywhere else in this file) — inventing a flat padding constant
+ * on top of this floor would be a fabricated number, not a derived one. This
+ * floor is the defensible, minimal physical constraint: "can't recast before
+ * the last cast finished."
+ *
+ * Applied to the SAMPLED (post-jitter) interval, not the mean, deliberately:
+ * clamping only the mean still lets the +/-40% jitter sample below it (e.g. a
+ * mean of exactly `durationSeconds` still jitters as low as 0.6x that), so
+ * only a post-jitter clamp actually guarantees the invariant.
+ */
+export function boundedJitteredChargedMoveInterval(
+  meanSeconds: number,
+  minSeconds: number,
+  rng: () => number,
+): { seconds: number; wasClamped: boolean } {
+  const raw = jitteredInterval(meanSeconds, rng);
+  const seconds = Math.max(raw, minSeconds);
+  return { seconds, wasClamped: seconds > raw + 1e-9 };
+}
+
+/**
+ * Chance a raid boss fires its charged move at each decision point once it
+ * has enough energy, under the "energy-driven" `StepwiseBoss.chargedMoveCadence`
+ * model. Source: MECHANICS.md's "Raid boss behaviour" section (Silph Road's
+ * analysis of Niantic's September 2024 raid rework, r/TheSilphRoad `1fckfja`,
+ * `[community-consensus]`) — reverted from a brief 100% "spam" period during
+ * that rework. ~2 years old as of 2026-09-08: the *mechanism* (an instant,
+ * no-look-ahead coin flip per opportunity, not a planned-ahead cooldown) is
+ * well corroborated, but this specific number could plausibly have been
+ * re-tuned since without a public announcement — keep it a named, exported
+ * constant rather than an inline literal so it's adjustable without
+ * archaeology.
+ */
+export const BOSS_CHARGED_MOVE_USE_PROBABILITY = 0.5;
+
 export interface StepwiseAttacker {
   hp: number;
   defenseStat: number;
@@ -123,7 +174,74 @@ export interface StepwiseBoss {
   /** Boss charged move; omit to reproduce the opening-burst-only behavior. */
   chargedMove?: ChargedMove;
   chargedMoveDamageOut?: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
-  /** Mean seconds between the boss's charged moves once it starts using them. */
+  /**
+   * Which model decides when the boss's charged move fires.
+   *
+   * - `"fixed-interval"` (default, unchanged behavior): a user-set mean
+   *   interval (`chargedMoveMeanIntervalSeconds`) with +/-40% jitter, warmup
+   *   derived only from the boss's own fast-move energy gain
+   *   (`bossChargedMoveReadySeconds`/`chargedMoveWarmupSeconds`/
+   *   `startingEnergy`). Kept as the default because it's what every existing
+   *   `Scenario` and pinned test currently assumes — a shared link must not
+   *   silently change meaning.
+   * - `"energy-driven"`: models the real post-September-2024 raid rework
+   *   described in MECHANICS.md's "Raid boss behaviour" section. The boss
+   *   accumulates energy from BOTH its own fast moves AND damage it takes
+   *   (`bossEnergyFromDamageTaken`/`BOSS_ENERGY_PER_DAMAGE_TAKEN`, mirroring
+   *   how the attacker already gains energy from damage taken). Once it has
+   *   at least its charged move's energy cost, it gets a
+   *   `BOSS_CHARGED_MOVE_USE_PROBABILITY` chance to fire — decided instantly,
+   *   with no look-ahead — at each **boss move-completion boundary**: the
+   *   instant it finishes a fast move, or the instant one of its own
+   *   charged-move casts ends (`attemptBossChargedMoveDecision`, called from
+   *   exactly those two spots in the tick loop below).
+   *
+   *   IMPORTANT — read before trusting this number: the real game's 50%
+   *   figure and the "decided instantly" phrasing are both sourced
+   *   (MECHANICS.md, ultimately one Silph Road analysis of the Sept-2024
+   *   rework), but nowhere is the real per-opportunity DENOMINATOR
+   *   documented — no source states whether a real boss re-checks once per
+   *   fast move, once per some fixed cycle, or on some other cadence, and an
+   *   explicit research pass exhausted every fetchable source without
+   *   finding one (`.claude/agent-memory/pogo-researcher/
+   *   fact_boss_charged_move_decision_cadence.md`, 2026-09-08). "Move-
+   *   completion boundary" is a REASONED INFERENCE, not a cited mechanic: it
+   *   is the only trigger consistent with BOTH already-sourced facts at
+   *   once — "decided instantly" (rules out a planned-ahead cooldown) AND
+   *   "a boss has been observed firing three charged moves in a row with
+   *   zero fast moves between them" (a fast-move-only trigger cannot produce
+   *   that; a boundary-of-any-move trigger can). It also introduces no
+   *   invented time constant — deliberately NOT tied to the unrelated 0.5s
+   *   combat cycle, which is a separately-sourced fact with no documented
+   *   link to this 50% figure. Treat this whole mode as a labelled modelling
+   *   assumption, not a confirmed game rule, if revisiting it.
+   *
+   *   This is also why an EARLIER version of this mode (re-rolling whenever
+   *   `bossEnergy` merely changed value, with no move-boundary requirement)
+   *   had a real deadlock: once energy pinned at `MAX_ENERGY` and one roll
+   *   failed, no further "change" could ever occur, so the boss would go
+   *   silent for the rest of the fight. Move-completion boundaries can't
+   *   deadlock — the boss's own fast move always keeps firing on a schedule
+   *   regardless of its energy total, so a fresh decision opportunity always
+   *   eventually arrives.
+   *
+   *   This is what lets a higher-DPS attacker force more/faster boss charged
+   *   moves (more/bigger damage-taken events reach the energy threshold
+   *   sooner, so more of the boss's own recurring move-completion boundaries
+   *   land on an eligible decision), and lets the boss chain back-to-back
+   *   casts when damage-taken energy completes the requirement mid-animation
+   *   (both effects sourced in MECHANICS.md; only the trigger granularity
+   *   above is inferred).
+   *   `chargedMoveMeanIntervalSeconds`/`chargedMoveWarmupSeconds`/
+   *   `startingEnergy` (used as the boss's INITIAL energy here instead) /
+   *   `chargedMoveNextFireInSeconds` interact differently or not at all in
+   *   this mode — see each field's own doc comment.
+   *
+   * Defaults to `"fixed-interval"`. `"energy-driven"` is deliberately opt-in
+   * for now — its impact hasn't been measured/rolled into any default yet.
+   */
+  chargedMoveCadence?: "fixed-interval" | "energy-driven";
+  /** Mean seconds between the boss's charged moves once it starts using them. Only consulted when chargedMoveCadence is "fixed-interval" (the default); ignored entirely under "energy-driven". */
   chargedMoveMeanIntervalSeconds?: number;
   /**
    * Seconds before the boss can use its first charged move at all. Defaults
@@ -135,8 +253,17 @@ export interface StepwiseBoss {
   /**
    * Energy the boss already has saved when the fight begins (0-energyCost),
    * e.g. modeling a mega that tags in mid-fight against a boss an earlier
-   * trainer's mega already left partway charged. Only affects the *default*
-   * chargedMoveWarmupSeconds above; ignored if that's set explicitly.
+   * trainer's mega already left partway charged. Under chargedMoveCadence
+   * "fixed-interval" (default), only affects the *default* chargedMoveWarmupSeconds
+   * above; ignored if that's set explicitly. Under "energy-driven", this is used
+   * directly as the boss's starting energy total instead (chargedMoveWarmupSeconds/
+   * chargedMoveNextFireInSeconds do not apply in that mode). This field is
+   * sufficient, on its own, to carry a boss's accumulated energy across a
+   * team-raid slot handoff (or a wipe-and-revive) under "energy-driven" — see
+   * StepwiseRunResult.bossEndingEnergy, the read-out counterpart a caller
+   * feeds back in here for the next fight (mirroring how
+   * bossChargedMoveResidualSeconds/chargedMoveNextFireInSeconds already do
+   * this for "fixed-interval"). No separate carryover field was needed.
    * Defaults to 0 (today's implicit assumption: every fight starts fresh).
    */
   startingEnergy?: number;
@@ -200,9 +327,13 @@ export interface StepwiseRunResult {
    * run ended (attacker fainted, or hit maxSeconds) — null when the boss has
    * no charged-move timing configured at all (no chargedMove, or no
    * chargedMoveMeanIntervalSeconds), since there's nothing to carry forward
-   * in that case. Clamped to >= 0 (a run can end exactly on the tick the
-   * boss's charged move was scheduled to fire, which nextBossChargedMoveAt
-   * already reflects as having "fired," not gone negative).
+   * in that case. Also always null under chargedMoveCadence "energy-driven":
+   * that model has no fixed "next fire" schedule to report a residual
+   * against (readiness there is a live energy total, not a countdown) —
+   * teamRaid.ts's slot-handoff isn't wired to that cadence yet. Clamped to
+   * >= 0 (a run can end exactly on the tick the boss's charged move was
+   * scheduled to fire, which nextBossChargedMoveAt already reflects as
+   * having "fired," not gone negative).
    *
    * The one real consumer of this is teamRaid.ts's sequential slot-handoff
    * orchestrator: feed this straight into the next slot's
@@ -215,6 +346,48 @@ export interface StepwiseRunResult {
    * sequential swap-in, which is mechanically identical from the boss's side.
    */
   bossChargedMoveResidualSeconds: number | null;
+  /**
+   * The boss's own accumulated energy at the moment this run ended (fainted,
+   * or hit maxSeconds) — the "energy-driven" `StepwiseBoss.chargedMoveCadence`
+   * counterpart to bossChargedMoveResidualSeconds above (that field's
+   * "countdown" concept doesn't exist in this mode; the boss's readiness is a
+   * live energy total instead). Always `null` under the default
+   * "fixed-interval" cadence — that mode never accumulates a bossEnergy total
+   * at all, so there is nothing meaningful to report (mirrors
+   * bossChargedMoveResidualSeconds's own null-under-the-other-mode
+   * convention).
+   *
+   * The one real consumer is teamRaid.ts's sequential slot-handoff
+   * orchestrator, exactly the way bossChargedMoveResidualSeconds already
+   * feeds the next slot's chargedMoveNextFireInSeconds under
+   * "fixed-interval": feed this straight into the next fight's
+   * StepwiseBoss.startingEnergy so the boss doesn't silently lose its
+   * accumulated energy just because the trainer swapped in a fresh Pokémon —
+   * a slot handoff handing the attacker a freshly-drained boss would make the
+   * energy-driven model MORE forgiving than the fixed-interval one it's
+   * meant to replace, which would be a real, easy-to-miss modeling bug (a
+   * "better-looking" number produced by a wiring mistake, not a real effect).
+   */
+  bossEndingEnergy: number | null;
+  /**
+   * True if at least one of the boss's charged-move inter-arrival times
+   * sampled during THIS run had to be raised to meet the move's own
+   * `durationSeconds` — i.e. the caller-supplied `chargedMoveMeanIntervalSeconds`
+   * (after its +/-40% jitter roll) asked for a cadence physically shorter
+   * than the boss's own cast time. See boundedJitteredChargedMoveInterval's
+   * doc comment for why this floor exists. Always false when the boss has no
+   * charged-move timing configured at all (no chargedMove, or no
+   * chargedMoveMeanIntervalSeconds), OR under chargedMoveCadence
+   * "energy-driven" — that model has no sampled interval to clamp; its own
+   * equivalent floor is structural (a new cast can't start while
+   * bossChargedAnimationEndsAt is still in the future), not a value that can
+   * be "clamped." A true
+   * value here means at least part of this run's dodge-vs-no-dodge
+   * comparison was silently unaffected by dodging before this floor existed
+   * (overlapping casts left no gap to dodge into) — the web layer should
+   * surface this as "requested cadence was physically impossible; clamped."
+   */
+  bossChargedMoveCadenceClamped: boolean;
 }
 
 /** Simple seeded PRNG (mulberry32) so a given seed always reproduces the same run. */
@@ -252,6 +425,10 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   const tick = params.tickSeconds ?? DEFAULT_TICK_SECONDS;
   const maxSeconds = params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS;
   const rng = mulberry32(params.seed ?? 1);
+  // See StepwiseBoss.chargedMoveCadence's doc comment for the two models.
+  // Gated on boss.chargedMove existing too, since there's nothing to drive
+  // energy toward otherwise.
+  const bossEnergyDriven = (boss.chargedMoveCadence ?? "fixed-interval") === "energy-driven" && !!boss.chargedMove;
 
   assertTickAligned(attacker.fastMove.durationSeconds, tick, `Attacker fast move "${attacker.fastMove.name}"`);
   assertTickAligned(attacker.chargedMove.durationSeconds, tick, `Attacker charged move "${attacker.chargedMove.name}"`);
@@ -277,8 +454,45 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   let nextBossFastMoveAt = boss.fastMove.durationSeconds;
   let attackerAnimationEndsAt: number | null = null;
 
+  // energy-driven-only state — see the "Boss charged move" block in the main
+  // loop below. Unused (stays 0/null) under the default "fixed-interval"
+  // cadence.
+  let bossEnergy = bossEnergyDriven ? (boss.startingEnergy ?? 0) : 0;
+  let bossChargedAnimationEndsAt: number | null = null;
+
+  /**
+   * Attempts the "should the boss fire its charged move right now" coin flip
+   * for the "energy-driven" cadence — see StepwiseBoss.chargedMoveCadence's
+   * doc comment for the full model, and why a boss MOVE-COMPLETION BOUNDARY
+   * (not a per-tick clock, not "energy changed") is the trigger. Only ever
+   * called from the two spots in the tick loop below that represent the
+   * boss finishing a move (its own charged-move cast ending, or its own fast
+   * move landing) — calling it anywhere else, or more than once per
+   * completed move, would defeat the whole point of gating on discrete
+   * events rather than a free-running per-tick roll (10 rolls/second at
+   * p=0.5 would be a ~99.9% chance of firing within one second alone).
+   * rng() is only invoked once eligibility (not mid-cast, energy >= cost) is
+   * already confirmed, so a fixed seed's rng sequence depends only on which
+   * boundaries were eligible, never on the outcome of a prior roll.
+   */
+  function attemptBossChargedMoveDecision(atSeconds: number): number | null {
+    if (bossChargedAnimationEndsAt !== null) return null; // already mid-cast, can't restart
+    if (bossEnergy < boss.chargedMove!.energyCost) return null; // not yet eligible
+    if (rng() >= BOSS_CHARGED_MOVE_USE_PROBABILITY) return null; // eligible, but the coin flip failed
+    const damage = calculateDamage({
+      power: boss.chargedMove!.power,
+      attackerAttackStat: boss.attackStat,
+      defenderDefenseStat: attacker.defenseStat,
+      ...(boss.chargedMoveDamageOut ?? boss.damageOut),
+    });
+    bossEnergy = 0;
+    bossChargedAnimationEndsAt = atSeconds + boss.chargedMove!.durationSeconds;
+    return damage;
+  }
+
   let nextBossChargedMoveAt: number | null = null;
-  if (boss.chargedMove && boss.chargedMoveMeanIntervalSeconds) {
+  let bossChargedMoveCadenceClamped = false;
+  if (!bossEnergyDriven && boss.chargedMove && boss.chargedMoveMeanIntervalSeconds) {
     if (boss.chargedMoveNextFireInSeconds != null) {
       // Already fully resolved (carried forward from a prior slot's residual
       // cooldown) — no additional jitteredInterval roll on top.
@@ -287,7 +501,13 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       const warmup =
         boss.chargedMoveWarmupSeconds ??
         bossChargedMoveReadySeconds(boss.fastMove, boss.chargedMove, boss.startingEnergy ?? 0);
-      nextBossChargedMoveAt = warmup + jitteredInterval(boss.chargedMoveMeanIntervalSeconds, rng);
+      const { seconds: interval, wasClamped } = boundedJitteredChargedMoveInterval(
+        boss.chargedMoveMeanIntervalSeconds,
+        boss.chargedMove.durationSeconds,
+        rng,
+      );
+      if (wasClamped) bossChargedMoveCadenceClamped = true;
+      nextBossChargedMoveAt = warmup + interval;
     }
   }
 
@@ -319,12 +539,38 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       chargedAttacksLanded += 1;
       attackerAnimationEndsAt = null;
       ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalFastMoveDamage + totalChargedDamage });
+      // Damage the attacker's own charged move just dealt to the boss also
+      // feeds the boss's energy under the energy-driven cadence — see
+      // StepwiseBoss.chargedMoveCadence.
+      if (bossEnergyDriven) {
+        bossEnergy = Math.min(bossEnergy + bossEnergyFromDamageTaken(damage), MAX_ENERGY);
+      }
     }
 
     // Boss charged move takes priority over its fast move in the same tick.
     let bossHitDamage: number | null = null;
     let isBossChargedHit = false;
-    if (nextBossChargedMoveAt !== null && roundedT >= nextBossChargedMoveAt - EPS) {
+
+    if (bossEnergyDriven) {
+      // Decision boundary #1: the boss's own charged-move cast finishing
+      // exactly on this tick. Clear the mid-cast lock BEFORE attempting a
+      // fresh decision so a same-tick refire is possible — this is the
+      // mechanism behind real observed back-to-back casts (MECHANICS.md:
+      // Kyogre firing three Hydro Pumps in a row with zero fast moves
+      // between them): energy accrued from damage taken DURING the previous
+      // cast can already be sufficient the instant that cast ends. See
+      // attemptBossChargedMoveDecision's doc comment and
+      // StepwiseBoss.chargedMoveCadence for why a move-completion boundary
+      // (not "energy changed", not a per-tick clock) is the trigger.
+      if (bossChargedAnimationEndsAt !== null && roundedT >= bossChargedAnimationEndsAt - EPS) {
+        bossChargedAnimationEndsAt = null;
+        const damage = attemptBossChargedMoveDecision(roundedT);
+        if (damage !== null) {
+          bossHitDamage = damage;
+          isBossChargedHit = true;
+        }
+      }
+    } else if (nextBossChargedMoveAt !== null && roundedT >= nextBossChargedMoveAt - EPS) {
       bossHitDamage = calculateDamage({
         power: boss.chargedMove!.power,
         attackerAttackStat: boss.attackStat,
@@ -332,15 +578,37 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
         ...(boss.chargedMoveDamageOut ?? boss.damageOut),
       });
       isBossChargedHit = true;
-      nextBossChargedMoveAt = roundedT + jitteredInterval(boss.chargedMoveMeanIntervalSeconds!, rng);
-    } else if (roundedT >= nextBossFastMoveAt - EPS) {
-      bossHitDamage = calculateDamage({
+      const { seconds: interval, wasClamped } = boundedJitteredChargedMoveInterval(
+        boss.chargedMoveMeanIntervalSeconds!,
+        boss.chargedMove!.durationSeconds,
+        rng,
+      );
+      if (wasClamped) bossChargedMoveCadenceClamped = true;
+      nextBossChargedMoveAt = roundedT + interval;
+    }
+
+    if (bossHitDamage === null && roundedT >= nextBossFastMoveAt - EPS) {
+      const fastDamage = calculateDamage({
         power: boss.fastMove.power,
         attackerAttackStat: boss.attackStat,
         defenderDefenseStat: attacker.defenseStat,
         ...boss.damageOut,
       });
+      bossHitDamage = fastDamage;
       nextBossFastMoveAt = roundedT + boss.fastMove.durationSeconds;
+      if (bossEnergyDriven) {
+        bossEnergy = Math.min(bossEnergy + boss.fastMove.energyGain, MAX_ENERGY);
+        // Decision boundary #2: the boss's own fast move finishing/landing.
+        // Only one boss action can land on the attacker per tick in this
+        // model, so a successful roll here REPLACES this tick's fast hit
+        // with the charged hit (the boss's next action being the charged
+        // move instead), rather than applying both.
+        const chargedDamage = attemptBossChargedMoveDecision(roundedT);
+        if (chargedDamage !== null) {
+          bossHitDamage = chargedDamage;
+          isBossChargedHit = true;
+        }
+      }
     }
 
     // Set within the block below when this tick's hit was a charged hit the
@@ -418,6 +686,15 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       });
       totalFastMoveDamage += fastDamage;
       ownDamageTrajectory.push({ atSeconds: roundedT, cumulativeDamage: totalFastMoveDamage + totalChargedDamage });
+      // Damage the attacker's own fast move just dealt to the boss also
+      // feeds the boss's energy under the energy-driven cadence. Note this
+      // lands one tick later than the boss's own action resolution above
+      // (the "Boss charged move" block runs earlier in this same loop body)
+      // — a bounded, sub-tick timing simplification consistent with this
+      // file's documented tick-quantization assumptions, not a bug.
+      if (bossEnergyDriven) {
+        bossEnergy = Math.min(bossEnergy + bossEnergyFromDamageTaken(fastDamage), MAX_ENERGY);
+      }
     }
 
     // Fire the charged move as soon as energy allows — UNLESS holding for a
@@ -458,6 +735,8 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     ownDamageTrajectory,
     damageTakenTrajectory,
     bossChargedMoveResidualSeconds,
+    bossEndingEnergy: bossEnergyDriven ? bossEnergy : null,
+    bossChargedMoveCadenceClamped,
   };
 }
 
@@ -474,6 +753,27 @@ export interface DistributionSummary {
   meanSecondsSurvived: number;
   fractionSurvivedFullWindow: number;
   fractionDiedDuringOwnAnimation: number;
+  /**
+   * True if ANY of the underlying runs had at least one boss charged-move
+   * inter-arrival sample clamped up to the move's own durationSeconds — see
+   * StepwiseRunResult.bossChargedMoveCadenceClamped (this is just an OR
+   * across every run in the distribution, since which specific runs hit the
+   * floor depends on per-seed jitter). False whenever the boss has no
+   * charged-move timing configured at all.
+   */
+  bossChargedMoveCadenceClamped: boolean;
+  /**
+   * The floor this distribution's boss charged-move cadence was constrained
+   * to — i.e. max(chargedMoveMeanIntervalSeconds, the resolved boss charged
+   * move's own durationSeconds) — a config-level fact (not sampled, so
+   * identical for every run in the distribution), not an actual observed
+   * mean of the (right-censored) sampled intervals. null when the boss has
+   * no charged-move timing configured at all (no chargedMove, or no
+   * chargedMoveMeanIntervalSeconds). A caller can compare this against the
+   * originally-requested chargedMoveMeanIntervalSeconds to build a message
+   * like "requested Xs is below this move's Ys cast time; using Ys."
+   */
+  bossChargedMoveEffectiveMinIntervalSeconds: number | null;
   /**
    * The first iteration's full run (seed = baseSeed), exposed so callers have
    * one concrete, reproducible ownDamageTrajectory to chart even though the
@@ -507,6 +807,11 @@ export function runStepwiseDistribution(
   const damages = runs.map((r) => r.totalChargedDamage + r.totalFastMoveDamage).sort((a, b) => a - b);
   const survivalSeconds = runs.map((r) => r.faintedAtSeconds ?? (params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS));
 
+  const bossChargedMoveEffectiveMinIntervalSeconds =
+    params.boss.chargedMove && params.boss.chargedMoveMeanIntervalSeconds
+      ? Math.max(params.boss.chargedMoveMeanIntervalSeconds, params.boss.chargedMove.durationSeconds)
+      : null;
+
   return {
     iterations,
     meanTotalDamage: damages.reduce((sum, d) => sum + d, 0) / iterations,
@@ -518,6 +823,8 @@ export function runStepwiseDistribution(
     meanSecondsSurvived: survivalSeconds.reduce((sum, s) => sum + s, 0) / iterations,
     fractionSurvivedFullWindow: runs.filter((r) => r.survivedFullWindow).length / iterations,
     fractionDiedDuringOwnAnimation: runs.filter((r) => r.diedDuringOwnChargedMoveAnimation).length / iterations,
+    bossChargedMoveCadenceClamped: runs.some((r) => r.bossChargedMoveCadenceClamped),
+    bossChargedMoveEffectiveMinIntervalSeconds,
     representativeRun: runs[0]!,
   };
 }

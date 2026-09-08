@@ -120,8 +120,10 @@ export interface SpeciesReportInputs {
   holdChargedMoveUntilSafe?: boolean;
   /** Active weather, applied per-move to both sides against every boss target — see weather.ts. Defaults to "none". */
   weather?: WeatherCondition;
-  /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption, the same user-adjustable value the two-candidate tab already exposes (Scenario's bossChargedMoveFrequencySeconds), not per-boss data this engine has no source for. */
+  /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption, the same user-adjustable value the two-candidate tab already exposes (Scenario's bossChargedMoveFrequencySeconds), not per-boss data this engine has no source for. Only consulted when bossChargedMoveCadence is "fixed-interval". */
   bossChargedMoveMeanIntervalSeconds: number;
+  /** See comparison.ts's SustainedComparisonInputs.bossChargedMoveCadence — one shared assumption swept identically across every boss target. Defaults to "fixed-interval". */
+  bossChargedMoveCadence?: "fixed-interval" | "energy-driven";
   /** See ComparisonInputs.bossStartingEnergy. Only affects each boss's own derived warmup default. Defaults to 0. */
   bossStartingEnergy?: number;
   maxSeconds?: number;
@@ -202,6 +204,7 @@ export function runSpeciesReverseLookup(inputs: SpeciesReportInputs): SpeciesRep
       dodgeFastAttacks: inputs.dodgeFastAttacks,
       holdChargedMoveUntilSafe: inputs.holdChargedMoveUntilSafe,
       bossChargedMoveMeanIntervalSeconds: inputs.bossChargedMoveMeanIntervalSeconds,
+      bossChargedMoveCadence: inputs.bossChargedMoveCadence,
       bossStartingEnergy: inputs.bossStartingEnergy,
       maxSeconds: inputs.maxSeconds,
       iterations: inputs.iterations,
