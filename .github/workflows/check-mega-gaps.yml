@@ -61,10 +61,10 @@ jobs:
       issues: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 20
           cache: npm
@@ -146,7 +146,7 @@ jobs:
 
       - name: Build combined roster-health report
         id: health
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -264,7 +264,7 @@ jobs:
 
       - name: Create or update roster-health tracking issue
         if: steps.health.outputs.hasFindings == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const summary = JSON.parse('${{ steps.health.outputs.summaryJson }}');
@@ -346,7 +346,7 @@ jobs:
 
       - name: Close stale roster-health issue if resolved
         if: steps.health.outputs.hasFindings == 'false'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const label = 'mega-gap-check';
