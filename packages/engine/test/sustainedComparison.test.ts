@@ -237,3 +237,46 @@ describe("runSustainedComparison", () => {
     expect(boostDisabled[0]!.meanChargedDamage).toBe(withBoost[0]!.meanChargedDamage);
   });
 });
+
+describe("runSustainedComparison: bossMaxHp / bossMaxHpOverride", () => {
+  const common = {
+    candidates: [CANDIDATE_ALPHA],
+    boss: BOSS_TIDE,
+    level: LEVEL,
+    ivs: PERFECT_IVS,
+    dodge: { kind: "none" } as const,
+    bossChargedMoveMeanIntervalSeconds: 12,
+    maxSeconds: 40,
+    iterations: 30,
+  };
+
+  it("surfaces bossMaxHp resolved exactly like bossEffectiveHp, with zero effect on the existing distribution numbers when omitted", () => {
+    const withoutField = runSustainedComparison(common);
+    const explicitlyUndefined = runSustainedComparison({ ...common, bossMaxHpOverride: undefined });
+
+    // BOSS_TIDE is statsArePrecomputed, so its resolved HP is baseStamina.
+    expect(withoutField[0]!.bossMaxHp).toBe(BOSS_TIDE.baseStamina);
+    // Purely additive: every other field is untouched by this field's mere presence/absence.
+    expect(explicitlyUndefined[0]!.meanTotalDamage).toBe(withoutField[0]!.meanTotalDamage);
+    expect(explicitlyUndefined[0]!.meanSecondsSurvived).toBe(withoutField[0]!.meanSecondsSurvived);
+    expect(explicitlyUndefined[0]!.bossMaxHp).toBe(withoutField[0]!.bossMaxHp);
+  });
+
+  it("bossMaxHpOverride is reflected exactly in bossMaxHp, without perturbing any other distribution number (the sim never consumes boss HP)", () => {
+    const overridden = runSustainedComparison({ ...common, bossMaxHpOverride: 1800 });
+    const baseline = runSustainedComparison(common);
+
+    expect(overridden[0]!.bossMaxHp).toBe(1800);
+    expect(overridden[0]!.bossMaxHp).not.toBe(baseline[0]!.bossMaxHp);
+    // Same seeds/inputs otherwise -> identical simulated combat numbers,
+    // since simulate.ts's stepwise engine has no boss-HP field at all.
+    expect(overridden[0]!.meanTotalDamage).toBe(baseline[0]!.meanTotalDamage);
+    expect(overridden[0]!.meanSecondsSurvived).toBe(baseline[0]!.meanSecondsSurvived);
+  });
+
+  it("rejects a non-positive/non-finite bossMaxHpOverride", () => {
+    expect(() => runSustainedComparison({ ...common, bossMaxHpOverride: 0 })).toThrow();
+    expect(() => runSustainedComparison({ ...common, bossMaxHpOverride: -5 })).toThrow();
+    expect(() => runSustainedComparison({ ...common, bossMaxHpOverride: NaN })).toThrow();
+  });
+});

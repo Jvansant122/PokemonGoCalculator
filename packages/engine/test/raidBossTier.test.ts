@@ -145,6 +145,48 @@ describe("bossEffectiveStats / bossEffectiveHp: real vs precomputed bosses", () 
   });
 });
 
+describe("bossEffectiveHp: maxHpOverride (historical raid-tier HP fix)", () => {
+  it("omitted/undefined is byte-identical to today's tier-derived behavior", () => {
+    expect(bossEffectiveHp(REAL_STYLE_BOSS, "3-Star Raids")).toBe(bossEffectiveHp(REAL_STYLE_BOSS, "3-Star Raids", undefined));
+    expect(bossEffectiveHp(REAL_STYLE_BOSS, "3-Star Raids")).toBe(RAID_TIER_TABLE["3-Star Raids"].hp);
+  });
+
+  it("wins over the tier-derived HP for a real (non-precomputed) boss", () => {
+    // Old tier-4 era HP (9000) applied on top of a species whose CURRENT tier
+    // is "3-Star Raids" (3600) — the exact real regression this feature
+    // fixes: a historical raid recorded at a since-merged tier label.
+    expect(bossEffectiveHp(REAL_STYLE_BOSS, "3-Star Raids", 9000)).toBe(9000);
+    expect(bossEffectiveHp(REAL_STYLE_BOSS, "3-Star Raids", 9000)).not.toBe(RAID_TIER_TABLE["3-Star Raids"].hp);
+  });
+
+  it("wins over the precomputed baseStamina pass-through too — HP-only override, orthogonal to the precomputed branch", () => {
+    const PRECOMPUTED_STYLE_BOSS: SpeciesDefinition = {
+      id: "precomputed-override-boss",
+      name: "Precomputed Override Boss",
+      types: ["normal"],
+      baseAttack: 200,
+      baseDefense: 180,
+      baseStamina: 15000,
+      fastMoves: [{ id: "pf2", name: "Precomputed Fast 2", type: "normal", power: 8, energyGain: 8, durationSeconds: 1 }],
+      chargedMoves: [{ id: "pc2", name: "Precomputed Charged 2", type: "normal", power: 70, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+      statsArePrecomputed: true,
+    };
+    expect(bossEffectiveHp(PRECOMPUTED_STYLE_BOSS, undefined, 1800)).toBe(1800);
+  });
+
+  it("does NOT touch the tier's attackDefenseMultiplier — bossEffectiveStats is completely unaffected by an HP override", () => {
+    const withoutOverride = bossEffectiveStats(REAL_STYLE_BOSS, "3-Star Raids");
+    const hpOverridden = bossEffectiveStats(REAL_STYLE_BOSS, "3-Star Raids");
+    expect(hpOverridden).toEqual(withoutOverride);
+  });
+
+  it("rejects a non-positive or non-finite override rather than silently producing a degenerate 0-HP boss", () => {
+    for (const bad of [0, -100, NaN, Infinity, -Infinity]) {
+      expect(() => bossEffectiveHp(REAL_STYLE_BOSS, "3-Star Raids", bad)).toThrow();
+    }
+  });
+});
+
 describe("defaultRaidTierForSpecies: rarity-keyed fallback (replaces the old blanket DEFAULT_REAL_RAID_TIER guess)", () => {
   const baseFields = {
     types: ["normal"] as [SpeciesDefinition["types"][number]],

@@ -82,8 +82,39 @@ export function bossEffectiveStats(boss: SpeciesDefinition, tier?: RaidTier): { 
  * straight through, unchanged — exactly like today's pass-through behavior,
  * since its baseStamina field already IS the final effective HP pool by
  * construction.
+ *
+ * `maxHpOverride`, when supplied, wins over BOTH of the above: a real,
+ * sourced historical HP value for one specific past encounter (e.g. a
+ * retired raid tier whose HP pool has since changed — Niantic's 2020-08-27
+ * tier-2/tier-4 merge folded those into today's tier-1/tier-3, silently
+ * understating old tier-2 raids by 3.0x and old tier-4 raids by 2.5x if
+ * simulated at today's stats), NOT a tuning knob. It overrides HP only — the
+ * tier's attackDefenseMultiplier above is untouched by it, since Bulbapedia's
+ * difficulty table only records CURRENT tier multipliers, not retired ones,
+ * while per-row era HP is reliably recorded by the historical archives this
+ * override is meant to feed from. HP is the dominant term of the two (up to
+ * 3x historically) and the multiplier's own era drift is second-order (0.73
+ * vs 0.79, ~8%) — so this override is a large, honest accuracy win even
+ * though it leaves that ~8% residual un-era-corrected; that residual is
+ * deliberate, not an oversight. Omitted/undefined leaves this function
+ * byte-identical to before this parameter existed. A supplied value that
+ * isn't finite and > 0 throws rather than silently producing a degenerate
+ * 0-HP (or negative/NaN-HP) boss that would "die" instantly and report
+ * absurd TDO — see this project's standing "no silent-degenerate-output"
+ * lesson (DEFAULT_STEPWISE_MAX_SECONDS's own history is the same lesson
+ * applied elsewhere).
  */
-export function bossEffectiveHp(boss: SpeciesDefinition, tier?: RaidTier): number {
+export function bossEffectiveHp(boss: SpeciesDefinition, tier?: RaidTier, maxHpOverride?: number): number {
+  if (maxHpOverride !== undefined) {
+    if (!Number.isFinite(maxHpOverride) || maxHpOverride <= 0) {
+      throw new Error(
+        `bossEffectiveHp's maxHpOverride must be a finite, positive HP value (got ${maxHpOverride}). ` +
+          `This is meant to carry a real, sourced historical HP figure for one specific past encounter — ` +
+          `omit it entirely to fall back to today's tier-derived default rather than passing an invalid value.`,
+      );
+    }
+    return maxHpOverride;
+  }
   if (boss.statsArePrecomputed) return boss.baseStamina;
   return raidTierStats(tier ?? defaultRaidTierForSpecies(boss)).hp;
 }
@@ -318,6 +349,17 @@ export interface SustainedComparisonInputs {
   boss: SpeciesDefinition;
   /** See ComparisonInputs.bossRaidTier. */
   bossRaidTier?: RaidTier;
+  /**
+   * Override for the boss's effective max HP for THIS comparison — see
+   * comparison.ts's bossEffectiveHp doc comment for the full contract (a
+   * real, sourced historical HP figure for one specific past encounter, not
+   * a tuning knob; overrides HP only, never the tier's own
+   * attackDefenseMultiplier). Omitted/undefined is byte-identical to before
+   * this field existed — the result's bossMaxHp still comes from
+   * bossEffectiveHp(boss, bossRaidTier) exactly as it always implicitly did
+   * for any caller that needed it. A non-finite or non-positive value throws.
+   */
+  bossMaxHpOverride?: number;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
   bossFastMoveId?: string | null;
   /** Boss charged-move selection. Omit/null defaults to the boss's first charged move (today's behavior) — also determines which move's `perfectlyDodgeable` flag applies. */
@@ -354,6 +396,21 @@ export interface SustainedComparisonInputs {
 export interface SustainedCandidateResult extends DistributionSummary {
   id: string;
   name: string;
+  /**
+   * The boss's resolved effective max HP for this comparison — see
+   * bossEffectiveHp. Identical across every row of a single
+   * runSustainedComparison call (the boss doesn't change per candidate);
+   * surfaced per-row purely so a caller never has to re-derive it (or
+   * duplicate the statsArePrecomputed/tier/override branch) itself, the same
+   * convenience `id`/`name` already provide. NOTE: the sustained simulation
+   * itself (simulate.ts) still never consumes this value for termination —
+   * a candidate's own meanTotalDamage/meanSecondsSurvived are computed
+   * exactly as before regardless of this field or of bossMaxHpOverride; boss
+   * HP is only ever compared against accumulated damage in caller-side
+   * post-processing (see teamRaid.ts's runTeamRaid, and speciesReport.ts's
+   * intended reverse-lookup use).
+   */
+  bossMaxHp: number;
 }
 
 /**
@@ -379,6 +436,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     candidateMegaBoostDisabled = [false, false],
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
+  const bossMaxHp = bossEffectiveHp(boss, inputs.bossRaidTier, inputs.bossMaxHpOverride);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
@@ -446,7 +504,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
       iterations,
     );
 
-    return { id: species.id, name: species.name, ...distribution };
+    return { id: species.id, name: species.name, bossMaxHp, ...distribution };
   });
 }
 

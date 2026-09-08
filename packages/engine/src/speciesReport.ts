@@ -43,6 +43,22 @@ export interface SpeciesReportBossTarget {
   bossFastMoveId?: string | null;
   /** Boss charged-move selection for this specific target — see bossFastMoveId. */
   bossChargedMoveId?: string | null;
+  /**
+   * Override for THIS target's effective max HP — see comparison.ts's
+   * bossEffectiveHp/SustainedComparisonInputs.bossMaxHpOverride for the full
+   * contract. Exists so a historical raid encounter backfilled from an
+   * archive (which records the tier LABEL a boss raided at, but whose HP
+   * pool for that label may since have changed — e.g. Niantic's
+   * 2020-08-27 tier-2/tier-4 merge) can be simulated at the HP it actually
+   * had, rather than at today's stats for `tier`. Overrides HP only; `tier`
+   * still drives the attack/defense multiplier and the displayed tier label,
+   * completely orthogonal to this field. Omitted/undefined is byte-identical
+   * to today's behavior — this row's sustained.bossMaxHp still resolves via
+   * the ordinary tier/precomputed derivation. A non-finite or non-positive
+   * value throws (see bossEffectiveHp) rather than silently producing a
+   * degenerate 0-HP boss.
+   */
+  bossMaxHpOverride?: number;
 }
 
 /**
@@ -177,6 +193,7 @@ export function runSpeciesReverseLookup(inputs: SpeciesReportInputs): SpeciesRep
       candidateChargedMoveIds: [inputs.chargedMoveId ?? null],
       boss: target.species,
       bossRaidTier: target.tier,
+      bossMaxHpOverride: target.bossMaxHpOverride,
       bossFastMoveId: target.bossFastMoveId,
       bossChargedMoveId: target.bossChargedMoveId,
       level: inputs.level,

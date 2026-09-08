@@ -241,6 +241,62 @@ describe("runSpeciesReverseLookup", () => {
   it("empty corpus is treated as no percentile context (returns 1, not NaN/throw)", () => {
     expect(typeMatchupPercentile(1.6, [])).toBe(1);
   });
+
+  describe("bossMaxHpOverride: historical raid-tier HP fix", () => {
+    // REAL_STYLE_BOSS (module-level, above) is a real (non-precomputed)
+    // synced-style species, so its resolved HP comes from RAID_TIER_TABLE
+    // rather than a hand-tuned baseStamina — exactly the code path a real
+    // backfilled historical raid target exercises.
+    it("absent override produces byte-identical results to today's tier-derived path", () => {
+      const targets: SpeciesReportBossTarget[] = [{ species: REAL_STYLE_BOSS, tier: "3-Star Raids" }];
+      const withField = runSpeciesReverseLookup({ ...commonInputs, targets: [{ ...targets[0]!, bossMaxHpOverride: undefined }] });
+      const withoutField = runSpeciesReverseLookup({ ...commonInputs, targets });
+
+      expect(withField.rows[0]!.sustained.bossMaxHp).toBe(RAID_TIER_TABLE["3-Star Raids"].hp);
+      expect(withField.rows[0]!.sustained.bossMaxHp).toBe(withoutField.rows[0]!.sustained.bossMaxHp);
+      expect(withField.rows[0]!.sustained.meanTotalDamage).toBe(withoutField.rows[0]!.sustained.meanTotalDamage);
+      expect(withField.rows[0]!.sustained.meanSecondsSurvived).toBe(withoutField.rows[0]!.sustained.meanSecondsSurvived);
+    });
+
+    it("override present resolves the row's boss HP to exactly the override, via the public sustained.bossMaxHp field", () => {
+      const targets: SpeciesReportBossTarget[] = [
+        { species: REAL_STYLE_BOSS, tier: "3-Star Raids", bossMaxHpOverride: 9000 },
+      ];
+      const result = runSpeciesReverseLookup({ ...commonInputs, targets });
+      expect(result.rows[0]!.sustained.bossMaxHp).toBe(9000);
+    });
+
+    it("REGRESSION: same species/tier, with vs without the old tier-4-era HP override (9000 vs today's 3-Star 3600) — differs by exactly 2.5x, the real understatement this feature fixes", () => {
+      const todayTierTargets: SpeciesReportBossTarget[] = [{ species: REAL_STYLE_BOSS, tier: "3-Star Raids" }];
+      const historicalOverrideTargets: SpeciesReportBossTarget[] = [
+        { species: REAL_STYLE_BOSS, tier: "3-Star Raids", bossMaxHpOverride: 9000 },
+      ];
+
+      const todayResult = runSpeciesReverseLookup({ ...commonInputs, targets: todayTierTargets });
+      const historicalResult = runSpeciesReverseLookup({ ...commonInputs, targets: historicalOverrideTargets });
+
+      expect(todayResult.rows[0]!.sustained.bossMaxHp).toBe(3600);
+      expect(historicalResult.rows[0]!.sustained.bossMaxHp).toBe(9000);
+      expect(historicalResult.rows[0]!.sustained.bossMaxHp / todayResult.rows[0]!.sustained.bossMaxHp).toBeCloseTo(2.5);
+      // Tier's attack/defense multiplier ("3-Star Raids", 0.73) is untouched
+      // by the HP override — the two runs' actual combat numbers (damage
+      // dealt/seconds survived) must therefore be identical, since
+      // bossRaidTier is the same for both and the stepwise sim never
+      // consumes boss HP at all (see comparison.ts/simulate.ts).
+      expect(historicalResult.rows[0]!.sustained.meanTotalDamage).toBe(todayResult.rows[0]!.sustained.meanTotalDamage);
+    });
+
+    it("rejects a non-positive/non-finite override rather than silently modeling a 0-HP boss", () => {
+      for (const bad of [0, -1, NaN, Infinity]) {
+        expect(() =>
+          runSpeciesReverseLookup({
+            ...commonInputs,
+            targets: [{ species: REAL_STYLE_BOSS, tier: "3-Star Raids", bossMaxHpOverride: bad }],
+          }),
+        ).toThrow();
+      }
+    });
+  });
 });
 
 describe("offensiveTypeMatchup / typeMatchupPercentile (the cheap, no-simulation helpers)", () => {
