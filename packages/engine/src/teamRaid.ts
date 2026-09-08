@@ -96,6 +96,18 @@ export interface TeamRaidSlotInput {
    * across every cycle it's fielded in (a revive doesn't un-mega it).
    */
   isMega?: boolean;
+  /**
+   * Per-slot override for TeamRaidInputs.level — this slot fights at ITS
+   * OWN level instead of the roster-wide default. Omitted/undefined falls
+   * back to the roster-wide `level` (today's behavior, byte-identical).
+   * Added for the Power-Up Optimizer (powerUp.ts's optimizePowerUps), which
+   * needs to simulate one slot power-up'd to a candidate level while every
+   * other slot stays at its own current level — but usable by any caller
+   * that wants a mixed-level roster.
+   */
+  level?: number;
+  /** Per-slot override for TeamRaidInputs.ivs — see `level` above for the same fallback convention and motivation. */
+  ivs?: IVSpread;
 }
 
 export interface TeamRaidInputs {
@@ -419,7 +431,10 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
       }
 
       const startClock = globalClock;
-      const stats = effectiveStatsAtLevel(species, ivs, level);
+      // Per-slot level/ivs override (see TeamRaidSlotInput.level's doc
+      // comment) — omitted for a slot falls back to the roster-wide
+      // level/ivs exactly as before this field existed.
+      const stats = effectiveStatsAtLevel(species, slot.ivs ?? ivs, slot.level ?? level);
       const fastMove = resolveMove(species.fastMoves, slot.fastMoveId);
       const chargedMove = resolveMove(species.chargedMoves, slot.chargedMoveId);
       if (!fastMove || !chargedMove) {

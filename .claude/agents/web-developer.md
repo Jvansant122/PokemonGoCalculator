@@ -20,7 +20,7 @@ chart is hand-rolled inline SVG (see `DamageOverTimeChart.tsx`); don't add one w
 
 **`App.tsx` is a thin tab shell, not the app itself.** It holds only the `view=`
 query-param-backed tab state and a `.tab-switcher` nav; the original two-candidate comparator's
-full logic lives in `ComparatorView.tsx`. There are five tabs (`AppTab` in `App.tsx`), each with
+full logic lives in `ComparatorView.tsx`. There are six tabs (`AppTab` in `App.tsx`), each with
 its own view component, its own shareable state type, and its own query param:
 
 | Tab (`view=`)                 | View component                       | State type / param                    |
@@ -30,6 +30,7 @@ its own view component, its own shareable state type, and its own query param:
 | `species-report`              | `SpeciesReportView.tsx`              | `SpeciesReportScenario` / `?sr=`      |
 | `iv-breakpoints`              | `IvBreakpointsView.tsx`              | `IvBreakpointsScenario` / `?ivc=`     |
 | `attack-defense-breakpoints`  | `AttackDefenseBreakpointsView.tsx`   | `AttackDefenseBreakpointsScenario` / `?adb=` |
+| `power-up-optimizer`          | `PowerUpOptimizerView.tsx`           | `PowerUpOptimizerScenario` / `?pu=`   |
 
 Don't conflate the scenario types — they're deliberately separate, not one unified shape — and
 reuse the existing `.tab-switcher` scaffold rather than inventing a second routing mechanism if a

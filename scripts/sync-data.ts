@@ -124,12 +124,21 @@ import {
   isKnownRaidTier,
   RAID_TIER_TABLE,
   defaultRaidTierForSpecies,
+  // 2026-09-08, Power-Up Optimizer data source (see IDEAS.md's "Power-Up
+  // Optimizer" entry). Written in parallel with engine-developer's own work —
+  // this export does not exist yet as of this script's authoring; expect a
+  // "no exported member" type error until engine-developer lands
+  // packages/engine/src/powerUp.ts and re-exports it from index.ts. Never
+  // worked around locally (e.g. by re-deriving the table here) — the engine
+  // owns this interpretation, same as fromGameMaster/fromGameMasterMove.
+  powerUpCostTableFromGameMaster,
   type PokemonType,
   type PokemonRarity,
   type RaidTier,
   type SpeciesDefinition,
   type FastMove,
   type ChargedMove,
+  type PowerUpCostTable,
 } from "@pogo-analyzer/engine";
 
 import type {
@@ -1901,6 +1910,59 @@ if (existsSync(raidHistoryOutPath)) {
 
 const SYNC_TIMESTAMP = new Date().toISOString();
 
+// ---------------------------------------------------------------------------
+// Power-up (level-up) cost table (2026-09-08, Power-Up Optimizer tab data
+// source — see IDEAS.md's "Power-Up Optimizer" entry). GAME_MASTER's own
+// POKEMON_UPGRADE_SETTINGS/LUCKY_POKEMON_SETTINGS templates carry the
+// universal per-level candy/stardust power-up cost table this pipeline
+// previously discarded entirely (see fetchGameMasterData's doc comment in
+// ./sync-data/fetchCache.ts) — GAME_MASTER already has this data, so
+// pogoapi's own pokemon_powerup_requirements.json (named as the fallback
+// source in IDEAS.md's step 1) is not needed at all here. The engine
+// (powerUpCostTableFromGameMaster, packages/engine/src/powerUp.ts) owns the
+// interpretation of the raw settings into a per-level PowerUpCostTable — this
+// script only fetches/validates/writes, same division of responsibility as
+// fromGameMaster/fromGameMasterMove above. A missing/malformed source, or a
+// validation failure inside powerUpCostTableFromGameMaster itself, means no
+// table is produced THIS run — data/normalized/powerUpCosts.json (if one
+// already exists from an earlier successful run) is left completely
+// untouched rather than overwritten with something worse, and the reason is
+// reported in WARNINGS, never silent and never a failed sync.
+// ---------------------------------------------------------------------------
+
+const powerUpCostsOutPath = join(NORMALIZED_DIR, "powerUpCosts.json");
+const POWER_UP_COSTS_SOURCE_URL =
+  "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json (POKEMON_UPGRADE_SETTINGS + LUCKY_POKEMON_SETTINGS templates)";
+
+let previousPowerUpCosts: (PowerUpCostTable & { sourceUrl: string; fetchedAt: string }) | null = null;
+if (existsSync(powerUpCostsOutPath)) {
+  try {
+    previousPowerUpCosts = JSON.parse(readFileSync(powerUpCostsOutPath, "utf-8"));
+  } catch {
+    previousPowerUpCosts = null;
+  }
+}
+
+let powerUpCostTable: PowerUpCostTable | null = null;
+let powerUpCostTableError: string | null = null;
+if (!gameMasterAvailable) {
+  powerUpCostTableError = "GAME_MASTER fetch failed this run — see the GAME_MASTER WARNINGS line above";
+} else if (!gameMasterFetchResult.upgradeSettings) {
+  powerUpCostTableError =
+    "POKEMON_UPGRADE_SETTINGS template not found (or missing its candyCost/stardustCost arrays) in this run's GAME_MASTER dump";
+} else if (gameMasterFetchResult.luckyStardustDiscountPercent === null) {
+  powerUpCostTableError = "LUCKY_POKEMON_SETTINGS template (powerUpStardustDiscountPercent) not found in this run's GAME_MASTER dump";
+} else {
+  try {
+    powerUpCostTable = powerUpCostTableFromGameMaster(
+      gameMasterFetchResult.upgradeSettings,
+      gameMasterFetchResult.luckyStardustDiscountPercent,
+    );
+  } catch (err) {
+    powerUpCostTableError = `powerUpCostTableFromGameMaster validation failed: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 const raidHistoryById = new Map<string, RaidHistoryEntry>();
 for (const entry of previousRaidHistory) {
   if (entry && typeof entry.speciesId === "string") raidHistoryById.set(entry.speciesId, entry);
@@ -2662,6 +2724,14 @@ if (!existsSync(NORMALIZED_DIR)) mkdirSync(NORMALIZED_DIR, { recursive: true });
 writeFileSync(speciesOutPath, JSON.stringify(species, null, 2));
 writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
 writeFileSync(raidHistoryOutPath, JSON.stringify(raidHistory, null, 2));
+// See this file's "Power-up (level-up) cost table" section above for why a
+// missing/invalid table this run intentionally leaves any existing file untouched.
+if (powerUpCostTable) {
+  writeFileSync(
+    powerUpCostsOutPath,
+    JSON.stringify({ sourceUrl: POWER_UP_COSTS_SOURCE_URL, fetchedAt: SYNC_TIMESTAMP, ...powerUpCostTable }, null, 2),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Report
@@ -2673,11 +2743,22 @@ const SCRAPEDDUCK_RAIDS_URL = "https://raw.githubusercontent.com/bigfoott/Scrape
 const raidsWithNullSpecies = activeRaids.filter((r) => r.speciesId === null).length;
 const raidsApproximate = activeRaids.filter((r) => r.isApproximate).length;
 
-console.log(`SYNCED: GAME_MASTER (primary), pokemon_stats/pokemon_types/fast_moves/charged_moves/current_pokemon_moves (roster + fallback), cp_multiplier, mega_pokemon, scrapedduck-raids, pokebattler-raids (live cross-check + "_LEGACY" archive backfill, see WARNINGS), raid_bosses.previous + bulbapedia-raid-archive + pokebattler-legacy (raidHistory backfill) (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length - extraFormSpeciesCount} single-form (Normal, or fallback — see WARNINGS) + ${extraFormSpeciesCount} mechanically-distinct extra form (see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (${shadowSeedDurableCount} durably from evidence [raidHistory.json/Pokebattler-legacy/Bulbapedia], ${shadowSpecies.length - shadowSeedDurableCount} from this run's live feed only, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} pogoapi-fallback moves cached + ${gameMasterFetchResult.moves.length} GAME_MASTER moveSettings entries)`);
+console.log(`SYNCED: GAME_MASTER (primary), pokemon_stats/pokemon_types/fast_moves/charged_moves/current_pokemon_moves (roster + fallback), cp_multiplier, mega_pokemon, scrapedduck-raids, pokebattler-raids (live cross-check + "_LEGACY" archive backfill, see WARNINGS), raid_bosses.previous + bulbapedia-raid-archive + pokebattler-legacy (raidHistory backfill) (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length - extraFormSpeciesCount} single-form (Normal, or fallback — see WARNINGS) + ${extraFormSpeciesCount} mechanically-distinct extra form (see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (${shadowSeedDurableCount} durably from evidence [raidHistory.json/Pokebattler-legacy/Bulbapedia], ${shadowSpecies.length - shadowSeedDurableCount} from this run's live feed only, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} pogoapi-fallback moves cached + ${gameMasterFetchResult.moves.length} GAME_MASTER moveSettings entries), power-up cost table (${powerUpCostTable ? `${powerUpCostTable.steps.length} steps, see WARNINGS` : "skipped this run, see WARNINGS"})`);
 console.log(`CHANGED (species.json): ${speciesDiffs.length > 0 ? speciesDiffs.join("; ") : "none"}`);
 console.log(`CHANGED (activeRaids.json): ${raidDiffs.length > 0 ? raidDiffs.join("; ") : "none"}`);
 console.log(
   `CHANGED (raidHistory.json): ${raidHistory.length} total entries (${raidHistoryLiveFeedCount} live-feed, ${raidHistoryResearchedCount} researched-tier, ${raidHistoryPogoapiPreviousCount} pogoapi-previous, ${raidHistoryBulbapediaArchiveCount} bulbapedia-archive, ${raidHistoryPokebattlerLegacyCount} pokebattler-legacy); newly added this run: ${raidHistoryNewlyAdded.length > 0 ? raidHistoryNewlyAdded.join(", ") : "none"}; archive-vs-archive tier upgrades this run: ${raidHistoryArchiveUpgradedCount > 0 ? raidHistoryArchiveUpgraded.join(", ") : "none"}; pokebattler-legacy tier upgrades this run: ${raidHistoryPokebattlerLegacyUpgradedCount > 0 ? raidHistoryPokebattlerLegacyUpgraded.join(", ") : "none"}; stale-row re-resolutions this run: ${raidHistoryMigrations.length > 0 ? raidHistoryMigrations.map((m) => `${m.from} -> ${m.to} (raidName "${m.raidName}"${m.merged ? ", merged into existing correct row" : ""})`).join("; ") : "none"}; species.json lastKnownRaidTier cleared alongside a migration (same-value contamination from the same old mis-resolution): ${raidHistoryMigrationClearedTiers.length > 0 ? raidHistoryMigrationClearedTiers.join(", ") : "none"}; phantom researched-tier rows superseded by a confidently-resolved extra form and removed: ${raidHistoryPhantomTierCleanups.length > 0 ? raidHistoryPhantomTierCleanups.join(", ") : "none"}`,
+);
+console.log(
+  `CHANGED (powerUpCosts.json): ${
+    !powerUpCostTable
+      ? `skipped this run (${powerUpCostTableError}) — see WARNINGS`
+      : !previousPowerUpCosts
+        ? "created (no previous file)"
+        : JSON.stringify(previousPowerUpCosts) === JSON.stringify({ sourceUrl: POWER_UP_COSTS_SOURCE_URL, fetchedAt: previousPowerUpCosts.fetchedAt, ...powerUpCostTable })
+          ? "none"
+          : "cost table or multipliers changed vs previous sync"
+  }`,
 );
 console.log(`AFFECTS SCENARIOS: none (no saved scenarios reference normalized species yet; scenarioA.ts fixtures untouched)`);
 console.log(`WARNINGS:`);
@@ -2688,6 +2769,19 @@ if (gameMasterAvailable) {
 } else {
   console.log(
     `  - VALIDATION: GAME_MASTER fetch FAILED this run (${gameMasterFetchResult.error}) — every species this run fell all the way back to pogoapi-sourced stats/typing/moveset, and rarity defaulted to "STANDARD" across the board (pokemon_rarity.json is no longer fetched independently — see below). Re-run once GAME_MASTER is reachable again.`,
+  );
+}
+if (powerUpCostTable) {
+  // Field names below are the engine's own PowerUpCostTable (packages/engine/src/powerUp.ts) — luckyStardustMultiplier is 1 - GAME_MASTER's powerUpStardustDiscountPercent.
+  const step1 = powerUpCostTable.steps.find((s) => s.fromLevel === 1);
+  const step40 = powerUpCostTable.steps.find((s) => s.fromLevel === 40);
+  const step495 = powerUpCostTable.steps.find((s) => s.fromLevel === 49.5);
+  console.log(
+    `  - Power-up cost table (data/normalized/powerUpCosts.json, 2026-09-08 Power-Up Optimizer data source — GAME_MASTER's POKEMON_UPGRADE_SETTINGS + LUCKY_POKEMON_SETTINGS templates, pogoapi's pokemon_powerup_requirements.json not needed since GAME_MASTER already has this data): ${powerUpCostTable.steps.length} steps, maxLevel ${powerUpCostTable.maxLevel}. Sample step costs — level 1: ${step1 ? `${step1.stardust} stardust / ${step1.candy} candy${step1.xlCandy ? ` / ${step1.xlCandy} XL candy` : ""}` : "not found (unexpected)"}; level 40: ${step40 ? `${step40.stardust} stardust / ${step40.candy} candy${step40.xlCandy ? ` / ${step40.xlCandy} XL candy` : ""}` : "not found (unexpected)"}; level 49.5: ${step495 ? `${step495.stardust} stardust / ${step495.candy} candy${step495.xlCandy ? ` / ${step495.xlCandy} XL candy` : ""}` : "not found (unexpected)"}. Multipliers — shadow: ${powerUpCostTable.shadowStardustMultiplier}x stardust / ${powerUpCostTable.shadowCandyMultiplier}x candy; purified: ${powerUpCostTable.purifiedStardustMultiplier}x stardust / ${powerUpCostTable.purifiedCandyMultiplier}x candy; lucky: ${powerUpCostTable.luckyStardustMultiplier}x stardust (candy unaffected).`,
+  );
+} else {
+  console.log(
+    `  - VALIDATION: power-up cost table NOT produced this run (${powerUpCostTableError}) — data/normalized/powerUpCosts.json left untouched${existsSync(powerUpCostsOutPath) ? " (existing file from an earlier run still stands)" : " (no existing file — Power-Up Optimizer data source is still unpopulated)"}. Re-run once the missing GAME_MASTER template is reachable/well-formed again.`,
   );
 }
 console.log(

@@ -6,106 +6,52 @@ before starting implementation. An idea promoted to a `PLAN_*.md` is a plan, not
 leave the pointer here, but the plan file owns the detail from then on, and gets deleted once
 the feature ships (see `CLAUDE.md`'s "For session continuity").
 
-## Power-Up Optimizer
+## Power-Up Optimizer — v1 SHIPPED 2026-09-08 (no login); what remains
 
-_Fleshed out by `pogo-researcher`, 2026-09-07 — see that agent's memory
-(`.claude/agent-memory/pogo-researcher/fact_powerup_cost_data_source.md`,
-`proposal_powerup_optimizer_flesh_out.md`) for full source citations._
+_Researched by `pogo-researcher` 2026-09-07 (see that agent's memory,
+`.claude/agent-memory/pogo-researcher/fact_powerup_cost_data_source.md` and
+`proposal_powerup_optimizer_flesh_out.md`, for the original citations). The thesis it
+established is now the sixth tab — see `CLAUDE.md`'s repo layout, `MECHANICS.md`'s
+"Power-up (level-up) costs", and `HANDOFF.md`'s 2026-09-08 entry for what was built._
 
-Given a user's own 6-Pokémon roster (or 5 + a hypothetical 6th), recommend the most
-stardust/candy-efficient power-ups (or new additions) for raid performance, ranked by
-**team-DPS gained per resource spent** — not raw CP or raw ATK — reusing this project's
-existing survivability/team-DPS math.
+What v1 does: a 6-slot roster where every slot carries its OWN level/IVs, candy and XL on
+hand, and Shadow/Purified/Lucky cost flags, plus one stardust budget. Every single-slot
+power-up to every half-level up to 50 is re-simulated as a full Team Raid (paired seeds), and
+ranked by **team-DPS gained per 1000 stardust and per candy as separate numbers** — resources
+are not fungible for a real player, so they are never blended into one score. Each slot's
+headline is the stardust/candy to its next floored per-hit damage breakpoint against the
+chosen boss (`powerUpDamageLadder`), because a power-up that crosses no breakpoint buys
+nothing. The cost table comes from GAME_MASTER's own `POKEMON_UPGRADE_SETTINGS` +
+`LUCKY_POKEMON_SETTINGS` templates (pogoapi's endpoint turned out to be unnecessary),
+interpreted only by the engine's `powerUpCostTableFromGameMaster`.
 
-**Why raw CP/ATK is the wrong metric here (not just philosophically, mechanically):**
-Pokémon GO's real damage formula truncates per-hit damage to an integer
-(`Math.floor(fullDamage * multiplier)` — already implemented in
-`packages/engine/src/breakpoints.ts`). A stardust/candy spend that raises a Pokémon's
-effective ATK can produce a literal zero change in damage-per-hit against a specific
-boss's real Defense stat until enough small increases stack to cross the next integer
-threshold. This is the exact same "breakpoint" concept the IV Breakpoints tab already
-surfaces for IV/level choices (`packages/engine/src/breakpoints.ts`,
-`packages/web/src/IvBreakpointsView.tsx`) — the Optimizer's headline metric should be
-**"stardust/candy to reach the next real damage breakpoint against this boss,"** not a
-naive linear $-per-level number. This is also where the project's core thesis applies
-directly: the *team*-DPS delta (via `teamRaid.ts`'s sequential-roster math, which already
-folds in uptime/downtime/revive cost) is the right numerator, not the power-up's own
-solo-DPS delta, since a power-up on a low-uptime slot may barely move team output even
-if it moves that slot's own DPS a lot.
+**Scope decision, restated:** the user chose to prototype WITHOUT login first (2026-09-08),
+reversing the 2026-09-07 "login before the optimizer" sequencing. The roster round-trips
+through the `pu` query param like every other tab. Real persistence is still
+[`PLAN_login_and_roster_persistence.md`](PLAN_login_and_roster_persistence.md) — unchanged,
+still pending, and now purely additive on top of a working tab ("remember my roster" rather
+than "share a link").
 
-**Real cost data**: pogoapi.net exposes a dedicated
-`GET /api/v1/pokemon_powerup_requirements.json` endpoint (levels 1-50, separate
-`candy_to_upgrade`/`xl_candy_to_upgrade`/`stardust_to_upgrade` fields, universal across
-species) — confirmed to exist via its own documentation, 2026-09-07. **Not currently
-fetched by `scripts/sync-data.ts`** — this needs new `data-sync` work, not a
-hand-authored table (matches this project's stated aversion to hand-typed data since
-the `baseAttack` incident). On top of that base table, real per-Pokémon modifiers apply
-at the cost layer only (no combat-math change): Lucky = 50% Stardust; Shadow = 1.2x
-both; Purified = 90% of both; these stack multiplicatively. [community-consensus —
-Bulbapedia percentages agree across two independent fetches; exact cumulative totals
-from wiki-page summarization did NOT agree across fetches and should not be trusted —
-only the structured API endpoint should be used for real numbers.] Shadow-vs-not is
-already representable via this engine's existing `isShadow` flag
-(`packages/engine/src/shadow.ts`); Lucky/Purified need no new combat flag, only a
-cost-side multiplier — they don't change a Pokémon's battle stats.
+**Not a Teambuilding-Analyzer conflict**: one trainer's own roster, same single-trainer framing
+as the Team Raid Simulator. Nothing here staggers megas across trainers.
 
-**Scope decision — RESOLVED 2026-09-07**: the original outline assumed real login +
-persistent server-side storage had to come first; `pogo-researcher` flagged a no-login,
-`Scenario`-URL-only alternative as a cheaper v1. The user decided: **build real login.**
-Full architecture spec written to
-[`PLAN_login_and_roster_persistence.md`](PLAN_login_and_roster_persistence.md) (Firebase
-Auth + Firestore, no server/hosting change, no password handling — Google Sign-In only).
-That plan is standalone infrastructure work, sequenced **before** this Optimizer's own
-step 3 below — read it first if picking this idea up. It keeps the existing
-`Scenario`+query-param share-link pattern too (auth adds "remember my stuff," it doesn't
-replace "share a link"), so nothing about the CLAUDE.md Scenario-round-trip rule changes.
+Remaining ideas, in rough value order (none scheduled):
 
-**Not a Teambuilding-Analyzer conflict**: this is one trainer optimizing their own
-roster's power-ups, the same single-trainer framing CLAUDE.md already blesses for the
-Team Raid Simulator (added 2026-09-06). No multi-trainer mega staggering is implied by
-anything here — flagging explicitly per CLAUDE.md's instruction to surface this rather
-than quietly assume it's fine.
-
-Revised steps:
-
-1. **Data**: `data-sync` fetches/normalizes a levels-1-50 candy/XL-candy/stardust cost table
-   into `data/normalized/` — small and rarely-changing, not a live feed. **Check GAME_MASTER
-   first, before reaching for pogoapi.** The 2026-09-06 pipeline switch (`5887d69`) made
-   GAME_MASTER this project's primary source, and `data/raw/game_master.json` is only a
-   *slice* — `fetchGameMasterData` keeps `pokemonSettings` and `moveSettings` and discards
-   every other template, so the absence of upgrade-cost fields in that cached file proves
-   nothing about the upstream dump. If GAME_MASTER carries the costs, take them from there
-   for consistency with everything else; pogoapi's
-   `pokemon_powerup_requirements.json` (confirmed to exist, 2026-09-07) is the fallback, and
-   either way this is real `data-sync` work, not a hand-authored table.
-2. **Login + persistence infrastructure** — see
-   [`PLAN_login_and_roster_persistence.md`](PLAN_login_and_roster_persistence.md), a
-   standalone plan (Firebase Auth + Firestore). Land and verify that plan's minimal
-   vertical slice before starting step 3 below.
-3. Roster data model: per-slot species id, IVs, current level, candy/candy-XL on hand,
-   stardust on hand, and Lucky/Shadow/Purified flags (cost-multiplier-only, per above)
-   — persisted via the new `useRoster()` hook from step 2, *and* still round-tripped
-   through a `Scenario`-family type + its own query param for the separate "share a
-   link" feature, following the existing per-tab convention.
-4. Engine: extend `breakpoints.ts`'s per-hit-damage-truncation logic to compute, per
-   candidate power-up step (or step-range), the resulting real damage-per-hit
-   breakpoint crossings against a chosen boss — reuses `compareIvSpreads`'s existing
-   level/IV stat math (`ivComparison.ts`), doesn't reinvent it.
-5. Engine: reuse `runTeamRaid`/`TeamRaidInputs` (`teamRaid.ts`) unchanged to compute
-   the **team-DPS delta** (not solo-DPS delta) of a given power-up or roster swap
-   against the user's real other 5 slots and a chosen boss.
-6. Optimizer layer: for each affordable power-up (or swap) candidate, compute
-   (team-DPS delta) / (stardust spent) and (team-DPS delta) / (candy-or-XL-candy
-   spent, weighted for scarcity) as two separate efficiency numbers — stardust and
-   candy are not fungible resources for a real player, don't collapse them into one
-   score. Group zero-delta intermediate steps under "cost to next real breakpoint."
-7. UI: new tab, its own query param, roster entry UI, ranked efficiency table.
-8. Sign-in flow + roster persistence UI, on top of step 2's `useAuth()`/`useRoster()`. Note
-   that plan's two pinned constraints: signed-out must stay fully functional (roster UI runs
-   on local state, Firestore syncs on top), and stored data needs a real delete path.
-9. Testing: engine tests for the new breakpoint-crossing-cost math and the
-   stardust/candy efficiency ranking, plus this project's usual
-   test → typecheck → build → ship pipeline.
+1. **Login + roster persistence** — the plan above. Signed-out must stay fully functional.
+2. **Multi-step plans.** v1 ranks single-slot power-ups only. A greedy "spend this whole budget"
+   plan (repeatedly take the best affordable candidate, re-baseline, repeat) is the obvious
+   next step and needs no new engine primitive — `optimizePowerUps` already returns the
+   re-baselined summary per candidate.
+3. **"Add a 7th" candidates.** Compare powering up an owned slot against replacing it with a
+   hypothetical new catch at level 20/25 (raid catch levels) — the original idea's "5 + a
+   hypothetical 6th" framing. Needs a roster-swap candidate type alongside the level-up one.
+4. **Per-species cost overrides.** GAME_MASTER carries an Eternatus-only 30× candy override
+   (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`); v1 ignores it, so Eternatus
+   candy costs are understated 30×. Small data-sync + engine change once a second such
+   override appears or someone actually optimizes an Eternatus.
+5. **Best Buddy +1 level** (`defaultCpBoostAdditionalLevel`) as a free, cost-less candidate.
+6. **More iterations / a Web Worker.** 3 paired seeds keep the tab responsive but small deltas
+   are still noisy; the Species Report's rejected-for-now worker idea applies here too.
 
 ## Unmodelled real mechanics
 

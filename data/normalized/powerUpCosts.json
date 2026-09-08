@@ -1,0 +1,600 @@
+{
+  "sourceUrl": "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json (POKEMON_UPGRADE_SETTINGS + LUCKY_POKEMON_SETTINGS templates)",
+  "fetchedAt": "2026-09-08T19:23:56.300Z",
+  "steps": [
+    {
+      "fromLevel": 1,
+      "stardust": 200,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 1.5,
+      "stardust": 200,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 2,
+      "stardust": 200,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 2.5,
+      "stardust": 200,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 3,
+      "stardust": 400,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 3.5,
+      "stardust": 400,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 4,
+      "stardust": 400,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 4.5,
+      "stardust": 400,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 5,
+      "stardust": 600,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 5.5,
+      "stardust": 600,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 6,
+      "stardust": 600,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 6.5,
+      "stardust": 600,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 7,
+      "stardust": 800,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 7.5,
+      "stardust": 800,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 8,
+      "stardust": 800,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 8.5,
+      "stardust": 800,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 9,
+      "stardust": 1000,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 9.5,
+      "stardust": 1000,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 10,
+      "stardust": 1000,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 10.5,
+      "stardust": 1000,
+      "candy": 1,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 11,
+      "stardust": 1300,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 11.5,
+      "stardust": 1300,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 12,
+      "stardust": 1300,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 12.5,
+      "stardust": 1300,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 13,
+      "stardust": 1600,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 13.5,
+      "stardust": 1600,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 14,
+      "stardust": 1600,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 14.5,
+      "stardust": 1600,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 15,
+      "stardust": 1900,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 15.5,
+      "stardust": 1900,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 16,
+      "stardust": 1900,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 16.5,
+      "stardust": 1900,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 17,
+      "stardust": 2200,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 17.5,
+      "stardust": 2200,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 18,
+      "stardust": 2200,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 18.5,
+      "stardust": 2200,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 19,
+      "stardust": 2500,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 19.5,
+      "stardust": 2500,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 20,
+      "stardust": 2500,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 20.5,
+      "stardust": 2500,
+      "candy": 2,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 21,
+      "stardust": 3000,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 21.5,
+      "stardust": 3000,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 22,
+      "stardust": 3000,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 22.5,
+      "stardust": 3000,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 23,
+      "stardust": 3500,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 23.5,
+      "stardust": 3500,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 24,
+      "stardust": 3500,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 24.5,
+      "stardust": 3500,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 25,
+      "stardust": 4000,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 25.5,
+      "stardust": 4000,
+      "candy": 3,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 26,
+      "stardust": 4000,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 26.5,
+      "stardust": 4000,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 27,
+      "stardust": 4500,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 27.5,
+      "stardust": 4500,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 28,
+      "stardust": 4500,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 28.5,
+      "stardust": 4500,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 29,
+      "stardust": 5000,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 29.5,
+      "stardust": 5000,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 30,
+      "stardust": 5000,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 30.5,
+      "stardust": 5000,
+      "candy": 4,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 31,
+      "stardust": 6000,
+      "candy": 6,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 31.5,
+      "stardust": 6000,
+      "candy": 6,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 32,
+      "stardust": 6000,
+      "candy": 6,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 32.5,
+      "stardust": 6000,
+      "candy": 6,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 33,
+      "stardust": 7000,
+      "candy": 8,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 33.5,
+      "stardust": 7000,
+      "candy": 8,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 34,
+      "stardust": 7000,
+      "candy": 8,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 34.5,
+      "stardust": 7000,
+      "candy": 8,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 35,
+      "stardust": 8000,
+      "candy": 10,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 35.5,
+      "stardust": 8000,
+      "candy": 10,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 36,
+      "stardust": 8000,
+      "candy": 10,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 36.5,
+      "stardust": 8000,
+      "candy": 10,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 37,
+      "stardust": 9000,
+      "candy": 12,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 37.5,
+      "stardust": 9000,
+      "candy": 12,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 38,
+      "stardust": 9000,
+      "candy": 12,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 38.5,
+      "stardust": 9000,
+      "candy": 12,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 39,
+      "stardust": 10000,
+      "candy": 15,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 39.5,
+      "stardust": 10000,
+      "candy": 15,
+      "xlCandy": 0
+    },
+    {
+      "fromLevel": 40,
+      "stardust": 10000,
+      "candy": 0,
+      "xlCandy": 10
+    },
+    {
+      "fromLevel": 40.5,
+      "stardust": 10000,
+      "candy": 0,
+      "xlCandy": 10
+    },
+    {
+      "fromLevel": 41,
+      "stardust": 11000,
+      "candy": 0,
+      "xlCandy": 10
+    },
+    {
+      "fromLevel": 41.5,
+      "stardust": 11000,
+      "candy": 0,
+      "xlCandy": 10
+    },
+    {
+      "fromLevel": 42,
+      "stardust": 11000,
+      "candy": 0,
+      "xlCandy": 12
+    },
+    {
+      "fromLevel": 42.5,
+      "stardust": 11000,
+      "candy": 0,
+      "xlCandy": 12
+    },
+    {
+      "fromLevel": 43,
+      "stardust": 12000,
+      "candy": 0,
+      "xlCandy": 12
+    },
+    {
+      "fromLevel": 43.5,
+      "stardust": 12000,
+      "candy": 0,
+      "xlCandy": 12
+    },
+    {
+      "fromLevel": 44,
+      "stardust": 12000,
+      "candy": 0,
+      "xlCandy": 15
+    },
+    {
+      "fromLevel": 44.5,
+      "stardust": 12000,
+      "candy": 0,
+      "xlCandy": 15
+    },
+    {
+      "fromLevel": 45,
+      "stardust": 13000,
+      "candy": 0,
+      "xlCandy": 15
+    },
+    {
+      "fromLevel": 45.5,
+      "stardust": 13000,
+      "candy": 0,
+      "xlCandy": 15
+    },
+    {
+      "fromLevel": 46,
+      "stardust": 13000,
+      "candy": 0,
+      "xlCandy": 17
+    },
+    {
+      "fromLevel": 46.5,
+      "stardust": 13000,
+      "candy": 0,
+      "xlCandy": 17
+    },
+    {
+      "fromLevel": 47,
+      "stardust": 14000,
+      "candy": 0,
+      "xlCandy": 17
+    },
+    {
+      "fromLevel": 47.5,
+      "stardust": 14000,
+      "candy": 0,
+      "xlCandy": 17
+    },
+    {
+      "fromLevel": 48,
+      "stardust": 14000,
+      "candy": 0,
+      "xlCandy": 20
+    },
+    {
+      "fromLevel": 48.5,
+      "stardust": 14000,
+      "candy": 0,
+      "xlCandy": 20
+    },
+    {
+      "fromLevel": 49,
+      "stardust": 15000,
+      "candy": 0,
+      "xlCandy": 20
+    },
+    {
+      "fromLevel": 49.5,
+      "stardust": 15000,
+      "candy": 0,
+      "xlCandy": 20
+    }
+  ],
+  "maxLevel": 50,
+  "shadowStardustMultiplier": 1.2,
+  "shadowCandyMultiplier": 1.2,
+  "purifiedStardustMultiplier": 0.9,
+  "purifiedCandyMultiplier": 0.9,
+  "luckyStardustMultiplier": 0.5
+}

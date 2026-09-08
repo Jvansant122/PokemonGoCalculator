@@ -23,7 +23,7 @@ is exactly why it's slipped before.
 
 ## Step 0: which tab?
 
-There are **five** tabs, each with its own Scenario type, its own query param, and its own copy of
+There are **six** tabs, each with its own Scenario type, its own query param, and its own copy of
 the round-trip. The checklist below is the same shape for all of them — only the filenames change.
 Find your row before touching anything:
 
@@ -34,10 +34,11 @@ Find your row before touching anything:
 | Species Report (`sr`) | `packages/web/src/speciesReportScenario.ts` | `SpeciesReportView.tsx` |
 | IV Breakpoints (`ivc`) | `packages/web/src/ivBreakpointsScenario.ts` | `IvBreakpointsAssumptionPanel.tsx` + `IvBreakpointsView.tsx` |
 | Attack/Defense Breakpoints (`adb`) | `packages/web/src/attackDefenseBreakpointsScenario.ts` | `AttackDefenseBreakpointsView.tsx` |
+| Power-Up Optimizer (`pu`) | `packages/web/src/powerUpOptimizerScenario.ts` | `PowerUpOptimizerAssumptionPanel.tsx` + `PowerUpOptimizerView.tsx` |
 
 Two asymmetries that matter:
 
-- **Only the first two Scenario types live in the engine.** The other three are web-only, so a
+- **Only the first two Scenario types live in the engine.** The other four are web-only, so a
   field added to one of those is not an engine change at all — don't go looking for it in
   `packages/engine`.
 - **The round-trip functions are per-view, not in `App.tsx`.** `App.tsx` only owns the `view=`
@@ -91,10 +92,11 @@ Two asymmetries that matter:
    - Comparator and Team Raid: add it to `packages/engine/test/scenario.test.ts` or
      `teamScenario.test.ts`, matching the existing pattern (e.g. "round-trips a non-default
      `matchingTeammateCount` rather than silently reverting to the full party").
-   - **The other three tabs have no scenario tests at all today** — `speciesReportScenario.ts`,
-     `ivBreakpointsScenario.ts` and `attackDefenseBreakpointsScenario.ts` are web-only and
-     untested, and `packages/web` has no vitest setup. That is a real hole in exactly the bug
-     class this skill exists to prevent. Don't let it silently excuse skipping step 7: at minimum,
+   - **The other four tabs have no scenario tests at all today** — `speciesReportScenario.ts`,
+     `ivBreakpointsScenario.ts`, `attackDefenseBreakpointsScenario.ts` and
+     `powerUpOptimizerScenario.ts` are web-only and untested, and `packages/web` has no vitest
+     setup. That is a real hole in exactly the bug class this skill exists to prevent. Don't let
+     it silently excuse skipping step 7: at minimum,
      manually verify the round-trip by building a share link with a non-default value, opening it
      in a fresh tab, and confirming the control comes back set. Say so explicitly in your report
      rather than implying a test covered it.
@@ -103,7 +105,7 @@ Two asymmetries that matter:
 
 Run `npm run check-scenario-roundtrip` from the repo root **first** — it's the mechanical version
 of step 3, extracting every field of each tab's `Assumptions` interface and asserting the name
-appears in both round-trip directions across all five tabs. It exits non-zero and names the
+appears in both round-trip directions across all six tabs. It exits non-zero and names the
 offending field if you missed one. It's a name-level smoke test, not a type check: it proves a
 field is *mentioned* in both functions, not that it's mapped correctly — so it does not replace
 step 7's test or the manual share-link check.

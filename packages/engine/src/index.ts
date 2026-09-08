@@ -18,3 +18,4 @@ export * from "./simulate.js";
 export * from "./teamRaid.js";
 export * from "./teamScenario.js";
 export * from "./speciesReport.js";
+export * from "./powerUp.js";

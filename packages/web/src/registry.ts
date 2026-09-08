@@ -2,6 +2,7 @@ import {
   SpeciesRegistry,
   defaultRaidTierForSpecies,
   isKnownRaidTier,
+  type PowerUpCostTable,
   type RaidTier,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
@@ -16,6 +17,10 @@ import {
 import speciesData from "../../../data/normalized/species.json";
 import activeRaidsData from "../../../data/normalized/activeRaids.json";
 import raidHistoryData from "../../../data/normalized/raidHistory.json";
+// The Power-Up Optimizer's cost table — the engine's own PowerUpCostTable
+// shape plus two provenance-only fields (sourceUrl/fetchedAt) this module
+// strips before exporting, since PowerUpCostTable itself declares neither.
+import powerUpCostsData from "../../../data/normalized/powerUpCosts.json";
 
 export interface RawActiveRaidEntry {
   raidName: string;
@@ -415,3 +420,26 @@ export function candidatePickerOptions(): TargetPickerOption[] {
     imageUrl: s.imageUrl,
   }));
 }
+
+/**
+ * The Power-Up Optimizer's universal levels-1-50 candy/XL-candy/stardust cost
+ * table (see powerUp.ts's top doc comment for full sourcing/derivation) —
+ * `data/normalized/powerUpCosts.json` IS the engine's own PowerUpCostTable
+ * shape plus two provenance-only fields (`sourceUrl`/`fetchedAt`) this
+ * export strips, so `powerUpCostTable` can be handed straight to
+ * `optimizePowerUps`/`powerUpCost`/`powerUpDamageLadder` without any
+ * reshaping at the call site. `powerUpCostsFetchedAt` is kept separately as a
+ * footnote string (when this table was last pulled from GAME_MASTER), not
+ * folded into the strict engine type.
+ */
+const RAW_POWER_UP_COSTS = powerUpCostsData as unknown as PowerUpCostTable & { sourceUrl: string; fetchedAt: string };
+export const powerUpCostTable: PowerUpCostTable = {
+  steps: RAW_POWER_UP_COSTS.steps,
+  maxLevel: RAW_POWER_UP_COSTS.maxLevel,
+  shadowStardustMultiplier: RAW_POWER_UP_COSTS.shadowStardustMultiplier,
+  shadowCandyMultiplier: RAW_POWER_UP_COSTS.shadowCandyMultiplier,
+  purifiedStardustMultiplier: RAW_POWER_UP_COSTS.purifiedStardustMultiplier,
+  purifiedCandyMultiplier: RAW_POWER_UP_COSTS.purifiedCandyMultiplier,
+  luckyStardustMultiplier: RAW_POWER_UP_COSTS.luckyStardustMultiplier,
+};
+export const powerUpCostsFetchedAt: string = RAW_POWER_UP_COSTS.fetchedAt;

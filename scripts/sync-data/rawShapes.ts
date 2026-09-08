@@ -242,11 +242,49 @@ export interface RawGameMasterMoveSettingsFull {
   durationMs?: number;
 }
 
+/**
+ * Raw shape of the SINGLE `templateId: "POKEMON_UPGRADE_SETTINGS"` entry in
+ * GAME_MASTER — the universal per-level candy/stardust power-up cost table,
+ * previously discarded entirely by fetchGameMasterData's extraction (see its
+ * doc comment). Fields are typed optional here because this is the raw,
+ * unvalidated shape straight off the wire; fetchGameMasterData is what
+ * decides whether a parsed instance is usable (see GameMasterUpgradeSettingsRecord
+ * below) — never assume this template is well-formed just because it's present.
+ * `xlCandyCost`/`xlCandyMinPlayerLevel`/`xlCandyMinPokemonLevel` govern XL candy,
+ * only relevant above `maxNormalUpgradeLevel`. Deliberately NOT modeled here:
+ * a per-species override block (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
+ * POKEMON_ETERNATUS`, 30x candy) — v1 of this pipeline's power-up cost table
+ * is universal-only, see fetchGameMasterData's doc comment for why that
+ * override is deliberately ignored rather than modeled.
+ */
+export interface RawGameMasterPokemonUpgradeSettingsFull {
+  upgradesPerLevel?: number;
+  allowedLevelsAbovePlayer?: number;
+  candyCost?: number[];
+  stardustCost?: number[];
+  shadowStardustMultiplier?: number;
+  shadowCandyMultiplier?: number;
+  purifiedStardustMultiplier?: number;
+  purifiedCandyMultiplier?: number;
+  maxNormalUpgradeLevel?: number;
+  defaultCpBoostAdditionalLevel?: number;
+  xlCandyMinPlayerLevel?: number;
+  xlCandyCost?: number[];
+  xlCandyMinPokemonLevel?: number;
+}
+
+/** Raw shape of the SINGLE `templateId: "LUCKY_POKEMON_SETTINGS"` entry in GAME_MASTER — only `powerUpStardustDiscountPercent` (a Lucky Pokémon's power-up Stardust discount) is consumed by this pipeline. */
+export interface RawGameMasterLuckyPokemonSettingsFull {
+  powerUpStardustDiscountPercent?: number;
+}
+
 export interface RawGameMasterFullEntry {
   templateId?: string;
   data?: {
     pokemonSettings?: RawGameMasterPokemonSettingsFull;
     moveSettings?: RawGameMasterMoveSettingsFull;
+    pokemonUpgrades?: RawGameMasterPokemonUpgradeSettingsFull;
+    luckyPokemonSettings?: RawGameMasterLuckyPokemonSettingsFull;
   };
 }
 
@@ -299,4 +337,33 @@ export interface GameMasterMoveRecord {
   power: number;
   energyDelta: number;
   durationMs: number;
+}
+
+/**
+ * Compact, VALIDATED slice of the `POKEMON_UPGRADE_SETTINGS` template, cached
+ * to data/raw/game_master.json alongside `pokemon`/`moves` (2026-09-08,
+ * Power-Up Optimizer data source — see IDEAS.md's "Power-Up Optimizer" entry
+ * and fetchGameMasterData's doc comment in ./fetchCache.ts). Every field here
+ * is required and defaulted at extraction time (see fetchGameMasterData) —
+ * unlike RawGameMasterPokemonUpgradeSettingsFull above, this is never a
+ * half-formed intermediate.
+ *
+ * Deliberately shaped to match the engine's own `GameMasterPokemonUpgradeSettings`
+ * input interface (packages/engine/src/powerUp.ts, `powerUpCostTableFromGameMaster`)
+ * FIELD-FOR-FIELD, so a value of this type can be passed there directly with
+ * no adapter — once that engine export exists, prefer importing its type
+ * from `@pogo-analyzer/engine` instead of this local duplicate; this one only
+ * exists because this script was written in parallel with that engine work.
+ */
+export interface GameMasterUpgradeSettingsRecord {
+  upgradesPerLevel: number;
+  maxNormalUpgradeLevel: number;
+  xlCandyMinPokemonLevel: number;
+  stardustCost: number[];
+  candyCost: number[];
+  xlCandyCost: number[];
+  shadowStardustMultiplier: number;
+  shadowCandyMultiplier: number;
+  purifiedStardustMultiplier: number;
+  purifiedCandyMultiplier: number;
 }

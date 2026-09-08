@@ -22,6 +22,7 @@ import type {
   RawGameMasterFullEntry,
   GameMasterPokemonRecord,
   GameMasterMoveRecord,
+  GameMasterUpgradeSettingsRecord,
   RawRaidBossesPreviousEntry,
   RawRaidBossesResponse,
 } from "./rawShapes.ts";
@@ -224,6 +225,20 @@ export interface GameMasterFetchResult {
   recoveredMoveIds: string[];
   /** moveSettings entries with a malformed `movementId` this pipeline couldn't recover at all (dropped, not fatal — see doc comment below). */
   droppedMoveCount: number;
+  /**
+   * The SINGLE `POKEMON_UPGRADE_SETTINGS` template, validated and defaulted
+   * (2026-09-08, Power-Up Optimizer data source — see doc comment below).
+   * `null` if that template is missing from this run's GAME_MASTER dump, or
+   * present but missing its `candyCost`/`stardustCost` arrays — never thrown,
+   * always reported by the caller (sync-data.ts) in WARNINGS.
+   */
+  upgradeSettings: GameMasterUpgradeSettingsRecord | null;
+  /**
+   * `LUCKY_POKEMON_SETTINGS`'s `powerUpStardustDiscountPercent` (2026-09-08,
+   * same task as `upgradeSettings` above). `null` under the same "missing or
+   * malformed, never thrown" discipline.
+   */
+  luckyStardustDiscountPercent: number | null;
 }
 
 /**
@@ -235,12 +250,26 @@ export interface GameMasterFetchResult {
  * maintained mirror of Niantic's own client-side file — the authoritative
  * upstream pogoapi.net itself ultimately derives from) exactly once per sync
  * run, then extracts and caches ONLY a compact slice — every `pokemonSettings`
- * template's stats/typing/moveset/rarity/tempEvoOverrides, and every
+ * template's stats/typing/moveset/rarity/tempEvoOverrides, every
  * `moveSettings` (PvE — raids/gyms/wild battles) entry's power/energy/
  * duration — to data/raw/game_master.json, rather than committing the full
  * ~19-20MB upstream dump to data/raw/ on every sync (same "cache only the
  * slice you use" convention this project already followed for the narrower
- * mega-only extraction this replaces).
+ * mega-only extraction this replaces). As of 2026-09-08 (Power-Up Optimizer
+ * data source, see IDEAS.md's "Power-Up Optimizer" entry) this cached slice
+ * ALSO carries the SINGLE `POKEMON_UPGRADE_SETTINGS` template (the universal
+ * per-level candy/stardust power-up cost table, `data.pokemonUpgrades`) and
+ * the SINGLE `LUCKY_POKEMON_SETTINGS` template's
+ * `powerUpStardustDiscountPercent` (`data.luckyPokemonSettings`) — extracted
+ * in the SAME single pass over the GAME_MASTER array as the pokemonSettings/
+ * moveSettings extraction below, not a second pass. Both are `null` (never
+ * thrown) if that specific template is missing or malformed this run;
+ * sync-data.ts reports that in WARNINGS and skips writing
+ * data/normalized/powerUpCosts.json that run rather than failing the sync.
+ * Deliberately NOT extracted: `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
+ * POKEMON_ETERNATUS`, a real per-species override (30x candy cost) — v1 of
+ * the power-up cost table this feeds only models the universal table (see
+ * RawGameMasterPokemonUpgradeSettingsFull's doc comment in rawShapes.ts).
  *
  * Deliberately reads `moveSettings`, NEVER `combatMove` — GAME_MASTER carries
  * TWO separate move-stat tables for the same move name: `moveSettings` (PvE,
@@ -314,6 +343,12 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
     const moves: GameMasterMoveRecord[] = [];
     const recoveredMoveIds: string[] = [];
     let droppedMoveCount = 0;
+    // Power-Up Optimizer data source (2026-09-08, see this function's doc
+    // comment) — at most one entry in the whole GAME_MASTER array carries
+    // each of these two templateIds, so these stay singular (not arrays) and
+    // simply get overwritten if somehow seen twice (never observed).
+    let upgradeSettings: GameMasterUpgradeSettingsRecord | null = null;
+    let luckyStardustDiscountPercent: number | null = null;
 
     for (const entry of parsed as RawGameMasterFullEntry[]) {
       const ps = entry?.data?.pokemonSettings;
@@ -371,20 +406,68 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
           durationMs: ms.durationMs,
         });
       }
+
+      // POKEMON_UPGRADE_SETTINGS: the universal per-level power-up cost table
+      // (2026-09-08, Power-Up Optimizer data source — see this function's doc
+      // comment). Requires both cost arrays to actually be present to count
+      // as a usable template; every other field falls back to its documented
+      // real-game default (matching this project's "never silently fabricate,
+      // but a reasonable documented default beats discarding good data over a
+      // missing minor field" discipline used elsewhere in this same loop, e.g.
+      // `ps.quickMoves ?? []` above) rather than rejecting the whole template.
+      const upgrades = entry?.data?.pokemonUpgrades;
+      if (upgrades && Array.isArray(upgrades.candyCost) && Array.isArray(upgrades.stardustCost)) {
+        upgradeSettings = {
+          upgradesPerLevel: upgrades.upgradesPerLevel ?? 2,
+          maxNormalUpgradeLevel: upgrades.maxNormalUpgradeLevel ?? 50,
+          xlCandyMinPokemonLevel: upgrades.xlCandyMinPokemonLevel ?? 40,
+          stardustCost: upgrades.stardustCost,
+          candyCost: upgrades.candyCost,
+          xlCandyCost: upgrades.xlCandyCost ?? [],
+          shadowStardustMultiplier: upgrades.shadowStardustMultiplier ?? 1.2,
+          shadowCandyMultiplier: upgrades.shadowCandyMultiplier ?? 1.2,
+          purifiedStardustMultiplier: upgrades.purifiedStardustMultiplier ?? 0.9,
+          purifiedCandyMultiplier: upgrades.purifiedCandyMultiplier ?? 0.9,
+        };
+      }
+
+      // LUCKY_POKEMON_SETTINGS: only `powerUpStardustDiscountPercent` is
+      // consumed by this pipeline (same 2026-09-08 task as upgradeSettings
+      // above).
+      const lucky = entry?.data?.luckyPokemonSettings;
+      if (lucky && typeof lucky.powerUpStardustDiscountPercent === "number") {
+        luckyStardustDiscountPercent = lucky.powerUpStardustDiscountPercent;
+      }
     }
 
     if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
     const cacheBody = JSON.stringify(
-      { sourceUrl: GAME_MASTER_URL, fetchedAt: new Date().toISOString(), pokemon, moves },
+      {
+        sourceUrl: GAME_MASTER_URL,
+        fetchedAt: new Date().toISOString(),
+        pokemon,
+        moves,
+        upgradeSettings,
+        luckyStardustDiscountPercent,
+      },
       null,
       2,
     );
     writeFileSync(join(rawDir, "game_master.json"), cacheBody);
     recordFetchMeta(rawDir, "game_master.json", Buffer.byteLength(cacheBody, "utf-8"));
-    return { pokemon, moves, source: "live", recoveredMoveIds, droppedMoveCount };
+    return { pokemon, moves, source: "live", recoveredMoveIds, droppedMoveCount, upgradeSettings, luckyStardustDiscountPercent };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return { pokemon: [], moves: [], source: "error", error: message, recoveredMoveIds: [], droppedMoveCount: 0 };
+    return {
+      pokemon: [],
+      moves: [],
+      source: "error",
+      error: message,
+      recoveredMoveIds: [],
+      droppedMoveCount: 0,
+      upgradeSettings: null,
+      luckyStardustDiscountPercent: null,
+    };
   }
 }
 

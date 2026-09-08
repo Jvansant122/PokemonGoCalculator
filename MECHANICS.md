@@ -235,6 +235,52 @@ not a contradiction. Prefer GAME_MASTER.
 
 ---
 
+## Power-up (level-up) costs
+
+### The universal stardust/candy table
+
+Each power-up raises a Pokémon by 0.5 level and costs a fixed amount of
+Stardust plus Candy — the same table for every species (one known exception,
+below). GAME_MASTER's `POKEMON_UPGRADE_SETTINGS` template carries it directly
+(`upgradesPerLevel: 2`; 49 per-whole-level `stardustCost` / `candyCost`
+entries, both half-steps at a whole level costing the same; levels 40-49.5
+cost XL Candy from a separate 10-entry `xlCandyCost` array instead of
+regular Candy, `xlCandyMinPokemonLevel: 40`; `maxNormalUpgradeLevel: 50`).
+Level 1 = 200 Stardust / 1 Candy per step, level 40 = 10,000 / 10 XL, level
+49.5 → 50 = 15,000 / 20 XL. `[first-party]` — read from the live dump
+2026-09-08 and cross-checked against the community-published tables.
+
+**Engine: implemented** (`powerUp.ts`, `powerUpCostTableFromGameMaster`;
+data-sync writes `data/normalized/powerUpCosts.json`). Best Buddy's +1 level
+(`defaultCpBoostAdditionalLevel`) is not modelled.
+
+### Shadow, Purified and Lucky modifiers
+
+Shadow: ×1.2 Stardust and Candy. Purified: ×0.9 Stardust and Candy, "rounded
+up". Lucky: ×0.5 Stardust only, Candy unaffected. All three multipliers are in
+GAME_MASTER (`shadowStardustMultiplier`/`shadowCandyMultiplier`/
+`purifiedStardustMultiplier`/`purifiedCandyMultiplier` on the template above;
+`LUCKY_POKEMON_SETTINGS.luckyPokemonSettings.powerUpStardustDiscountPercent:
+0.5` — a fraction despite the name) `[first-party]`, and Bulbapedia's "Shadow
+Pokémon (GO)" page agrees on all three and adds the rounding
+`[community-consensus]`, fetched 2026-09-08. Lucky and Purified stack
+multiplicatively on Stardust. None of these change battle stats — Purified is
+combat-identical to a non-Shadow Pokémon, Lucky only affects catch IVs.
+
+**Engine: implemented** — multipliers applied per step and rounded up per
+step. The shadow-side rounding direction is `[inferred]` from the purified
+rule; Bulbapedia only states "rounded up" for Purified explicitly.
+
+### Per-species cost overrides
+
+GAME_MASTER carries `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`
+— a 30× Candy override for Eternatus (same Stardust). Observed 2026-09-08.
+
+**Engine: not modelled.** v1 of the Power-Up Optimizer uses the universal
+table for every species; Eternatus's candy costs are understated by 30×.
+
+---
+
 ## Known bugs in the real game
 
 Recorded so we neither model a bug as intended behaviour nor mistake one for

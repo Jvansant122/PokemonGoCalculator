@@ -631,3 +631,18 @@ p.species-picker-hint {
   color: var(--muted);
   border: 1px solid var(--border);
 }
+
+/*
+ * Power-Up Optimizer's ranked candidate table (PowerUpOptimizerView.tsx) —
+ * "this power-up crosses a real floored-damage breakpoint" (fast and/or
+ * charged), the mechanic the whole tab is built around. Green like
+ * badge-past-archive ("verified/real"), but a distinct enough context
+ * (candidate table cell, not a species/raid-history badge) that reusing the
+ * same class name would be more confusing than a small duplicate rule.
+ */
+.badge-breakpoint {
+  background: rgba(76, 175, 125, 0.18);
+  color: var(--good);
+  border: 1px solid var(--good);
+  margin-left: 4px;
+}

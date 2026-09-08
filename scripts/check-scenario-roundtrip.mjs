@@ -28,11 +28,12 @@
  * forgotten), not a substitute for the round-trip test or the manual
  * share-link check the skill also asks for.
  *
- * Three of the five Scenario types (`speciesReportScenario`,
- * `ivBreakpointsScenario`, `attackDefenseBreakpointsScenario`) are web-only and
- * have no automated tests at all, since `packages/web` has no vitest setup —
- * for those three this script is currently the ONLY automated coverage of the
- * round-trip, so keep it working.
+ * Four of the six Scenario types (`speciesReportScenario`,
+ * `ivBreakpointsScenario`, `attackDefenseBreakpointsScenario`,
+ * `powerUpOptimizerScenario`) are web-only and have no automated tests at
+ * all, since `packages/web` has no vitest setup — for those four this script
+ * is currently the ONLY automated coverage of the round-trip, so keep it
+ * working.
  */
 import fs from 'fs';
 import path from 'path';
@@ -47,6 +48,7 @@ const TABS = [
   ['Species Report', 'packages/web/src/SpeciesReportView.tsx', 'SpeciesReportAssumptions', 'packages/web/src/SpeciesReportView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['IV Breakpoints', 'packages/web/src/IvBreakpointsView.tsx', 'IvBreakpointsAssumptions', 'packages/web/src/IvBreakpointsView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['Attack/Defense', 'packages/web/src/AttackDefenseBreakpointsView.tsx', 'AttackDefenseBreakpointsAssumptions', 'packages/web/src/AttackDefenseBreakpointsView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
+  ['Power-Up Optimizer', 'packages/web/src/PowerUpOptimizerAssumptionPanel.tsx', 'PowerUpOptimizerAssumptions', 'packages/web/src/PowerUpOptimizerView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
 ];
 
 /** Lines of the block opened by the line matching `re`, up to the first column-0 `}`. */

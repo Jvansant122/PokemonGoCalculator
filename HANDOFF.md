@@ -3,6 +3,66 @@
 Last updated: 2026-09-08. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
+## 2026-09-08 (later): Power-Up Optimizer v1 — sixth tab, no login
+
+The user asked to prototype the level-up optimizer WITHOUT login persistence first, reversing
+the 2026-09-07 "login before the optimizer" sequencing. `PLAN_login_and_roster_persistence.md`
+is untouched and still pending; it is now purely additive on top of a working tab.
+
+### What shipped (uncommitted at time of writing — see "Next")
+
+- **Data** (`data-sync`): the power-up cost table comes from GAME_MASTER's own
+  `POKEMON_UPGRADE_SETTINGS` + `LUCKY_POKEMON_SETTINGS` templates — pogoapi's
+  `pokemon_powerup_requirements.json` was never needed. `fetchGameMasterData` now keeps both in
+  the cached slice; `sync-data.ts` writes `data/normalized/powerUpCosts.json` (98 half-level
+  steps + five multipliers) by calling the engine's `powerUpCostTableFromGameMaster`, so the
+  engine is the only place the raw arrays are interpreted. One real surprise: the dump's
+  `candyCost` has **50** entries to `stardustCost`'s 49 (a trailing 0 for level 50); the
+  engine's validation tolerates extra trailing zeros only.
+- **Engine** (`engine-developer`, `packages/engine/src/powerUp.ts`, 30 new tests, 237 total):
+  cost table + per-step costs with Shadow ×1.2 / Purified ×0.9 / Lucky ×0.5-stardust modifiers
+  (applied per step, rounded up — shadow-side rounding is inferred, see MECHANICS.md);
+  `powerUpDamageLadder` (next floored per-hit breakpoint vs a boss, with cumulative cost);
+  optional per-slot `level`/`ivs` overrides on `TeamRaidSlotInput` (byte-identical when
+  omitted); and `optimizePowerUps`, which reruns the full team raid for every fielded slot ×
+  every half-level to 50 × 3 paired seeds and reports Δ team-DPS per 1000 stardust, per candy,
+  and per XL candy as SEPARATE numbers. Team DPS = boss HP / time-to-clear when cleared, else
+  damage-at-timer / timer (`teamDamageAtRaidSeconds` clips the last fight's trajectory).
+  Measured ~217 ms for 202 candidates on the default roster.
+- **Web** (`web-developer`): `view=power-up-optimizer`, query param `pu`,
+  `PowerUpOptimizerView.tsx` / `PowerUpOptimizerAssumptionPanel.tsx` /
+  `powerUpOptimizerScenario.ts`. Per-slot level, IVs, candy/XL on hand, Shadow/Purified/Lucky
+  (Shadow and Purified exclude each other; mega + Purified is allowed, correctly). Baseline
+  card, per-slot ladder cards, recommendation line (most stardust-efficient AND biggest raw
+  gain, called out as different candidates when they are), ranked table with a rank-by select,
+  debounced 400 ms. `check-scenario-roundtrip.mjs` has the sixth row.
+- **Docs**: CLAUDE.md (six tabs, `pu`, cost data file), MECHANICS.md ("Power-up (level-up)
+  costs" section, including the un-modelled Eternatus 30× candy override and Best Buddy +1),
+  IDEAS.md (section rewritten as shipped-v1 + remaining ideas), the `add-scenario-assumption`
+  skill table and `web-developer` agent table.
+
+### Verified by the overseer, not just by agent summaries
+
+Loaded the tab in the in-app browser: no console errors; results render on first load; hand-
+checked two ladder costs against the raw table (Latios 35→50 = 338,000 / 118 candy / 296 XL;
+Garchomp 30→31.5 = 16,000 / 14 candy); changing a slot's level re-ranks; Shadow disables
+Purified; a share link with slot 2 at 27.5 + Shadow reloads restored. `npm run
+check-scenario-roundtrip` (97 fields / 6 tabs), web `tsc`, and the production build are clean.
+Engine tests: 237/237. Note vitest's default pool can report worker OOM "errors" alongside all-
+passing tests on this machine — rerun with `--pool=forks --poolOptions.forks.singleFork=true`;
+it is environment noise (recorded in the overseer's memory).
+
+### Next
+
+1. **Commit and ship** — the user had not yet said to; run the `verify-and-ship` skill. The
+   sync also refreshed timestamps in `raidHistory.json` and the raw caches (no content change).
+2. Have `skeptic` drive the new tab against real numbers — the default roster's baseline team
+   DPS (~8.6 vs Mega Tyranitar's 9,000 HP, never clearing) looks low; it is driven by each
+   species' FIRST move being the default (Kartana Air Slash, Tyranitar Bite are poor picks), but
+   nobody has cross-checked a candidate's Δ against the Team Raid tab by hand yet.
+3. Remaining optimizer ideas are listed in IDEAS.md (greedy multi-step plans, "add a 7th",
+   Eternatus override, Best Buddy, more seeds / a worker).
+
 ## 2026-09-08: real raid-boss mechanics — MECHANICS.md, and an energy-driven boss model
 
 The user supplied the Silph Road analysis of Niantic's September 2024 raid rework, which
