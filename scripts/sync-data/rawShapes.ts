@@ -89,6 +89,100 @@ export interface ActiveRaidEntry {
 }
 
 /**
+ * A single row of data/normalized/raidHistory.json — an append-only,
+ * ever-growing record of every species this pipeline has ever confirmed as a
+ * real raid boss, kept because activeRaids.json is a full-replace snapshot
+ * (a rotated-out boss vanishes from it with no trace) whereas this file never
+ * deletes. See the "Raid history" section of sync-data.ts for how it's built.
+ * Schema is pinned (packages/web is written against these exact field names
+ * in parallel) — do not rename fields here without updating that consumer.
+ */
+export interface RaidHistoryEntry {
+  /** Registered species id, e.g. "skarmory-mega". Never null — an entry with no resolvable species is not recorded at all. */
+  speciesId: string;
+  /** The raid name as the live feed presented it, e.g. "Mega Skarmory". For a seeded entry with no feed observation, falls back to the species' own `name`. */
+  raidName: string;
+  /** A tier string. Prefer one this project's RaidTier union recognizes; see `source` for provenance. */
+  tier: string;
+  /** ISO timestamp of the first sync run that recorded this entry. */
+  firstSeenAt: string;
+  /** ISO timestamp of the most recent sync run that observed it in the live feed. For a "researched-tier" seed never yet seen live, equal to firstSeenAt. */
+  lastSeenAt: string;
+  /**
+   * Provenance, so the UI can be honest about how strong the evidence is:
+   *  - "live-feed": this pipeline actually observed it in data/raw/raids.json on some run.
+   *  - "researched-tier": seeded from species.lastKnownRaidTier without this pipeline ever having seen it live (e.g. from RELEASED_MEGA_PRIMAL_ALLOWLIST's hand-researched citations).
+   *  - "pogoapi-previous": seeded from pogoapi.net's raid_bosses.json `previous` list (2026-09-07 backfill) — a real historical raid-boss appearance this pipeline never itself observed live and that carries no hand-researched citation either.
+   *  - "bulbapedia-archive": seeded from Bulbapedia's "List of Raid Boss changes in ..." archive pages (2026-09-07 union backfill) — the same kind of real historical appearance as "pogoapi-previous", from an independent community archive that covers ~26 base species pogoapi's own `previous` list is missing entirely (Heatran among them).
+   *  - "pokebattler-legacy": seeded from Pokebattler's `_LEGACY` raid tiers (fight.pokebattler.com, 2026-09-08 import — see scripts/sync-data/pokebattlerRaids.ts's top-of-file doc comment) — a third independent historical archive, larger than the pogoapi+Bulbapedia union (~741 distinct species). NEVER carries `eraHp`: Pokebattler re-maps its own history onto MODERN tier labels with no era fidelity (confirmed 2026-09-08 — e.g. its `RAID_LEVEL_4_LEGACY` holds Community Day four-star bosses, not the real pre-2020 tier 4), so an HP value derived from it would misrepresent history exactly the way this field exists to avoid.
+   * "pogoapi-previous", "bulbapedia-archive", and "pokebattler-legacy" are peers, jointly the lowest-precedence tier: between each other, whichever's tier maps to the higher RAID_TIER_TABLE HP wins on a same-species conflict (see sync-data.ts's "archive union" / "Pokebattler legacy archive backfill" sections for the conflict counts this produces); any of the three can be upgraded in place by another on a later run without that counting as an overwrite of a "live-feed"/"researched-tier" entry. None of the three ever overwrites a "live-feed" or "researched-tier" entry, and "live-feed" always wins if an entry is later observed live.
+   */
+  source: "live-feed" | "researched-tier" | "pogoapi-previous" | "bulbapedia-archive" | "pokebattler-legacy";
+  /**
+   * The real boss max HP recorded for this specific historical encounter
+   * (2026-09-07 era-HP backfill task) — NOT today's `raidTierStats(tier).hp`,
+   * which has changed over time for the same `tier` label (the 2020-08-27
+   * merge folded the old tier-2/tier-4 HP values into tier-1/tier-3; tier-3's
+   * own HP separately changed 3000->3600 on 2019-02-03; Mega's changed
+   * 15000->9000(ish)/back on various dates — see this task's own research
+   * notes). Sourced ONLY from a Bulbapedia `{{lop/raid/GO|...}}` archive
+   * row's own positional HP field, for the specific row whose resolved tier
+   * won this species' highest-tier collapse (see sync-data.ts's "Bulbapedia
+   * archive union" section) — never mixed with a tier resolved from a
+   * different row/era. Every captured value is validated against the closed
+   * set of plausible raid-HP magnitudes (600/1800/3000/3600/9000/12500/
+   * 15000/20000/22500/25000); a row whose positional HP field doesn't match
+   * is treated as unparseable and never stored (see sync-data's WARNINGS for
+   * a count).
+   *
+   * pogoapi.net's `previous` list (the OTHER archive source feeding
+   * "pogoapi-previous" entries) carries no HP field and no dates at all, so
+   * this is undefined — genuinely absent, not a laundered
+   * `raidTierStats(tier).hp` — for any species Bulbapedia's archive doesn't
+   * also cover. Undefined means "no era HP known; fall back to the tier's
+   * current stats," not "zero HP."
+   *
+   * Deliberately NOT gated on `source === "bulbapedia-archive"`: a species
+   * covered by BOTH archive sources keeps whichever source's TIER won the
+   * union (so `source` may read "pogoapi-previous"), but if Bulbapedia's own
+   * archive independently resolved to that exact same real tier for this
+   * species, its HP is still attached here — maximum honest era-HP coverage,
+   * not coverage tied to which source's label happened to win.
+   */
+  eraHp?: number;
+}
+
+/**
+ * One entry from the `previous` bucket of
+ * https://pogoapi.net/api/v1/raid_bosses.json — pogoapi's own historical
+ * record of every raid boss it has ever scraped, grouped by tier key
+ * ("1"|"2"|"3"|"4"|"5"|"6"|"ex"|"mega"|"mega_legendary"). No date field
+ * exists on these entries — pogoapi does not record WHEN a boss was active,
+ * only THAT it was. `form` is "Normal" for most species but also carries
+ * real distinguishing values: region variants ("Alola"/"Galarian"/
+ * "Hisuian"), Unown's per-letter forms, Deoxys's formes, and — for `mega`/
+ * `mega_legendary` entries specifically — the mega-form suffix itself
+ * ("X"/"Y" for a two-mega species like Charizard, "Normal" for a
+ * single-mega/primal species), matching mega_pokemon.json's own `form`
+ * field convention exactly. See sync-data.ts's raidHistory "pogoapi-previous
+ * backfill" section for how a `mega`/`mega_legendary` entry's `name` (the
+ * BASE species, e.g. "Kyogre") + `form` gets resolved to the correct
+ * mega/primal species id (e.g. "kyogre-primal") rather than the base one.
+ */
+export interface RawRaidBossesPreviousEntry {
+  name: string;
+  form: string;
+  tier: number | string;
+  type: string[];
+}
+
+/** Shape of the full https://pogoapi.net/api/v1/raid_bosses.json response — `current` (this pipeline doesn't use it; the ScrapedDuck feed is the live-raid source) plus `previous`, this pipeline's raidHistory.json backfill source (see RawRaidBossesPreviousEntry). */
+export interface RawRaidBossesResponse {
+  current: Record<string, RawRaidBossesPreviousEntry[]>;
+  previous: Record<string, RawRaidBossesPreviousEntry[]>;
+}
+
+/**
  * Raw shapes read directly off a live GAME_MASTER dump (PokeMiners' mirror of
  * Niantic's own client-side file — see GAME_MASTER_URL in fetchCache.ts).
  * As of the 2026-09-06 full-pipeline switch, GAME_MASTER is the PRIMARY

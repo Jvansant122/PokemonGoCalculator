@@ -1,0 +1,6667 @@
+[
+  {
+    "speciesId": "abomasnow",
+    "raidName": "Abomasnow",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "abomasnow-mega",
+    "raidName": "Mega Abomasnow",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "abra",
+    "raidName": "Abra",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "abra-shadow",
+    "raidName": "Shadow Abra",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "absol",
+    "raidName": "Absol",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "absol-mega",
+    "raidName": "Mega Absol",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "aerodactyl",
+    "raidName": "Aerodactyl",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "aerodactyl-mega",
+    "raidName": "Mega Aerodactyl",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "aerodactyl-shadow",
+    "raidName": "Shadow Aerodactyl",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "aggron",
+    "raidName": "Aggron",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "aggron-mega",
+    "raidName": "Mega Aggron",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "aipom",
+    "raidName": "Aipom",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "aipom-shadow",
+    "raidName": "Shadow Aipom",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "alakazam",
+    "raidName": "Alakazam",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "alakazam-mega",
+    "raidName": "Mega Alakazam",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "alomomola",
+    "raidName": "Alomomola",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "altaria-mega",
+    "raidName": "Mega Altaria",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "amaura",
+    "raidName": "Amaura",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "amoonguss",
+    "raidName": "Amoonguss",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "ampharos",
+    "raidName": "Ampharos",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "ampharos-mega",
+    "raidName": "Mega Ampharos",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "anorith",
+    "raidName": "Anorith",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "arbok",
+    "raidName": "Arbok",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "arcanine",
+    "raidName": "Arcanine",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "archen",
+    "raidName": "Archen",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "ariados",
+    "raidName": "Ariados",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "aron",
+    "raidName": "Aron",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "articuno",
+    "raidName": "Articuno",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "articuno-shadow",
+    "raidName": "Shadow Articuno",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "audino",
+    "raidName": "Audino",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "audino-mega",
+    "raidName": "Mega Audino",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "avalugg",
+    "raidName": "Avalugg",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "avalugg-hisuian",
+    "raidName": "Avalugg (Hisuian)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "axew",
+    "raidName": "Axew",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "azelf",
+    "raidName": "Azelf",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "azumarill",
+    "raidName": "Azumarill",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "bagon",
+    "raidName": "Bagon",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bagon-shadow",
+    "raidName": "Shadow Bagon",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "baltoy",
+    "raidName": "Baltoy",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "banette",
+    "raidName": "Banette",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "banette-mega",
+    "raidName": "Mega Banette",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "barboach",
+    "raidName": "Barboach",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "barboach-shadow",
+    "raidName": "Shadow Barboach",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "bastiodon",
+    "raidName": "Bastiodon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "bayleef",
+    "raidName": "Bayleef",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bayleef-shadow",
+    "raidName": "Shadow Bayleef",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "beautifly",
+    "raidName": "Beautifly",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "beedrill",
+    "raidName": "Beedrill",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "beedrill-mega",
+    "raidName": "Mega Beedrill",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "beldum",
+    "raidName": "Beldum",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "beldum-shadow",
+    "raidName": "Shadow Beldum",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "bellossom",
+    "raidName": "Bellossom",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "bellsprout",
+    "raidName": "Bellsprout",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bellsprout-shadow",
+    "raidName": "Shadow Bellsprout",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "bergmite",
+    "raidName": "Bergmite",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bibarel",
+    "raidName": "Bibarel",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "bidoof",
+    "raidName": "Bidoof",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "binacle",
+    "raidName": "Binacle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "blastoise",
+    "raidName": "Blastoise",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "blastoise-mega",
+    "raidName": "Mega Blastoise",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "blaziken",
+    "raidName": "Blaziken",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "blaziken-mega",
+    "raidName": "Mega Blaziken",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "blitzle",
+    "raidName": "Blitzle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "boldore",
+    "raidName": "Boldore",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "bombirdier",
+    "raidName": "Bombirdier",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "bounsweet",
+    "raidName": "Bounsweet",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "braviary",
+    "raidName": "Braviary",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "braviary-hisuian",
+    "raidName": "Braviary (Hisuian)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "breloom",
+    "raidName": "Breloom",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "brionne",
+    "raidName": "Brionne",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "bronzong",
+    "raidName": "Bronzong",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "bronzor",
+    "raidName": "Bronzor",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bruxish",
+    "raidName": "Bruxish",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "buizel",
+    "raidName": "Buizel",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bulbasaur",
+    "raidName": "Bulbasaur",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "buneary",
+    "raidName": "Buneary",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "bunnelby",
+    "raidName": "Bunnelby",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "burmy-plant",
+    "raidName": "Burmy (Plant)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "butterfree",
+    "raidName": "Butterfree",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "buzzwole",
+    "raidName": "Buzzwole",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "cacnea",
+    "raidName": "Cacnea",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cacnea-shadow",
+    "raidName": "Shadow Cacnea",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "cacturne",
+    "raidName": "Cacturne",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "camerupt",
+    "raidName": "Camerupt",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "camerupt-mega",
+    "raidName": "Mega Camerupt",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "carvanha",
+    "raidName": "Carvanha",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "caterpie",
+    "raidName": "Caterpie",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "celesteela",
+    "raidName": "Celesteela",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "cetoddle",
+    "raidName": "Cetoddle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "chansey",
+    "raidName": "Chansey",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "charizard",
+    "raidName": "Charizard",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "charizard-mega-x",
+    "raidName": "Mega Charizard X",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "charizard-mega-y",
+    "raidName": "Mega Charizard Y",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "charjabug",
+    "raidName": "Charjabug",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "charmander",
+    "raidName": "Charmander",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "charmeleon",
+    "raidName": "Charmeleon",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "chespin",
+    "raidName": "Chespin",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "chikorita",
+    "raidName": "Chikorita",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "chimchar",
+    "raidName": "Chimchar",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "chimecho",
+    "raidName": "Chimecho",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "chinchou",
+    "raidName": "Chinchou",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cinccino",
+    "raidName": "Cinccino",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "clamperl",
+    "raidName": "Clamperl",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "clauncher",
+    "raidName": "Clauncher",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "claydol",
+    "raidName": "Claydol",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "clefable",
+    "raidName": "Clefable",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "clefairy",
+    "raidName": "Clefairy",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cloyster",
+    "raidName": "Cloyster",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "cobalion",
+    "raidName": "Cobalion",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "combee",
+    "raidName": "Combee",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "combusken",
+    "raidName": "Combusken",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "corsola",
+    "raidName": "Corsola",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "cottonee",
+    "raidName": "Cottonee",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "crabrawler",
+    "raidName": "Crabrawler",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "cranidos",
+    "raidName": "Cranidos",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "cranidos-shadow",
+    "raidName": "Shadow Cranidos",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "crawdaunt",
+    "raidName": "Crawdaunt",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "cresselia",
+    "raidName": "Cresselia",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "cresselia-shadow",
+    "raidName": "Shadow Cresselia",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "croagunk",
+    "raidName": "Croagunk",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "croagunk-shadow",
+    "raidName": "Shadow Croagunk",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "crobat",
+    "raidName": "Crobat",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "croconaw",
+    "raidName": "Croconaw",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "croconaw-shadow",
+    "raidName": "Shadow Croconaw",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "crustle",
+    "raidName": "Crustle",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "cryogonal",
+    "raidName": "Cryogonal",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "cubchoo",
+    "raidName": "Cubchoo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cubone",
+    "raidName": "Cubone",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cubone-shadow",
+    "raidName": "Shadow Cubone",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "cutiefly",
+    "raidName": "Cutiefly",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cyndaquil",
+    "raidName": "Cyndaquil",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "cyndaquil-shadow",
+    "raidName": "Shadow Cyndaquil",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "darkrai",
+    "raidName": "Darkrai",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 22500
+  },
+  {
+    "speciesId": "dartrix",
+    "raidName": "Dartrix",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "darumaka",
+    "raidName": "Darumaka",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "darumaka-galarian",
+    "raidName": "Darumaka (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "darumaka-shadow",
+    "raidName": "Shadow Darumaka",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "dedenne",
+    "raidName": "Dedenne",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "deino",
+    "raidName": "Deino",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "delcatty",
+    "raidName": "Delcatty",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "delibird",
+    "raidName": "Delibird",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "deoxys",
+    "raidName": "Deoxys",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "deoxys-attack",
+    "raidName": "Deoxys (Attack)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "deoxys-defense",
+    "raidName": "Deoxys (Defense)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "deoxys-speed",
+    "raidName": "Deoxys (Speed)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "dewgong",
+    "raidName": "Dewgong",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "dialga",
+    "raidName": "Dialga",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "diggersby",
+    "raidName": "Diggersby",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "diglett",
+    "raidName": "Diglett",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "diglett-alola",
+    "raidName": "Diglett (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "doduo",
+    "raidName": "Doduo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "donphan",
+    "raidName": "Donphan",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "dragonite",
+    "raidName": "Dragonite",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "dragonite-mega",
+    "raidName": "Mega Dragonite",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "drampa",
+    "raidName": "Drampa",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "drapion",
+    "raidName": "Drapion",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "dratini",
+    "raidName": "Dratini",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "dratini-shadow",
+    "raidName": "Shadow Dratini",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "drifblim",
+    "raidName": "Drifblim",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "drifloon",
+    "raidName": "Drifloon",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "drilbur",
+    "raidName": "Drilbur",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "drowzee",
+    "raidName": "Drowzee",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "drowzee-shadow",
+    "raidName": "Shadow Drowzee",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "druddigon",
+    "raidName": "Druddigon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "ducklett",
+    "raidName": "Ducklett",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "dugtrio-alola",
+    "raidName": "Dugtrio (Alola)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "duosion",
+    "raidName": "Duosion",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "duraludon",
+    "raidName": "Duraludon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "durant",
+    "raidName": "Durant",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "dusclops",
+    "raidName": "Dusclops",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "duskull",
+    "raidName": "Duskull",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "dwebble",
+    "raidName": "Dwebble",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "eelektrik",
+    "raidName": "Eelektrik",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "eevee",
+    "raidName": "Eevee",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "ekans",
+    "raidName": "Ekans",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "electabuzz",
+    "raidName": "Electabuzz",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "electabuzz-shadow",
+    "raidName": "Shadow Electabuzz",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "electivire",
+    "raidName": "Electivire",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "electrike",
+    "raidName": "Electrike",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "electrode",
+    "raidName": "Electrode",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "elgyem",
+    "raidName": "Elgyem",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "emolga",
+    "raidName": "Emolga",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "empoleon",
+    "raidName": "Empoleon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "enamorus-incarnate",
+    "raidName": "Enamorus (Incarnate)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "entei",
+    "raidName": "Entei",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "entei-shadow",
+    "raidName": "Shadow Entei",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "espeon",
+    "raidName": "Espeon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "espurr",
+    "raidName": "Espurr",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "excadrill",
+    "raidName": "Excadrill",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "exeggcute",
+    "raidName": "Exeggcute",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "exeggcute-shadow",
+    "raidName": "Shadow Exeggcute",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "exeggutor",
+    "raidName": "Exeggutor",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "exeggutor-alola",
+    "raidName": "Exeggutor (Alola)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "falinks",
+    "raidName": "Falinks",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "farfetch’d",
+    "raidName": "Farfetch’d",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "farfetch’d-galarian",
+    "raidName": "Farfetch’d (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "fearow",
+    "raidName": "Fearow",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "feebas",
+    "raidName": "Feebas",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "fennekin",
+    "raidName": "Fennekin",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "feraligatr",
+    "raidName": "Feraligatr",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "ferroseed",
+    "raidName": "Ferroseed",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "ferrothorn",
+    "raidName": "Ferrothorn",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "flaaffy",
+    "raidName": "Flaaffy",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "flareon",
+    "raidName": "Flareon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "fletchinder",
+    "raidName": "Fletchinder",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "fletchling",
+    "raidName": "Fletchling",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "floatzel",
+    "raidName": "Floatzel",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "flygon",
+    "raidName": "Flygon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "fomantis",
+    "raidName": "Fomantis",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "foongus",
+    "raidName": "Foongus",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "foongus-shadow",
+    "raidName": "Shadow Foongus",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "forretress",
+    "raidName": "Forretress",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "frillish",
+    "raidName": "Frillish",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "froakie",
+    "raidName": "Froakie",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "furfrou-dandy",
+    "raidName": "Furfrou",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "gabite",
+    "raidName": "Gabite",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "gallade",
+    "raidName": "Gallade",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "galvantula",
+    "raidName": "Galvantula",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "garbodor",
+    "raidName": "Garbodor",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "garchomp",
+    "raidName": "Garchomp",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "garchomp-mega",
+    "raidName": "Mega Garchomp",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "gardevoir",
+    "raidName": "Gardevoir",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "gardevoir-mega",
+    "raidName": "Mega Gardevoir",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "gastly",
+    "raidName": "Gastly",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "gastly-shadow",
+    "raidName": "Shadow Gastly",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "genesect",
+    "raidName": "Genesect",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "gengar",
+    "raidName": "Gengar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "gengar-mega",
+    "raidName": "Mega Gengar",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "geodude",
+    "raidName": "Geodude",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "geodude-alola",
+    "raidName": "Geodude (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "gible",
+    "raidName": "Gible",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "gigalith",
+    "raidName": "Gigalith",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "girafarig",
+    "raidName": "Girafarig",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "giratina-altered",
+    "raidName": "Giratina (Altered)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "giratina-altered-shadow",
+    "raidName": "Shadow Giratina (Altered)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "giratina-origin",
+    "raidName": "Giratina (Origin)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "glaceon",
+    "raidName": "Glaceon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "glalie",
+    "raidName": "Glalie",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "glalie-mega",
+    "raidName": "Mega Glalie",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "glameow",
+    "raidName": "Glameow",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "gligar",
+    "raidName": "Gligar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "gligar-shadow",
+    "raidName": "Shadow Gligar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "gloom",
+    "raidName": "Gloom",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "golbat",
+    "raidName": "Golbat",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "golbat-shadow",
+    "raidName": "Shadow Golbat",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "golduck",
+    "raidName": "Golduck",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "golem",
+    "raidName": "Golem",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "golett",
+    "raidName": "Golett",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "golett-shadow",
+    "raidName": "Shadow Golett",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "golurk",
+    "raidName": "Golurk",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "gothita",
+    "raidName": "Gothita",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "gothorita",
+    "raidName": "Gothorita",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "granbull",
+    "raidName": "Granbull",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "graveler",
+    "raidName": "Graveler",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "graveler-alola",
+    "raidName": "Graveler (Alola)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "graveler-shadow",
+    "raidName": "Shadow Graveler",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "greavard",
+    "raidName": "Greavard",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "grimer",
+    "raidName": "Grimer",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "grimer-alola",
+    "raidName": "Grimer (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "grimer-shadow",
+    "raidName": "Shadow Grimer",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "grookey",
+    "raidName": "Grookey",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "grotle",
+    "raidName": "Grotle",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "groudon",
+    "raidName": "Groudon",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "groudon-primal",
+    "raidName": "Primal Groudon",
+    "tier": "Legendary Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 22500
+  },
+  {
+    "speciesId": "grovyle",
+    "raidName": "Grovyle",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "growlithe",
+    "raidName": "Growlithe",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "growlithe-hisuian",
+    "raidName": "Growlithe (Hisuian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "growlithe-shadow",
+    "raidName": "Shadow Growlithe",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "grubbin",
+    "raidName": "Grubbin",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "grubbin-shadow",
+    "raidName": "Shadow Grubbin",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "grumpig",
+    "raidName": "Grumpig",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "gulpin",
+    "raidName": "Gulpin",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "gurdurr",
+    "raidName": "Gurdurr",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "gurdurr-shadow",
+    "raidName": "Shadow Gurdurr",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "guzzlord",
+    "raidName": "Guzzlord",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "gyarados",
+    "raidName": "Gyarados",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "gyarados-mega",
+    "raidName": "Mega Gyarados",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "hariyama",
+    "raidName": "Hariyama",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "haunter",
+    "raidName": "Haunter",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "heatmor",
+    "raidName": "Heatmor",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "heatran",
+    "raidName": "Heatran",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "helioptile",
+    "raidName": "Helioptile",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "heracross",
+    "raidName": "Heracross",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "heracross-mega",
+    "raidName": "Mega Heracross",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "herdier",
+    "raidName": "Herdier",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "hippopotas",
+    "raidName": "Hippopotas",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "hippowdon",
+    "raidName": "Hippowdon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "hitmonchan",
+    "raidName": "Hitmonchan",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "hitmonchan-shadow",
+    "raidName": "Shadow Hitmonchan",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "hitmonlee",
+    "raidName": "Hitmonlee",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "hitmonlee-shadow",
+    "raidName": "Shadow Hitmonlee",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "hitmontop",
+    "raidName": "Hitmontop",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "hitmontop-shadow",
+    "raidName": "Shadow Hitmontop",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "ho-oh",
+    "raidName": "Ho-Oh",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "ho-oh-shadow",
+    "raidName": "Shadow Ho-Oh",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "honedge",
+    "raidName": "Honedge",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "hoothoot",
+    "raidName": "Hoothoot",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "hoppip",
+    "raidName": "Hoppip",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "horsea",
+    "raidName": "Horsea",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "horsea-shadow",
+    "raidName": "Shadow Horsea",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "houndoom",
+    "raidName": "Houndoom",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "houndoom-mega",
+    "raidName": "Mega Houndoom",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "houndour",
+    "raidName": "Houndour",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "houndour-shadow",
+    "raidName": "Shadow Houndour",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "hypno",
+    "raidName": "Hypno",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "illumise",
+    "raidName": "Illumise",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "impidimp",
+    "raidName": "Impidimp",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "infernape",
+    "raidName": "Infernape",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "inkay",
+    "raidName": "Inkay",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "ivysaur",
+    "raidName": "Ivysaur",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "jangmo-o",
+    "raidName": "Jangmo-o",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "jigglypuff",
+    "raidName": "Jigglypuff",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "jolteon",
+    "raidName": "Jolteon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "joltik",
+    "raidName": "Joltik",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "joltik-shadow",
+    "raidName": "Shadow Joltik",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "jumpluff",
+    "raidName": "Jumpluff",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "jynx",
+    "raidName": "Jynx",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "kabuto",
+    "raidName": "Kabuto",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "kabutops",
+    "raidName": "Kabutops",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "kadabra",
+    "raidName": "Kadabra",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "kangaskhan",
+    "raidName": "Kangaskhan",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "kangaskhan-mega",
+    "raidName": "Mega Kangaskhan",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "kartana",
+    "raidName": "Kartana",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "kingler",
+    "raidName": "Kingler",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "kirlia",
+    "raidName": "Kirlia",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "kirlia-shadow",
+    "raidName": "Shadow Kirlia",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "kleavor",
+    "raidName": "Kleavor",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "klink",
+    "raidName": "Klink",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "koffing",
+    "raidName": "Koffing",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "krabby",
+    "raidName": "Krabby",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "kricketot",
+    "raidName": "Kricketot",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "kricketune",
+    "raidName": "Kricketune",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "kyogre",
+    "raidName": "Kyogre",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "kyogre-primal",
+    "raidName": "Primal Kyogre",
+    "tier": "Legendary Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 22500
+  },
+  {
+    "speciesId": "kyurem",
+    "raidName": "Kyurem",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "lairon",
+    "raidName": "Lairon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "lampent",
+    "raidName": "Lampent",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "lampent-shadow",
+    "raidName": "Shadow Lampent",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "landorus-incarnate",
+    "raidName": "Landorus (Incarnate)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "landorus-therian",
+    "raidName": "Landorus (Therian)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "lanturn",
+    "raidName": "Lanturn",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "lapras",
+    "raidName": "Lapras",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "lapras-shadow",
+    "raidName": "Shadow Lapras",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "larvitar",
+    "raidName": "Larvitar",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "larvitar-shadow",
+    "raidName": "Shadow Larvitar",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "latias",
+    "raidName": "Latias",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "latias-mega",
+    "raidName": "Mega Latias",
+    "tier": "Legendary Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 22500
+  },
+  {
+    "speciesId": "latios",
+    "raidName": "Latios",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "latios-mega",
+    "raidName": "Mega Latios",
+    "tier": "Legendary Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 22500
+  },
+  {
+    "speciesId": "latios-shadow",
+    "raidName": "Shadow Latios",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "lechonk",
+    "raidName": "Lechonk",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "ledyba",
+    "raidName": "Ledyba",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "lickitung",
+    "raidName": "Lickitung",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "liepard",
+    "raidName": "Liepard",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "lileep",
+    "raidName": "Lileep",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "lilligant-hisuian",
+    "raidName": "Hisuian Lilligant",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "lillipup",
+    "raidName": "Lillipup",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "litleo",
+    "raidName": "Litleo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "litwick",
+    "raidName": "Litwick",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "litwick-shadow",
+    "raidName": "Shadow Litwick",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "lopunny",
+    "raidName": "Lopunny",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "lopunny-mega",
+    "raidName": "Mega Lopunny",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "lotad",
+    "raidName": "Lotad",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "lucario",
+    "raidName": "Lucario",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "lucario-mega",
+    "raidName": "Mega Lucario",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "ludicolo",
+    "raidName": "Ludicolo",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "lugia",
+    "raidName": "Lugia",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "lugia-shadow",
+    "raidName": "Shadow Lugia",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "lumineon",
+    "raidName": "Lumineon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "lunatone",
+    "raidName": "Lunatone",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "luvdisc",
+    "raidName": "Luvdisc",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "luxio",
+    "raidName": "Luxio",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "luxray",
+    "raidName": "Luxray",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "machamp",
+    "raidName": "Machamp",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "machoke",
+    "raidName": "Machoke",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "machop",
+    "raidName": "Machop",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "machop-shadow",
+    "raidName": "Shadow Machop",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "magcargo",
+    "raidName": "Magcargo",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "magikarp",
+    "raidName": "Magikarp",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "magmar",
+    "raidName": "Magmar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "magmar-shadow",
+    "raidName": "Shadow Magmar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "magnemite",
+    "raidName": "Magnemite",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "magnemite-shadow",
+    "raidName": "Shadow Magnemite",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "magneton",
+    "raidName": "Magneton",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "makuhita",
+    "raidName": "Makuhita",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "malamar-mega",
+    "raidName": "Mega Malamar",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "manectric",
+    "raidName": "Manectric",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "manectric-mega",
+    "raidName": "Mega Manectric",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "manectric-shadow",
+    "raidName": "Shadow Manectric",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "mankey",
+    "raidName": "Mankey",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "mankey-shadow",
+    "raidName": "Shadow Mankey",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "mantine",
+    "raidName": "Mantine",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "mareanie",
+    "raidName": "Mareanie",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "mareep",
+    "raidName": "Mareep",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "mareep-shadow",
+    "raidName": "Shadow Mareep",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "marill",
+    "raidName": "Marill",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "marowak",
+    "raidName": "Marowak",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "marowak-alola",
+    "raidName": "Marowak (Alola)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "marshtomp",
+    "raidName": "Marshtomp",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "masquerain",
+    "raidName": "Masquerain",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "mawile",
+    "raidName": "Mawile",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "mawile-mega",
+    "raidName": "Mega Mawile",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "mawile-shadow",
+    "raidName": "Shadow Mawile",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "medicham",
+    "raidName": "Medicham",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "medicham-mega",
+    "raidName": "Mega Medicham",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "meditite",
+    "raidName": "Meditite",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "meganium",
+    "raidName": "Meganium",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "meowth",
+    "raidName": "Meowth",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "meowth-alola",
+    "raidName": "Meowth (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "meowth-galarian",
+    "raidName": "Meowth (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "meowth-shadow",
+    "raidName": "Shadow Meowth",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "mesprit",
+    "raidName": "Mesprit",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "metagross",
+    "raidName": "Metagross",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "metagross-mega",
+    "raidName": "Mega Metagross",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "metang",
+    "raidName": "Metang",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "metapod",
+    "raidName": "Metapod",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "mewtwo",
+    "raidName": "Mewtwo",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "mewtwo-a",
+    "raidName": "Mewtwo (A)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "mewtwo-mega-x",
+    "raidName": "Mega Mewtwo X",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "mewtwo-mega-y",
+    "raidName": "Mega Mewtwo Y",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "mewtwo-shadow",
+    "raidName": "Shadow Mewtwo",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "mienfoo",
+    "raidName": "Mienfoo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "mightyena",
+    "raidName": "Mightyena",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "miltank",
+    "raidName": "Miltank",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "minccino",
+    "raidName": "Minccino",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "minun",
+    "raidName": "Minun",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "misdreavus",
+    "raidName": "Misdreavus",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "misdreavus-shadow",
+    "raidName": "Shadow Misdreavus",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "moltres",
+    "raidName": "Moltres",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "moltres-shadow",
+    "raidName": "Shadow Moltres",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "monferno",
+    "raidName": "Monferno",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "morelull",
+    "raidName": "Morelull",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "mr. mime",
+    "raidName": "Mr. Mime",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "mudkip",
+    "raidName": "Mudkip",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "muk",
+    "raidName": "Muk",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "munna",
+    "raidName": "Munna",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "murkrow",
+    "raidName": "Murkrow",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "murkrow-shadow",
+    "raidName": "Shadow Murkrow",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "natu",
+    "raidName": "Natu",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "necrozma",
+    "raidName": "Necrozma",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nidoking",
+    "raidName": "Nidoking",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "nidoqueen",
+    "raidName": "Nidoqueen",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "nidoran♀",
+    "raidName": "Nidoran♀",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nidoran♀-shadow",
+    "raidName": "Shadow Nidoran♀",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nidoran♂",
+    "raidName": "Nidoran♂",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "nidoran♂-shadow",
+    "raidName": "Shadow Nidoran♂",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nidorina",
+    "raidName": "Nidorina",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nidorina-shadow",
+    "raidName": "Shadow Nidorina",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nidorino",
+    "raidName": "Nidorino",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "nidorino-shadow",
+    "raidName": "Shadow Nidorino",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "nihilego",
+    "raidName": "Nihilego",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "nincada",
+    "raidName": "Nincada",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "ninetales",
+    "raidName": "Ninetales",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "ninetales-shadow",
+    "raidName": "Shadow Ninetales",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "ninjask",
+    "raidName": "Ninjask",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "noctowl",
+    "raidName": "Noctowl",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "nosepass",
+    "raidName": "Nosepass",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "numel",
+    "raidName": "Numel",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "nuzleaf",
+    "raidName": "Nuzleaf",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "nuzleaf-shadow",
+    "raidName": "Shadow Nuzleaf",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "octillery",
+    "raidName": "Octillery",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "omanyte",
+    "raidName": "Omanyte",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "omastar",
+    "raidName": "Omastar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "onix",
+    "raidName": "Onix",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "onix-shadow",
+    "raidName": "Shadow Onix",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "oranguru",
+    "raidName": "Oranguru",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "oshawott",
+    "raidName": "Oshawott",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "palkia",
+    "raidName": "Palkia",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "palpitoad",
+    "raidName": "Palpitoad",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "pancham",
+    "raidName": "Pancham",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "panpour",
+    "raidName": "Panpour",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pansage",
+    "raidName": "Pansage",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pansear",
+    "raidName": "Pansear",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "paras",
+    "raidName": "Paras",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "parasect",
+    "raidName": "Parasect",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "passimian",
+    "raidName": "Passimian",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "patrat",
+    "raidName": "Patrat",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pawniard",
+    "raidName": "Pawniard",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "pelipper",
+    "raidName": "Pelipper",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "persian",
+    "raidName": "Persian",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "petilil",
+    "raidName": "Petilil",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "phanpy",
+    "raidName": "Phanpy",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "phanpy-shadow",
+    "raidName": "Shadow Phanpy",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "phantump",
+    "raidName": "Phantump",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pheromosa",
+    "raidName": "Pheromosa",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "pidgeot",
+    "raidName": "Pidgeot",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "pidgeot-mega",
+    "raidName": "Mega Pidgeot",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "pidove",
+    "raidName": "Pidove",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pidove-shadow",
+    "raidName": "Shadow Pidove",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "pikachu",
+    "raidName": "Pikachu",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pikipek",
+    "raidName": "Pikipek",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "piloswine",
+    "raidName": "Piloswine",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "piloswine-shadow",
+    "raidName": "Shadow Piloswine",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "pineco",
+    "raidName": "Pineco",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "pineco-shadow",
+    "raidName": "Shadow Pineco",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "pinsir",
+    "raidName": "Pinsir",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "pinsir-mega",
+    "raidName": "Mega Pinsir",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "pinsir-shadow",
+    "raidName": "Shadow Pinsir",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "piplup",
+    "raidName": "Piplup",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "plusle",
+    "raidName": "Plusle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "politoed",
+    "raidName": "Politoed",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "poliwag",
+    "raidName": "Poliwag",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "poliwag-shadow",
+    "raidName": "Shadow Poliwag",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "poliwhirl",
+    "raidName": "Poliwhirl",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "poliwrath",
+    "raidName": "Poliwrath",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "ponyta",
+    "raidName": "Ponyta",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "ponyta-galarian",
+    "raidName": "Ponyta (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "poochyena",
+    "raidName": "Poochyena",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "popplio",
+    "raidName": "Popplio",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "porygon",
+    "raidName": "Porygon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "porygon-shadow",
+    "raidName": "Shadow Porygon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "porygon2",
+    "raidName": "Porygon2",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "primeape",
+    "raidName": "Primeape",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "primeape-shadow",
+    "raidName": "Shadow Primeape",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "prinplup",
+    "raidName": "Prinplup",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "psyduck",
+    "raidName": "Psyduck",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "pumpkaboo-average",
+    "raidName": "Pumpkaboo (Average)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "purrloin",
+    "raidName": "Purrloin",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "quagsire",
+    "raidName": "Quagsire",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "quilava",
+    "raidName": "Quilava",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "quilava-shadow",
+    "raidName": "Shadow Quilava",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "qwilfish",
+    "raidName": "Qwilfish",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "qwilfish-hisuian",
+    "raidName": "Qwilfish (Hisuian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "raichu",
+    "raidName": "Raichu",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "raichu-alola",
+    "raidName": "Raichu (Alola)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "raichu-mega-x",
+    "raidName": "Mega Raichu X",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "raichu-mega-y",
+    "raidName": "Mega Raichu Y",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "raikou",
+    "raidName": "Raikou",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "raikou-shadow",
+    "raidName": "Shadow Raikou",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "ralts",
+    "raidName": "Ralts",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "ralts-shadow",
+    "raidName": "Shadow Ralts",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "rapidash",
+    "raidName": "Rapidash",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "raticate",
+    "raidName": "Raticate",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "rattata-alola",
+    "raidName": "Rattata (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "rayquaza",
+    "raidName": "Rayquaza",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "rayquaza-mega",
+    "raidName": "Mega Rayquaza",
+    "tier": "Legendary Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "regice",
+    "raidName": "Regice",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "regice-shadow",
+    "raidName": "Shadow Regice",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "regidrago",
+    "raidName": "Regidrago",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "regieleki",
+    "raidName": "Regieleki",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "regigigas",
+    "raidName": "Regigigas",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "regirock",
+    "raidName": "Regirock",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "regirock-shadow",
+    "raidName": "Shadow Regirock",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "registeel",
+    "raidName": "Registeel",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "registeel-shadow",
+    "raidName": "Shadow Registeel",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "reshiram",
+    "raidName": "Reshiram",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "rhydon",
+    "raidName": "Rhydon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "rhyhorn",
+    "raidName": "Rhyhorn",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "rockruff",
+    "raidName": "Rockruff",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "roggenrola",
+    "raidName": "Roggenrola",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "roselia",
+    "raidName": "Roselia",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "roserade",
+    "raidName": "Roserade",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "rowlet",
+    "raidName": "Rowlet",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "rufflet",
+    "raidName": "Rufflet",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sableye",
+    "raidName": "Sableye",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "sableye-mega",
+    "raidName": "Mega Sableye",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "sableye-shadow",
+    "raidName": "Shadow Sableye",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "salamence",
+    "raidName": "Salamence",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "salamence-mega",
+    "raidName": "Mega Salamence",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "sandshrew",
+    "raidName": "Sandshrew",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sandshrew-alola",
+    "raidName": "Sandshrew (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "sandslash",
+    "raidName": "Sandslash",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "sandygast",
+    "raidName": "Sandygast",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sawk",
+    "raidName": "Sawk",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "sawk-shadow",
+    "raidName": "Shadow Sawk",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "sceptile-mega",
+    "raidName": "Mega Sceptile",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "scizor",
+    "raidName": "Scizor",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "scizor-mega",
+    "raidName": "Mega Scizor",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "scolipede",
+    "raidName": "Scolipede",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "scorbunny",
+    "raidName": "Scorbunny",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "scraggy",
+    "raidName": "Scraggy",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "scyther",
+    "raidName": "Scyther",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "scyther-shadow",
+    "raidName": "Shadow Scyther",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "seadra",
+    "raidName": "Seadra",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "sealeo",
+    "raidName": "Sealeo",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "seedot",
+    "raidName": "Seedot",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "seel",
+    "raidName": "Seel",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sentret",
+    "raidName": "Sentret",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "seviper",
+    "raidName": "Seviper",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "sewaddle",
+    "raidName": "Sewaddle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sharpedo",
+    "raidName": "Sharpedo",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "sharpedo-mega",
+    "raidName": "Mega Sharpedo",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "shelgon",
+    "raidName": "Shelgon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "shellder",
+    "raidName": "Shellder",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "shellos-west_sea",
+    "raidName": "Shellos (West_sea)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "shieldon",
+    "raidName": "Shieldon",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "shieldon-shadow",
+    "raidName": "Shadow Shieldon",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "shiftry",
+    "raidName": "Shiftry",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "shinx",
+    "raidName": "Shinx",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "shuckle",
+    "raidName": "Shuckle",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "shuppet",
+    "raidName": "Shuppet",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "skarmory",
+    "raidName": "Skarmory",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "skarmory-mega",
+    "raidName": "Mega Skarmory",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "skarmory-shadow",
+    "raidName": "Shadow Skarmory",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "skorupi",
+    "raidName": "Skorupi",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "skrelp",
+    "raidName": "Skrelp",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "skuntank",
+    "raidName": "Skuntank",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "slaking",
+    "raidName": "Slaking",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "slakoth",
+    "raidName": "Slakoth",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "slowbro",
+    "raidName": "Slowbro",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "slowbro-mega",
+    "raidName": "Mega Slowbro",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "slowking",
+    "raidName": "Slowking",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "slowpoke",
+    "raidName": "Slowpoke",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "slowpoke-galarian",
+    "raidName": "Slowpoke (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "slowpoke-shadow",
+    "raidName": "Shadow Slowpoke",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "smoliv",
+    "raidName": "Smoliv",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "sneasel",
+    "raidName": "Sneasel",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "sneasel-hisuian",
+    "raidName": "Hisuian Sneasel",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "sneasel-shadow",
+    "raidName": "Shadow Sneasel",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "snivy",
+    "raidName": "Snivy",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "snorlax",
+    "raidName": "Snorlax",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "snorlax-shadow",
+    "raidName": "Shadow Snorlax",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "snorunt",
+    "raidName": "Snorunt",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "snover",
+    "raidName": "Snover",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "snover-shadow",
+    "raidName": "Shadow Snover",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "snubbull",
+    "raidName": "Snubbull",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sobble",
+    "raidName": "Sobble",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "solosis",
+    "raidName": "Solosis",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "solrock",
+    "raidName": "Solrock",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "spheal",
+    "raidName": "Spheal",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "spheal-shadow",
+    "raidName": "Shadow Spheal",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "spinda-00",
+    "raidName": "Spinda (00)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "spoink",
+    "raidName": "Spoink",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "spoink-shadow",
+    "raidName": "Shadow Spoink",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "spritzee",
+    "raidName": "Spritzee",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "squirtle",
+    "raidName": "Squirtle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "stantler",
+    "raidName": "Stantler",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "stantler-shadow",
+    "raidName": "Shadow Stantler",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "staraptor",
+    "raidName": "Staraptor",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "starly",
+    "raidName": "Starly",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "starly-shadow",
+    "raidName": "Shadow Starly",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "starmie",
+    "raidName": "Starmie",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "starmie-mega",
+    "raidName": "Mega Starmie",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "staryu",
+    "raidName": "Staryu",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "steelix",
+    "raidName": "Steelix",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "steelix-mega",
+    "raidName": "Mega Steelix",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "stoutland",
+    "raidName": "Stoutland",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "stufful",
+    "raidName": "Stufful",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "stunfisk",
+    "raidName": "Stunfisk",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "stunfisk-galarian",
+    "raidName": "Stunfisk (Galarian)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "stunky",
+    "raidName": "Stunky",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "sudowoodo",
+    "raidName": "Sudowoodo",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "sudowoodo-shadow",
+    "raidName": "Shadow Sudowoodo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "suicune",
+    "raidName": "Suicune",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "suicune-shadow",
+    "raidName": "Shadow Suicune",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "sunflora",
+    "raidName": "Sunflora",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "sunkern",
+    "raidName": "Sunkern",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "swablu",
+    "raidName": "Swablu",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "swadloon",
+    "raidName": "Swadloon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "swalot",
+    "raidName": "Swalot",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "swampert",
+    "raidName": "Swampert",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "swampert-mega",
+    "raidName": "Mega Swampert",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "swellow",
+    "raidName": "Swellow",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "swinub",
+    "raidName": "Swinub",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "swirlix",
+    "raidName": "Swirlix",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tadbulb",
+    "raidName": "Tadbulb",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "taillow",
+    "raidName": "Taillow",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tangela",
+    "raidName": "Tangela",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "tapu bulu",
+    "raidName": "Tapu Bulu",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "tapu fini",
+    "raidName": "Tapu Fini",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "tapu koko",
+    "raidName": "Tapu Koko",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "tapu lele",
+    "raidName": "Tapu Lele",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "tauros",
+    "raidName": "Tauros",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "teddiursa",
+    "raidName": "Teddiursa",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "teddiursa-shadow",
+    "raidName": "Shadow Teddiursa",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "tentacool",
+    "raidName": "Tentacool",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tentacruel",
+    "raidName": "Tentacruel",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "tepig",
+    "raidName": "Tepig",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "terrakion",
+    "raidName": "Terrakion",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "throh",
+    "raidName": "Throh",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "throh-shadow",
+    "raidName": "Shadow Throh",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "thundurus-incarnate",
+    "raidName": "Thundurus (Incarnate)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "thundurus-therian",
+    "raidName": "Thundurus (Therian)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "timburr",
+    "raidName": "Timburr",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tirtouga",
+    "raidName": "Tirtouga",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "togedemaru",
+    "raidName": "Togedemaru",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "togekiss",
+    "raidName": "Togekiss",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "togetic",
+    "raidName": "Togetic",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "torchic",
+    "raidName": "Torchic",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tornadus-incarnate",
+    "raidName": "Tornadus (Incarnate)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "tornadus-therian",
+    "raidName": "Tornadus (Therian)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T03:39:55.279Z",
+    "lastSeenAt": "2026-09-08T03:39:55.279Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "torracat",
+    "raidName": "Torracat",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "torterra",
+    "raidName": "Torterra",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "totodile",
+    "raidName": "Totodile",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "totodile-shadow",
+    "raidName": "Shadow Totodile",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "toucannon",
+    "raidName": "Toucannon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "toxicroak",
+    "raidName": "Toxicroak",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "tranquill",
+    "raidName": "Tranquill",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "trapinch",
+    "raidName": "Trapinch",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "trapinch-shadow",
+    "raidName": "Shadow Trapinch",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "treecko",
+    "raidName": "Treecko",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "trubbish",
+    "raidName": "Trubbish",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "turtonator",
+    "raidName": "Turtonator",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "turtwig",
+    "raidName": "Turtwig",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tympole",
+    "raidName": "Tympole",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "tynamo",
+    "raidName": "Tynamo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "typhlosion",
+    "raidName": "Typhlosion",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "tyranitar",
+    "raidName": "Tyranitar",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "tyranitar-mega",
+    "raidName": "Mega Tyranitar",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "tyrunt",
+    "raidName": "Tyrunt",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T15:01:50.362Z",
+    "source": "live-feed"
+  },
+  {
+    "speciesId": "umbreon",
+    "raidName": "Umbreon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "unown-a",
+    "raidName": "Unown (A)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "ursaring",
+    "raidName": "Ursaring",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "uxie",
+    "raidName": "Uxie",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "vanillite",
+    "raidName": "Vanillite",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "vaporeon",
+    "raidName": "Vaporeon",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3000
+  },
+  {
+    "speciesId": "venipede",
+    "raidName": "Venipede",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "venomoth",
+    "raidName": "Venomoth",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "venonat",
+    "raidName": "Venonat",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "venusaur",
+    "raidName": "Venusaur",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "venusaur-mega",
+    "raidName": "Mega Venusaur",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "vibrava",
+    "raidName": "Vibrava",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "vibrava-shadow",
+    "raidName": "Shadow Vibrava",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "victreebel",
+    "raidName": "Victreebel",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "victreebel-mega",
+    "raidName": "Mega Victreebel",
+    "tier": "Super Mega Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "researched-tier"
+  },
+  {
+    "speciesId": "vikavolt",
+    "raidName": "Vikavolt",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "vileplume",
+    "raidName": "Vileplume",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "virizion",
+    "raidName": "Virizion",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "volbeat",
+    "raidName": "Volbeat",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "voltorb",
+    "raidName": "Voltorb",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "voltorb-hisuian",
+    "raidName": "Voltorb (Hisuian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "vulpix",
+    "raidName": "Vulpix",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "vulpix-alola",
+    "raidName": "Vulpix (Alola)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous"
+  },
+  {
+    "speciesId": "wailmer",
+    "raidName": "Wailmer",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "walrein",
+    "raidName": "Walrein",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "wartortle",
+    "raidName": "Wartortle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "weedle",
+    "raidName": "Weedle",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "weepinbell",
+    "raidName": "Weepinbell",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "weezing",
+    "raidName": "Weezing",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "weezing-galarian",
+    "raidName": "Weezing (Galarian)",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 9000
+  },
+  {
+    "speciesId": "whimsicott",
+    "raidName": "Whimsicott",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "whirlipede",
+    "raidName": "Whirlipede",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "whiscash",
+    "raidName": "Whiscash",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "wigglytuff",
+    "raidName": "Wigglytuff",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "wimpod",
+    "raidName": "Wimpod",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "wingull",
+    "raidName": "Wingull",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "wobbuffet",
+    "raidName": "Wobbuffet",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "wobbuffet-shadow",
+    "raidName": "Shadow Wobbuffet",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "woobat",
+    "raidName": "Woobat",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "wooloo",
+    "raidName": "Wooloo",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "wooper",
+    "raidName": "Wooper",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "wooper-shadow",
+    "raidName": "Shadow Wooper",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "wurmple",
+    "raidName": "Wurmple",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "wyrdeer",
+    "raidName": "Wyrdeer",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "xatu",
+    "raidName": "Xatu",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "xerneas",
+    "raidName": "Xerneas",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "xurkitree",
+    "raidName": "Xurkitree",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "bulbapedia-archive",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "yamask",
+    "raidName": "Yamask",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 1800
+  },
+  {
+    "speciesId": "yamask-galarian",
+    "raidName": "Yamask (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "yanma",
+    "raidName": "Yanma",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:43:33.227Z",
+    "lastSeenAt": "2026-09-08T14:43:33.227Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "yungoos",
+    "raidName": "Yungoos",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "yveltal",
+    "raidName": "Yveltal",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "zacian-hero",
+    "raidName": "Zacian (Hero)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "zamazenta-hero",
+    "raidName": "Zamazenta (Hero)",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "zangoose",
+    "raidName": "Zangoose",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 3600
+  },
+  {
+    "speciesId": "zapdos",
+    "raidName": "Zapdos",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 12500
+  },
+  {
+    "speciesId": "zapdos-shadow",
+    "raidName": "Shadow Zapdos",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "zebstrika",
+    "raidName": "Zebstrika",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "zekrom",
+    "raidName": "Zekrom",
+    "tier": "5-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 15000
+  },
+  {
+    "speciesId": "zigzagoon-galarian",
+    "raidName": "Zigzagoon (Galarian)",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T03:48:21.769Z",
+    "lastSeenAt": "2026-09-08T03:48:21.769Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "zorua",
+    "raidName": "Zorua",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "zubat",
+    "raidName": "Zubat",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T01:01:53.395Z",
+    "lastSeenAt": "2026-09-08T01:01:53.395Z",
+    "source": "pogoapi-previous",
+    "eraHp": 600
+  },
+  {
+    "speciesId": "zubat-shadow",
+    "raidName": "Shadow Zubat",
+    "tier": "1-Star Raids",
+    "firstSeenAt": "2026-09-08T14:58:35.056Z",
+    "lastSeenAt": "2026-09-08T14:58:35.056Z",
+    "source": "pokebattler-legacy"
+  },
+  {
+    "speciesId": "zweilous",
+    "raidName": "Zweilous",
+    "tier": "3-Star Raids",
+    "firstSeenAt": "2026-09-08T14:39:11.556Z",
+    "lastSeenAt": "2026-09-08T14:39:11.556Z",
+    "source": "pokebattler-legacy"
+  }
+]

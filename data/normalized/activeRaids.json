@@ -1,38 +1,68 @@
 [
   {
-    "raidName": "Mega Mewtwo Y",
-    "tier": "Super Mega Raids",
-    "speciesId": "mewtwo-mega-y",
+    "raidName": "Dratini",
+    "tier": "1-Star Raids",
+    "speciesId": "dratini",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Raichu Y",
-    "tier": "Mega Raids",
-    "speciesId": "raichu-mega-y",
+    "raidName": "Honedge",
+    "tier": "1-Star Raids",
+    "speciesId": "honedge",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Sableye",
-    "tier": "Mega Raids",
-    "speciesId": "sableye-mega",
+    "raidName": "Tyrunt",
+    "tier": "1-Star Raids",
+    "speciesId": "tyrunt",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Mawile",
-    "tier": "Mega Raids",
-    "speciesId": "mawile-mega",
+    "raidName": "Amaura",
+    "tier": "1-Star Raids",
+    "speciesId": "amaura",
     "isApproximate": false
   },
   {
-    "raidName": "Mega Audino",
-    "tier": "Mega Raids",
-    "speciesId": "audino-mega",
+    "raidName": "Hisuian Sneasel",
+    "tier": "3-Star Raids",
+    "speciesId": "sneasel-hisuian",
     "isApproximate": false
   },
   {
-    "raidName": "Armored Mewtwo",
+    "raidName": "Hisuian Lilligant",
+    "tier": "3-Star Raids",
+    "speciesId": "lilligant-hisuian",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Passimian",
+    "tier": "3-Star Raids",
+    "speciesId": "passimian",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Regirock",
     "tier": "5-Star Raids",
-    "speciesId": null,
+    "speciesId": "regirock",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Regice",
+    "tier": "5-Star Raids",
+    "speciesId": "regice",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Registeel",
+    "tier": "5-Star Raids",
+    "speciesId": "registeel",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Mega Gyarados",
+    "tier": "Mega Raids",
+    "speciesId": "gyarados-mega",
     "isApproximate": false
   },
   {

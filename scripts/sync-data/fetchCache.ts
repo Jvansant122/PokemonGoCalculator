@@ -22,7 +22,10 @@ import type {
   RawGameMasterFullEntry,
   GameMasterPokemonRecord,
   GameMasterMoveRecord,
+  RawRaidBossesPreviousEntry,
+  RawRaidBossesResponse,
 } from "./rawShapes.ts";
+import type { RawPokebattlerResponse, RawPokebattlerTier } from "./pokebattlerRaids.ts";
 
 export function readJson<T>(rawDir: string, filename: string): T {
   return JSON.parse(readFileSync(join(rawDir, filename), "utf-8")) as T;
@@ -155,6 +158,58 @@ export async function fetchAndCacheRaids(rawDir: string, repoRoot: string): Prom
     const emptyFallback: RaidFallbackFile = { bosses: [] };
     writeFileSync(raidFallbackPath, JSON.stringify(emptyFallback, null, 2));
     return { entries: [], source: "fallback-file-created-empty", error: message };
+  }
+}
+
+const POKEBATTLER_RAIDS_URL = "https://fight.pokebattler.com/raids";
+const POKEBATTLER_USER_AGENT = "pogo-analyzer-data-sync pokebattler-live-cross-check (advisory, non-commercial)";
+
+export interface PokebattlerRaidsFetchResult {
+  tiers: RawPokebattlerTier[];
+  source: "live" | "error";
+  error?: string;
+}
+
+/**
+ * Fetches Pokebattler's own raid roster (https://fight.pokebattler.com/raids,
+ * ~673KB) live and caches the raw response under
+ * data/raw/pokebattler_raids.json (same discipline as every other endpoint —
+ * see recordFetchMeta). Added 2026-09-07 for an independent LIVE cross-check
+ * of ScrapedDuck's current raid roster (data/raw/raids.json) — see
+ * scripts/sync-data/pokebattlerRaids.ts's module doc comment for the tier-
+ * classification traps (`_FUTURE`/`_MAX`/`RAID_LEVEL_UNSET`) the consumer
+ * must filter out itself, and sync-data.ts's "Pokebattler live cross-check"
+ * section for how the two feeds are compared and reported.
+ *
+ * ScrapedDuck remains the sole, authoritative source for activeRaids.json —
+ * this endpoint never adds, removes, or overwrites a single active raid; its
+ * entire value is DETECTING divergence between the two feeds, reported loudly
+ * rather than silently reconciled (see CLAUDE.md's "Known gap: raid bosses").
+ *
+ * Best-effort, same philosophy as fetchAndCacheRaidBossesPrevious/
+ * fetchAndCacheBulbapediaRaidArchive: an unreachable/malformed response here
+ * must never fail the whole sync. Returns an error result instead of
+ * throwing; the caller logs a WARNING and simply skips the cross-check this
+ * run.
+ */
+export async function fetchAndCachePokebattlerRaids(rawDir: string): Promise<PokebattlerRaidsFetchResult> {
+  try {
+    const response = await fetch(POKEBATTLER_RAIDS_URL, { headers: { "User-Agent": POKEBATTLER_USER_AGENT } });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    const text = await response.text();
+    const parsed = JSON.parse(text) as RawPokebattlerResponse;
+    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.tiers)) {
+      throw new Error("unexpected shape: response body has no `tiers` array");
+    }
+    if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
+    writeFileSync(join(rawDir, "pokebattler_raids.json"), text);
+    recordFetchMeta(rawDir, "pokebattler_raids.json", Buffer.byteLength(text, "utf-8"));
+    return { tiers: parsed.tiers, source: "live" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { tiers: [], source: "error", error: message };
   }
 }
 
@@ -330,6 +385,214 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { pokemon: [], moves: [], source: "error", error: message, recoveredMoveIds: [], droppedMoveCount: 0 };
+  }
+}
+
+const RAID_BOSSES_URL = "https://pogoapi.net/api/v1/raid_bosses.json";
+
+export interface RaidBossesPreviousFetchResult {
+  /** The `previous` bucket — keyed by tier ("1".."6"/"ex"/"mega"/"mega_legendary"). */
+  previous: Record<string, RawRaidBossesPreviousEntry[]>;
+  /**
+   * The `current` bucket, same shape — originally fetched-and-discarded
+   * (this pipeline's live-raid source is ScrapedDuck, not this endpoint) but
+   * now ALSO consumed by the 2026-09-07 Pokebattler-cross-check task: pogoapi's
+   * own "current" snapshot is confirmed stale (verified 2026-09-07: zero
+   * species overlap with the real live ScrapedDuck roster — e.g. this bucket's
+   * lone "5" entry, Heatran, was NOT actually raiding that day) and is
+   * therefore folded into raidHistory.json as historical data too, same as
+   * `previous` (see sync-data.ts's "pogoapi-previous backfill" section, which
+   * now iterates both buckets together under the one "pogoapi-previous"
+   * source label — same file, same reliability characteristics, equally
+   * historical despite pogoapi's own "current" naming).
+   */
+  current: Record<string, RawRaidBossesPreviousEntry[]>;
+  source: "live" | "error";
+  error?: string;
+}
+
+/**
+ * Fetches pogoapi.net's raid_bosses.json live and caches the raw response
+ * under data/raw/raid_bosses.json (same discipline as every other endpoint —
+ * see recordFetchMeta). This pipeline already depends on pogoapi.net for the
+ * released-content roster/allowlist and per-species fallback (see
+ * sync-data.ts's module docstring); this is a second, independent endpoint
+ * from that same source, used ONLY to backfill data/normalized/
+ * raidHistory.json's `previous` list (2026-09-07 raidHistory backfill task —
+ * see that section of sync-data.ts) with real historical raid-boss
+ * appearances neither the live ScrapedDuck feed nor
+ * RELEASED_MEGA_PRIMAL_ALLOWLIST already covers. Fetched live on every run
+ * (not assumed pre-cached) since this pipeline has no prior cached copy of
+ * it and pogoapi's own scrape of it can grow over time as new raids rotate
+ * through and get recorded into `previous`.
+ *
+ * Best-effort: unlike fetchAndCacheMegaPokemon (whose roster this pipeline's
+ * released-content GATE depends on, so a fetch failure there should be
+ * loud), this endpoint is purely an ADDITIVE historical enrichment — a
+ * failure here should never fail the whole sync. Returns an error result
+ * instead of throwing (same pattern as fetchGameMasterData/
+ * fetchAndCacheRaids's fallback path) so the caller can log a WARNING and
+ * simply add zero "pogoapi-previous" entries this run rather than crash.
+ */
+export async function fetchAndCacheRaidBossesPrevious(rawDir: string): Promise<RaidBossesPreviousFetchResult> {
+  try {
+    const response = await fetch(RAID_BOSSES_URL);
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    const text = await response.text();
+    const parsed = JSON.parse(text) as RawRaidBossesResponse;
+    if (!parsed || typeof parsed !== "object" || typeof parsed.previous !== "object") {
+      throw new Error("unexpected shape: response body has no `previous` object");
+    }
+    if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
+    writeFileSync(join(rawDir, "raid_bosses.json"), text);
+    recordFetchMeta(rawDir, "raid_bosses.json", Buffer.byteLength(text, "utf-8"));
+    return { previous: parsed.previous, current: parsed.current ?? {}, source: "live" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { previous: {}, current: {}, source: "error", error: message };
+  }
+}
+
+/**
+ * The 16 Bulbapedia "List of Raid Boss changes in ..." archive pages this
+ * project's raidHistory.json Bulbapedia backfill (2026-09-07) is built from —
+ * see sync-data.ts's "Bulbapedia archive union" section. Coverage ends at
+ * 2023: Niantic-era Bulbapedia editors stopped maintaining a dedicated page
+ * per year/season after that, and there is no 2024/2025/2026 page to add.
+ * Deliberately the `in <page>` title form, NOT `(<page>)` — the parenthetical
+ * form is a redirect page that returns no usable wikitext via `action=raw`
+ * (confirmed 2026-09-07; see git history for the earlier attempt this
+ * tripped up).
+ */
+export const BULBAPEDIA_RAID_ARCHIVE_PAGES = [
+  "2017-2018",
+  "2019",
+  "2020",
+  "2021",
+  "2022",
+  "Season_1",
+  "Season_2",
+  "Season_3",
+  "Season_4",
+  "Season_5",
+  "Season_6",
+  "Season_7",
+  "Season_8",
+  "Season_9",
+  "Season_10",
+  "Season_11",
+] as const;
+
+const BULBAPEDIA_USER_AGENT = "pogo-analyzer-data-sync raid-history-bulbapedia-archive (advisory, non-commercial)";
+
+export interface BulbapediaRaidArchiveFetchResult {
+  /** Page slug -> raw wikitext, only for pages that fetched successfully. */
+  pages: Record<string, string>;
+  /** Page slugs that failed to fetch or came back empty — logged as a WARNING, never fatal. */
+  failedPages: string[];
+  source: "live" | "partial" | "error";
+  error?: string;
+}
+
+/**
+ * Fetches all 16 Bulbapedia raid-archive pages (BULBAPEDIA_RAID_ARCHIVE_PAGES)
+ * live and caches the combined result under data/raw/bulbapedia_raid_history.json
+ * (same discipline as every other endpoint — see recordFetchMeta), one
+ * fetch per page with the project's standard 150ms delay between sequential
+ * live fetches. Best-effort per page, same philosophy as
+ * fetchAndCacheRaidBossesPrevious: this is a purely ADDITIVE historical
+ * enrichment (see sync-data.ts's "Bulbapedia archive union" section), so one
+ * bad page should never fail the whole sync — a page that 404s, errors, or
+ * comes back empty is skipped and named in `failedPages` rather than thrown.
+ * `source` is "live" only if every page succeeded, "partial" if some did,
+ * "error" only if literally none did (in which case the Bulbapedia archive
+ * contributes zero entries this run, exactly like a fetchAndCacheRaidBossesPrevious
+ * failure does for its own source).
+ */
+export async function fetchAndCacheBulbapediaRaidArchive(rawDir: string): Promise<BulbapediaRaidArchiveFetchResult> {
+  const pages: Record<string, string> = {};
+  const failedPages: string[] = [];
+
+  for (const page of BULBAPEDIA_RAID_ARCHIVE_PAGES) {
+    const url = `https://bulbapedia.bulbagarden.net/w/index.php?title=List_of_Raid_Boss_changes_in_${page}&action=raw`;
+    try {
+      const response = await fetch(url, { headers: { "User-Agent": BULBAPEDIA_USER_AGENT } });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const text = await response.text();
+      if (!text || text.trim().length === 0) throw new Error("empty response body");
+      pages[page] = text;
+    } catch {
+      failedPages.push(page);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  if (Object.keys(pages).length === 0) {
+    return { pages: {}, failedPages, source: "error", error: "all 16 Bulbapedia raid-archive pages failed to fetch" };
+  }
+
+  if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
+  const cacheBody = JSON.stringify({ fetchedAt: new Date().toISOString(), failedPages, pages }, null, 2);
+  writeFileSync(join(rawDir, "bulbapedia_raid_history.json"), cacheBody);
+  recordFetchMeta(rawDir, "bulbapedia_raid_history.json", Buffer.byteLength(cacheBody, "utf-8"));
+
+  return { pages, failedPages, source: failedPages.length === 0 ? "live" : "partial" };
+}
+
+/**
+ * The single Bulbapedia "List of Shadow Raid Boss changes" page — 2026-09-08
+ * shadow-variant durability task (see sync-data.ts's "Shadow-variant durable
+ * synthesis" section). Unlike BULBAPEDIA_RAID_ARCHIVE_PAGES' 16 per-year/
+ * season pages, Shadow Raids are recent enough (debuted Season 10, 2023) to
+ * fit on one page — confirmed 2026-09-08 by direct wikitext inspection: 18
+ * `{{Lop/raid/GO|...}}` rows / 17 distinct species across two `==Season==`
+ * sections, each species row carrying `shadow=yes` and a bare (non-"Shadow
+ * "-prefixed) name — the "Shadow" head token appears once per tier group
+ * instead (`{{lop/raid/GO-head|Shadow|1}}`, `|3}}`, `|5}}`), a shape
+ * `BULBAPEDIA_RAID_ARCHIVE_PAGES`' own head-token parser (which expects a
+ * bare "1".."5" or "Mega"/"Primal" token) doesn't recognize — hence the
+ * dedicated, deliberately simpler parseBulbapediaShadowRaidPage in
+ * ./bulbapediaRaidArchive.ts rather than teaching the general parser a third
+ * head shape for a single page. Treated as thin CORROBORATION only (all 17
+ * distinct species independently confirmed 2026-09-08 to already be a subset
+ * of Pokebattler's own 105-entry `_SHADOW_LEGACY` archive) — never the sole
+ * evidence source a shadow variant depends on, though the pipeline doesn't
+ * special-case that; it just adds to the same evidence set.
+ */
+export const BULBAPEDIA_SHADOW_RAID_ARCHIVE_PAGE = "List_of_Shadow_Raid_Boss_changes";
+
+export interface BulbapediaShadowRaidArchiveFetchResult {
+  wikitext: string | null;
+  source: "live" | "error";
+  error?: string;
+}
+
+/**
+ * Fetches the single BULBAPEDIA_SHADOW_RAID_ARCHIVE_PAGE live and caches it
+ * to data/raw/bulbapedia_shadow_raid_history.json (same discipline as
+ * fetchAndCacheBulbapediaRaidArchive) — best-effort: a fetch failure here
+ * just means zero corroboration from this source this run, never a failed
+ * sync (see sync-data.ts's shadow-durability section for how the other two
+ * evidence sources cover this independently).
+ */
+export async function fetchAndCacheBulbapediaShadowRaidArchive(rawDir: string): Promise<BulbapediaShadowRaidArchiveFetchResult> {
+  const url = `https://bulbapedia.bulbagarden.net/w/index.php?title=${BULBAPEDIA_SHADOW_RAID_ARCHIVE_PAGE}&action=raw`;
+  try {
+    const response = await fetch(url, { headers: { "User-Agent": BULBAPEDIA_USER_AGENT } });
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+    const text = await response.text();
+    if (!text || text.trim().length === 0) throw new Error("empty response body");
+
+    if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
+    const cacheBody = JSON.stringify({ fetchedAt: new Date().toISOString(), wikitext: text }, null, 2);
+    writeFileSync(join(rawDir, "bulbapedia_shadow_raid_history.json"), cacheBody);
+    recordFetchMeta(rawDir, "bulbapedia_shadow_raid_history.json", Buffer.byteLength(cacheBody, "utf-8"));
+
+    return { wikitext: text, source: "live" };
+  } catch (e) {
+    return { wikitext: null, source: "error", error: e instanceof Error ? e.message : String(e) };
   }
 }
 

@@ -122,6 +122,8 @@ import {
   speciesIdFor,
   DEFAULT_MEGA_BOOST_MULTIPLIER,
   isKnownRaidTier,
+  RAID_TIER_TABLE,
+  defaultRaidTierForSpecies,
   type PokemonType,
   type PokemonRarity,
   type RaidTier,
@@ -137,15 +139,39 @@ import type {
   RawCurrentMovesEntry,
   RawMegaPokemonEntry,
   ActiveRaidEntry,
+  RaidHistoryEntry,
   GameMasterPokemonRecord,
+  RawRaidBossesPreviousEntry,
 } from "./sync-data/rawShapes.ts";
 import {
   fetchAndCacheMegaPokemon,
   fetchAndCacheRaids,
+  fetchAndCacheRaidBossesPrevious,
+  fetchAndCacheBulbapediaRaidArchive,
+  fetchAndCacheBulbapediaShadowRaidArchive,
+  fetchAndCachePokebattlerRaids,
   fetchGameMasterData,
   fetchMegaSpriteUrls,
   raidFallbackPathFor,
 } from "./sync-data/fetchCache.ts";
+import {
+  parseBulbapediaRaidRows,
+  parseBulbapediaShadowRaidPage,
+  buildBaseNameIndex,
+  resolveBulbapediaRow,
+} from "./sync-data/bulbapediaRaidArchive.ts";
+import {
+  isCurrentRotationTier,
+  buildEnumToPogoapiName,
+  pokebattlerDisplayNameForCrossCheck,
+  isArchivableLegacyTier,
+  POKEBATTLER_LEGACY_NUMERIC_TIER_MAP,
+  POKEBATTLER_LEGACY_MEGA_TIERS,
+  POKEBATTLER_LEGACY_EXCLUDED_TIERS,
+  resolvePokebattlerPokemonId,
+  resolveMegaLegacyTier,
+  type PokebattlerResolutionContext,
+} from "./sync-data/pokebattlerRaids.ts";
 import { toPokemonType, toRawGameMasterMove, toRawGameMasterMoveFromMoveSettings, spriteUrlForDexId } from "./sync-data/adapters.ts";
 import {
   resolvePokemonEnum,
@@ -157,6 +183,7 @@ import {
 import { megaSpeciesIdFor, parseMegaOrPrimalRaidName, tempEvoIdFor } from "./sync-data/megaPrimalParsing.ts";
 import { getOrCreateShadowVariant } from "./sync-data/shadowVariant.ts";
 import { diffSpecies, diffRaids } from "./sync-data/diff.ts";
+import { RELEASED_MEGA_PRIMAL_ALLOWLIST } from "./sync-data/releasedMegaPrimalAllowlist.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -183,6 +210,46 @@ await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between
 // list now depends on it, not just a rare gap-fill.
 const gameMasterFetchResult = await fetchGameMasterData(RAW_DIR);
 const gameMasterAvailable = gameMasterFetchResult.source === "live";
+await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
+
+// pogoapi.net's raid_bosses.json `previous` list — 2026-09-07 raidHistory
+// backfill task (see the "pogoapi-previous historical backfill" section
+// below for how this is consumed). Best-effort: a fetch failure here just
+// means zero "pogoapi-previous" entries get added this run (logged in
+// WARNINGS), never a failed sync — see fetchAndCacheRaidBossesPrevious's own
+// doc comment in ./sync-data/fetchCache.ts.
+const raidBossesPreviousFetchResult = await fetchAndCacheRaidBossesPrevious(RAW_DIR);
+await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
+
+// Bulbapedia's raid-archive pages — 2026-09-07 raidHistory Bulbapedia union
+// backfill (see the "Bulbapedia archive union" section below). Independent of
+// and additive to raidBossesPreviousFetchResult above; same best-effort
+// discipline (a fetch failure here just means zero "bulbapedia-archive"
+// entries get added/upgraded this run, logged in WARNINGS, never a failed
+// sync) — see fetchAndCacheBulbapediaRaidArchive's own doc comment.
+const bulbapediaRaidArchiveFetchResult = await fetchAndCacheBulbapediaRaidArchive(RAW_DIR);
+await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
+
+// The single Bulbapedia "List of Shadow Raid Boss changes" page — 2026-09-08
+// shadow-variant durability task (see the "Shadow-variant durable synthesis"
+// section below and fetchAndCacheBulbapediaShadowRaidArchive's own doc
+// comment in ./sync-data/fetchCache.ts). Thin corroboration only, same
+// best-effort discipline as every other archive fetch above.
+const bulbapediaShadowRaidArchiveFetchResult = await fetchAndCacheBulbapediaShadowRaidArchive(RAW_DIR);
+await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
+
+// Pokebattler's raid roster — feeds TWO tasks now (see
+// ./sync-data/pokebattlerRaids.ts's top-of-file note): (1) the 2026-09-07
+// LIVE cross-check against ScrapedDuck, and (2) the 2026-09-08 `_LEGACY`
+// archive import into raidHistory.json's "pokebattler-legacy" source (see
+// the "Pokebattler legacy archive backfill" section further down this file).
+// Best-effort for both: a fetch failure here just means the cross-check is
+// skipped AND zero "pokebattler-legacy" rows are added this run (logged in
+// WARNINGS), never a failed sync — see fetchAndCachePokebattlerRaids's own
+// doc comment in ./sync-data/fetchCache.ts. ScrapedDuck (raidFetchResult
+// above) remains the sole source for activeRaids.json regardless of what
+// the live cross-check finds.
+const pokebattlerFetchResult = await fetchAndCachePokebattlerRaids(RAW_DIR);
 
 const gameMasterPokemonByEnum = new Map<string, GameMasterPokemonRecord[]>();
 for (const p of gameMasterFetchResult.pokemon) {
@@ -379,6 +446,23 @@ for (const c of rawCurrentMoves) {
   if (c.form === defaultFormByPokemonId.get(c.pokemon_id)) movesByPokemonId.set(c.pokemon_id, c);
 }
 
+/**
+ * Per-(pokemon_id, form) lookups, unlike typesByPokemonId/movesByPokemonId
+ * above which only ever keep the ONE row matching each id's chosen default
+ * form. Needed by the "mechanically-distinct extra forms" pass below (2026-
+ * 09-08, AUDIT_2026-09-08.md Defect 1) as the pogoapi fallback path for a
+ * specific non-default form when GAME_MASTER has no exact template for it —
+ * not observed for any of the 83 extra-form candidates in the 2026-09-08
+ * audit (all 83 resolved via an exact GAME_MASTER form-key match), but
+ * budgeted for regardless, same discipline as every other fallback in this
+ * file.
+ */
+const typesByPokemonIdAndForm = new Map<string, RawPokemonTypesEntry>();
+for (const t of rawTypes) typesByPokemonIdAndForm.set(`${t.pokemon_id}|${t.form}`, t);
+
+const movesByPokemonIdAndForm = new Map<string, RawCurrentMovesEntry>();
+for (const c of rawCurrentMoves) movesByPokemonIdAndForm.set(`${c.pokemon_id}|${c.form}`, c);
+
 /** Builds the `[PokemonType]|[PokemonType,PokemonType]` shape fromGameMaster expects from either a GAME_MASTER or pogoapi raw type-string list; returns null for an empty list (caller skips the species, same as before this switch). */
 function buildTypesArray(rawTypeStrings: string[]): [PokemonType] | [PokemonType, PokemonType] | null {
   const converted = rawTypeStrings.map(toPokemonType);
@@ -401,6 +485,15 @@ const skippedSpecies: { pokemon_id: number; pokemon_name: string; reason: string
 const unresolvedMoveNames = new Set<string>();
 const speciesFallenBackToPogoapi: string[] = [];
 const rarityFallenBackToStandard: string[] = [];
+/**
+ * pokemon_id -> the default form's resolved type array, populated as the
+ * primary loop below builds each species. Read by the "mechanically-distinct
+ * extra forms" pass further down this file so a candidate form's typing can
+ * be compared against its OWN default form's typing (not re-derived from
+ * scratch), the same way that pass already compares base_attack/defense/
+ * stamina against baseRow.
+ */
+const typesByDefaultForm = new Map<number, [PokemonType] | [PokemonType, PokemonType]>();
 
 for (const stat of normalStats) {
   const pokemonId = stat.pokemon_id;
@@ -460,6 +553,7 @@ for (const stat of normalStats) {
     skippedSpecies.push({ pokemon_id: pokemonId, pokemon_name: stat.pokemon_name, reason: "empty typing array" });
     continue;
   }
+  typesByDefaultForm.set(pokemonId, pokemonTypes);
 
   let resolvedFast: FastMove[];
   let resolvedCharged: ChargedMove[];
@@ -516,6 +610,270 @@ for (const stat of normalStats) {
   definition.rarity = rarity;
 
   species.push(definition);
+}
+
+// ---------------------------------------------------------------------------
+// Mechanically-distinct EXTRA forms (2026-09-08 fix for AUDIT_2026-09-08.md
+// Defect 1; widened same-day after the Hisuian Sneasel incident below). The
+// loop above normalizes exactly ONE form per pokemon_id (see this file's
+// "Scope (documented limitation)" note up top) — every OTHER form
+// pokemon_stats.json carries for that same pokemon_id was previously dropped
+// outright, with no distinction between a COSMETIC variant (Pikachu
+// costumes, Vivillon patterns, seasonal Deerling/Sawsbuck — genuinely
+// identical base stats AND typing, correctly excluded) and a
+// MECHANICALLY-DISTINCT one (Hisuian Lilligant 208/159/172 vs Normal
+// Lilligant's 214/155/172, Calyrex Shadow Rider 324/194/205 vs base
+// Calyrex's 162/162/225, etc. — a real, separately-real Pokémon whose exact
+// stats were sitting unused in this same raw cache). That silent drop was
+// also why a live raid boss for one of these forms fell back to the wrong
+// (base-form) stats via the "strip a known prefix" approximate-match
+// fallback further down this file, flagged `isApproximate: true` even when
+// exact stats were available all along.
+//
+// The discriminator is: this row's base_attack/base_defense/base_stamina
+// OR its type array differs from the SAME default-form row the primary loop
+// above already picked for that pokemon_id (baseRow) — TYPING ALONE IS
+// SUFFICIENT, deliberately. A first pass (2026-09-08) used a stats-only
+// discriminator and missed 57 real forms whose stats are identical to their
+// default form's but whose typing is completely different — Hisuian Sneasel
+// (fighting/poison vs. base Sneasel's dark/ice), Alolan Vulpix (ice vs.
+// fire), Galarian Ponyta (psychic vs. fire), Alolan Golem (rock/electric vs.
+// rock/ground), and 53 others. Hisuian Sneasel was a LIVE 3-star raid boss at
+// the time, silently resolving to base Sneasel's dark/ice stats and moves —
+// type effectiveness swings a simulated fight far harder than a same-
+// magnitude stat-line difference does: measured against the real
+// (fighting/poison) Hisuian Sneasel at L40 15/15/15, Metagross's sustained
+// TDO was off by +167% (715 shown vs. 1913 correct) under the stats-only
+// version of this check. Do not narrow this discriminator back to
+// stats-only — a form matching its default form's stats exactly but not its
+// typing is not cosmetic, and the cost of getting this wrong is a
+// silently-wrong combat simulation, not a cosmetic-only species miscount.
+//
+// Resolution reuses the exact same GAME_MASTER-primary / pogoapi-fallback
+// machinery as the primary loop above, but deliberately restricted to an
+// EXACT GAME_MASTER form-key match (`${enum}_${form.toUpperCase()}`) —
+// resolveGameMasterPokemonRecord's own NORMAL/bare-template fallback
+// priorities (#2/#3) exist to pick a sensible default for a species with no
+// better option, and would silently misattribute another form's stats/type/
+// moves here (e.g. Zygarde's bare template is its Fifty_percent data, not
+// Complete_ten_percent's) — a real, checked risk, not a hypothetical one.
+// Every one of the 83 candidates resolved via this exact-match path in the
+// 2026-09-08 audit (0 needed the pogoapi per-form fallback below), but the
+// fallback is kept for the same reason every other one in this file is:
+// logged in WARNINGS, never silent, never fabricated.
+//
+// Id/name convention is IDENTICAL to the one this project already uses for a
+// species' sole default form when that isn't "Normal" — fromGameMaster's own
+// speciesIdFor (packages/engine/src/gamemaster.ts) gives id
+// `${pokemon_name}-${form}` (lowercased) and name `${pokemon_name} (${form})`,
+// e.g. "lilligant-hisuian" / "Lilligant (Hisuian)" — matching this project's
+// existing giratina-altered / shellos-west_sea / landorus-incarnate
+// convention exactly. No second scheme is invented here.
+// ---------------------------------------------------------------------------
+
+/**
+ * `${raw pogoapi form string}` -> the adjective ScrapedDuck's live raid feed
+ * prefixes onto a regional form's BASE name instead of this project's own
+ * "(Form)" suffix convention (e.g. "Hisuian Lilligant", not "Lilligant
+ * (Hisuian)") — confirmed 2026-09-08 by direct inspection of data/raw/
+ * raids.json. Consulted only by the raid-matching section further down this
+ * file (regionalFormSpeciesByPrefixAndBase) so a raid named in ScrapedDuck's
+ * convention can still find the species built here under this project's own
+ * convention, without changing either naming scheme. Deliberately small and
+ * exact (not a generalized "adjective of a region" transform) — extend only
+ * once a live raid actually needs a form not listed here.
+ */
+const REGIONAL_FORM_TO_RAID_PREFIX: Record<string, string> = {
+  Hisuian: "hisuian",
+  Galarian: "galarian",
+  Alola: "alolan",
+};
+
+/** `${raid-prefix}|${base pokemon_name, lowercased}` -> the extra-form species id built below, e.g. "hisuian|lilligant" -> "lilligant-hisuian". Populated below, read by the raid-matching section further down this file. */
+const regionalFormSpeciesByPrefixAndBase = new Map<string, string>();
+
+const statsByPokemonId = new Map<number, RawPokemonStatsEntry[]>();
+for (const s of rawStats) {
+  if (!statsByPokemonId.has(s.pokemon_id)) statsByPokemonId.set(s.pokemon_id, []);
+  statsByPokemonId.get(s.pokemon_id)!.push(s);
+}
+
+const skippedExtraForms: { pokemon_id: number; pokemon_name: string; form: string; reason: string }[] = [];
+let extraFormSpeciesCount = 0;
+/** Every extra-form species actually added this pass, with which side of the stats-OR-types discriminator qualified it — read by the WARNINGS output below so a sync run's diff is auditable, not just a count. */
+const extraFormSpeciesAdded: { id: string; name: string; statsDiffer: boolean; typesDiffer: boolean }[] = [];
+
+for (const [pokemonId, rows] of statsByPokemonId) {
+  const defaultForm = defaultFormByPokemonId.get(pokemonId);
+  const baseRow = rows.find((r) => r.form === defaultForm);
+  if (!baseRow) continue; // shouldn't happen — defaultFormByPokemonId is derived from these same rows
+
+  for (const row of rows) {
+    if (row.form === defaultForm) continue; // already normalized by the primary loop above
+
+    const statsDiffer =
+      row.base_attack !== baseRow.base_attack ||
+      row.base_defense !== baseRow.base_defense ||
+      row.base_stamina !== baseRow.base_stamina;
+
+    const enumName = gameMasterAvailable ? resolvePokemonEnum(pokemonId, row.pokemon_name, gameMasterKnownEnums) : null;
+    const candidates = enumName ? (gameMasterPokemonByEnum.get(enumName) ?? []) : [];
+    const exactFormKey = enumName ? `${enumName}_${row.form.toUpperCase()}` : null;
+    const gmExactRecord = exactFormKey ? (candidates.find((c) => c.form === exactFormKey) ?? null) : null;
+    const fallbackTypesEntry = typesByPokemonIdAndForm.get(`${pokemonId}|${row.form}`);
+
+    // This row's own type array, resolved via the same GAME_MASTER-exact /
+    // pogoapi-per-form sources the rest of this pass uses below — computed up
+    // front so the cosmetic-vs-real decision right below never has to guess.
+    const candidateRawTypeStrings: string[] | null = gmExactRecord
+      ? [gmExactRecord.type, gmExactRecord.type2].filter((t): t is string => Boolean(t))
+      : (fallbackTypesEntry?.type ?? null);
+    const candidateTypes = candidateRawTypeStrings ? buildTypesArray(candidateRawTypeStrings) : null;
+    const baseTypes = typesByDefaultForm.get(pokemonId) ?? null;
+    const typesDiffer =
+      candidateTypes !== null &&
+      baseTypes !== null &&
+      (candidateTypes.length !== baseTypes.length || candidateTypes.some((t, i) => t !== baseTypes[i]));
+
+    // QUALIFYING CONDITION: stats differ OR types differ — types ALONE are
+    // sufficient, deliberately, since 2026-09-08's Hisuian Sneasel incident.
+    // Hisuian Sneasel's base stats are IDENTICAL to base Sneasel's, but its
+    // typing is completely different (fighting/poison vs. base Sneasel's
+    // dark/ice) — under the old stats-only version of this discriminator it
+    // was silently excluded as "cosmetic" and a live 3-star raid boss kept
+    // resolving to base Sneasel's dark/ice stats and moves. Type
+    // effectiveness swings a simulated fight far harder than a same-magnitude
+    // stat-line difference does: measured against the real (fighting/poison)
+    // Hisuian Sneasel at L40 15/15/15, Metagross's sustained TDO was off by
+    // +167% (715 shown vs. 1913 correct) under the stats-only version of this
+    // check. Do not narrow this back to stats-only — a form matching its
+    // default form's stats exactly but not its typing is not cosmetic.
+    if (!statsDiffer && !typesDiffer) continue; // cosmetic variant (identical stats AND types) — correctly excluded, unchanged
+
+    let baseAttack: number;
+    let baseDefense: number;
+    let baseStamina: number;
+    let rawTypeStrings: string[];
+    let rarity: PokemonRarity;
+    let fastNames: string[];
+    let chargedNames: string[];
+
+    if (gmExactRecord) {
+      baseAttack = gmExactRecord.baseAttack;
+      baseDefense = gmExactRecord.baseDefense;
+      baseStamina = gmExactRecord.baseStamina;
+      rawTypeStrings = candidateRawTypeStrings!; // non-null here — gmExactRecord is set, so the hoisted lookup above always populated it
+      rarity = pokemonClassToRarity(gmExactRecord.pokemonClass);
+      fastNames = [...gmExactRecord.quickMoves, ...gmExactRecord.eliteQuickMoves];
+      chargedNames = [...gmExactRecord.cinematicMoves, ...gmExactRecord.eliteCinematicMoves];
+    } else {
+      speciesFallenBackToPogoapi.push(`${row.pokemon_name} (${row.form}) [extra form]`);
+      const typesEntry = fallbackTypesEntry;
+      const movesEntry = movesByPokemonIdAndForm.get(`${pokemonId}|${row.form}`);
+      if (!typesEntry) {
+        skippedExtraForms.push({
+          pokemon_id: pokemonId,
+          pokemon_name: row.pokemon_name,
+          form: row.form,
+          reason: "no typing data (no exact GAME_MASTER template and no pogoapi fallback)",
+        });
+        continue;
+      }
+      if (!movesEntry) {
+        skippedExtraForms.push({
+          pokemon_id: pokemonId,
+          pokemon_name: row.pokemon_name,
+          form: row.form,
+          reason: "no moveset data (no exact GAME_MASTER template and no pogoapi fallback)",
+        });
+        continue;
+      }
+      baseAttack = row.base_attack;
+      baseDefense = row.base_defense;
+      baseStamina = row.base_stamina;
+      rawTypeStrings = typesEntry.type;
+      rarity = "STANDARD";
+      rarityFallenBackToStandard.push(`${row.pokemon_name} (${row.form}) [extra form]`);
+      fastNames = [...movesEntry.fast_moves, ...movesEntry.elite_fast_moves];
+      chargedNames = [...movesEntry.charged_moves, ...movesEntry.elite_charged_moves];
+    }
+
+    const pokemonTypes = buildTypesArray(rawTypeStrings);
+    if (!pokemonTypes) {
+      skippedExtraForms.push({ pokemon_id: pokemonId, pokemon_name: row.pokemon_name, form: row.form, reason: "empty typing array" });
+      continue;
+    }
+
+    let resolvedFast: FastMove[];
+    let resolvedCharged: ChargedMove[];
+    if (gmExactRecord) {
+      resolvedFast = resolveGameMasterMoves<FastMove>(fastNames, true, unresolvedMoveNames);
+      resolvedCharged = resolveGameMasterMoves<ChargedMove>(chargedNames, false, unresolvedMoveNames);
+    } else {
+      resolvedFast = [];
+      for (const name of fastNames) {
+        const move = fastMoveByName.get(name);
+        if (move) resolvedFast.push(move);
+        else unresolvedMoveNames.add(`fast:${name}`);
+      }
+      resolvedCharged = [];
+      for (const name of chargedNames) {
+        const move = chargedMoveByName.get(name);
+        if (move) resolvedCharged.push(move);
+        else unresolvedMoveNames.add(`charged:${name}`);
+      }
+    }
+
+    if (resolvedFast.length === 0 || resolvedCharged.length === 0) {
+      skippedExtraForms.push({
+        pokemon_id: pokemonId,
+        pokemon_name: row.pokemon_name,
+        form: row.form,
+        reason:
+          resolvedFast.length === 0 && resolvedCharged.length === 0
+            ? "no resolvable fast or charged moves"
+            : resolvedFast.length === 0
+              ? "no resolvable fast moves"
+              : "no resolvable charged moves",
+      });
+      continue;
+    }
+
+    const definition = fromGameMaster(
+      {
+        pokemon_id: pokemonId,
+        pokemon_name: row.pokemon_name,
+        form: row.form,
+        base_attack: baseAttack,
+        base_defense: baseDefense,
+        base_stamina: baseStamina,
+      },
+      pokemonTypes,
+      resolvedFast,
+      resolvedCharged,
+    );
+
+    if (species.some((s) => s.id === definition.id)) {
+      skippedExtraForms.push({
+        pokemon_id: pokemonId,
+        pokemon_name: row.pokemon_name,
+        form: row.form,
+        reason: `id collision with an already-built species "${definition.id}" — not overwriting either`,
+      });
+      continue;
+    }
+
+    definition.imageUrl = spriteUrlForDexId(pokemonId);
+    definition.rarity = rarity;
+    species.push(definition);
+    extraFormSpeciesCount++;
+    extraFormSpeciesAdded.push({ id: definition.id, name: definition.name, statsDiffer, typesDiffer });
+
+    const raidPrefix = REGIONAL_FORM_TO_RAID_PREFIX[row.form];
+    if (raidPrefix) {
+      regionalFormSpeciesByPrefixAndBase.set(`${raidPrefix}|${row.pokemon_name.toLowerCase()}`, definition.id);
+    }
+  }
 }
 
 // This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y,
@@ -647,196 +1005,123 @@ for (const s of rawStats) {
   if (!pokemonIdByName.has(s.pokemon_name)) pokemonIdByName.set(s.pokemon_name, s.pokemon_id);
 }
 
+// ---------------------------------------------------------------------------
+// Pokebattler live cross-check (2026-09-07). ScrapedDuck (rawRaids, cached
+// above) remains the ONLY source for activeRaids.json — nothing here adds,
+// removes, or overwrites a single active raid. This section exists purely to
+// DETECT and report divergence between the two feeds; see
+// ./sync-data/pokebattlerRaids.ts's top-of-file doc comment for the
+// provenance caveat (neither feed discloses its own detection method, so
+// agreement is circumstantial, not proven independence) and for why the
+// separate `_LEGACY` archive-import task is deliberately deferred rather than
+// wired in here.
+//
+// Two traps this comparison deliberately avoids (see isCurrentRotationTier's
+// own doc comment for the third, RAID_LEVEL_UNSET):
+// - `_FUTURE` tiers (e.g. RAID_LEVEL_5_FUTURE, currently Arceus) are
+//   Niantic-announced UPCOMING raids, not live ones — isCurrentRotationTier
+//   excludes them outright. Including them would report phantom
+//   disagreements and imply unreleased bosses are already live.
+// - `attackMultiplier`/`defenseMultiplier`/`staminaMultiplier` on each tier
+//   are confirmed to be event modifiers (all `1` on every one of the 66 live
+//   tiers, 2026-09-07) — NOT raid-tier stats. They are never read here and
+//   never used to populate or "verify" RAID_TIER_TABLE.
+//
+// Name resolution deliberately uses pokebattlerDisplayNameForCrossCheck, NOT
+// resolvePokebattlerPokemonId — see that function's own doc comment for why
+// the stricter, roster-gated resolver would produce false disagreements for
+// real regional-form raids (e.g. Hisuian Sneasel) this project's
+// one-form-per-species scope simply doesn't carry.
+const enumToPogoapiName = buildEnumToPogoapiName(pokemonIdByName, resolvePokemonEnum, gameMasterKnownEnums);
+
+function normalizeRaidNameForCrossCheck(name: string): string {
+  // Strips a trailing parenthetical (e.g. "Shadow Giratina (Altered)" ->
+  // "shadow giratina") so a ScrapedDuck name carrying this project's own
+  // "(Form)" convention still compares equal to Pokebattler's bare-base-name
+  // reconstruction, which never includes one.
+  return name
+    .replace(/\s*\([^)]*\)\s*$/, "")
+    .trim()
+    .toLowerCase();
+}
+
+interface PokebattlerCrossCheckEntry {
+  rawName: string;
+  tier: string;
+  normalized: string;
+}
+
+/**
+ * True for a ScrapedDuck raid tier this project's own RaidTier union
+ * classifies as Mega/Primal ("Mega Raids", "Legendary Mega Raids", "Super
+ * Mega Raids", "Primal Raids" — see types.ts's RaidTier union). Used to
+ * exclude Mega/Primal raids from BOTH sides of the live cross-check below,
+ * symmetrically with POKEBATTLER_MEGA_POOL_TIERS's own exclusion — see that
+ * constant's doc comment (2026-09-08, AUDIT_2026-09-08.md Defect 2) for why
+ * Pokebattler's own Mega tiers are a rotation POOL, not a live list.
+ * Excluding only the Pokebattler side (which an earlier version of this fix
+ * did) is NOT enough on its own: a genuinely-live Mega raid ScrapedDuck
+ * reports (e.g. Mega Gyarados) would then have nothing on the Pokebattler
+ * side left to match against, turning into a brand-new PHANTOM "only in
+ * ScrapedDuck" disagreement — the exact cry-wolf failure mode this fix
+ * exists to remove, just relocated rather than fixed. Excluding Mega/Primal
+ * from both sides means this cross-check makes no claim about Mega raids at
+ * all (reported as a separate advisory line, never folded into the real
+ * disagreement count) rather than a wrong one.
+ */
+function isMegaOrPrimalRaidTier(tier: string): boolean {
+  return /mega|primal/i.test(tier);
+}
+
+const scrapedDuckMegaOrPrimalExcludedFromCrossCheck = rawRaids
+  .filter((r) => isMegaOrPrimalRaidTier(r.tier))
+  .map((r) => `${r.name} [${r.tier}]`);
+
+const scrapedDuckCrossCheckEntries: PokebattlerCrossCheckEntry[] = rawRaids
+  .filter((r) => !isMegaOrPrimalRaidTier(r.tier))
+  .map((r) => ({
+    rawName: r.name,
+    tier: r.tier,
+    normalized: normalizeRaidNameForCrossCheck(r.name),
+  }));
+
+const pokebattlerCrossCheckEntries: PokebattlerCrossCheckEntry[] = [];
+const pokebattlerCrossCheckUnresolved: string[] = [];
+if (pokebattlerFetchResult.source === "live") {
+  for (const tier of pokebattlerFetchResult.tiers) {
+    if (!isCurrentRotationTier(tier.tier)) continue;
+    for (const raid of tier.raids ?? []) {
+      const displayName = pokebattlerDisplayNameForCrossCheck(raid.pokemon, enumToPogoapiName);
+      if (!displayName) {
+        pokebattlerCrossCheckUnresolved.push(`${raid.pokemon} [${tier.tier}]`);
+        continue;
+      }
+      pokebattlerCrossCheckEntries.push({
+        rawName: displayName,
+        tier: tier.tier,
+        normalized: normalizeRaidNameForCrossCheck(displayName),
+      });
+    }
+  }
+}
+
+const scrapedDuckNormalizedSet = new Set(scrapedDuckCrossCheckEntries.map((e) => e.normalized));
+const pokebattlerNormalizedSet = new Set(pokebattlerCrossCheckEntries.map((e) => e.normalized));
+const pokebattlerCrossCheckMatched = scrapedDuckCrossCheckEntries.filter((e) => pokebattlerNormalizedSet.has(e.normalized));
+const pokebattlerCrossCheckOnlyInScrapedDuck = scrapedDuckCrossCheckEntries.filter((e) => !pokebattlerNormalizedSet.has(e.normalized));
+const pokebattlerCrossCheckOnlyInPokebattler = pokebattlerCrossCheckEntries.filter((e) => !scrapedDuckNormalizedSet.has(e.normalized));
+
 const pogoApiMegaNames = new Set(rawMegaPokemon.map((m) => m.mega_name.toLowerCase()));
 const megaOrPrimalRaidGaps = rawRaids.filter(
   (r) => /^(Mega|Primal) /.test(r.name) && !pogoApiMegaNames.has(r.name.toLowerCase()),
 );
 
-/**
- * Hand-curated allowlist of mega/primal forms confirmed REAL, RELEASED
- * Pokémon GO content that fall through BOTH of this pipeline's other
- * released-content gates: pogoapi.net's mega_pokemon.json roster (updated on
- * pogoapi's own cadence, confirmed missing these as of this sync's fetch) AND
- * the currently-active ScrapedDuck raid rotation (`megaOrPrimalRaidGaps`
- * above only fires for a mega/primal that's raiding RIGHT NOW). A real mega
- * whose debut was a single dedicated raid-day event needs a third way in,
- * since Mega Evolution unlocks are permanent per-trainer once earned — the
- * mega itself doesn't stop being real, released content just because its
- * one-day debut event ended and it may not raid again for months. Same
- * spirit as FORM_OVERRIDES above: a short, hand-reviewed, per-entry-justified
- * table for a case the automated raid-gap/pogoapi-roster logic structurally
- * can't cover — add an entry here (with its own citation) the moment a
- * similar gap is spotted; this is NOT a place to speculatively list unreleased
- * content (see fetchGameMasterData's reliability caveat in
- * scripts/sync-data/fetchCache.ts for why GAME_MASTER's own tempEvoOverrides
- * can't be trusted alone as "released").
- *
- * Names are parsed by the exact same parseMegaOrPrimalRaidName/tempEvoIdFor
- * machinery `megaOrPrimalRaidGaps` already uses below, so "confirmed real
- * mega name" is the only thing this table needs to supply — GAME_MASTER still
- * supplies (and this pipeline still cross-checks against independent
- * community sources, see gameMasterCrossChecks below) the actual stat values.
- *
- * Each entry also optionally carries `lastKnownRaidTier` — this form's REAL
- * confirmed historical/debut raid tier (2026-09-07 research pass, see
- * per-entry citations below), written onto the resulting SpeciesDefinition's
- * `lastKnownRaidTier` field (see the mega-species build loop below) so
- * raidBoss.ts's defaultRaidTierForSpecies() has a real observation to prefer
- * over its rarity/boost-keyed guess (which would otherwise assign every
- * STANDARD-rarity mega here the generic "Mega Raids" tier — wrong for a form
- * that actually debuted at the harder "Super Mega Raids" tier). Left
- * `undefined` for a form no confirmed tier was found for after genuine
- * research effort — an absent field honestly falls through to the existing
- * heuristic; a wrong guess would not be honest.
- */
-const RELEASED_MEGA_PRIMAL_ALLOWLIST: { name: string; lastKnownRaidTier?: RaidTier }[] = [
-  // Debuted 2026-07-18 via a dedicated "Super Mega Raid Day" event — real,
-  // permanently-unlockable content, just not currently in pogoapi's roster or
-  // in raid rotation. Sources: pokemongo.com/news/raichu-super-mega-raid-day-2026,
-  // leekduck.com/events/raichu-super-mega-raid-day-2026, rotomlabs.net/article/
-  // raichu-super-mega-raid-day. Stats cross-checked below against two sources
-  // independent of GAME_MASTER (poketory.com's raid guide + PvPoke's own
-  // separately-maintained gamemaster.json), both agreeing exactly with
-  // GAME_MASTER's tempEvoOverrides — see gameMasterCrossChecks.
-  //
-  // lastKnownRaidTier "Super Mega Raids": directly confirmed by
-  // leekduck.com/events/raichu-super-mega-raid-day-2026 ("Mega Raichu X and
-  // Mega Raichu Y will make their Pokémon GO debut in Super Mega Raids"),
-  // re-checked 2026-09-07.
-  { name: "Mega Raichu X", lastKnownRaidTier: "Super Mega Raids" },
-  { name: "Mega Raichu Y", lastKnownRaidTier: "Super Mega Raids" },
-
-  // 9 more real, released megas found missing by scripts/check-mega-gaps.ts
-  // (a Bulbapedia "Mega Evolution (GO)" diff) this session (2026-09-06). Every
-  // one below was independently verified (not just trusted off the Bulbapedia
-  // scrape) against at least one source distinct from both Bulbapedia and
-  // GAME_MASTER before being added here — see per-entry citations. This is the
-  // SAME pattern as Raichu above (real content this pipeline's other gates
-  // haven't caught up to), not a case of blindly re-adding the "known
-  // unreleased/datamined" names this file's sibling fetchCache.ts used to warn
-  // about (Falinks/Malamar/Chesnaught/Delphox/Greninja) — those specific 5
-  // have genuinely shipped since that comment was written; see fetchCache.ts's
-  // updated fetchGameMasterData doc comment.
-  //
-  // Debuted 2026-02-20 per Bulbapedia. Confirmed via two sources independent
-  // of both Bulbapedia and GAME_MASTER, checked 2026-09-06: Serebii.net's
-  // Pokémon GO Mega Evolution list (type + Max CP, serebii.net/pokemongo/
-  // megaevolution.shtml) and Pokémon GO Hub's own raid guide (base
-  // Attack/Defense/Stamina) — both agree with each other and with GAME_MASTER's
-  // tempEvoOverrides on type and stats; see gameMasterCrossChecks.
-  //
-  // lastKnownRaidTier "Super Mega Raids" for all three (2026-09-07 research
-  // pass): pokemongohub.net's per-species raid guides state this explicitly —
-  // "Mega Dragonite is a Dragon and Flying type Super Mega Raid boss" (also:
-  // "Super Mega Dragonite Raids require a minimum of 10 Trainers"),
-  // "Super Mega Raids require a minimum of 8 trainers to defeat them" (Mega
-  // Victreebel's guide), "Mega Malamar is a Dark and Psychic type Super Mega
-  // Raid boss." (pokemongohub.net/post/raid-guide/mega-{dragonite,victreebel,
-  // malamar}-raid-guide/, all checked 2026-09-07). Note: leekduck.com's own
-  // "Mega Ascension" event page, fetched the same day, only says "Mega Raids
-  // will make up the majority of raids during the Mega Ascension event" in
-  // generic terms and doesn't call out these three specifically — not treated
-  // as contradicting the three explicit, per-species Pokémon GO Hub quotes
-  // above, since it's a generic event-wide summary line, not a per-boss tier
-  // list.
-  { name: "Mega Victreebel", lastKnownRaidTier: "Super Mega Raids" },
-  { name: "Mega Dragonite", lastKnownRaidTier: "Super Mega Raids" },
-  { name: "Mega Malamar", lastKnownRaidTier: "Super Mega Raids" },
-
-  // Debuted 2026-05-23 per Bulbapedia — a Pokémon-GO-exclusive mega (Falinks
-  // doesn't mega evolve in the mainline games at all). Confirmed via
-  // Serebii.net's Mega Evolution list (Fighting type, Max CP 4149), checked
-  // 2026-09-06. No independent raid-guide base-stat breakdown was found for
-  // this one (unlike the two above/below it), so only a type-level
-  // cross-check against GAME_MASTER is applied below, not a full stat
-  // assertion — flagged in gameMasterCrossChecks as "type-only".
-  //
-  // lastKnownRaidTier left UNSET (2026-09-07 research pass): no
-  // pokemongohub.net raid guide exists for Mega Falinks (search returned "No
-  // posts to display"), and no other independent source naming a specific
-  // raid tier for it was found after a genuine search (leekduck.com's events
-  // list has no Falinks-named event at all, Bing search returned nothing
-  // relevant). Left unset rather than guessed — falls through to the
-  // rarity/boost heuristic (STANDARD-rarity mega -> "Mega Raids").
-  { name: "Mega Falinks" },
-
-  // Debuted 2026-05-24 per Bulbapedia, alongside Mega Mewtwo Y (Y is
-  // deliberately NOT added here — as of this sync's fetch it's already
-  // covered by the live ScrapedDuck raid-gap gate on its own, confirmed
-  // currently in Super Mega Raid rotation via leekduck.com/raid-bosses/,
-  // checked 2026-09-06). Confirmed via Serebii.net (Psychic/Fighting, Max CP
-  // 6910) and Pokémon GO Hub's raid guide (base Attack/Defense/Stamina), both
-  // checked 2026-09-06, both independent of GAME_MASTER.
-  //
-  // lastKnownRaidTier "Super Mega Raids" (2026-09-07 research pass):
-  // pokemongohub.net/post/raid-guide/mega-mewtwo-x-raid-guide/ states "Mega
-  // Mewtwo X is a Psychic and Fighting type Super Mega Raid boss." — matches
-  // sibling Mega Mewtwo Y's own currently-live "Super Mega Raids" tier
-  // (leekduck.com/raid-bosses/, checked 2026-09-07), consistent with both X
-  // and Y debuting together per the comment above.
-  { name: "Mega Mewtwo X", lastKnownRaidTier: "Super Mega Raids" },
-
-  // Debuted 2026-08-22 per Bulbapedia. Confirmed via Serebii.net
-  // (Water/Psychic, Max CP 4184) and Pokémon GO Hub's raid guide (base
-  // Attack/Defense/Stamina), both checked 2026-09-06.
-  //
-  // lastKnownRaidTier "Super Mega Raids" (2026-09-07 research pass):
-  // pokemongohub.net/post/raid-guide/mega-starmie-raid-guide/ states "Mega
-  // Starmie is a Water and Psychic type Super Mega Raid boss."
-  { name: "Mega Starmie", lastKnownRaidTier: "Super Mega Raids" },
-
-  // Debuted 2026-08-28 (Pokémon World Championships) and again 2026-09-05/06
-  // (Pokémon GO Fest 2026: Mega Finale, confirmed live via leekduck.com/events/
-  // as of 2026-09-06) as part of the Kalos-starter-trio mega reveal, per
-  // Bulbapedia. Confirmed via Serebii.net's Mega Evolution list (type + Max
-  // CP), checked 2026-09-06. No independent raid-guide base-stat breakdown
-  // was found yet for these three (recent enough that community sites hadn't
-  // published one as of this sync), so only a type-level cross-check against
-  // GAME_MASTER is applied below for each — flagged in gameMasterCrossChecks
-  // as "type-only".
-  //
-  // lastKnownRaidTier left UNSET for all three (2026-09-07 research pass):
-  // leekduck.com/events/pokemon-go-fest-2026-mega-finale/ (checked 2026-09-07)
-  // describes these three as obtained via GO Pass progression — "Trainers can
-  // choose Chespin, Fennekin, or Froakie to begin a Mega Evolution–focused
-  // journey leading to Mega Evolving them into Mega Chesnaught, Mega Delphox,
-  // or Mega Greninja" — not via a raid encounter at all, so there is no
-  // confirmed raid tier to record for their debut. No pokemongohub.net raid
-  // guide exists for any of the three either. Left unset rather than
-  // guessed — falls through to the rarity/boost heuristic.
-  { name: "Mega Chesnaught" },
-  { name: "Mega Delphox" },
-  { name: "Mega Greninja" },
-
-  // Added 2026-09-07 after a real regression this specific gap-fill mechanism
-  // exists to prevent: today's ScrapedDuck rotation flipped away from the
-  // "Mega Ascension" raid set (Mega Steelix/Skarmory/Aggron/Glalie) to a new
-  // set (Mega Raichu Y/Sableye/Mawile/Audino), and Mega Skarmory dropped out
-  // of species.json entirely — it is absent from pogoapi.net's
-  // mega_pokemon.json roster (confirmed missing as of this sync's fetch) and,
-  // once the rotation ended, was no longer a currently-live raid either, so it
-  // fell through BOTH of this pipeline's other released-content gates
-  // simultaneously. It is real, released content regardless: this pipeline's
-  // OWN cached data/raw/raids.json from earlier the same day (2026-09-07,
-  // 05:01 UTC fetch, i.e. this project's own first-hand live-feed
-  // observation, not a third-party claim) lists "Mega Skarmory | Mega Raids"
-  // — it was raiding just hours before this rotation. Previously reachable
-  // only through the raid gate (megaOrPrimalRaidGaps), never through this
-  // allowlist, which is exactly why it silently vanished the moment the raid
-  // gate stopped firing for it.
-  //
-  // No further independent cross-check beyond the stat cross-check already
-  // wired up in the gap-fill loop below (see the "Mega Skarmory" branch in
-  // gameMasterCrossChecks, comparing against Dittobase + Pokémon GO Hub DB,
-  // both agreeing exactly, checked 2026-09-06) — that check already runs for
-  // every mega-gap candidate regardless of which gate let it through, so it
-  // still applies here.
-  //
-  // lastKnownRaidTier "Mega Raids": this pipeline's own 2026-09-07 live-feed
-  // observation (data/raw/raids.json, "Mega Skarmory | Mega Raids") — a real
-  // observation, not a guess.
-  { name: "Mega Skarmory", lastKnownRaidTier: "Mega Raids" },
-];
+// RELEASED_MEGA_PRIMAL_ALLOWLIST: hand-curated, per-entry-cited allowlist of real,
+// released mega/primal content that falls through both the pogoapi roster and
+// the live-raid gate. Lives in ./sync-data/releasedMegaPrimalAllowlist.ts (see
+// that module's own header for the full citations and WHY it is a separate
+// module rather than defined here) so scripts/check-mega-gates.ts can import
+// it without triggering this file's top-level network fetches.
 
 const megaOrPrimalAllowlistGaps = RELEASED_MEGA_PRIMAL_ALLOWLIST.filter(
   (entry) =>
@@ -1023,6 +1308,21 @@ if (megaOrPrimalGapCandidates.length > 0) {
 
 const rawMegaPokemonCombined: RawMegaPokemonEntry[] = [...rawMegaPokemonWithGameMasterValues, ...gameMasterDerivedMega];
 
+/**
+ * `${base pokemon_name}|${mega-form suffix}` -> real mega_name, e.g.
+ * "kyogre|Normal" -> "Primal Kyogre", "charizard|X" -> "Mega Charizard X".
+ * Used only by the pogoapi-previous raidHistory backfill below to resolve a
+ * `mega`/`mega_legendary` raid_bosses.json entry (which names the BASE
+ * species plus a mega-form-suffix `form` field in this exact convention —
+ * confirmed 2026-09-07 by direct comparison against mega_pokemon.json's own
+ * `form` field for Charizard/Kyogre/Groudon/Latios/Latias) to the real mega
+ * name, which is then looked up against the built species list's own `name`
+ * field to get the final (possibly `-attacker`-renamed) species id.
+ */
+const megaPokemonKeyToMegaName = new Map<string, string>(
+  rawMegaPokemonCombined.map((m) => [`${m.pokemon_name.toLowerCase()}|${m.form}`, m.mega_name]),
+);
+
 const reservedSpeciesIds = new Set<string>(species.map((s) => s.id));
 
 const megaSpecies: SpeciesDefinition[] = [];
@@ -1200,6 +1500,151 @@ const speciesById = new Map(species.map((s) => [s.id, s]));
  */
 const shadowSpeciesByBaseId = new Map<string, SpeciesDefinition>();
 
+// ---------------------------------------------------------------------------
+// Shadow-variant durable synthesis (2026-09-08 fix). Before this fix, a
+// Shadow-variant species (getOrCreateShadowVariant, just above) was
+// synthesized ONLY inside the activeRaids-matching loop below — i.e. only
+// for a species raiding as Shadow RIGHT NOW on this run's live ScrapedDuck
+// feed. That is the exact same live-raid-gate fragility that produced the
+// Mega Skarmory/Mega Mewtwo Y incidents (see CLAUDE.md "Standing decisions"):
+// the moment a Shadow raid rotation ends, nothing could ever regenerate that
+// species again, and Pokebattler's 105-entry `_SHADOW_LEGACY` archive could
+// never resolve against this roster at all (there was no shadow species for
+// it to resolve TO — see resolvePokebattlerPokemonId's shadow branch, now
+// updated to prefer the variant this section creates).
+//
+// This section synthesizes a Shadow variant for every species with RECORDED
+// EVIDENCE of a shadow raid appearance from up to three sources (a fourth,
+// the live feed, is still handled by the activeRaids loop below, unchanged —
+// "keep it" per this task), in order of durability:
+//   1. raidHistory.json's OWN already-persisted shadow rows (speciesId
+//      ending "-shadow") — the durable anchor. That file is accumulate-only
+//      and never shrinks, so once a shadow appearance is recorded there this
+//      species must keep being regenerated on every future run, forever,
+//      regardless of what any live feed or third-party archive says later.
+//   2. Pokebattler's RAID_LEVEL_{1,3,5}_SHADOW_LEGACY tiers (105 raw entries,
+//      confirmed 2026-09-08) — the bulk of the backfill.
+//   3. Bulbapedia's "List of Shadow Raid Boss changes" page (18 rows / 17
+//      distinct species, Seasons 10-11) — thin corroboration (confirmed
+//      2026-09-08: every one of its 17 species is already a subset of
+//      Pokebattler's 105), wired in anyway since it's cheap given the
+//      existing {{lop/raid/GO}} row parser.
+//
+// MUST run before this file's Pokebattler-legacy and Bulbapedia archive-
+// resolution passes further down (both do, unconditionally, being later in
+// this sequential script) — otherwise Pokebattler's shadow-legacy rows would
+// fail to resolve against a real Shadow-variant species again, exactly as
+// they did before this fix.
+//
+// EVIDENCE-GATED ONLY (this task's explicit non-negotiable): a species with
+// ZERO shadow evidence from any of the sources above (or the live feed,
+// below) never gets a "-shadow" entry. This is not a blanket dex-wide
+// synthesis.
+// ---------------------------------------------------------------------------
+
+const SHADOW_ID_SUFFIX = "-shadow";
+
+// Evidence 1: raidHistory.json's own accumulated shadow rows. Read
+// defensively (same discipline as every other raidHistory.json read in this
+// file) directly from disk here — a second, narrow read of the same file the
+// main raidHistory-building section (below, near "Step 1.5") also loads into
+// `previousRaidHistory`/`raidHistoryById`; reading it twice is simpler and
+// safer than restructuring this 2600+ line sequential script's ordering just
+// to share one array, and costs nothing (the file is small).
+const raidHistoryPathForShadowSeed = join(NORMALIZED_DIR, "raidHistory.json");
+let raidHistoryForShadowSeed: unknown[] = [];
+if (existsSync(raidHistoryPathForShadowSeed)) {
+  try {
+    const parsed = JSON.parse(readFileSync(raidHistoryPathForShadowSeed, "utf-8"));
+    if (Array.isArray(parsed)) raidHistoryForShadowSeed = parsed;
+  } catch {
+    raidHistoryForShadowSeed = [];
+  }
+}
+const shadowSeedBaseIdsFromHistory = new Set<string>();
+for (const entry of raidHistoryForShadowSeed) {
+  const speciesId = (entry as { speciesId?: unknown } | null)?.speciesId;
+  if (typeof speciesId === "string" && speciesId.endsWith(SHADOW_ID_SUFFIX)) {
+    shadowSeedBaseIdsFromHistory.add(speciesId.slice(0, -SHADOW_ID_SUFFIX.length));
+  }
+}
+
+// Evidence 2 (Pokebattler `_SHADOW_LEGACY` tiers) needs a name->id lookup
+// over the roster AS IT EXISTS RIGHT NOW (ordinary + extra-form + mega/primal
+// species, no Shadow variants yet — none exist yet at this point in the
+// pipeline) so resolvePokebattlerPokemonId's shadow branch resolves to the
+// BASE species id (there being no Shadow-variant entry in this map yet for
+// it to prefer instead) — exactly what this seeding step needs to feed
+// getOrCreateShadowVariant below. The FINAL speciesIdByNameLower built later
+// in this file (after Shadow variants exist) is what the real Pokebattler-
+// legacy backfill pass further down uses to resolve to the variant itself.
+const speciesIdByNameLowerForShadowSeed = new Map(species.map((s) => [s.name.toLowerCase(), s.id]));
+const shadowSeedPokebattlerCtx: PokebattlerResolutionContext = {
+  pokemonIdByName,
+  defaultFormByPokemonId,
+  enumToPogoapiName,
+  speciesIdByNameLower: speciesIdByNameLowerForShadowSeed,
+};
+const shadowSeedBaseIdsFromPokebattler = new Set<string>();
+const shadowSeedPokebattlerUnresolved: string[] = [];
+if (pokebattlerFetchResult.source === "live") {
+  for (const tier of pokebattlerFetchResult.tiers) {
+    if (!tier.tier.includes("_SHADOW_LEGACY")) continue;
+    for (const raid of tier.raids ?? []) {
+      const resolved = resolvePokebattlerPokemonId(raid.pokemon, shadowSeedPokebattlerCtx);
+      if (resolved && resolved.bucket === "shadow") {
+        shadowSeedBaseIdsFromPokebattler.add(resolved.speciesId);
+      } else {
+        shadowSeedPokebattlerUnresolved.push(`${raid.pokemon} [${tier.tier}]`);
+      }
+    }
+  }
+}
+
+// Evidence 3: Bulbapedia's dedicated Shadow Raid Boss changes page — every
+// row names a bare base species (see parseBulbapediaShadowRaidPage's doc
+// comment), resolved the same way resolveBulbapediaRow's own base-name
+// fallback does (exact qualified name first, then the unique-base-name
+// index — safe because this pipeline's roster is one-form-per-species).
+const shadowSeedBaseIdsFromBulbapedia = new Set<string>();
+const shadowSeedBulbapediaUnresolved: string[] = [];
+if (bulbapediaShadowRaidArchiveFetchResult.wikitext) {
+  const shadowSeedBaseNameIndex = buildBaseNameIndex(species);
+  for (const row of parseBulbapediaShadowRaidPage(bulbapediaShadowRaidArchiveFetchResult.wikitext)) {
+    const key = row.name.toLowerCase();
+    const resolvedId = shadowSeedBaseNameIndex.byQualifiedName.get(key) ?? shadowSeedBaseNameIndex.byUniqueBaseName.get(key);
+    if (resolvedId) {
+      shadowSeedBaseIdsFromBulbapedia.add(resolvedId);
+    } else {
+      shadowSeedBulbapediaUnresolved.push(row.name);
+    }
+  }
+}
+
+const shadowSeedAllBaseIds = new Set<string>([
+  ...shadowSeedBaseIdsFromHistory,
+  ...shadowSeedBaseIdsFromPokebattler,
+  ...shadowSeedBaseIdsFromBulbapedia,
+]);
+
+// Never fabricate: a base id named by evidence above that ISN'T a real,
+// currently-registered species (e.g. a stale raidHistory.json row from a
+// species removed for an unrelated reason) is reported, never invented.
+const shadowSeedUnresolvedBaseIds: string[] = [];
+for (const baseId of shadowSeedAllBaseIds) {
+  const baseSpecies = speciesById.get(baseId);
+  if (!baseSpecies) {
+    shadowSeedUnresolvedBaseIds.push(baseId);
+    continue;
+  }
+  // Copies raw base stats unmultiplied (see getOrCreateShadowVariant's own
+  // doc comment) — the engine applies SHADOW_ATTACK_MULTIPLIER/
+  // SHADOW_DEFENSE_MULTIPLIER at effective-stat time, never pre-multiplied
+  // here.
+  getOrCreateShadowVariant(baseSpecies, shadowSpeciesByBaseId);
+}
+const shadowSeedDurableCount = shadowSpeciesByBaseId.size;
+
 const activeRaids: ActiveRaidEntry[] = [];
 let unmatchedRaidCount = 0;
 
@@ -1233,6 +1678,25 @@ for (const raid of rawRaids) {
       for (const prefix of KNOWN_PREFIXES) {
         if (raid.name.startsWith(prefix)) {
           const baseName = raid.name.slice(prefix.length);
+
+          // Priority 3a (real, not approximate): a regional-form prefix
+          // (e.g. "Hisuian ") this project now carries as its OWN
+          // mechanically-distinct species (see the "extra forms" pass above,
+          // 2026-09-08 fix for AUDIT_2026-09-08.md Defect 1) — checked
+          // before the generic base-species stand-in below so e.g. "Hisuian
+          // Lilligant" resolves to lilligant-hisuian's own real 208/159/172
+          // stats instead of base Lilligant's 214/155/172. A regional raid
+          // whose stats happen to be cosmetically identical to its base form
+          // (e.g. Hisuian Sneasel) was never added as its own species (see
+          // above), so it correctly falls through to the generic stand-in
+          // below unchanged.
+          const regionalId = regionalFormSpeciesByPrefixAndBase.get(`${prefix.trim().toLowerCase()}|${baseName.toLowerCase()}`);
+          if (regionalId) {
+            speciesId = regionalId;
+            isApproximate = false;
+            break;
+          }
+
           const baseMatch = findByExactName(baseName, speciesLookupPool);
           if (baseMatch) {
             if (prefix === "Shadow ") {
@@ -1350,7 +1814,8 @@ if (existsSync(raidsOutPath)) {
 // ---------------------------------------------------------------------------
 // lastKnownRaidTier carry-forward (precedence step 3 of 4 — see
 // SpeciesDefinition.lastKnownRaidTier's doc comment in packages/engine/src/
-// types.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment above for steps
+// types.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment in
+// ./sync-data/releasedMegaPrimalAllowlist.ts for steps
 // 1/2). Without this, lastKnownRaidTier is rebuilt from scratch every run
 // from only (1) this run's own live-raid observation and (2) the
 // hand-researched allowlist — so a species that was observed raiding in some
@@ -1397,6 +1862,798 @@ const speciesDiffs = diffSpecies(previousSpecies, species);
 const raidDiffs = diffRaids(previousRaids, activeRaids);
 
 // ---------------------------------------------------------------------------
+// Raid history (data/normalized/raidHistory.json) — an append-only, ever-
+// growing record of every species this pipeline has ever confirmed as a real
+// raid boss, so the web app can offer "previously active (now inactive)" raid
+// bosses on the Species Report tab. activeRaids.json is a full-replace
+// snapshot regenerated every run — a boss that rotates out vanishes from it
+// with no trace — so this file exists specifically to keep that trace. Two
+// ways a species enters it (see RaidHistoryEntry's doc comment in
+// scripts/sync-data/rawShapes.ts for the pinned schema packages/web is
+// written against):
+//   - "live-feed": THIS run's own activeRaids (built above from
+//     data/raw/raids.json) observed it. Always wins if a species is ever
+//     observed live again after being seeded as researched-tier only.
+//   - "researched-tier": seeded from species.lastKnownRaidTier (by this point
+//     in the file, already carrying this run's live-raid observation, a
+//     RELEASED_MEGA_PRIMAL_ALLOWLIST citation, or a carried-forward value
+//     from a previous run's species.json — see the precedence doc comment
+//     above) for a species this pipeline's OWN raid-history file has never
+//     itself recorded a live observation for.
+// Loaded defensively (same discipline as the lastKnownRaidTier carry-forward
+// above) so a missing or malformed raidHistory.json never fails the run —
+// this is the very first sync to produce the file, so previousRaidHistory
+// will be empty on that run, same as previousSpecies/previousRaids on this
+// project's first-ever sync. Never deletes an entry; only grows.
+// ---------------------------------------------------------------------------
+
+const raidHistoryOutPath = join(NORMALIZED_DIR, "raidHistory.json");
+
+let previousRaidHistory: RaidHistoryEntry[] = [];
+if (existsSync(raidHistoryOutPath)) {
+  try {
+    const parsed = JSON.parse(readFileSync(raidHistoryOutPath, "utf-8"));
+    if (Array.isArray(parsed)) previousRaidHistory = parsed;
+  } catch {
+    previousRaidHistory = [];
+  }
+}
+
+const SYNC_TIMESTAMP = new Date().toISOString();
+
+const raidHistoryById = new Map<string, RaidHistoryEntry>();
+for (const entry of previousRaidHistory) {
+  if (entry && typeof entry.speciesId === "string") raidHistoryById.set(entry.speciesId, entry);
+}
+
+// One-time self-heal (2026-09-08, same day as the "pokebattler-legacy"
+// source's introduction): an earlier, buggy version of the Pokebattler
+// legacy-archive-backfill step below could persist a row with
+// `source: "pokebattler-legacy"` that ALSO carried a pre-existing `eraHp`
+// forward from the archive entry it upgraded — violating this task's
+// invariant that a pokebattler-legacy row never carries an eraHp (see that
+// section's own doc comment; the invariant is now enforced going forward by
+// construction, so this should never recur). Any row already in that
+// impossible state on disk is dropped here (not repaired in place, since the
+// pre-upgrade tier/source it should revert to isn't recoverable from the
+// corrupted row alone) so the normal precedence steps below (live-feed /
+// researched-tier / pogoapi-previous+Bulbapedia archive union /
+// pokebattler-legacy) re-derive it fresh this run, exactly as if this
+// species had no history row yet.
+const raidHistorySelfHealed: string[] = [];
+for (const [speciesId, entry] of [...raidHistoryById.entries()]) {
+  if (entry.source === "pokebattler-legacy" && entry.eraHp !== undefined) {
+    raidHistoryById.delete(speciesId);
+    raidHistorySelfHealed.push(`${speciesId} (was "${entry.tier}", eraHp ${entry.eraHp})`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 1.5: re-resolve stale rows (2026-09-07 raidHistory re-resolution fix).
+//
+// raidHistory.json is accumulate-only, which means it durably preserves past
+// MIS-resolutions exactly as well as it preserves facts. Before the extra-
+// forms/type-distinct-forms work, a live raid literally named "Hisuian
+// Sneasel" resolved to base species "sneasel" (dark/ice) because
+// "sneasel-hisuian" (fighting/poison) didn't exist yet; that row was written
+// to history with source "live-feed" and never revisited once the matcher
+// got smarter — the Species Report went on rendering it as a second,
+// PAST-badged "Hisuian Sneasel" row that was actually base Sneasel's stats
+// under Hisuian Sneasel's name, the exact wrong-typing bug the extra-forms
+// fix was supposed to eliminate. This step re-resolves every stored row's
+// OWN `raidName` through the current matcher (resolveRaidNameForHistoryMigration
+// below, kept in sync with the activeRaids matching loop's priorities) and,
+// when it now resolves to a different, real, CONFIDENT (non-approximate) id,
+// migrates the row there — merging into an already-correct row at that id if
+// one exists, rather than leaving both.
+//
+// Two guards keep this from over-correcting:
+//   - A raidName that no longer resolves to anything at all is left
+//     completely untouched (absent evidence is not evidence of error) — this
+//     is what protects a row whose species was later renamed/removed from
+//     species.json for an unrelated reason.
+//   - A raidName that resolves to a species whose id is a LESS specific form
+//     of the already-stored id (stored.startsWith(resolved + "-")) is left
+//     alone too — this is the benign "furfrou-dandy" case: raidName "Furfrou"
+//     is a generic archive name for a row we already know (from elsewhere)
+//     was the specific Dandy trim, not a wrong id needing correction. Only
+//     the opposite direction — resolved is a MORE specific form of stored
+//     (resolved.startsWith(stored + "-")), or resolved is simply a different
+//     id entirely — counts as a correction.
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-resolves a historical raidHistory row's stored `raidName` through the
+ * SAME priority order the activeRaids matching loop below uses (exact mega,
+ * exact species, real regional-form match, real Shadow-variant match,
+ * approximate generic-prefix stand-in) — used only by the Step 1.5 migration
+ * above. Deliberately does NOT synthesize a brand-new Shadow-variant species
+ * (unlike the activeRaids loop, which creates one on demand): migration must
+ * only ever move/merge raidHistory rows, never mutate species.json, so a
+ * Shadow-prefixed raidName with no ALREADY-existing shadow variant falls
+ * through to the approximate base-species branch instead. Kept deliberately
+ * in sync with the activeRaids priority order further down this file — if
+ * that logic changes, mirror the change here too.
+ */
+function resolveRaidNameForHistoryMigration(raidName: string): { speciesId: string | null; isApproximate: boolean } {
+  const exactMega = findByExactName(raidName, megaSpeciesLookupPool);
+  if (exactMega) return { speciesId: exactMega, isApproximate: false };
+
+  const exactNormalized = findByExactName(raidName, speciesLookupPool);
+  if (exactNormalized) return { speciesId: exactNormalized, isApproximate: false };
+
+  for (const prefix of KNOWN_PREFIXES) {
+    if (!raidName.startsWith(prefix)) continue;
+    const baseName = raidName.slice(prefix.length);
+
+    const regionalId = regionalFormSpeciesByPrefixAndBase.get(`${prefix.trim().toLowerCase()}|${baseName.toLowerCase()}`);
+    if (regionalId) return { speciesId: regionalId, isApproximate: false };
+
+    const baseMatch = findByExactName(baseName, speciesLookupPool);
+    if (baseMatch) {
+      if (prefix === "Shadow ") {
+        const existingShadow = shadowSpeciesByBaseId.get(baseMatch);
+        if (existingShadow) return { speciesId: existingShadow.id, isApproximate: false };
+      }
+      return { speciesId: baseMatch, isApproximate: true };
+    }
+  }
+
+  return { speciesId: null, isApproximate: true };
+}
+
+/** Source strength for the Step 1.5 merge below — mirrors RaidHistoryEntry.source's own doc-comment precedence (live-feed > researched-tier > the three archive sources, which are peers). */
+const RAID_HISTORY_SOURCE_STRENGTH: Record<RaidHistoryEntry["source"], number> = {
+  "live-feed": 3,
+  "researched-tier": 2,
+  "pogoapi-previous": 1,
+  "bulbapedia-archive": 1,
+  "pokebattler-legacy": 1,
+};
+
+/** Merges a stale row being migrated into an already-correct row at the resolved id — never loses a `firstSeenAt`, a `lastSeenAt`, an `eraHp`, or the strongest recorded `source`, per this task's design notes. */
+function mergeRaidHistoryEntries(existing: RaidHistoryEntry, stale: RaidHistoryEntry, speciesId: string): RaidHistoryEntry {
+  const winner =
+    RAID_HISTORY_SOURCE_STRENGTH[existing.source] >= RAID_HISTORY_SOURCE_STRENGTH[stale.source] ? existing : stale;
+  const loser = winner === existing ? stale : existing;
+  return {
+    speciesId,
+    raidName: winner.raidName,
+    tier: winner.tier,
+    firstSeenAt: existing.firstSeenAt < stale.firstSeenAt ? existing.firstSeenAt : stale.firstSeenAt,
+    lastSeenAt: existing.lastSeenAt > stale.lastSeenAt ? existing.lastSeenAt : stale.lastSeenAt,
+    source: winner.source,
+    eraHp: winner.eraHp ?? loser.eraHp,
+  };
+}
+
+const raidHistoryMigrations: { from: string; to: string; raidName: string; merged: boolean }[] = [];
+/** speciesId whose own `lastKnownRaidTier` was cleared alongside a Step 1.5 migration (see the loop below) — reported in WARNINGS so this is never a silent mutation. */
+const raidHistoryMigrationClearedTiers: string[] = [];
+
+for (const [storedId, entry] of [...raidHistoryById.entries()]) {
+  const resolution = resolveRaidNameForHistoryMigration(entry.raidName);
+  if (!resolution.speciesId || resolution.isApproximate) continue; // no confident re-resolution — leave untouched
+  const resolvedId = resolution.speciesId;
+  if (resolvedId === storedId) continue; // already correct
+  if (storedId.startsWith(`${resolvedId}-`)) continue; // stored id is already a MORE specific form than the generic raidName resolves to (e.g. furfrou-dandy / "Furfrou") — benign, not a mis-resolution
+
+  const existingTarget = raidHistoryById.get(resolvedId);
+  raidHistoryById.delete(storedId);
+  if (existingTarget) {
+    raidHistoryById.set(resolvedId, mergeRaidHistoryEntries(existingTarget, entry, resolvedId));
+    raidHistoryMigrations.push({ from: storedId, to: resolvedId, raidName: entry.raidName, merged: true });
+  } else {
+    raidHistoryById.set(resolvedId, { ...entry, speciesId: resolvedId });
+    raidHistoryMigrations.push({ from: storedId, to: resolvedId, raidName: entry.raidName, merged: false });
+  }
+
+  // The stale row's own speciesId (storedId) is very likely also carrying a
+  // `lastKnownRaidTier` set by this exact same historical mis-resolution
+  // (species.lastKnownRaidTier is populated by the very same raid-matching
+  // pass this migration is correcting — see the tier-capture side effect on
+  // the activeRaids loop further down this file). Left alone, Step 3 below
+  // (which seeds a "researched-tier" row for any species carrying a
+  // lastKnownRaidTier with no history row yet) would immediately recreate an
+  // equally-wrong row under storedId's generic name the moment this loop
+  // deletes it above — resurrecting the exact bug this migration exists to
+  // fix. Only cleared when the value is IDENTICAL to the migrated tier (the
+  // strongest available evidence it's the same artifact, not a separate real
+  // fact about storedId) — never a blind clear.
+  const staleSpecies = speciesById.get(storedId);
+  if (staleSpecies && staleSpecies.lastKnownRaidTier === entry.tier) {
+    delete staleSpecies.lastKnownRaidTier;
+    raidHistoryMigrationClearedTiers.push(storedId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step 1.6: clean up a "researched-tier" phantom left behind by a Step 1.5
+// migration on an EARLIER run, before this species.json tier-clearing existed
+// in the same pass. This is the exact same failure mode Step 1.5 exists to
+// fix, one layer deeper: if a base species' `lastKnownRaidTier` was ever
+// carried forward from an older mis-resolution (e.g. base "sneasel" once
+// wrongly credited with Hisuian Sneasel's raid tier) and a Step 1.5 migration
+// on some prior run deleted that species' history row WITHOUT yet clearing
+// the tier (because this cleanup didn't exist yet), Step 3 below would have
+// immediately re-seeded a "researched-tier" row for the base species under
+// its own bare name — a real row in the file, but standing for a raid
+// appearance the base species never actually had.
+//
+// Deliberately scoped ONLY to the exact regional-form/Shadow-variant family
+// Step 1.5 already governs (regionalFormSpeciesByPrefixAndBase /
+// shadowSpeciesByBaseId), never a generic "any base+suffix pair" rule — this
+// project has many completely legitimate base+suffix history pairs (e.g.
+// "gyarados"/"gyarados-mega", "deoxys"/"deoxys-attack") that really did have
+// independent raid appearances and must never be pruned. Only fires when:
+//   - this row is "researched-tier" (never a real live/allowlist observation
+//     on its own, by definition — see RaidHistoryEntry.source's doc comment)
+//   - its raidName is exactly the species' own bare name (the Step 3 seeding
+//     signature, not a real feed-observed name)
+//   - a sibling id that IS a confidently-resolved regional/Shadow extra form
+//     of this exact species already carries the identical tier under
+//     stronger evidence (anything other than "researched-tier")
+// ---------------------------------------------------------------------------
+
+const confidentExtraFormIds = new Set<string>([
+  ...regionalFormSpeciesByPrefixAndBase.values(),
+  ...[...shadowSpeciesByBaseId.values()].map((s) => s.id),
+]);
+
+const raidHistoryPhantomTierCleanups: string[] = [];
+
+for (const [storedId, entry] of [...raidHistoryById.entries()]) {
+  if (entry.source !== "researched-tier") continue;
+  const ownSpecies = speciesById.get(storedId);
+  if (!ownSpecies || entry.raidName !== ownSpecies.name) continue; // not a Step-3-shaped seed at all — leave alone
+
+  const strongerSibling = [...raidHistoryById.entries()].find(
+    ([siblingId, siblingEntry]) =>
+      siblingId.startsWith(`${storedId}-`) &&
+      confidentExtraFormIds.has(siblingId) &&
+      siblingEntry.source !== "researched-tier" &&
+      siblingEntry.tier === entry.tier,
+  );
+  if (!strongerSibling) continue;
+
+  raidHistoryById.delete(storedId);
+  if (ownSpecies.lastKnownRaidTier === entry.tier) delete ownSpecies.lastKnownRaidTier;
+  raidHistoryPhantomTierCleanups.push(`${storedId} (superseded by ${strongerSibling[0]})`);
+}
+
+const registeredSpeciesIds = new Set(species.map((s) => s.id));
+const raidHistoryNewlyAdded: string[] = [];
+
+// Step 2: this run's live-feed observations always win over whatever was
+// there before (a fresher live observation, or a weaker researched-tier
+// seed), and always overwrite tier/raidName/source on an existing entry.
+for (const raid of activeRaids) {
+  if (!raid.speciesId || !registeredSpeciesIds.has(raid.speciesId)) continue;
+  const existing = raidHistoryById.get(raid.speciesId);
+  if (!existing) raidHistoryNewlyAdded.push(raid.speciesId);
+  raidHistoryById.set(raid.speciesId, {
+    speciesId: raid.speciesId,
+    raidName: raid.raidName,
+    tier: raid.tier,
+    firstSeenAt: existing?.firstSeenAt ?? SYNC_TIMESTAMP,
+    lastSeenAt: SYNC_TIMESTAMP,
+    source: "live-feed",
+  });
+}
+
+// Step 3: seed a researched-tier entry for any species this run's live feed
+// didn't already cover (step 2, just above) but that carries a
+// lastKnownRaidTier from some other source (this run's allowlist match, or a
+// carry-forward from a previous run's species.json — see the precedence
+// chain above this section).
+for (const s of species) {
+  if (!s.lastKnownRaidTier) continue;
+  if (raidHistoryById.has(s.id)) continue;
+  raidHistoryNewlyAdded.push(s.id);
+  raidHistoryById.set(s.id, {
+    speciesId: s.id,
+    raidName: s.name,
+    tier: s.lastKnownRaidTier,
+    firstSeenAt: SYNC_TIMESTAMP,
+    lastSeenAt: SYNC_TIMESTAMP,
+    source: "researched-tier",
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Step 4: pogoapi-previous historical backfill (2026-09-07 raidHistory
+// backfill task). raidHistory.json started this project life with only 31
+// entries (all megas) — a real gap, since Pokémon GO has had hundreds of
+// raid bosses. pogoapi.net's raid_bosses.json `previous` list (fetched above
+// by fetchAndCacheRaidBossesPrevious) is a source this project already
+// depends on elsewhere, is machine-readable, and needs no scraping — 696
+// historical entries across ~552 distinct species+form+tier-bucket
+// combinations (tiers 1-6, "ex", "mega", "mega_legendary"; see the grouping
+// key below for why "tier-bucket", not just species+form). Lowest-precedence
+// source: only fills in a species this run's live-feed (step 2) or
+// researched-tier (step 3) — or an EARLIER run's own raidHistory.json,
+// reloaded into raidHistoryById at the top of this section — hasn't already
+// covered. Never overwrites an existing entry.
+//
+// Two tiers are excluded outright rather than mapped, per this task's "never
+// fabricate a tier" rule:
+//   - "ex" (1 entry: Regidrago). EX Raids have no modern tier equivalent in
+//     this project's RaidTier union (Niantic retired the format entirely) —
+//     any tier assigned here would be invented, not sourced.
+//   - "6" (2 entries: Darkrai, Mewtwo). pogoapi's own schema reserves a "6"
+//     tier key (present, usually empty, in `current` too — confirmed
+//     2026-09-07), but nothing in Niantic's real raid-tier history documents
+//     a tier above 5 outside EX raids, and no independent source found
+//     during this pass confirms what "6" is actually meant to denote.
+//     Investigating further: BOTH Darkrai and Mewtwo ALSO have a separate
+//     "5" entry in this same `previous` list, at the EXACT SAME max_boosted_cp
+//     as their "6" entry (Darkrai 2671, Mewtwo 2984, confirmed by direct
+//     inspection) — i.e. "6" looks like a duplicate record of an appearance
+//     already captured under "5" for the same species+form, not a distinct
+//     higher difficulty. Since both species are already covered via their
+//     "5" -> "5-Star Raids" entry regardless, excluding "6" costs zero real
+//     coverage either way — an honest exclusion beats a plausible guess,
+//     and here it happens to be a free one.
+// ---------------------------------------------------------------------------
+
+const POGOAPI_PREVIOUS_TIER_MAP: Record<string, RaidTier> = {
+  "1": "1-Star Raids",
+  "2": "1-Star Raids", // pre-2020-08-26 tier, merged into Tier 1 (Niantic Support + corroborating community outlets)
+  "3": "3-Star Raids",
+  "4": "3-Star Raids", // pre-2020-08-26 tier, merged into Tier 3
+  "5": "5-Star Raids",
+  mega: "Mega Raids",
+  mega_legendary: "Legendary Mega Raids",
+  // "6" and "ex" deliberately absent — see reasoning above.
+};
+
+const raidBossesPreviousFetchFailed = raidBossesPreviousFetchResult.source === "error";
+const raidBossesPreviousExcludedExCount = (raidBossesPreviousFetchResult.previous.ex ?? []).length;
+const raidBossesPreviousExcludedTier6Count = (raidBossesPreviousFetchResult.previous["6"] ?? []).length;
+
+interface PogoapiPreviousGroupEntry {
+  bucket: "normal" | "mega";
+  name: string;
+  form: string;
+  mappedTier: RaidTier;
+}
+
+const pogoapiPreviousGroups = new Map<string, PogoapiPreviousGroupEntry>();
+for (const [tierKey, entries] of Object.entries(raidBossesPreviousFetchResult.previous)) {
+  const mappedTier = POGOAPI_PREVIOUS_TIER_MAP[tierKey];
+  if (!mappedTier) continue; // "6" and "ex" — excluded, see above
+  const bucket: "normal" | "mega" = tierKey === "mega" || tierKey === "mega_legendary" ? "mega" : "normal";
+  for (const entry of entries as RawRaidBossesPreviousEntry[]) {
+    // Grouping key MUST include `bucket`, not just name+form: a mega/primal
+    // raid_bosses.json entry conflates the base species with its mega form
+    // via `form: "Normal"` (see RawRaidBossesPreviousEntry's doc comment) —
+    // confirmed 2026-09-07 that e.g. "Venusaur"/"Normal" appears BOTH as a
+    // real base-species Tier-3/4 raid AND as the "mega" tier's stand-in for
+    // Mega Venusaur (35 such real collisions found across
+    // Glalie/Manectric/Slowbro/Aerodactyl/Medicham/Salamence/Gengar/Absol/
+    // Venusaur/Charizard/Blastoise/Aggron/Alakazam/Lopunny/Banette/
+    // Kangaskhan/Ampharos/Abomasnow/Houndoom/Pidgeot/Gyarados/Groudon/
+    // Kyogre/Latias/Latios). Collapsing across bucket would silently merge a
+    // real base-species raid tier with its mega/primal counterpart's tier —
+    // exactly the trap this task's instructions called out.
+    const key = `${bucket}|${entry.name}|${entry.form}`;
+    const existing = pogoapiPreviousGroups.get(key);
+    if (!existing || RAID_TIER_TABLE[mappedTier].hp > RAID_TIER_TABLE[existing.mappedTier].hp) {
+      pogoapiPreviousGroups.set(key, { bucket, name: entry.name, form: entry.form, mappedTier });
+    }
+  }
+}
+
+/** `${species name}`.toLowerCase() -> registered species id, built from the FULL final roster (ordinary + mega/primal + Shadow) so both this backfill's normal-bucket and mega-bucket resolution can share one lookup. */
+const speciesIdByNameLower = new Map(species.map((s) => [s.name.toLowerCase(), s.id]));
+
+interface ArchiveResolution {
+  raidName: string;
+  tier: RaidTier;
+  /** Real era HP for this specific historical encounter (2026-09-07 era-HP backfill task) — see RaidHistoryEntry.eraHp's doc comment in ./sync-data/rawShapes.ts. pogoapi's `previous` list never sets this (raid_bosses.json's `previous` entries carry no HP field at all); only a Bulbapedia-sourced resolution ever does. */
+  eraHp?: number;
+}
+
+const raidHistoryPogoapiPreviousUnresolved: string[] = [];
+const pogoapiResolvedBySpeciesId = new Map<string, ArchiveResolution>();
+
+for (const group of pogoapiPreviousGroups.values()) {
+  let resolvedSpeciesId: string | null = null;
+  let resolvedRaidName: string | null = null;
+
+  if (group.bucket === "normal") {
+    // Same qualified-name convention fromGameMaster itself uses to build
+    // SpeciesDefinition.name: bare name for the "Normal" form, "Name (Form)"
+    // otherwise (see gamemaster.ts's fromGameMaster) — pogoapi's own form
+    // strings are exactly what stat.form/RawGameMasterSpecies.form already
+    // carry, since both this project's species roster and raid_bosses.json
+    // come from the same pogoapi.net form-naming convention.
+    const qualifiedName = group.form === "Normal" ? group.name : `${group.name} (${group.form})`;
+    resolvedRaidName = qualifiedName;
+    resolvedSpeciesId = speciesIdByNameLower.get(qualifiedName.toLowerCase()) ?? null;
+  } else {
+    const megaName = megaPokemonKeyToMegaName.get(`${group.name.toLowerCase()}|${group.form}`);
+    if (megaName) {
+      resolvedRaidName = megaName;
+      resolvedSpeciesId = speciesIdByNameLower.get(megaName.toLowerCase()) ?? null;
+    }
+  }
+
+  if (!resolvedSpeciesId) {
+    raidHistoryPogoapiPreviousUnresolved.push(
+      `${group.bucket === "mega" ? (resolvedRaidName ?? `${group.name}/${group.form} (no mega_pokemon.json/GAME_MASTER match)`) : (resolvedRaidName ?? `${group.name}/${group.form}`)} (tier ${group.mappedTier})`,
+    );
+    continue;
+  }
+
+  // A single pogoapi-previous run can independently produce both a "normal"
+  // and a "mega" resolution for the SAME species id in rare cases (none
+  // currently known, but the bucket-keyed grouping above doesn't itself rule
+  // it out) — keep the higher-HP tier rather than letting iteration order
+  // decide, same rule the Bulbapedia union below uses.
+  const existing = pogoapiResolvedBySpeciesId.get(resolvedSpeciesId);
+  if (!existing || RAID_TIER_TABLE[group.mappedTier].hp > RAID_TIER_TABLE[existing.tier].hp) {
+    pogoapiResolvedBySpeciesId.set(resolvedSpeciesId, { raidName: resolvedRaidName ?? resolvedSpeciesId, tier: group.mappedTier });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bulbapedia archive union (2026-09-07 raidHistory backfill task, phase 2).
+// pogoapi's own `previous` list (just above) is missing ~26 base species
+// entirely (Heatran among them — a marquee 5-star legendary, so a real gap,
+// not an edge case) that Bulbapedia's own "List of Raid Boss changes in ..."
+// archive pages DO carry. Resolved independently here (see
+// scripts/sync-data/bulbapediaRaidArchive.ts for the parsing/matching this
+// wraps), then UNIONED against pogoapiResolvedBySpeciesId above by resolved
+// species id — not by raw name/form key, since the two sources use
+// completely different form-wording vocabularies (pogoapi: "Altered";
+// Bulbapedia: "Altered Form") and only converge once both are matched down to
+// this project's own species ids. On a same-species conflict the higher-HP
+// tier wins and the conflict is counted+sampled for the sync report — an
+// intentional read on how often the two independent sources disagree, not
+// just a silent pick.
+// ---------------------------------------------------------------------------
+
+const bulbapediaRaidArchiveFetchFailed = bulbapediaRaidArchiveFetchResult.source === "error";
+const { rows: bulbapediaRawRows, invalidHpSamples: bulbapediaInvalidHpSamples } = parseBulbapediaRaidRows(
+  bulbapediaRaidArchiveFetchResult.pages,
+);
+const bulbapediaBaseNameIndex = buildBaseNameIndex(species);
+
+const bulbapediaResolvedBySpeciesId = new Map<string, ArchiveResolution>();
+const bulbapediaUnresolved: string[] = [];
+let bulbapediaViaBaseNameFallbackCount = 0;
+
+for (const row of bulbapediaRawRows) {
+  const resolved = resolveBulbapediaRow(row, bulbapediaBaseNameIndex, speciesById, defaultRaidTierForSpecies);
+  if (!resolved) {
+    bulbapediaUnresolved.push(`${row.name}${row.form ? `/${row.form}` : ""} (${row.bucket})`);
+    continue;
+  }
+  if (resolved.viaBaseNameFallback) bulbapediaViaBaseNameFallbackCount++;
+  const existing = bulbapediaResolvedBySpeciesId.get(resolved.speciesId);
+  const resolvedHp = RAID_TIER_TABLE[resolved.tier].hp;
+  const existingHp = existing ? RAID_TIER_TABLE[existing.tier].hp : -1;
+  if (!existing || resolvedHp > existingHp) {
+    // Strictly higher real (mapped) tier wins outright — unchanged tier-
+    // selection behavior. Also seeds eraHp from this same winning row, if it
+    // has one (2026-09-07 era-HP backfill task).
+    bulbapediaResolvedBySpeciesId.set(resolved.speciesId, { raidName: resolved.raidName, tier: resolved.tier, eraHp: resolved.eraHp });
+  } else if (resolvedHp === existingHp && existing!.eraHp === undefined && resolved.eraHp !== undefined) {
+    // Same resolved (mapped) tier as an already-seen row for this species,
+    // AND no era HP captured for it yet — 2026-09-07 era-HP backfill task.
+    // Rows are processed in chronological page order (see
+    // BULBAPEDIA_RAID_ARCHIVE_PAGES in ./sync-data/fetchCache.ts), so this
+    // fills in the FIRST row (chronologically) that has a parseable HP
+    // (KNOWN_ERA_HP_VALUES) for that already-established tier — covering the
+    // real case where the very first row ever seen for a species had an
+    // out-of-set HP (e.g. Tyranitar's earliest, 2017-2018 tier-4 rows record
+    // 7500, a real but out-of-scope value — see KNOWN_ERA_HP_VALUES's doc
+    // comment — so the first-VALID row, 2019's 9000, is what gets kept).
+    //
+    // Once set, eraHp is intentionally LOCKED for the rest of this loop
+    // (never overwritten by a LATER same-mapped-tier row) — this is the
+    // deliberate fix for the tier-2->1 / tier-4->3 collapse: Tyranitar's old
+    // tier-4 rows (real HP 9000) and its later, post-merge tier-3
+    // reappearances (real HP 3600) BOTH map to today's "3-Star Raids", but
+    // the old tier-4 rows come first chronologically and get locked in,
+    // preserving the historically-significant 9000 rather than letting a
+    // later, lower-difficulty reappearance quietly overwrite it. The same
+    // logic naturally holds a currently-recurring mega's pre-2022-04-28
+    // 15000 HP (its own first-ever resolved row) rather than its later,
+    // lower 9000-HP reappearances, since a mega/primal row's `tier` is
+    // always the same value for a given species (derived from
+    // defaultRaidTierForSpecies, not from wikitext) — every later row is
+    // necessarily a "same tier" case here.
+    bulbapediaResolvedBySpeciesId.set(resolved.speciesId, { ...existing!, eraHp: resolved.eraHp });
+  }
+}
+// De-duplicate the unresolved list (thousands of raw rows collapse to a
+// small, repeated set of unresolved name/form pairs across many pages).
+const bulbapediaUnresolvedDistinct = [...new Set(bulbapediaUnresolved)].sort();
+
+interface ArchiveConflictExample {
+  speciesId: string;
+  pogoapiTier: RaidTier;
+  bulbapediaTier: RaidTier;
+  winner: "pogoapi-previous" | "bulbapedia-archive";
+}
+
+const archiveUnionConflicts: ArchiveConflictExample[] = [];
+const archiveUnionResolved = new Map<string, { resolution: ArchiveResolution; source: "pogoapi-previous" | "bulbapedia-archive" }>();
+
+for (const [speciesId, pogoapiRes] of pogoapiResolvedBySpeciesId) {
+  archiveUnionResolved.set(speciesId, { resolution: pogoapiRes, source: "pogoapi-previous" });
+}
+for (const [speciesId, bulbapediaRes] of bulbapediaResolvedBySpeciesId) {
+  const existing = archiveUnionResolved.get(speciesId);
+  if (!existing) {
+    archiveUnionResolved.set(speciesId, { resolution: bulbapediaRes, source: "bulbapedia-archive" });
+    continue;
+  }
+  const existingHp = RAID_TIER_TABLE[existing.resolution.tier].hp;
+  const bulbapediaHp = RAID_TIER_TABLE[bulbapediaRes.tier].hp;
+  if (bulbapediaHp === existingHp) {
+    // Agree — keep the existing (pogoapi-previous) entry's tier/raidName/
+    // source, nothing to report. But Bulbapedia's own row independently
+    // resolved to this EXACT SAME real tier for this species, so its era HP
+    // (2026-09-07 backfill task) is honestly attachable here too — pogoapi's
+    // own `previous` list never carries an HP field at all, so this can only
+    // ever ADD an eraHp, never overwrite/mix one from a different tier. This
+    // is the documented case where the persisted entry's `source` reads
+    // "pogoapi-previous" yet still carries a real `eraHp`.
+    if (bulbapediaRes.eraHp !== undefined && existing.resolution.eraHp === undefined) {
+      archiveUnionResolved.set(speciesId, { resolution: { ...existing.resolution, eraHp: bulbapediaRes.eraHp }, source: existing.source });
+    }
+    continue;
+  }
+  const winner: "pogoapi-previous" | "bulbapedia-archive" = bulbapediaHp > existingHp ? "bulbapedia-archive" : "pogoapi-previous";
+  archiveUnionConflicts.push({
+    speciesId,
+    pogoapiTier: existing.resolution.tier,
+    bulbapediaTier: bulbapediaRes.tier,
+    winner,
+  });
+  if (winner === "bulbapedia-archive") archiveUnionResolved.set(speciesId, { resolution: bulbapediaRes, source: "bulbapedia-archive" });
+}
+
+let raidHistoryArchiveNewlyAddedCount = 0;
+let raidHistoryArchiveUpgradedCount = 0;
+const raidHistoryArchiveUpgraded: string[] = [];
+let raidHistoryEraHpBackfilledCount = 0;
+
+for (const [speciesId, { resolution, source }] of archiveUnionResolved) {
+  const existing = raidHistoryById.get(speciesId);
+  if (existing && (existing.source === "live-feed" || existing.source === "researched-tier")) continue; // never overwrites higher precedence
+
+  if (!existing) {
+    raidHistoryNewlyAdded.push(speciesId);
+    raidHistoryArchiveNewlyAddedCount++;
+    raidHistoryById.set(speciesId, {
+      speciesId,
+      raidName: resolution.raidName,
+      tier: resolution.tier,
+      firstSeenAt: SYNC_TIMESTAMP,
+      lastSeenAt: SYNC_TIMESTAMP,
+      source,
+      eraHp: resolution.eraHp,
+    });
+    continue;
+  }
+
+  // existing.source is "pogoapi-previous" or "bulbapedia-archive" (an earlier
+  // run's own archive entry) — accumulate-only: upgrade in place if this
+  // run's union resolved a strictly higher tier, otherwise leave untouched.
+  // Never downgrades, never deletes.
+  if (RAID_TIER_TABLE[resolution.tier].hp > RAID_TIER_TABLE[existing.tier].hp) {
+    raidHistoryArchiveUpgradedCount++;
+    raidHistoryArchiveUpgraded.push(`${speciesId} ${existing.tier} -> ${resolution.tier}`);
+    raidHistoryById.set(speciesId, {
+      ...existing,
+      raidName: resolution.raidName,
+      tier: resolution.tier,
+      lastSeenAt: SYNC_TIMESTAMP,
+      source,
+      eraHp: resolution.eraHp,
+    });
+  } else if (existing.eraHp === undefined && resolution.eraHp !== undefined) {
+    // Era-HP-only backfill (2026-09-07 task): the tier itself didn't change
+    // (this species' correct tier was already recorded by an earlier run, or
+    // by the newly-added-entry branch above on a PRIOR run before eraHp
+    // existed as a field at all), but this run's union resolution now
+    // carries a real era HP for it that the persisted entry has never had.
+    // Attach it without touching tier/raidName/source/firstSeenAt/lastSeenAt
+    // — purely additive, never downgrades or invents a tier.
+    raidHistoryEraHpBackfilledCount++;
+    raidHistoryById.set(speciesId, { ...existing, eraHp: resolution.eraHp });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pokebattler legacy archive backfill (2026-09-08 task — see
+// ./sync-data/pokebattlerRaids.ts's top-of-file doc comment for why this was
+// deferred until now, and RaidHistoryEntry.source's own doc comment in
+// ./sync-data/rawShapes.ts for the "pokebattler-legacy" provenance value's
+// pinned name). A THIRD independent historical archive, unioned in as a peer
+// of "pogoapi-previous"/"bulbapedia-archive" — never overwrites a "live-feed"
+// or "researched-tier" entry, and among the three archive peers the highest-
+// HP resolved tier wins on a same-species conflict, same discipline as the
+// pogoapi-vs-Bulbapedia union above.
+//
+// NEVER sets `eraHp` from a Pokebattler row (non-negotiable, confirmed
+// 2026-09-08: Pokebattler re-maps its own history onto MODERN tier labels
+// with no era fidelity — its `RAID_LEVEL_4_LEGACY` holds Community-Day-style
+// four-star bosses, not the real pre-2020 tier 4, and `RAID_LEVEL_3_LEGACY`
+// holds Tyranitar even though Bulbapedia records its historical tier as 4).
+// Every write below either omits eraHp entirely (new row) or explicitly
+// carries the PRE-EXISTING entry's own eraHp forward unchanged (tier
+// upgrade) — never `resolution.eraHp`, which doesn't exist on this source at
+// all.
+//
+// Tier mapping is deliberately conservative per this task's "never fabricate
+// a tier" rule: RAID_LEVEL_ELITE_LEGACY (Bulbapedia's Elite Raid difficulty
+// table: 20000 HP) has no equivalent anywhere in this project's RaidTier
+// union and is excluded outright. RAID_LEVEL_ULTRA_BEAST_LEGACY's real-world
+// HP (15000) happens to numerically match "5-Star Raids"/"Legendary Mega
+// Raids", but Ultra Wormhole encounters were a Special-Research-gated event
+// format, not standard raid-egg rotation content — the HP coincidence alone
+// isn't independent confirmation the two are the same content type this
+// project's RaidTier union is meant to classify, so it stays excluded too
+// (see POKEBATTLER_LEGACY_EXCLUDED_TIERS's doc comment in
+// ./sync-data/pokebattlerRaids.ts). Both exclusions, and their raw entry
+// counts, are reported below.
+// ---------------------------------------------------------------------------
+
+interface PokebattlerLegacyResolution {
+  raidName: string;
+  tier: RaidTier;
+}
+
+const pokebattlerLegacyResolvedBySpeciesId = new Map<string, PokebattlerLegacyResolution>();
+const pokebattlerLegacyUnresolved: string[] = [];
+const pokebattlerLegacyExcludedTierCounts: Record<string, number> = {};
+let pokebattlerLegacyTotalConsidered = 0;
+let pokebattlerLegacyResolvedRawCount = 0;
+
+if (pokebattlerFetchResult.source === "live") {
+  const pokebattlerLegacyCtx: PokebattlerResolutionContext = {
+    pokemonIdByName,
+    defaultFormByPokemonId,
+    enumToPogoapiName,
+    speciesIdByNameLower,
+  };
+
+  for (const tier of pokebattlerFetchResult.tiers) {
+    if (!isArchivableLegacyTier(tier.tier)) continue; // not a "_LEGACY" tier, or a "_MAX" one — out of scope, see isArchivableLegacyTier's doc comment
+    if (POKEBATTLER_LEGACY_EXCLUDED_TIERS.has(tier.tier)) {
+      pokebattlerLegacyExcludedTierCounts[tier.tier] = (tier.raids ?? []).length;
+      continue;
+    }
+    const isMegaTier = POKEBATTLER_LEGACY_MEGA_TIERS.has(tier.tier);
+    for (const raid of tier.raids ?? []) {
+      pokebattlerLegacyTotalConsidered++;
+      const resolved = resolvePokebattlerPokemonId(raid.pokemon, pokebattlerLegacyCtx);
+      if (!resolved) {
+        pokebattlerLegacyUnresolved.push(`${raid.pokemon} [${tier.tier}]`);
+        continue;
+      }
+      const mappedTier = isMegaTier
+        ? resolveMegaLegacyTier(resolved.speciesId, speciesById, defaultRaidTierForSpecies)
+        : (POKEBATTLER_LEGACY_NUMERIC_TIER_MAP[tier.tier] ?? null);
+      if (!mappedTier) {
+        // Should never happen (resolveMegaLegacyTier only returns null for a
+        // speciesId this same resolution just produced from the live
+        // roster) — defensive, reported rather than silently dropped.
+        pokebattlerLegacyUnresolved.push(`${raid.pokemon} [${tier.tier}] (resolved to species "${resolved.speciesId}" but no tier mapping)`);
+        continue;
+      }
+      pokebattlerLegacyResolvedRawCount++;
+      // Shadow-bucket entries resolve `resolved.speciesId` to the actual
+      // Shadow-variant species id as of the 2026-09-08 durability fix (see
+      // resolvePokebattlerPokemonId's doc comment) — the sync-data.ts
+      // "Shadow-variant durable synthesis" section pre-creates that variant
+      // from this exact tier BEFORE this loop runs, so `resolvedToShadowVariant`
+      // is expected true here. `raidName` keeps the full "Shadow <Base>" name
+      // in that case (it names the actual matched species now, not a stand-
+      // in); only the defensive base-species-fallback branch (no variant
+      // registered, `resolvedToShadowVariant` unset) strips the prefix,
+      // matching this pipeline's existing "historical archive entry falls
+      // back to the base species" convention (same as resolveBulbapediaRow's).
+      const raidName =
+        resolved.bucket === "shadow" && !resolved.resolvedToShadowVariant
+          ? resolved.displayName.replace(/^Shadow /, "")
+          : resolved.displayName;
+      const existing = pokebattlerLegacyResolvedBySpeciesId.get(resolved.speciesId);
+      if (!existing || RAID_TIER_TABLE[mappedTier].hp > RAID_TIER_TABLE[existing.tier].hp) {
+        pokebattlerLegacyResolvedBySpeciesId.set(resolved.speciesId, { raidName, tier: mappedTier });
+      }
+    }
+  }
+}
+
+let raidHistoryPokebattlerLegacyNewlyAddedCount = 0;
+let raidHistoryPokebattlerLegacyUpgradedCount = 0;
+const raidHistoryPokebattlerLegacyUpgraded: string[] = [];
+let raidHistoryPokebattlerLegacySkippedEraHpCount = 0;
+const raidHistoryPokebattlerLegacySkippedEraHp: string[] = [];
+
+for (const [speciesId, resolution] of pokebattlerLegacyResolvedBySpeciesId) {
+  const existing = raidHistoryById.get(speciesId);
+  if (existing && (existing.source === "live-feed" || existing.source === "researched-tier")) continue; // never overwrites higher precedence
+
+  if (!existing) {
+    raidHistoryNewlyAdded.push(speciesId);
+    raidHistoryPokebattlerLegacyNewlyAddedCount++;
+    raidHistoryById.set(speciesId, {
+      speciesId,
+      raidName: resolution.raidName,
+      tier: resolution.tier,
+      firstSeenAt: SYNC_TIMESTAMP,
+      lastSeenAt: SYNC_TIMESTAMP,
+      source: "pokebattler-legacy",
+      // eraHp deliberately omitted — never set from a Pokebattler row, see this section's doc comment.
+    });
+    continue;
+  }
+
+  // existing.source is "pogoapi-previous" | "bulbapedia-archive" |
+  // "pokebattler-legacy" (a peer archive entry, this run's or an earlier
+  // run's). Never touches a row that already carries a real eraHp at all —
+  // relabeling its `source` to "pokebattler-legacy" while carrying an eraHp
+  // forward would violate BOTH this task's non-negotiables at once (a
+  // pokebattler-legacy row must never carry an eraHp — this source has no
+  // era fidelity — AND an existing eraHp must never be stripped); the only
+  // way to honor both simultaneously is to leave such a row completely
+  // alone, even when this resolution's tier is technically higher. Only a
+  // row with NO eraHp yet is eligible for the peer tier-upgrade, same
+  // discipline as the pogoapi-vs-Bulbapedia union above: upgrade in place
+  // only on a strictly higher resolved tier, never downgrade, never delete.
+  if (existing.eraHp !== undefined) {
+    raidHistoryPokebattlerLegacySkippedEraHpCount++;
+    raidHistoryPokebattlerLegacySkippedEraHp.push(`${speciesId} (kept ${existing.source} "${existing.tier}", eraHp ${existing.eraHp})`);
+    continue;
+  }
+  if (RAID_TIER_TABLE[resolution.tier].hp > RAID_TIER_TABLE[existing.tier].hp) {
+    raidHistoryPokebattlerLegacyUpgradedCount++;
+    raidHistoryPokebattlerLegacyUpgraded.push(`${speciesId} ${existing.tier} -> ${resolution.tier}`);
+    raidHistoryById.set(speciesId, {
+      ...existing,
+      raidName: resolution.raidName,
+      tier: resolution.tier,
+      lastSeenAt: SYNC_TIMESTAMP,
+      source: "pokebattler-legacy",
+      // eraHp intentionally absent from this new object entirely (not even
+      // `undefined` copied from existing, which is already undefined here
+      // given the guard above) — a pokebattler-legacy row never carries one.
+    });
+  }
+  // else: existing tier's HP already >= this resolution's — leave completely untouched.
+}
+
+const pokebattlerLegacyUnresolvedDistinct = [...new Set(pokebattlerLegacyUnresolved)].sort();
+
+const raidHistory = [...raidHistoryById.values()].sort((a, b) => a.speciesId.localeCompare(b.speciesId));
+const raidHistoryLiveFeedCount = raidHistory.filter((r) => r.source === "live-feed").length;
+const raidHistoryResearchedCount = raidHistory.filter((r) => r.source === "researched-tier").length;
+const raidHistoryPogoapiPreviousCount = raidHistory.filter((r) => r.source === "pogoapi-previous").length;
+const raidHistoryBulbapediaArchiveCount = raidHistory.filter((r) => r.source === "bulbapedia-archive").length;
+const raidHistoryPokebattlerLegacyCount = raidHistory.filter((r) => r.source === "pokebattler-legacy").length;
+// 2026-09-07 era-HP backfill task reporting.
+const raidHistoryWithEraHp = raidHistory.filter((r) => r.eraHp !== undefined);
+const raidHistoryEraHpBySource = {
+  "live-feed": raidHistoryWithEraHp.filter((r) => r.source === "live-feed").length,
+  "researched-tier": raidHistoryWithEraHp.filter((r) => r.source === "researched-tier").length,
+  "pogoapi-previous": raidHistoryWithEraHp.filter((r) => r.source === "pogoapi-previous").length,
+  "bulbapedia-archive": raidHistoryWithEraHp.filter((r) => r.source === "bulbapedia-archive").length,
+  "pokebattler-legacy": raidHistoryWithEraHp.filter((r) => r.source === "pokebattler-legacy").length,
+};
+const raidHistoryEraHpDistribution: Record<number, number> = {};
+for (const r of raidHistoryWithEraHp) {
+  raidHistoryEraHpDistribution[r.eraHp!] = (raidHistoryEraHpDistribution[r.eraHp!] ?? 0) + 1;
+}
+const bulbapediaInvalidHpSamplesDistinct = [...new Set(bulbapediaInvalidHpSamples)].sort();
+
+// ---------------------------------------------------------------------------
 // Write output
 // ---------------------------------------------------------------------------
 
@@ -1404,6 +2661,7 @@ if (!existsSync(NORMALIZED_DIR)) mkdirSync(NORMALIZED_DIR, { recursive: true });
 
 writeFileSync(speciesOutPath, JSON.stringify(species, null, 2));
 writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
+writeFileSync(raidHistoryOutPath, JSON.stringify(raidHistory, null, 2));
 
 // ---------------------------------------------------------------------------
 // Report
@@ -1415,9 +2673,12 @@ const SCRAPEDDUCK_RAIDS_URL = "https://raw.githubusercontent.com/bigfoott/Scrape
 const raidsWithNullSpecies = activeRaids.filter((r) => r.speciesId === null).length;
 const raidsApproximate = activeRaids.filter((r) => r.isApproximate).length;
 
-console.log(`SYNCED: GAME_MASTER (primary), pokemon_stats/pokemon_types/fast_moves/charged_moves/current_pokemon_moves (roster + fallback), cp_multiplier, mega_pokemon, scrapedduck-raids (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length} single-form (Normal, or fallback — see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (synthesized for Shadow raid matches, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} pogoapi-fallback moves cached + ${gameMasterFetchResult.moves.length} GAME_MASTER moveSettings entries)`);
+console.log(`SYNCED: GAME_MASTER (primary), pokemon_stats/pokemon_types/fast_moves/charged_moves/current_pokemon_moves (roster + fallback), cp_multiplier, mega_pokemon, scrapedduck-raids, pokebattler-raids (live cross-check + "_LEGACY" archive backfill, see WARNINGS), raid_bosses.previous + bulbapedia-raid-archive + pokebattler-legacy (raidHistory backfill) (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length - extraFormSpeciesCount} single-form (Normal, or fallback — see WARNINGS) + ${extraFormSpeciesCount} mechanically-distinct extra form (see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (${shadowSeedDurableCount} durably from evidence [raidHistory.json/Pokebattler-legacy/Bulbapedia], ${shadowSpecies.length - shadowSeedDurableCount} from this run's live feed only, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} pogoapi-fallback moves cached + ${gameMasterFetchResult.moves.length} GAME_MASTER moveSettings entries)`);
 console.log(`CHANGED (species.json): ${speciesDiffs.length > 0 ? speciesDiffs.join("; ") : "none"}`);
 console.log(`CHANGED (activeRaids.json): ${raidDiffs.length > 0 ? raidDiffs.join("; ") : "none"}`);
+console.log(
+  `CHANGED (raidHistory.json): ${raidHistory.length} total entries (${raidHistoryLiveFeedCount} live-feed, ${raidHistoryResearchedCount} researched-tier, ${raidHistoryPogoapiPreviousCount} pogoapi-previous, ${raidHistoryBulbapediaArchiveCount} bulbapedia-archive, ${raidHistoryPokebattlerLegacyCount} pokebattler-legacy); newly added this run: ${raidHistoryNewlyAdded.length > 0 ? raidHistoryNewlyAdded.join(", ") : "none"}; archive-vs-archive tier upgrades this run: ${raidHistoryArchiveUpgradedCount > 0 ? raidHistoryArchiveUpgraded.join(", ") : "none"}; pokebattler-legacy tier upgrades this run: ${raidHistoryPokebattlerLegacyUpgradedCount > 0 ? raidHistoryPokebattlerLegacyUpgraded.join(", ") : "none"}; stale-row re-resolutions this run: ${raidHistoryMigrations.length > 0 ? raidHistoryMigrations.map((m) => `${m.from} -> ${m.to} (raidName "${m.raidName}"${m.merged ? ", merged into existing correct row" : ""})`).join("; ") : "none"}; species.json lastKnownRaidTier cleared alongside a migration (same-value contamination from the same old mis-resolution): ${raidHistoryMigrationClearedTiers.length > 0 ? raidHistoryMigrationClearedTiers.join(", ") : "none"}; phantom researched-tier rows superseded by a confidently-resolved extra form and removed: ${raidHistoryPhantomTierCleanups.length > 0 ? raidHistoryPhantomTierCleanups.join(", ") : "none"}`,
+);
 console.log(`AFFECTS SCENARIOS: none (no saved scenarios reference normalized species yet; scenarioA.ts fixtures untouched)`);
 console.log(`WARNINGS:`);
 if (gameMasterAvailable) {
@@ -1451,7 +2712,11 @@ if (raidFetchResult.source === "scrapedduck") {
 console.log(`  - Scope limitation: only one form per species (form === "Normal", or a documented fallback — see next line) was normalized from pokemon_stats.json (${normalStats.length} candidates out of ${rawStats.length} total rows spanning 273 distinct forms), plus all ${rawMegaPokemon.length} mega_pokemon.json entries. Other regional/costume/event forms are still out of scope this pass.`);
 console.log(`  - Fallback-form species (no row labeled "Normal" in pokemon_stats.json; ${fallbackFormPokemonIds.size} of ${defaultFormByPokemonId.size} distinct pokemon_id values): normalized under their first-listed form, or a FORM_OVERRIDES entry when the first-listed form was confirmed wrong (see below). Full audit completed 2026-09-05 against all 59 species named in the previous sync's report (Bulbapedia/GamePress/PoGo-release-status cross-check, not just a spot-check): ${[...fallbackFormPokemonIds].map((id) => `${rawStats.find((s) => s.pokemon_id === id)?.pokemon_name} (${defaultFormByPokemonId.get(id)})`).join(", ")}`);
 console.log(`  - FORM_OVERRIDES applied (${Object.keys(FORM_OVERRIDES).length} species, see scripts/sync-data.ts's FORM_OVERRIDES doc comment for the full per-species reasoning): Shellos/Gastrodon -> West_sea, Darmanitan -> Standard, Deerling/Sawsbuck -> Spring, Flabébé/Floette/Florges -> Red, Aegislash -> Shield, Zygarde -> Fifty_percent, Lycanroc -> Midday, Wishiwashi -> Solo, Mimikyu -> Disguised, Sinistea/Polteageist -> Phony, Zacian/Zamazenta -> Hero, Palafin -> Zero, Dudunsparce -> Two, Poltchageist -> Counterfeit, Sinistcha -> Unremarkable.`);
-console.log(`  - Deliberately NOT overridden (multiple real, independently-released forms with no single correct "default" per a Bulbapedia/GO-focused check): Urshifu (Single Strike vs Rapid Strike), Indeedee (Male vs Female — stats genuinely differ, no canonical default), Basculin (Red- vs Blue-Striped). Also left alone: species where every candidate form has identical stats/type and no clearly-conventional default exists either (Unown, Spinda, Scatterbug/Spewpa/Vivillon, Furfrou, Minior, Squawkabilly, Tatsugiri, Toxtricity, Maushold, Koraidon, Miraidon, and the single-form-only Galarian-native species: Obstagoon, Perrserker, Sirfetch'd, Mr. Rime, Runerigus) — this pass's fallback pick for all of these was confirmed correct or inconsequential.`);
+console.log(`  - Deliberately NOT overridden (multiple real, independently-released forms with no single correct "default" per a Bulbapedia/GO-focused check): Urshifu (Single Strike vs Rapid Strike), Indeedee (Male vs Female — stats genuinely differ, no canonical default; Male now also normalizes as its own species, see the extra-forms line below), Basculin (Red- vs Blue-Striped). Also left alone: species where every candidate form has identical stats/type and no clearly-conventional default exists either (Unown, Spinda, Scatterbug/Spewpa/Vivillon, Furfrou, Minior, Squawkabilly, Tatsugiri, Toxtricity, Maushold, Koraidon, Miraidon, and the single-form-only Galarian-native species: Obstagoon, Perrserker, Sirfetch'd, Mr. Rime, Runerigus) — this pass's fallback pick for all of these was confirmed correct or inconsequential.`);
+const extraFormsStatsOnly = extraFormSpeciesAdded.filter((f) => f.statsDiffer && !f.typesDiffer);
+const extraFormsTypesOnly = extraFormSpeciesAdded.filter((f) => !f.statsDiffer && f.typesDiffer);
+const extraFormsBoth = extraFormSpeciesAdded.filter((f) => f.statsDiffer && f.typesDiffer);
+console.log(`  - MECHANICALLY-DISTINCT EXTRA FORMS (2026-09-08 fix for AUDIT_2026-09-08.md Defect 1, widened same-day to stats-OR-types after the Hisuian Sneasel incident — see the "extra forms" pass's own doc comment above the primary species-build loop): of the ${rawStats.length - normalStats.length} non-default-form rows in pokemon_stats.json, ${extraFormSpeciesCount} had base stats and/or typing genuinely differing from their pokemon_id's own default-form baseline and were normalized as their own species (id/name convention identical to the existing giratina-altered/shellos-west_sea style, e.g. "lilligant-hisuian" / "Lilligant (Hisuian)") — ${extraFormsBoth.length} differ in both stats and typing, ${extraFormsStatsOnly.length} in stats only, ${extraFormsTypesOnly.length} in typing only (types-only additions this pass: ${extraFormsTypesOnly.length > 0 ? extraFormsTypesOnly.map((f) => f.name).join(", ") : "none"}); the rest matched their baseline exactly on BOTH stats and typing (cosmetic — Pikachu costumes, Vivillon patterns, seasonal Deerling/Sawsbuck, etc.) and stay correctly excluded, unchanged. ${skippedExtraForms.length > 0 ? `${skippedExtraForms.length} distinct candidate(s) could not be normalized and were skipped (reported, not fabricated): ${skippedExtraForms.map((s) => `${s.pokemon_name} (${s.form}): ${s.reason}`).join("; ")}.` : "None were skipped — every distinct candidate resolved a full type + moveset."}`);
 if (formOverrideMismatches.length > 0) {
   console.log(`  - VALIDATION: FORM_OVERRIDES named a form pokemon_stats.json doesn't actually have a row for (override skipped, generic fallback used instead — check for a typo or an upstream form-name rename): ${formOverrideMismatches.map((m) => `pokemon_id ${m.pokemon_id} -> "${m.wanted}"`).join(", ")}`);
 }
@@ -1459,8 +2724,38 @@ console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/mov
 console.log(`  - Unresolved move names referenced by a species' moveset but absent from BOTH GAME_MASTER's moveSettings AND pogoapi's fast_moves/charged_moves.json (likely retired/legacy/Dynamax-only moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);
-console.log(`  - GAME_MASTER gap-fill for mega/primal stats beyond pogoapi.net's 48-entry mega_pokemon.json list, from two independent gates (a currently-live raid naming one, OR a hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST entry for a real-but-not-currently-raiding mega — see PokeMiners' GAME_MASTER mirror doc comment in scripts/sync-data/fetchCache.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment in this file): ${megaOrPrimalGapCandidates.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list, and no allowlist entry currently needed)" : `${megaOrPrimalGapCandidates.length} gap(s) found (${megaOrPrimalGapCandidates.map((c) => `${c.name} [${c.source}]`).join(", ")}); resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (no fallback data exists for these — pogoapi's mega_pokemon.json doesn't cover them at all, so they're simply absent from species.json this run): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
-console.log(`  - RELEASED_MEGA_PRIMAL_ALLOWLIST mechanism (hand-curated, see this file's doc comment on that constant): exists to catch a real, released mega/primal that's neither in pogoapi's mega_pokemon.json roster nor in the current raid rotation (e.g. a mega whose debut was a single past raid-day event) — currently lists ${RELEASED_MEGA_PRIMAL_ALLOWLIST.length} entry(ies): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.map((e) => e.name).join(", ")}. ${megaOrPrimalAllowlistGaps.length === 0 ? "None of these were needed via this specific gate this run (already covered by pogoapi's roster or the live raid feed instead)." : `${megaOrPrimalAllowlistGaps.length} of them were resolved via this gate this run: ${megaOrPrimalAllowlistGaps.join(", ")}.`}`);
+if (raidHistorySelfHealed.length > 0) {
+  console.log(
+    `  - VALIDATION: self-healed ${raidHistorySelfHealed.length} raidHistory.json row(s) found in the impossible "pokebattler-legacy" + eraHp state (artifact of an earlier, already-fixed bug in this same 2026-09-08 task, never shipped) — dropped and re-derived fresh this run via the normal precedence steps: ${raidHistorySelfHealed.join(", ")}.`,
+  );
+}
+console.log(`  - raidHistory.json (append-only "ever a boss" record, never deletes): ${raidHistory.length} total entries (${raidHistoryLiveFeedCount} live-feed, ${raidHistoryResearchedCount} researched-tier, ${raidHistoryPogoapiPreviousCount} pogoapi-previous, ${raidHistoryBulbapediaArchiveCount} bulbapedia-archive, ${raidHistoryPokebattlerLegacyCount} pokebattler-legacy); newly added this run: ${raidHistoryNewlyAdded.length > 0 ? raidHistoryNewlyAdded.join(", ") : "none"}.`);
+console.log(
+  `  - raidHistory.json pogoapi-previous backfill (2026-09-07 task, source: pogoapi.net/api/v1/raid_bosses.json "previous" list): ${raidBossesPreviousFetchFailed ? `fetch FAILED (${raidBossesPreviousFetchResult.error}) — added 0 pogoapi-previous entries this run.` : `fetch succeeded, data/raw/raid_bosses.json cached. ${pogoapiPreviousGroups.size} distinct species+form(+tier-bucket) groups after collapsing 696 raw entries to their highest tier; excluded outright: ${raidBossesPreviousExcludedExCount} "ex" entry (Regidrago — no modern tier equivalent, would be fabricated) and ${raidBossesPreviousExcludedTier6Count} "6"-tier entries (Darkrai, Mewtwo — undocumented tier, but both are exact-CP duplicates of their own "5"-tier entry for the same species+form, so excluding them costs zero real coverage). Resolved ${pogoapiResolvedBySpeciesId.size} distinct species id(s). Unresolved (${raidHistoryPogoapiPreviousUnresolved.length} — all real historical bosses in a form outside this pipeline's documented one-form-per-species scope: regional variants Alola/Galarian/Hisuian, non-default Unown letters, etc.): ${raidHistoryPogoapiPreviousUnresolved.length > 0 ? raidHistoryPogoapiPreviousUnresolved.join(", ") : "none"}.`}`,
+);
+console.log(
+  `  - raidHistory.json Bulbapedia archive backfill (2026-09-07 task, source: 16 "List of Raid Boss changes in ..." pages, see BULBAPEDIA_RAID_ARCHIVE_PAGES in ./sync-data/fetchCache.ts): ${bulbapediaRaidArchiveFetchFailed ? `fetch FAILED (${bulbapediaRaidArchiveFetchResult.error}) — added 0 bulbapedia-archive entries this run.` : `${Object.keys(bulbapediaRaidArchiveFetchResult.pages).length}/16 pages fetched (${bulbapediaRaidArchiveFetchResult.failedPages.length > 0 ? `FAILED: ${bulbapediaRaidArchiveFetchResult.failedPages.join(", ")}` : "none failed"}), cached to data/raw/bulbapedia_raid_history.json. ${bulbapediaRawRows.length} raw rows parsed, resolved to ${bulbapediaResolvedBySpeciesId.size} distinct species id(s) (${bulbapediaViaBaseNameFallbackCount} via the base-name/costume fallback — see resolveBulbapediaRow's doc comment in ./sync-data/bulbapediaRaidArchive.ts). Unresolved, distinct name/form pairs (${bulbapediaUnresolvedDistinct.length} — all real alternate forms (regional Alolan/Galarian/Hisuian, Origin/Therian/Attack/Defense/Speed Forme, Armored Mewtwo, Shellos East Sea, Burmy Sandy/Trash Cloak) outside this pipeline's one-form-per-species scope, plus one accepted marginal miss (Furfrou "Natural Form" — contains the word "form" so is conservatively treated as a possible real alt form rather than guessed into the roster's "(Dandy)" entry)): ${bulbapediaUnresolvedDistinct.join(", ")}.`}`,
+);
+console.log(
+  `  - raidHistory.json pogoapi-vs-Bulbapedia archive union (2026-09-07 task): ${archiveUnionConflicts.length} same-species tier conflict(s) between the two independent archive sources${archiveUnionConflicts.length > 0 ? ` — ${archiveUnionConflicts.map((c) => `${c.speciesId}: pogoapi "${c.pogoapiTier}" vs Bulbapedia "${c.bulbapediaTier}" (winner: ${c.winner})`).join("; ")}` : ""}. This run: ${raidHistoryArchiveNewlyAddedCount} new archive-sourced entries, ${raidHistoryArchiveUpgradedCount} existing archive entries upgraded to a higher tier${raidHistoryArchiveUpgradedCount > 0 ? ` (${raidHistoryArchiveUpgraded.join(", ")})` : ""}.`,
+);
+console.log(
+  `  - raidHistory.json era-HP backfill (2026-09-07 task, RaidHistoryEntry.eraHp — see its doc comment in ./sync-data/rawShapes.ts): ${raidHistoryWithEraHp.length}/${raidHistory.length} total entries carry a real era HP, by source: ${raidHistoryEraHpBySource["live-feed"]} live-feed, ${raidHistoryEraHpBySource["researched-tier"]} researched-tier, ${raidHistoryEraHpBySource["pogoapi-previous"]} pogoapi-previous, ${raidHistoryEraHpBySource["bulbapedia-archive"]} bulbapedia-archive, ${raidHistoryEraHpBySource["pokebattler-legacy"]} pokebattler-legacy (always 0 by construction — a pokebattler-legacy row is never allowed to carry an eraHp, see the "Pokebattler legacy archive backfill" section's doc comment). Value distribution: ${JSON.stringify(raidHistoryEraHpDistribution)}. This run backfilled eraHp onto ${raidHistoryEraHpBackfilledCount} existing entry(ies) whose tier didn't change. Bulbapedia rows whose positional HP field didn't match a plausible raid-HP magnitude (never stored, per this task's "never fabricate/launder an HP" rule) — ${bulbapediaInvalidHpSamplesDistinct.length} distinct: ${bulbapediaInvalidHpSamplesDistinct.length > 0 ? bulbapediaInvalidHpSamplesDistinct.join("; ") : "none"}.`,
+);
+console.log(
+  `  - raidHistory.json Pokebattler legacy archive backfill (2026-09-08 task, source: fight.pokebattler.com's "_LEGACY" raid tiers, data/raw/pokebattler_raids.json): ${
+    pokebattlerFetchResult.source !== "live"
+      ? `fetch FAILED (${pokebattlerFetchResult.error}) — added 0 pokebattler-legacy entries this run.`
+      : `${pokebattlerLegacyTotalConsidered} raw entries considered across ${Object.keys(POKEBATTLER_LEGACY_NUMERIC_TIER_MAP).length + POKEBATTLER_LEGACY_MEGA_TIERS.size} in-scope legacy tiers; excluded outright (see this section's doc comment for why): ${Object.entries(pokebattlerLegacyExcludedTierCounts).map(([t, n]) => `${n} in ${t}`).join(", ") || "none"}. Resolved ${pokebattlerLegacyResolvedRawCount}/${pokebattlerLegacyTotalConsidered} raw entries (${(100 * pokebattlerLegacyResolvedRawCount / Math.max(pokebattlerLegacyTotalConsidered, 1)).toFixed(1)}%) to ${pokebattlerLegacyResolvedBySpeciesId.size} distinct species id(s). Unresolved (${pokebattlerLegacyUnresolvedDistinct.length} distinct raw id[tier] pairs — expected to be real alternate forms outside this pipeline's one-form-per-species scope, same family as the pogoapi-previous/Bulbapedia unresolved lists above): ${pokebattlerLegacyUnresolvedDistinct.length > 0 ? pokebattlerLegacyUnresolvedDistinct.join(", ") : "none"}. This run: ${raidHistoryPokebattlerLegacyNewlyAddedCount} new pokebattler-legacy entries, ${raidHistoryPokebattlerLegacyUpgradedCount} existing archive entries upgraded to a higher tier${raidHistoryPokebattlerLegacyUpgradedCount > 0 ? ` (${raidHistoryPokebattlerLegacyUpgraded.join(", ")})` : ""}, ${raidHistoryPokebattlerLegacySkippedEraHpCount} tier-upgrade candidate(s) deliberately LEFT UNTOUCHED because the existing row already carries a real eraHp (relabeling to "pokebattler-legacy" — a source with no era fidelity — would either strip that eraHp or misattribute it; this task's two non-negotiables can only both hold by leaving these alone entirely)${raidHistoryPokebattlerLegacySkippedEraHpCount > 0 ? `: ${raidHistoryPokebattlerLegacySkippedEraHp.join(", ")}` : ""}.`
+  }`,
+);
+if (pokebattlerFetchResult.source === "live") {
+  console.log(
+    `  - Pokebattler legacy tiers EXCLUDED rather than mapped, per this task's "never fabricate a tier" rule: RAID_LEVEL_2_LEGACY (${pokebattlerLegacyExcludedTierCounts["RAID_LEVEL_2_LEGACY"] ?? 0} entries) and RAID_LEVEL_4_LEGACY (${pokebattlerLegacyExcludedTierCounts["RAID_LEVEL_4_LEGACY"] ?? 0}) — confirmed Pokebattler re-maps these onto MODERN content (RAID_LEVEL_4_LEGACY holds Community-Day-style four-star bosses, not the real pre-2020 tier 4 pogoapi's own "4"->"3-Star" merge already covers), so folding them in would fabricate history rather than record it. RAID_LEVEL_6_LEGACY/RAID_LEVEL_4_5_LEGACY (0 each, confirmed always-empty) excluded on principle regardless. RAID_LEVEL_ELITE_LEGACY (${pokebattlerLegacyExcludedTierCounts["RAID_LEVEL_ELITE_LEGACY"] ?? 0}): Bulbapedia's own difficulty table puts Elite Raids at 20000 HP, which has no equivalent anywhere in this project's RaidTier union — excluded, no honest mapping exists. RAID_LEVEL_ULTRA_BEAST_LEGACY (${pokebattlerLegacyExcludedTierCounts["RAID_LEVEL_ULTRA_BEAST_LEGACY"] ?? 0}): its real HP (15000) numerically matches "5-Star Raids"/"Legendary Mega Raids", but Ultra Wormhole encounters were a Special-Research-gated event format, not standard raid-egg rotation content — an HP coincidence alone isn't independent confirmation the two are the same content type this project's RaidTier union exists to classify, so this one also stays excluded (judgement call, not a blind default) rather than mapped on a numeric coincidence.`,
+  );
+}
+console.log(`  - GAME_MASTER gap-fill for mega/primal stats beyond pogoapi.net's 48-entry mega_pokemon.json list, from two independent gates (a currently-live raid naming one, OR a hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST entry for a real-but-not-currently-raiding mega — see PokeMiners' GAME_MASTER mirror doc comment in scripts/sync-data/fetchCache.ts and RELEASED_MEGA_PRIMAL_ALLOWLIST's doc comment in ./sync-data/releasedMegaPrimalAllowlist.ts): ${megaOrPrimalGapCandidates.length === 0 ? "not needed this run (no active Mega/Primal raid outside pogoapi's 48-entry list, and no allowlist entry currently needed)" : `${megaOrPrimalGapCandidates.length} gap(s) found (${megaOrPrimalGapCandidates.map((c) => `${c.name} [${c.source}]`).join(", ")}); resolved via GAME_MASTER: ${gameMasterDerivedMega.length > 0 ? gameMasterDerivedMega.map((m) => m.mega_name).join(", ") : "none"}${gameMasterUnresolvedGaps.length > 0 ? `; UNRESOLVED (no fallback data exists for these — pogoapi's mega_pokemon.json doesn't cover them at all, so they're simply absent from species.json this run): ${gameMasterUnresolvedGaps.join("; ")}` : ""}`}`);
+console.log(`  - RELEASED_MEGA_PRIMAL_ALLOWLIST mechanism (hand-curated, see its own doc comment in ./sync-data/releasedMegaPrimalAllowlist.ts): exists to catch a real, released mega/primal that's neither in pogoapi's mega_pokemon.json roster nor in the current raid rotation (e.g. a mega whose debut was a single past raid-day event) — currently lists ${RELEASED_MEGA_PRIMAL_ALLOWLIST.length} entry(ies): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.map((e) => e.name).join(", ")}. ${megaOrPrimalAllowlistGaps.length === 0 ? "None of these were needed via this specific gate this run (already covered by pogoapi's roster or the live raid feed instead)." : `${megaOrPrimalAllowlistGaps.length} of them were resolved via this gate this run: ${megaOrPrimalAllowlistGaps.join(", ")}.`}`);
 console.log(
   `  - lastKnownRaidTier backfill (2026-09-07 research pass, see RELEASED_MEGA_PRIMAL_ALLOWLIST's per-entry citations): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e) => e.lastKnownRaidTier !== undefined).map((e) => `${e.name} -> "${e.lastKnownRaidTier}"`).join(", ") || "none"}. Left unset after genuine research effort (falls through to the rarity/boost heuristic instead of a guess): ${RELEASED_MEGA_PRIMAL_ALLOWLIST.filter((e) => e.lastKnownRaidTier === undefined).map((e) => e.name).join(", ") || "none"}.`,
 );
@@ -1470,13 +2765,33 @@ console.log(
 if (gameMasterCrossChecks.length > 0) {
   console.log(`  - GAME_MASTER cross-check against independent community sources: ${gameMasterCrossChecks.join("; ")}`);
 }
-console.log(`  - Shadow raid entries (${shadowSpecies.length} distinct species synthesized: ${shadowSpecies.map((s) => s.name).join(", ") || "none"}): now real, not approximate, matches — each gets its own SpeciesDefinition (id "<base>-shadow") with isShadow: true and unmultiplied base stats copied from the real base species; the engine's shadowAdjustedBaseStats (packages/engine/src/shadow.ts) applies SHADOW_ATTACK_MULTIPLIER (1.2)/SHADOW_DEFENSE_MULTIPLIER (0.83) at effective-stat time. Previously these were flagged isApproximate: true against the unboosted base species.`);
+console.log(`  - Shadow raid entries (${shadowSpecies.length} distinct species synthesized total): each gets its own SpeciesDefinition (id "<base>-shadow") with isShadow: true and unmultiplied base stats copied from the real base species; the engine's shadowAdjustedBaseStats (packages/engine/src/shadow.ts) applies SHADOW_ATTACK_MULTIPLIER (1.2)/SHADOW_DEFENSE_MULTIPLIER (0.83) at effective-stat time. A Shadow-matched raid is a real, not approximate, match against its own species (previously flagged isApproximate: true against the unboosted base species).`);
+console.log(
+  `  - SHADOW-VARIANT DURABILITY (2026-09-08 fix — see the "Shadow-variant durable synthesis" section in this file): ${shadowSeedDurableCount} of the ${shadowSpecies.length} total were synthesized DURABLY (i.e. would survive this species also dropping out of the live raid feed), from evidence gated on: ${shadowSeedBaseIdsFromHistory.size} already-recorded shadow row(s) in raidHistory.json, ${shadowSeedBaseIdsFromPokebattler.size} distinct species from Pokebattler's RAID_LEVEL_{1,3,5}_SHADOW_LEGACY tiers (${pokebattlerFetchResult.source === "live" ? "fetched live" : "fetch FAILED this run, 0 contributed"}), ${shadowSeedBaseIdsFromBulbapedia.size} distinct species from Bulbapedia's "List of Shadow Raid Boss changes" page (${bulbapediaShadowRaidArchiveFetchResult.wikitext ? "fetched live, thin corroboration" : `fetch FAILED this run (${bulbapediaShadowRaidArchiveFetchResult.error}), 0 contributed`}). ${shadowSpecies.length - shadowSeedDurableCount} additional species were synthesized ONLY from this run's own live raid feed (not yet durable — will be durable from the NEXT run onward once this run's raidHistory.json write lands, per evidence source 1 above; relies on Map's insertion-order iteration to slice these off the end of shadowSpeciesByBaseId, since the pre-seed loop above runs to completion before the activeRaids loop can append any more): ${shadowSpecies.slice(shadowSeedDurableCount).map((s) => s.name).join(", ") || "none"}. Unresolved (reported, never fabricated): ${shadowSeedUnresolvedBaseIds.length} stale raidHistory.json base id(s) (${shadowSeedUnresolvedBaseIds.join(", ") || "none"}), ${shadowSeedPokebattlerUnresolved.length} Pokebattler shadow-legacy raw id(s) (${shadowSeedPokebattlerUnresolved.join(", ") || "none"}), ${shadowSeedBulbapediaUnresolved.length} Bulbapedia shadow-page name(s) (${shadowSeedBulbapediaUnresolved.join(", ") || "none"}).`,
+);
 console.log(`  - Speculative/hypothetical species in use for raid matching: none. This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y, Primal Kyogre, Mega Skarmory) were deleted from the engine's product-reachable exports entirely (CLAUDE.md "Standing decisions", 2026-09-06); this sync no longer imports or matches against them. Note separately: GAME_MASTER can in general carry real, well-formed tempEvoOverrides blocks for mega forms Niantic hasn't released YET (a known datamining phenomenon) — this pipeline never surfaces those on their own, since every mega/primal species it builds is still gated against pogoapi's mega_pokemon.json roster, a currently-live ScrapedDuck raid, or the hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST, never GAME_MASTER's tempEvoOverrides alone. (Falinks/Malamar/Chesnaught/Delphox/Greninja were flagged here as examples of this in an earlier sync's WARNINGS — all 5 have since genuinely shipped and moved to RELEASED_MEGA_PRIMAL_ALLOWLIST this run, see that constant's doc comment for citations; no other specific example is currently known.)`);
 console.log(`  - mega_pokemon.json entries are REAL data (not flagged speculative) but model an ATTACKER (standard level/IV/CPM pipeline), not a raid boss — the real Primal Kyogre entry now normalizes to id "${reservedSpeciesIds.has("kyogre-primal-attacker") ? "kyogre-primal-attacker" : "kyogre-primal"}" (previously forced to "-attacker" to avoid colliding with a hand-tuned boss-mode fixture of the same id that has since been deleted from product data — see above).`);
 console.log(`  - Mega/primal species id collisions resolved by appending "-attacker": ${megaIdCollisions.length > 0 ? megaIdCollisions.map((c) => `${c.megaName} (${c.wouldBeId} -> ${c.usedId})`).join(", ") : "none"}`);
 console.log(`  - mega_pokemon.json/GAME_MASTER's tempEvoOverrides have no per-species boosted-type data, so each of the ${megaSpecies.length} mega/primal entries gets boost = { multiplier: DEFAULT_MEGA_BOOST_MULTIPLIER (1.3), boostedType: <its primary listed type> } — comparison.ts only applies a mega boost when \`species.boost\` is explicitly set (its fallback is 1, not 1.3), so this was required, not cosmetic.`);
 const megaSpeciesWithoutImage = megaSpecies.filter((m) => !m.imageUrl).map((m) => m.name);
 console.log(`  - Mega/primal species image lookups (PokeAPI, cached to data/raw/mega_sprite_urls.json): ${megaSpecies.length - megaSpeciesWithoutImage.length}/${megaSpecies.length} resolved${megaSpeciesWithoutImage.length > 0 ? `; no image found for: ${megaSpeciesWithoutImage.join(", ")}` : ""}. All Normal-form-or-fallback-form species get a dex-id sprite URL with no extra request.`);
+if (pokebattlerFetchResult.source === "live") {
+  const disagreementCount = pokebattlerCrossCheckOnlyInScrapedDuck.length + pokebattlerCrossCheckOnlyInPokebattler.length;
+  console.log(
+    `  - POKEBATTLER LIVE CROSS-CHECK (2026-09-07, live-only — see ./sync-data/pokebattlerRaids.ts's provenance-caveat doc comment; ScrapedDuck remains the sole source for activeRaids.json regardless of this comparison's outcome): fetched ${pokebattlerFetchResult.tiers.length} tiers, data/raw/pokebattler_raids.json cached. Current-rotation entries (isCurrentRotationTier — excludes _LEGACY/_FUTURE/_MAX/RAID_LEVEL_UNSET, AND RAID_LEVEL_MEGA/RAID_LEVEL_4_MEGA_ENHANCED as of 2026-09-08 — see POKEBATTLER_MEGA_POOL_TIERS's doc comment: those two are a rotation POOL, not a live list, confirmed via Mega Skarmory/Raichu X/Y still appearing there after their real rotations ended): ${pokebattlerCrossCheckEntries.length} resolved to a display name${pokebattlerCrossCheckUnresolved.length > 0 ? ` (${pokebattlerCrossCheckUnresolved.length} UNRESOLVED, likely a form this project's naming can't reconstruct: ${pokebattlerCrossCheckUnresolved.join(", ")})` : ""} vs. ScrapedDuck's ${scrapedDuckCrossCheckEntries.length} current NON-Mega/Primal entries (Mega/Primal excluded from BOTH sides — see isMegaOrPrimalRaidTier's doc comment — and reported as a separate ADVISORY line below, never folded into this disagreement count). MATCHED: ${pokebattlerCrossCheckMatched.length} (${pokebattlerCrossCheckMatched.map((e) => `${e.rawName} [${e.tier}]`).join(", ") || "none"}).${
+      disagreementCount > 0
+        ? ` *** DISAGREEMENT (${disagreementCount}) ***  Only in ScrapedDuck (${pokebattlerCrossCheckOnlyInScrapedDuck.length}): ${pokebattlerCrossCheckOnlyInScrapedDuck.map((e) => `${e.rawName} [${e.tier}]`).join(", ") || "none"}. Only in Pokebattler (${pokebattlerCrossCheckOnlyInPokebattler.length}): ${pokebattlerCrossCheckOnlyInPokebattler.map((e) => `${e.rawName} [${e.tier}]`).join(", ") || "none"}. This is exactly the signal this cross-check exists to surface, not a bug to silently fix — see the provenance-caveat doc comment for why two never-mutually-disclosed feeds are expected to drift.`
+        : ` No disagreement this run — both feeds agree exactly on the current (non-Mega/Primal) roster.`
+    }`,
+  );
+  console.log(
+    `  - POKEBATTLER CROSS-CHECK ADVISORY (Mega/Primal, excluded from the disagreement count above — see isMegaOrPrimalRaidTier's doc comment): ${scrapedDuckMegaOrPrimalExcludedFromCrossCheck.length} ScrapedDuck Mega/Primal raid(s) this run, NOT cross-checked against Pokebattler at all (its RAID_LEVEL_MEGA/RAID_LEVEL_4_MEGA_ENHANCED tiers are a rotation pool, not reliably "currently live" — see POKEBATTLER_MEGA_POOL_TIERS): ${scrapedDuckMegaOrPrimalExcludedFromCrossCheck.join(", ") || "none"}.`,
+  );
+} else {
+  console.log(
+    `  - POKEBATTLER LIVE CROSS-CHECK: fetch FAILED this run (${pokebattlerFetchResult.error}) — cross-check skipped, zero effect on activeRaids.json (ScrapedDuck-sourced regardless).`,
+  );
+}
 if (validationErrors.length > 0) {
   console.log(`  - VALIDATION ERRORS: ${validationErrors.join("; ")}`);
 }
