@@ -3,6 +3,57 @@
 Last updated: 2026-09-08. Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
+## 2026-09-08: real raid-boss mechanics — MECHANICS.md, and an energy-driven boss model
+
+The user supplied the Silph Road analysis of Niantic's September 2024 raid rework, which
+answered several things our own research could not reach.
+
+### MECHANICS.md (new, root)
+
+How the REAL game behaves, sourced and dated, with **what this engine does about each entry**
+(implemented / diverges / not modelled). Add to it whenever research establishes a mechanic —
+an undocumented mechanic gets rediscovered as a bug. It records real-game bugs too, so we
+neither reproduce them nor mistake one for ours.
+
+### Energy-driven boss cadence (shipped, OFF by default)
+
+Real bosses gain 0.5 energy per HP lost — most of their energy comes from **being attacked** —
+so a higher-DPS attacker makes the boss fire charged moves faster. We modelled none of that.
+Now available as `bossChargedMoveCadence: "fixed-interval" | "energy-driven"` on the three
+tabs that actually simulate (Comparator, Team Raid, Species Report). IV Breakpoints and
+Attack/Defense do per-hit math and were correctly left alone.
+
+Measured (real species, L40 15/15/15 vs Regirock 5-Star): Kartana -34%, Gengar -34%,
+Metagross -26%, Blissey -15% survival. On Species Report it **reorders the rankings** — Shadow
+Croagunk drops out of the top three entirely. That is the thesis, not a rescale.
+
+**Default stays fixed-interval.** The 0.5 energy/HP rate is independently corroborated
+(Bulbapedia), but the 50% charged-move roll is single-sourced and ~2 years old, and its
+*denominator* is undocumented — our move-boundary trigger is a reasoned inference, labelled
+`[speculative]` in MECHANICS.md. Flipping the default would silently re-baseline every number
+and every shared link on a claim the sourcing does not support.
+
+### Two bugs found by verifying rather than trusting
+
+1. **Boss froze at full energy.** The first implementation re-rolled only when energy *changed*;
+   energy caps at 100, so a boss pinned at the cap whose roll failed never rolled again — 101 of
+   200 seeded 60s runs never fired a charged move. Found because the user asked what governs
+   firing once the bar is full. Now triggered on boss move-completion boundaries.
+2. **A reported "sign flip" was an artifact.** I reported bulky attackers *improving* under the
+   model and called it correct emergent behaviour. It was the deadlock — long-surviving attackers
+   spent more of the run against a frozen boss. Post-fix every attacker is penalised, glass
+   cannons worst. Corrected.
+
+### Also
+
+- Boss charged-move cadence now has a physical floor (cannot recast before the previous cast
+  ends), which is what AUDIT finding 5 asked for. Sourced: bosses genuinely do fire back-to-back.
+- Struggle investigated and closed as NOT a defect — 0 energy in raids, 100 in PvP, two separate
+  Bulbapedia fields. pogoapi was right.
+- Team Raid carries boss **energy** across slot handoffs and wipes under the new model. Verified
+  directly; a silent reset there would have made the model more forgiving than the one it
+  replaces.
+
 ## 2026-09-08 (overnight): Species Report expansion + comprehensive audit
 
 Started as "review the Species Report tab, add raid-tier filters and past raids." Grew into a

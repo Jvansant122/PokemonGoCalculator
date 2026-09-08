@@ -21,3 +21,6 @@
 - [lastKnownRaidTier field](feature_last_known_raid_tier.md) — SpeciesDefinition.lastKnownRaidTier, RaidTier moved types.ts<-raidBoss.ts to break a cycle, verified export* re-export doesn't collide
 - [gamemaster.ts test coverage](test_coverage_gamemaster.md) — new gamemaster.test.ts (24 tests), pins sign convention/id rules/vulnerableWindowSeconds approximation, no bugs found
 - [Boss max-HP override](feature_boss_max_hp_override.md) — bossEffectiveHp's maxHpOverride param, SustainedCandidateResult.bossMaxHp, SpeciesReportBossTarget.bossMaxHpOverride; fixes historical raid-tier HP understatement
+- [Boss charged-move cadence floor](fix_boss_charged_move_cadence_floor.md) — simulate.ts's boundedJitteredChargedMoveInterval, bossChargedMoveCadenceClamped/bossChargedMoveEffectiveMinIntervalSeconds fields, why post-jitter clamp not mean-clamp
+- [Boss energy-driven charged-move cadence](feature_boss_energy_driven_cadence.md) — StepwiseBoss.chargedMoveCadence "energy-driven" (opt-in); UPDATED: deadlock fix, trigger now boss move-completion boundary not energy-change, sign-flipped impact numbers
+- [Energy-driven cadence wiring](feature_energy_driven_cadence_wiring.md) — bossChargedMoveCadence threaded into 3 Input types; TeamRaid boss-energy carryover across handoff+wipe; bossEndingEnergy field; Scenario round-trip gap flagged

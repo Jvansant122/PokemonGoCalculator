@@ -240,6 +240,11 @@ absorb another:
 - **`HANDOFF.md`** — the point-in-time "what shipped, what's next," newest section first. Update
   it (don't just append) at the end of a session with meaningful unfinished work; it's the first
   place a fresh session looks.
+- **`MECHANICS.md`** — how the REAL game behaves, with a source and date per entry, and
+  explicitly what this engine does about each one (implemented / diverges / not modelled). Check
+  it before assuming a number is right, and add to it whenever research establishes a mechanic —
+  an undocumented mechanic gets rediscovered as a bug. It records real-game bugs too, so we
+  neither reproduce them nor mistake one for ours.
 - **`IDEAS.md`** — not-yet-scheduled feature ideas, barebones. Nothing here is committed work.
 - **`PLAN_*.md`** — one self-contained implementation plan per not-yet-built feature, written for
   a fresh session to pick up cold. **Delete a `PLAN_*.md` once its feature ships** and record the
