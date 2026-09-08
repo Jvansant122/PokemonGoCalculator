@@ -1,9 +1,10 @@
 /**
  * Shared UI for the boss charged-move cadence toggle, used identically by
  * all THREE tabs that actually simulate a boss over time (Comparator, Team
- * Raid, Species Report — see PLAN_energy_driven_boss_cadence.md for why IV
- * Breakpoints and Attack/Defense Breakpoints don't get this at all: neither
- * calls a simulator). Pulled into one module rather than duplicated three
+ * Raid, Species Report). IV Breakpoints and Attack/Defense Breakpoints don't
+ * get this at all, deliberately: neither calls a simulator — they do per-hit
+ * breakpoint math, so a cadence setting there would be dead weight and would
+ * wrongly imply those tabs model boss cadence. Pulled into one module rather than duplicated three
  * times, unlike this project's usual "small self-contained constant, not
  * worth a shared file" precedent (see AssumptionPanel.tsx/
  * TeamAssumptionPanel.tsx's own WEATHER_LABELS) — a hand-typed factual claim

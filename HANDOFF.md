@@ -54,12 +54,50 @@ and every shared link on a claim the sourcing does not support.
   directly; a silent reset there would have made the model more forgiving than the one it
   replaces.
 
+### Shipped and deployed
+
+Pushed 2026-09-08 (`ecbc578..ea0e6be`, 9 commits). GitHub Pages run #32 succeeded in 1m 2s, and
+the live bundle was verified to actually contain this work — not just the workflow's word.
+
+The audit is closed: every finding is either fixed or consciously closed with a recorded reason,
+so `AUDIT_2026-09-08.md` now carries a CLOSED banner. It is deliberately kept rather than deleted:
+six code comments in `scripts/` cite its defect numbers as their rationale, and its dated filename
+reads as a record rather than as pending work. The table below is the summary; durable
+game-mechanics facts live in `MECHANICS.md`.
+
+Findings and outcomes:
+
+| # | Finding | Outcome |
+| :--- | :--- | :--- |
+| 0 | Ranking-flip marker showed the first, non-decisive crossing | fixed |
+| 0b | Form ingestion keyed on stats alone, so type-distinct forms stayed wrong | fixed |
+| 1 | 52 mechanically-distinct forms missing from the roster | fixed |
+| 2 | Pokebattler cross-check reported ~11 phantom disagreements | fixed |
+| 2b | Accumulate-only history preserved stale mis-resolutions | fixed |
+| 2c | Historical rows use today's attack/defense multiplier (~8%, 35 species) | won't fix |
+| 3 | Attack/Defense floored (GO floors only HP) | won't fix, known precision limit |
+| 4 | STRUGGLE energyCost 0 | NOT a defect — 0 in raids, 100 in PvP |
+| 5 | Dodge silently saturated below the boss charged-move duration | fixed |
+| 6 | Team Raid never explained "approximate" | fixed |
+
+### Still genuinely open
+
+- `raidHistory.json` archive rows carry no dates, so past bosses cannot be ordered or filtered by
+  era. Bulbapedia coverage ends 2023 and pogoapi's archive is undated.
+- Nothing corroborates the CURRENT 2026 roster except Pokebattler, and its agreement with
+  ScrapedDuck is circumstantial rather than proven independence.
+- One real cross-check disagreement stands: Shadow Grubbin (ScrapedDuck only).
+- Two Alolan shadow forms (`SANDSHREW_ALOLA_SHADOW_FORM`, `MAROWAK_ALOLA_SHADOW_FORM`) do not
+  resolve — shadow synthesis resolves to base species, not regional forms.
+- The energy-driven boss cadence ships OFF by default. See `MECHANICS.md` for what would need to
+  be established before flipping it.
+
+---
 ## 2026-09-08 (overnight): Species Report expansion + comprehensive audit
 
 Started as "review the Species Report tab, add raid-tier filters and past raids." Grew into a
 full audit after the user reported data-quality and calculation issues that had survived several
-previous fix attempts. Full findings: `AUDIT_2026-09-08.md` (keep it until the LOW items are
-either fixed or consciously closed).
+previous fix attempts. Full findings: `AUDIT_2026-09-08.md` — now CLOSED, all findings resolved.
 
 ### Shipped
 
@@ -130,13 +168,12 @@ Comparator-vs-Species-Report agreement (0.0), base stats 21/21 vs real GO, all f
 codecs round-tripping VALUES (67 fields — the existing guard only checks name presence), and
 zero NaN/infinite/negative across 1092 attackers x 19 bosses.
 
-### Open
+### Open at the time — all since resolved, see the 2026-09-08 section above
 
-- Pokebattler's 741-species LEGACY archive is **deliberately not imported** — deferred so the
-  audit was not run against a mountain of unverified new rows. Helpers exist in
-  `scripts/sync-data/pokebattlerRaids.ts`, unused and marked deferred.
-- Three LOW findings knowingly unfixed (atk/def flooring; STRUGGLE energyCost 0 from upstream;
-  dodge saturating below the boss charged-move duration). Reasons in the audit.
+- ~~Pokebattler's LEGACY archive not imported~~ — imported later the same day (161 rows).
+- ~~Three LOW findings unfixed~~ — all closed: atk/def flooring accepted as a known precision
+  limit; STRUGGLE verified NOT a defect (0 in raids, 100 in PvP); dodge saturation fixed with a
+  physical cadence floor.
 - `raidHistory.json` has no dates on archive rows, so past bosses cannot be ordered or filtered
   by era. Bulbapedia coverage ends 2023; nothing corroborates the 2026 roster except Pokebattler.
 - One real cross-check disagreement stands: Shadow Grubbin, ScrapedDuck only.

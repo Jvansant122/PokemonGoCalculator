@@ -9,8 +9,10 @@ import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
 /**
  * Tests for wiring StepwiseBoss.chargedMoveCadence ("fixed-interval" |
  * "energy-driven") through the three simulating entry points
- * (runSustainedComparison, runSpeciesReverseLookup, runTeamRaid) per
- * PLAN_energy_driven_boss_cadence.md. The underlying model itself is already
+ * (runSustainedComparison, runSpeciesReverseLookup, runTeamRaid). Shipped from
+ * PLAN_energy_driven_boss_cadence.md, which was deleted on completion per this
+ * repo's convention — see HANDOFF.md for the outcome and MECHANICS.md for the
+ * sourcing behind the model. The underlying model itself is already
  * covered by test/energyDrivenBossCadence.test.ts (low-level
  * simulateStepwiseBattle) — this file is specifically about the plumbing: the
  * option reaching every entry point, staying a no-op by default, and (the one
@@ -434,8 +436,9 @@ describe("StepwiseBoss.chargedMoveCadence wiring", () => {
       const highMean = highTotal / iterations;
       expect(highMean).toBeGreaterThan(lowMean);
       // Not a marginal difference — this is the product's headline
-      // ranking-flip axis, not a rounding artifact (see PLAN_energy_driven_
-      // boss_cadence.md's measured-impact table).
+      // ranking-flip axis, not a rounding artifact — measured at -15% to -34%
+      // survival across real species, and it reorders Species Report's rankings
+      // outright (see HANDOFF.md's 2026-09-08 entry).
       expect(highMean).toBeGreaterThan(lowMean * 1.5);
     });
   });

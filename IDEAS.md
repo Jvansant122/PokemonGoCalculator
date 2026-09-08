@@ -106,3 +106,41 @@ Revised steps:
 9. Testing: engine tests for the new breakpoint-crossing-cost math and the
    stardust/candy efficiency ranking, plus this project's usual
    test → typecheck → build → ship pipeline.
+
+## Unmodelled real mechanics
+
+Each of these is a real, recorded game mechanic this engine does **not** model. They live in
+`MECHANICS.md` with sourcing and a "not modelled" note; this is the scheduling view of the same
+list. None is a bug — each is a deliberate, dated gap.
+
+Ordered by how much they'd change results, not by effort.
+
+1. **Turn the energy-driven boss cadence on by default.** Already built and shipped behind a
+   toggle (`bossChargedMoveCadence`), off by default. Flipping it costs nothing to implement —
+   the blocker is evidential, not technical. What would need to be true first: the denominator of
+   the boss's 50% charged-move roll established from a source (ours is a reasoned inference), and
+   ideally the ~15-34% survival impact sanity-checked against a real raid log. See
+   `MECHANICS.md`'s "OPEN QUESTION" section. Do not flip it just because it is more faithful in
+   principle — that silently re-baselines every number and every previously-shared link.
+
+2. **Asymmetric move delay.** Fast moves apply their 1s/1.5s delay at the END of the animation;
+   charged moves apply it at the BEGINNING. So the fast move following a boss's charged move
+   arrives quickly. Currently all move durations are treated uniformly. This shifts the fine
+   structure of when damage lands, which matters most for dodge timing.
+
+3. **The 0.7s dodge window.** We model dodge damage (0.25) and its 0.5s cost, but not the window
+   itself. Related and harder: per-move windup-to-flash delay reportedly varies by move
+   (Flamethrower ~1.0s vs Fire Blast ~2.9s) rather than being flat — but that is `[unverified]`,
+   and pogoapi exposes no per-move windup field, so it is not derivable from current data sources.
+
+4. **Dodge damage may scale with remaining HP.** Silph Road observed a player surviving 8 dodged
+   Paybacks where 4-5 was expected. They flag it as needing confirmation and have no formula.
+   **Do not implement until confirmed** — it is recorded so anomalous survivability reports are
+   recognised rather than re-investigated from scratch.
+
+5. **The 0.5s combat cycle.** Since the Sept 2024 rework the real game runs on 0.5s cycles; our
+   simulator uses a finer 0.1s tick. Nothing is mis-timed (0.5 is representable at 0.1), but the
+   engine permits event boundaries the real game would snap. No known error from this today.
+
+Standing caveat for all of the above: the sourcing is ~2 years old and Niantic re-tunes raid
+internals without notice. Re-verify before building on any of it.
