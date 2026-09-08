@@ -1,7 +1,76 @@
 # Handoff
 
-Last updated: 2026-09-08. Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-08 (scaffolding batch). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
+
+## 2026-09-08 (latest): scaffolding batch — one gate, CI, hooks, tests in every layer
+
+The user asked for the full list of scaffolding improvements (simple + complex) and then said
+"make these changes". Everything below is UNCOMMITTED at time of writing (~60 files).
+`npm run verify:full` is green end to end (42 s locally).
+
+### What shipped
+
+- **One gate.** `npm run verify` = all three vitest suites + three type-checks + lint + the four
+  checkers + web build; `verify:full` adds Playwright. `.github/workflows/deploy.yml` now has a
+  `verify` job that gates deploy and also runs on pull requests (previously CI only built).
+  `.github/dependabot.yml` added.
+- **Hooks are scripts now.** `.claude/hooks/session-start.sh` puts Node on PATH for the session
+  (via CLAUDE_ENV_FILE) and prints git status plus this file's newest section.
+  `.claude/hooks/post-edit.mjs` picks the check per edited file: engine src → engine tests, web
+  src → web tsc, any `*Scenario.ts` / `*AssumptionPanel.tsx` / `*View.tsx` → round-trip check.
+  Permissions allowlist covers every read-only/test command.
+- **Tests where there were none.** `packages/web`: vitest, 66 tests (value-level round-trip for
+  all six codecs, helpers, `rankingFlip.ts` pinning the audit's double-flip case, one smoke per
+  run function). `scripts/`: 132 tests under `scripts/sync-data/test/` incl. golden sentinels
+  over committed `data/normalized` (they will fail on a legitimate data change — update them
+  deliberately). Engine: `perf.bench.ts` + `perf.test.ts` (~10x budgets, measured numbers in
+  comments). Playwright: 9 tests in `packages/web/e2e/` (per-tab load, zero console errors,
+  UI-vs-engine number checks, share-link round-trip).
+- **The run/ layer.** Every View's computation is now a pure `run<Tab>Scenario()` in
+  `packages/web/src/run/`; the View calls it via useMemo. `npm run run-scenario -- "<url>"`
+  calls the same functions, so a displayed number is reproducible without a browser.
+- **Tooling.** ESLint (root flat config; 0 errors, 6 react-hooks warnings owned by
+  web-developer), `npm run unused-exports` (ts-unused-exports; knip cannot allocate on this
+  machine), `typecheck:scripts` (found and fixed 17 latent strict-mode errors in scripts/),
+  `npm run diff-normalized` (readable data diffs; `--strict` fails if raidHistory shrinks),
+  `npm run check-docs-drift` (tab/param/command/agent/skill/PLAN consistency; it immediately
+  caught CLAUDE.md's stale skill count).
+- **Setup.** Four new skills (`record-mechanic`, `add-mega-allowlist-entry`, `close-session`,
+  `new-tab`); `verify-and-ship` collapsed to `npm run verify`; every agent definition updated
+  for the new commands; CLAUDE.md commands regrouped.
+- Six trivial dead-code fixes landed as part of making lint pass (unused imports/vars in
+  `combat.ts`, `IvBreakpointsView.tsx`, `ivBreakpointsHelpers.ts`, `sync-data.ts`).
+
+### Follow-up the same day: negative deltas, and a 15s revive cost
+
+The user asked why some power-ups showed NEGATIVE team DPS. Measured on the default roster
+(202 candidates): at the tab's 3 paired seeds, 78 were negative; at 40 seeds only 24, none below
+-0.05, while the baseline alone varies 8.31-8.84 across single seeds. So most negatives are seed
+noise (a level change shifts when the boss's RNG is consumed, which weakens the pairing), and the
+rest is a real property of the model: with revive/swap costs at 0, a low-DPS slot's extra bulk
+that buys no extra charged move just delays the stronger slots behind it (Rayquaza 25->26:
+survives 10.0s instead of 9.5s, deals 79 instead of 78, its own DPS falls).
+
+**User decision: 15s revive cost per full wipe** is now this tab's DEFAULT (`reviveCostSeconds:
+15` in `PowerUpOptimizerView.tsx`, preset button relabelled, caveat text explains that team DPS
+is damage dealt within the 300s timer divided by the timer). The Team Raid tab's own 0s default
+is untouched. Effect on the default roster: baseline 8.65 -> 7.07 DPS, negatives at 3 seeds
+78 -> 40 (4 at 40 seeds, worst -0.01). `npm run run-scenario -- "?view=power-up-optimizer"`
+reproduces it. Still open: raise iterations (40 seeds ran in seconds) and display a noise floor
+instead of a signed delta below it — proposed, not yet asked for.
+
+### Next
+
+1. **Commit and ship** — run `verify-and-ship`. The first push exercises the new CI `verify` job;
+   Playwright's browser install in CI is the one step not yet proven.
+2. `registry.ts`'s three bare JSON imports need `with { type: "json" }` to be importable from
+   Playwright specs directly (they currently go through a tsx subprocess in
+   `e2e/helpers/runViaTsx.ts`). Web-developer call; verify the Vite build still passes.
+3. Clear the 6 react-hooks lint warnings (`ComparatorView` inline `SpeciesIcon`,
+   `SpeciesPicker` setState-in-effect, `IvBreakpointsView` useMemo deps) — web-developer.
+4. CLAUDE.md grew to ~6k tokens; a trim pass once the tab descriptions stabilise.
+5. The Power-Up Optimizer follow-ups below (skeptic pass, login plan) are unchanged.
 
 ## 2026-09-08 (later): Power-Up Optimizer v1 — sixth tab, no login
 

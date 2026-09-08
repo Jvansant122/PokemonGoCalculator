@@ -455,12 +455,24 @@ export interface PowerUpOptimizerInputs extends Omit<TeamRaidInputs, "slots" | "
   maxLevel?: number;
   /**
    * How many full team-raid runs to average per candidate (and for the
-   * baseline). Defaults to 3. Each iteration i's seed is `seed + i * 7919`
-   * — the same offsetting convention runStepwiseDistribution already uses.
-   * Critically, the SAME seed set is reused for the baseline AND every
-   * candidate (common random numbers) — this is what makes small
-   * candidate-vs-baseline deltas rankable at all; independently-seeded runs
-   * would bury a real but small teamDps delta in run-to-run jitter noise.
+   * baseline). Defaults to 3, which is only enough for a smoke result —
+   * measured on the default roster (202 candidates) at 3 seeds, 78
+   * candidates come out with a negative deltaTeamDps purely from seed
+   * noise; at 40 seeds only 24 do (4 with a 15s revive cost), none below
+   * -0.05. The web tab uses 20-40 iterations for a real result; this
+   * default is deliberately cheap so callers that only need shape/wiring
+   * (tests, a first paint) aren't paying for it. Each iteration i's seed is
+   * `seed + i * 7919` — the same offsetting convention
+   * runStepwiseDistribution already uses. Critically, the SAME seed set is
+   * reused for the baseline AND every candidate (common random numbers) —
+   * this is what makes small candidate-vs-baseline deltas rankable at all;
+   * independently-seeded runs would bury a real but small teamDps delta in
+   * run-to-run jitter noise. Even so, that pairing is weak for THIS
+   * comparison (a level change shifts when the boss's charged-move RNG is
+   * consumed) — see PowerUpOptimizerResult.noiseFloorTeamDps, which is
+   * deliberately conservative about how much the pairing actually helps.
+   * Measured cost: ~217ms for 202 candidates at 3 seeds on the default
+   * roster, so roughly ~1.5s at 20.
    */
   iterations?: number;
 }
@@ -468,6 +480,10 @@ export interface PowerUpOptimizerInputs extends Omit<TeamRaidInputs, "slots" | "
 export interface PowerUpEncounterSummary {
   /** Mean, over iterations, of: cleared within the timer -> bossHp / timeToClearSeconds; else teamDamageAtRaidSeconds(result, raidTimerSeconds) / raidTimerSeconds. */
   teamDps: number;
+  /** The per-iteration teamDps values that fed the mean above, in seed order (same length as `iterations`). */
+  teamDpsPerSeed: number[];
+  /** Population standard deviation of teamDpsPerSeed. Always 0 for a single iteration (a lone sample has no deviation from itself, not "no noise"). */
+  teamDpsStdDev: number;
   /** Fraction of iterations with clearsWithinTimer. */
   clearRate: number;
   /** Mean over CLEARED iterations only; null if none cleared. */
@@ -521,22 +537,59 @@ export interface PowerUpCandidate {
   /** Whether this slot's own floored per-hit damage (fast/charged) against this boss actually differs between fromLevel and toLevel — from the slot's damage ladder (Part C). */
   crossesFastBreakpoint: boolean;
   crossesChargedBreakpoint: boolean;
+  /**
+   * `Math.abs(deltaTeamDps) > noiseFloorTeamDps` (the result's noise floor —
+   * see PowerUpOptimizerResult.noiseFloorTeamDps). A level change shifts
+   * WHEN the boss's charged-move RNG is consumed, which is weak signal on
+   * its own — most small deltas measured on the default roster are this
+   * seed-timing noise, not a real effect. The web layer should render a
+   * candidate with this false as "no measurable change," not as a signed
+   * delta.
+   */
+  deltaExceedsNoise: boolean;
 }
 
 export interface PowerUpOptimizerResult {
   baseline: PowerUpEncounterSummary;
   bossHp: number;
+  /** The iteration count actually used (same value the caller passed as `iterations`, or the default). */
+  iterations: number;
+  /**
+   * A conservative noise floor for `deltaTeamDps`, in the same teamDps
+   * units: `2 * baseline.teamDpsStdDev * Math.sqrt(2 / iterations)` —
+   * roughly a 95% band on the difference between two independent means of
+   * `iterations` seeds each. This DELIBERATELY ignores the variance
+   * reduction the paired common-random-numbers seeding (see
+   * PowerUpOptimizerInputs.iterations) would normally buy, because that
+   * pairing is weak here: a level change shifts when the boss's own
+   * charged-move RNG gets consumed, decorrelating the "same seed" runs more
+   * than a typical paired comparison. Treating the floor as if runs were
+   * unpaired is the conservative (i.e. larger, safer) choice.
+   *
+   * Exactly 0 when iterations is 1 — with a single seed there is no
+   * estimate of noise AT ALL, not "everything is significant." The web
+   * layer must not treat a 0 floor here as license to trust every nonzero
+   * delta; it should surface that caveat explicitly whenever iterations
+   * is 1.
+   */
+  noiseFloorTeamDps: number;
   /** Every fielded slot x every half-level above its current level through maxLevel, ascending slotIndex then toLevel. */
   candidates: PowerUpCandidate[];
   /** One per input slot (same index), null for an empty slot. */
   ladders: (PowerUpDamageLadder | null)[];
-  /** Max deltaTeamDps among affordable candidates with delta > 0. Null if none qualify. */
+  /** Max deltaTeamDps among affordable candidates with deltaTeamDps > noiseFloorTeamDps (stricter than, and not the same test as, deltaExceedsNoise — see that field). Null if none qualify. */
   bestAffordableByDelta: PowerUpCandidate | null;
-  /** Max deltaTeamDpsPer1000Stardust among affordable candidates with delta > 0 (and a non-null per-1000-stardust value). Null if none qualify. */
+  /** Max deltaTeamDpsPer1000Stardust among affordable candidates with deltaTeamDps > noiseFloorTeamDps (and a non-null per-1000-stardust value). Null if none qualify. */
   bestAffordableByStardustEfficiency: PowerUpCandidate | null;
 }
 
 const mean = (values: number[]): number => values.reduce((a, b) => a + b, 0) / values.length;
+
+/** Population standard deviation (divides by n, not n-1) — this is a description of the exact sample set produced, not an estimate of a larger population. */
+const stdDev = (values: number[]): number => {
+  const m = mean(values);
+  return Math.sqrt(mean(values.map((v) => (v - m) ** 2)));
+};
 
 function summarizeResults(results: TeamRaidResult[], bossHp: number, raidTimerSeconds: number): PowerUpEncounterSummary {
   const dpsValues = results.map((r) =>
@@ -549,6 +602,8 @@ function summarizeResults(results: TeamRaidResult[], bossHp: number, raidTimerSe
     .map((r) => r.timeToClearSeconds!);
   return {
     teamDps: mean(dpsValues),
+    teamDpsPerSeed: dpsValues,
+    teamDpsStdDev: stdDev(dpsValues),
     clearRate: results.filter((r) => r.clearsWithinTimer).length / results.length,
     meanTimeToClearSeconds: clearedTimes.length > 0 ? mean(clearedTimes) : null,
     meanDamageAtTimer: mean(results.map((r) => Math.min(bossHp, teamDamageAtRaidSeconds(r, raidTimerSeconds)))),
@@ -601,6 +656,9 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
   const baselineSlots = toTeamRaidSlots(slots, null, undefined);
   const baselineResults = seeds.map((s) => runTeamRaid({ ...rest, slots: baselineSlots, level: rosterLevel, ivs: rosterIvs, seed: s }));
   const baseline = summarizeResults(baselineResults, bossHp, rest.raidTimerSeconds);
+  // See PowerUpOptimizerResult.noiseFloorTeamDps for the derivation and why
+  // it deliberately ignores the (weak) variance reduction from seed pairing.
+  const noiseFloorTeamDps = 2 * baseline.teamDpsStdDev * Math.sqrt(2 / iterations);
 
   const ladders: (PowerUpDamageLadder | null)[] = slots.map((slot) => {
     if (!slot.species) return null;
@@ -664,19 +722,27 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
         deltaTeamDpsPerXlCandy: cost.xlCandy > 0 ? deltaTeamDps / cost.xlCandy : null,
         crossesFastBreakpoint: ladder != null && ladderStep != null && ladderStep.fastMoveDamage !== ladder.current.fastMoveDamage,
         crossesChargedBreakpoint: ladder != null && ladderStep != null && ladderStep.chargedMoveDamage !== ladder.current.chargedMoveDamage,
+        deltaExceedsNoise: Math.abs(deltaTeamDps) > noiseFloorTeamDps,
       });
     }
   });
 
-  const affordablePositive = candidates.filter((c) => c.affordable && c.deltaTeamDps > 0);
+  // Both "best" picks now require deltaTeamDps > noiseFloorTeamDps, not
+  // merely delta > 0 — see PowerUpOptimizerResult.noiseFloorTeamDps for why
+  // a bare positive delta isn't trustworthy on its own for this comparison.
+  // NOTE: this is stricter than (and NOT the same as) c.deltaExceedsNoise,
+  // which uses Math.abs and so also flags a significant NEGATIVE delta —
+  // useful for "don't power this up, it measurably hurts," but not what a
+  // "best improvement" pick should ever select.
+  const affordableSignificant = candidates.filter((c) => c.affordable && c.deltaTeamDps > noiseFloorTeamDps);
   const bestAffordableByDelta =
-    affordablePositive.length > 0 ? affordablePositive.reduce((best, c) => (c.deltaTeamDps > best.deltaTeamDps ? c : best)) : null;
+    affordableSignificant.length > 0 ? affordableSignificant.reduce((best, c) => (c.deltaTeamDps > best.deltaTeamDps ? c : best)) : null;
 
-  const stardustEfficiencyCandidates = affordablePositive.filter((c) => c.deltaTeamDpsPer1000Stardust !== null);
+  const stardustEfficiencyCandidates = affordableSignificant.filter((c) => c.deltaTeamDpsPer1000Stardust !== null);
   const bestAffordableByStardustEfficiency =
     stardustEfficiencyCandidates.length > 0
       ? stardustEfficiencyCandidates.reduce((best, c) => (c.deltaTeamDpsPer1000Stardust! > best.deltaTeamDpsPer1000Stardust! ? c : best))
       : null;
 
-  return { baseline, bossHp, candidates, ladders, bestAffordableByDelta, bestAffordableByStardustEfficiency };
+  return { baseline, bossHp, iterations, noiseFloorTeamDps, candidates, ladders, bestAffordableByDelta, bestAffordableByStardustEfficiency };
 }

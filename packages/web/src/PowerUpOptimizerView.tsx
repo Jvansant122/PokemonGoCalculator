@@ -3,9 +3,7 @@ import {
   bossChargedMoveReadySeconds,
   bossEffectiveHp,
   MAX_TEAM_RAID_SLOTS,
-  optimizePowerUps,
   type PowerUpCandidate,
-  type PowerUpOptimizerInputs,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
 import {
@@ -20,18 +18,18 @@ import {
   type PowerUpOptimizerScenario,
   type PowerUpRankBy,
 } from "./powerUpOptimizerScenario.js";
-import { applyShadowToggle, effectiveIsShadow } from "./shadowToggle.js";
+import { effectiveIsShadow } from "./shadowToggle.js";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 import { getBaseUrl } from "./urlUtils.js";
 import {
   candidatePickerOptions,
-  powerUpCostTable,
   powerUpCostsFetchedAt,
   raidTierForSpeciesId,
   speciesRegistry,
   targetPickerOptions,
   unmatchedActiveRaids,
 } from "./registry.js";
+import { runPowerUpOptimizerScenario } from "./run/runPowerUpOptimizer.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates real
 // ranked results immediately, not an empty form — same precedent as every
@@ -60,7 +58,7 @@ function defaultSlot(speciesId: string, level: number, isMega: boolean): PowerUp
   };
 }
 
-const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
+export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   slots: [
     defaultSlot("latios-mega", 35, true),
     defaultSlot("garchomp", 30, false),
@@ -83,11 +81,18 @@ const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   bossStartingEnergyFraction: 0.5,
   raidTimerSeconds: 300,
   swapCostSeconds: 0,
-  reviveCostSeconds: 0,
+  // 15s per full-roster wipe (user decision 2026-09-08): a lobby revive-and-rejoin
+  // is real raid-clock time in which nothing is dealt, and without it a bulkier
+  // low-DPS slot surviving longer can LOWER team DPS by delaying the stronger
+  // slots behind it (free replacement). Unlike the Team Raid tab this tab's
+  // whole output is a ranking of survivability-vs-damage trade-offs, so a 0s
+  // default would bias every candidate toward glass. Within the community's
+  // ~12-15s estimate (see teamRaid.ts's reviveCostSeconds doc comment).
+  reviveCostSeconds: 15,
   rankBy: "stardust",
 };
 
-function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
+export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
   return {
     slots: a.slots.map((s) => ({
       speciesId: s.speciesId,
@@ -121,7 +126,7 @@ function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizer
   };
 }
 
-function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptimizerAssumptions {
+export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptimizerAssumptions {
   const slots: PowerUpSlotAssumption[] = s.slots.map((slot) => ({
     speciesId: slot.speciesId ?? null,
     fastMoveId: slot.fastMoveId ?? null,
@@ -162,7 +167,11 @@ function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptimizerAss
     bossStartingEnergyFraction: s.bossStartingEnergyFraction ?? DEFAULT_ASSUMPTIONS.bossStartingEnergyFraction,
     raidTimerSeconds: s.raidTimerSeconds ?? DEFAULT_ASSUMPTIONS.raidTimerSeconds,
     swapCostSeconds: s.swapCostSeconds ?? 0,
-    reviveCostSeconds: s.reviveCostSeconds ?? 0,
+    // Every link this tab has ever built carries this field explicitly, so the
+    // fallback only ever applies to a hand-edited URL — and per the
+    // add-scenario-assumption convention (and scenarioRoundtrip.test.ts) a
+    // missing field decodes to DEFAULT_ASSUMPTIONS, i.e. 15s.
+    reviveCostSeconds: s.reviveCostSeconds ?? DEFAULT_ASSUMPTIONS.reviveCostSeconds,
     rankBy: s.rankBy ?? "stardust",
   };
 }
@@ -171,17 +180,8 @@ function resolveSpecies(id: string | null): SpeciesDefinition | null {
   return id && speciesRegistry.has(id) ? speciesRegistry.get(id) : null;
 }
 
-/** Rounds to the nearest half-level and clamps to [1, 50] — powerUpCost/powerUpDamageLadder both throw on a non-half-level or an out-of-range level, and a live-typed number input can transiently be neither. Applied only at the engine-call boundary (see optimizerInputs below), never to the raw editable state. */
-function clampHalfLevel(level: number): number {
-  const safe = Number.isFinite(level) ? level : DEFAULT_ASSUMPTIONS.slots[0]!.level;
-  return Math.min(50, Math.max(1, Math.round(safe * 2) / 2));
-}
-
-/** Clamps a live-typed IV to [0, 15] — same defensive boundary reasoning as clampHalfLevel. */
-function clampIv(iv: number): number {
-  const safe = Number.isFinite(iv) ? iv : 0;
-  return Math.min(15, Math.max(0, Math.round(safe)));
-}
+// clampHalfLevel/clampIv now live in run/runPowerUpOptimizer.ts, applied only
+// at that module's own engine-call boundary — see its own doc comment.
 
 /**
  * Enforces PowerUpSlotInput/runTeamRaid's own invariants BEFORE the engine
@@ -191,7 +191,7 @@ function clampIv(iv: number): number {
  * powerUpStepCost, which throws if both are set) that Team Raid has no
  * equivalent of.
  */
-function normalizePowerUpAssumptions(a: PowerUpOptimizerAssumptions): PowerUpOptimizerAssumptions {
+export function normalizePowerUpAssumptions(a: PowerUpOptimizerAssumptions): PowerUpOptimizerAssumptions {
   let megaClaimed = false;
   const slots = a.slots.map((s) => {
     const species = resolveSpecies(s.speciesId);
@@ -287,102 +287,106 @@ export function PowerUpOptimizerView() {
 
   // The expensive part: one full paired team-raid comparison per fielded
   // slot x half-level-above-current x iteration (see optimizePowerUps' own
-  // doc comment for the exact cost). Built as its own object, EXCLUDING
-  // rankBy (display-only — see PowerUpOptimizerAssumptionPanel's own field
-  // doc comment), same "debounce the narrow derived object, not the whole
-  // assumptions blob" pattern SpeciesReportView's sweepInputs established —
-  // this is what keeps the Rank-by select instantly responsive without
-  // flashing a "recomputing…" indicator for work that was never re-triggered.
-  const optimizerInputs = useMemo<PowerUpOptimizerInputs | null>(() => {
-    if (!bossSpecies) return null;
-    if (!assumptions.slots.some((s) => s.speciesId)) return null;
-    return {
-      slots: assumptions.slots.map((s) => {
-        const species = resolveSpecies(s.speciesId);
-        const effectiveShadowFlag = effectiveIsShadow(species, s.isShadow);
-        return {
-          // Each slot's own species stays RAW everywhere else in this view
-          // (slotSpecies above, used for the panel's movepool/badge/boost
-          // checks) — the Shadow toggle is applied ONLY here, at the
-          // boundary into optimizePowerUps, same convention as
-          // TeamRaidView's shadowAdjustedCandidates.
-          species: applyShadowToggle(species, s.isShadow),
-          fastMoveId: s.fastMoveId,
-          chargedMoveId: s.chargedMoveId,
-          isMega: s.isMega,
-          level: clampHalfLevel(s.level),
-          ivs: { attack: clampIv(s.ivAttack), defense: clampIv(s.ivDefense), stamina: clampIv(s.ivStamina) },
-          costModifiers: { isShadow: effectiveShadowFlag, isPurified: s.isPurified, isLucky: s.isLucky },
-          candyOnHand: Math.max(0, Math.floor(Number.isFinite(s.candyOnHand) ? s.candyOnHand : 0)),
-          xlCandyOnHand: Math.max(0, Math.floor(Number.isFinite(s.xlCandyOnHand) ? s.xlCandyOnHand : 0)),
-        };
-      }),
-      costTable: powerUpCostTable,
-      stardustOnHand: Math.max(0, Math.floor(Number.isFinite(assumptions.stardustOnHand) ? assumptions.stardustOnHand : 0)),
-      boss: bossSpecies,
-      bossRaidTier,
+  // doc comment for the exact cost) — now lives in runPowerUpOptimizerScenario
+  // (run/runPowerUpOptimizer.ts), a pure, React-free function shared with the
+  // run-scenario CLI and this tab's own vitest smoke test. `optimizerAssumptions`
+  // below is built as its own memo EXCLUDING rankBy (display-only — see
+  // PowerUpOptimizerAssumptionPanel's own field doc comment), same "debounce
+  // the narrow derived object, not the whole assumptions blob" pattern
+  // SpeciesReportView's sweepInputs established — this is what keeps the
+  // Rank-by select instantly responsive without flashing a "recomputing…"
+  // indicator for work that was never re-triggered. bossSpecies/bossReadySeconds/
+  // bossHp above stay live (not debounced) — cheap boss-preview values the
+  // assumption panel needs instantly, unrelated to this expensive call.
+  const optimizerAssumptions = useMemo<PowerUpOptimizerAssumptions>(
+    () => ({
+      slots: assumptions.slots,
+      stardustOnHand: assumptions.stardustOnHand,
+      targetId: assumptions.targetId,
       bossFastMoveId: assumptions.bossFastMoveId,
       bossChargedMoveId: assumptions.bossChargedMoveId,
       dodge: assumptions.dodge,
       dodgeFastAttacks: assumptions.dodgeFastAttacks,
       holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
-      bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
+      bossChargedMoveFrequencySeconds: assumptions.bossChargedMoveFrequencySeconds,
       bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
-      bossStartingEnergy,
+      bossStartsPrimed: assumptions.bossStartsPrimed,
+      bossStartingEnergyFraction: assumptions.bossStartingEnergyFraction,
       weather: assumptions.weather,
       raidTimerSeconds: assumptions.raidTimerSeconds,
       swapCostSeconds: assumptions.swapCostSeconds,
       reviveCostSeconds: assumptions.reviveCostSeconds,
-    };
-  }, [
-    assumptions.slots,
-    assumptions.stardustOnHand,
-    bossSpecies,
-    bossRaidTier,
-    assumptions.bossFastMoveId,
-    assumptions.bossChargedMoveId,
-    assumptions.dodge,
-    assumptions.dodgeFastAttacks,
-    assumptions.holdChargedMoveUntilSafe,
-    assumptions.bossChargedMoveFrequencySeconds,
-    assumptions.bossChargedMoveCadence,
-    bossStartingEnergy,
-    assumptions.weather,
-    assumptions.raidTimerSeconds,
-    assumptions.swapCostSeconds,
-    assumptions.reviveCostSeconds,
-  ]);
+      // Deliberately NOT assumptions.rankBy — display-only, excluded from this
+      // memo's own recompute trigger (see the doc comment above); the exact
+      // value doesn't matter since runPowerUpOptimizerScenario never reads it.
+      rankBy: "stardust",
+    }),
+    [
+      assumptions.slots,
+      assumptions.stardustOnHand,
+      assumptions.targetId,
+      assumptions.bossFastMoveId,
+      assumptions.bossChargedMoveId,
+      assumptions.dodge,
+      assumptions.dodgeFastAttacks,
+      assumptions.holdChargedMoveUntilSafe,
+      assumptions.bossChargedMoveFrequencySeconds,
+      assumptions.bossChargedMoveCadence,
+      assumptions.bossStartsPrimed,
+      assumptions.bossStartingEnergyFraction,
+      assumptions.weather,
+      assumptions.raidTimerSeconds,
+      assumptions.swapCostSeconds,
+      assumptions.reviveCostSeconds,
+    ],
+  );
 
   // Debounced echo — see useDebouncedValue.ts / SpeciesReportView.tsx's
   // identical precedent. This computation is materially heavier than that
   // one (a full team-raid run per candidate, not a single-attacker sim), so
   // the "don't recompute on every keystroke" case matters even more here.
-  const debouncedOptimizerInputs = useDebouncedValue(optimizerInputs, 400);
-  const isOptimizerPending = optimizerInputs !== debouncedOptimizerInputs;
+  const debouncedOptimizerAssumptions = useDebouncedValue(optimizerAssumptions, 400);
+  const isOptimizerPending = optimizerAssumptions !== debouncedOptimizerAssumptions;
 
-  const result = useMemo(() => {
-    if (!debouncedOptimizerInputs) return { data: null, error: null as string | null };
-    try {
-      const data = optimizePowerUps(debouncedOptimizerInputs);
-      return { data, error: null as string | null };
-    } catch (err) {
-      return { data: null, error: (err as Error).message };
-    }
-  }, [debouncedOptimizerInputs]);
+  const runResult = useMemo(
+    () => runPowerUpOptimizerScenario(debouncedOptimizerAssumptions, speciesRegistry),
+    [debouncedOptimizerAssumptions],
+  );
+  const result = { data: runResult.data, error: runResult.error };
 
   // Sorting is over the ALREADY-COMPUTED candidates and is cheap — kept bound
   // to the LIVE rankBy (not the debounced snapshot) so switching the sort
   // column is instant, same "cheap display-only work shouldn't wait on the
   // debounce" reasoning as SpeciesReportView's sortedRows.
+  //
+  // Three-group order (noise-floor-aware, not a plain delta sort): (1) rows
+  // beyond the noise floor with a positive delta, by the chosen efficiency
+  // descending (null efficiency still sinks within this group — nothing to
+  // divide by, not a zero result); (2) rows inside the noise floor — "no
+  // measurable change" — by stardust cost ascending, cheapest first; (3)
+  // rows beyond the noise floor with a negative delta, most negative last
+  // (a genuinely-confirmed-bad power-up, sorted worst-to-least-bad).
   const sortedCandidates = useMemo(() => {
     const list = result.data?.candidates ?? [];
+    const group = (c: PowerUpCandidate): 0 | 1 | 2 => {
+      if (!c.deltaExceedsNoise) return 1;
+      return c.deltaTeamDps > 0 ? 0 : 2;
+    };
     return [...list].sort((a, b) => {
-      const ea = candidateEfficiency(a, assumptions.rankBy);
-      const eb = candidateEfficiency(b, assumptions.rankBy);
-      if (ea === null && eb === null) return 0;
-      if (ea === null) return 1;
-      if (eb === null) return -1;
-      return eb - ea;
+      const ga = group(a);
+      const gb = group(b);
+      if (ga !== gb) return ga - gb;
+      if (ga === 0) {
+        const ea = candidateEfficiency(a, assumptions.rankBy);
+        const eb = candidateEfficiency(b, assumptions.rankBy);
+        if (ea === null && eb === null) return 0;
+        if (ea === null) return 1;
+        if (eb === null) return -1;
+        return eb - ea;
+      }
+      if (ga === 1) return a.cost.stardust - b.cost.stardust;
+      // ga === 2: most-negative delta last.
+      return b.deltaTeamDps - a.deltaTeamDps;
     });
   }, [result.data, assumptions.rankBy]);
 
@@ -463,6 +467,14 @@ export function PowerUpOptimizerView() {
                 </dd>
                 <dt>Team DPS</dt>
                 <dd>{result.data.baseline.teamDps.toFixed(1)}</dd>
+                <dt
+                  title={`A candidate's |delta team DPS| below this band is indistinguishable from seed-to-seed jitter in these ${result.data.iterations} simulated runs, not a real effect — see the ranked table below for how this is applied.`}
+                >
+                  Noise floor
+                </dt>
+                <dd>
+                  ±{result.data.noiseFloorTeamDps.toFixed(2)} team DPS ({result.data.iterations} seeds)
+                </dd>
               </dl>
             </div>
           </section>
@@ -512,7 +524,7 @@ export function PowerUpOptimizerView() {
             <h2>Recommendation</h2>
             <p className="caveats" style={{ color: "var(--text)" }}>
               {!result.data.bestAffordableByDelta && !result.data.bestAffordableByStardustEfficiency
-                ? "Nothing affordable in this roster improves team DPS in these simulated runs — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss."
+                ? `Nothing affordable improves team DPS beyond the ±${result.data.noiseFloorTeamDps.toFixed(2)} noise floor — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss.`
                 : (
                     <>
                       {result.data.bestAffordableByStardustEfficiency && (
@@ -545,13 +557,17 @@ export function PowerUpOptimizerView() {
             <h2>
               Ranked power-up candidates
               <span className="species-picker-hint" style={{ marginLeft: 8 }}>
-                sorted by {rankByLabel(assumptions.rankBy)}, descending
+                grouped: measurable gains first (sorted by {rankByLabel(assumptions.rankBy)}, descending), then within-noise
+                rows (cheapest first), then measurable losses last (worst first)
               </span>
             </h2>
             <p className="caveats" style={{ marginBottom: 12 }}>
               Rows with no {assumptions.rankBy === "stardust" ? "stardust" : assumptions.rankBy === "candy" ? "candy" : "XL candy"} cost
               (e.g. a pure-XL step has no regular-candy cost, and vice versa) show "—" for that column's efficiency and sink to the
-              bottom of this sort — there is nothing to divide by, not a zero result.
+              bottom of the first group — there is nothing to divide by, not a zero result. A row whose |Δ team DPS| is inside this
+              run's ±{result.data.noiseFloorTeamDps.toFixed(2)} noise floor shows "≈0" instead of a signed number and "—" for every
+              efficiency column, and sorts into the middle group by stardust cost (cheapest first) — the measured delta is
+              indistinguishable from seed-to-seed jitter, not a real gain or loss.
             </p>
             <div style={{ overflowX: "auto", opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
               <table className="time-series-table">
@@ -579,13 +595,25 @@ export function PowerUpOptimizerView() {
                       <td>
                         {c.fromLevel} → {c.toLevel}
                       </td>
-                      <td>
-                        {c.deltaTeamDps >= 0 ? "+" : ""}
-                        {c.deltaTeamDps.toFixed(2)}
+                      <td
+                        title={
+                          c.deltaExceedsNoise
+                            ? undefined
+                            : `Within ±${result.data!.noiseFloorTeamDps.toFixed(2)} noise floor; the measured delta was ${c.deltaTeamDps >= 0 ? "+" : ""}${c.deltaTeamDps.toFixed(2)}`
+                        }
+                      >
+                        {c.deltaExceedsNoise ? (
+                          <>
+                            {c.deltaTeamDps >= 0 ? "+" : ""}
+                            {c.deltaTeamDps.toFixed(2)}
+                          </>
+                        ) : (
+                          "≈0"
+                        )}
                       </td>
-                      <td>{c.deltaTeamDpsPer1000Stardust === null ? "—" : c.deltaTeamDpsPer1000Stardust.toFixed(3)}</td>
-                      <td>{c.deltaTeamDpsPerCandy === null ? "—" : c.deltaTeamDpsPerCandy.toFixed(3)}</td>
-                      <td>{c.deltaTeamDpsPerXlCandy === null ? "—" : c.deltaTeamDpsPerXlCandy.toFixed(3)}</td>
+                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPer1000Stardust === null ? "—" : c.deltaTeamDpsPer1000Stardust.toFixed(3)}</td>
+                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPerCandy === null ? "—" : c.deltaTeamDpsPerCandy.toFixed(3)}</td>
+                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPerXlCandy === null ? "—" : c.deltaTeamDpsPerXlCandy.toFixed(3)}</td>
                       <td>{c.cost.stardust.toLocaleString()}</td>
                       <td>{c.cost.candy || "—"}</td>
                       <td>{c.cost.xlCandy || "—"}</td>
@@ -621,17 +649,27 @@ export function PowerUpOptimizerView() {
         <p className="caveats">
           v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
           two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
-          the mean of 3 paired-seed (common-random-numbers) team-raid runs, not one run — small deltas (a fraction of a
-          team-DPS point) can still be run-to-run noise even with paired seeding; treat the ranked ORDER as more
-          trustworthy than any single candidate's exact number. The power-up cost table (universal levels 1-50,
+          the mean of {result.data ? result.data.iterations : 20} paired-seed (common-random-numbers) team-raid runs, not one
+          run — a level change shifts WHEN the boss's own charged-move RNG gets consumed, which decorrelates the
+          "same seed" runs more than a typical paired comparison, so this tool also computes a conservative noise floor
+          (shown on the baseline card and applied to the ranked table above) and treats any candidate whose |Δ team DPS|
+          falls inside it as "no measurable change" rather than a signed number. A candidate CAN still show a genuine
+          small negative delta beyond that floor, and that isn't necessarily a bug: with swap/revive costs at 0 a
+          bulkier, lower-DPS slot that gains no extra charged move from the power-up just delays the roster's stronger
+          slots behind it for no compensating survival benefit — it's the revive cost above (15s by default) that makes
+          a slot's extra bulk pay for itself by avoiding a paid full-roster wipe. The power-up cost table (universal
+          levels 1-50,
           fetched {powerUpCostsFetchedAt.slice(0, 10)} from GAME_MASTER) ignores Eternatus's known per-species
           candy-cost override — this tool does not special-case it. Best Buddy status (a real +1 level beyond the
           normal level-50 cap) is not modelled at all. The Shadow-side
           candy rounding rule is [inferred from the Purified rule, not independently confirmed] — see powerUp.ts's own
           top doc comment. Stardust and candy/XL-candy efficiency are kept as two separate numbers on purpose (see the
           "Rank by" control) — they are not fungible resources for a real player, so this tool never blends them into
-          one composite score. Team Raid v1's own assumptions carry over unchanged: unlimited healing items on a full
-          wipe, and no cap on wipe-and-rejoin cycles other than a purely-engineering safety guard. A raid target badged
+          one composite score. Every full-roster wipe costs the revive-and-rejoin time above (15s by default) of raid
+          clock in which nothing is dealt, and team DPS is the damage dealt within the raid timer divided by the timer
+          (or boss HP divided by time-to-clear when the roster clears) — so a slot's extra bulk only counts when it
+          buys damage, or avoids a paid revive. Team Raid v1's other assumptions carry over unchanged: unlimited
+          healing items on a full wipe, and no cap on wipe-and-rejoin cycles other than a purely-engineering safety guard. A raid target badged
           "approximate" in the picker is one the live raid feed named but whose exact form this data layer couldn't
           resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
         </p>

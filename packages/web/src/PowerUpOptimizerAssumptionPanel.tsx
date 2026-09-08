@@ -578,10 +578,10 @@ export function PowerUpOptimizerAssumptionPanel({
             step={0.5}
             value={value.reviveCostSeconds}
             onChange={(e) => set("reviveCostSeconds", Math.max(0, Number(e.target.value)))}
-            title="Paid once every time the whole fielded roster faints out, before restarting from the first fielded slot. No official fixed value exists."
+            title="Paid once every time the whole fielded roster faints out, before restarting from the first fielded slot — raid-clock time in which nothing is dealt. Defaults to 15s on this tab (within the community's ~12-15s lobby-rejoin estimate; no official figure exists). Set 0 to model instant, free revives."
           />
-          <button type="button" onClick={() => set("reviveCostSeconds", 13)} style={{ marginTop: 4, alignSelf: "flex-start" }}>
-            Use ~13s (community estimate, unverified)
+          <button type="button" onClick={() => set("reviveCostSeconds", 15)} style={{ marginTop: 4, alignSelf: "flex-start" }}>
+            Reset to 15s (default — community ~12-15s estimate, unverified)
           </button>
         </div>
       </div>

@@ -412,4 +412,132 @@ describe("optimizePowerUps", () => {
     expect(result.bestAffordableByDelta).toBeNull();
     expect(result.bestAffordableByStardustEfficiency).toBeNull();
   });
+
+  describe("noise floor and per-seed stats", () => {
+    // A boss with a real charged move, so its timing jitter (see
+    // simulate.ts's boundedJitteredChargedMoveInterval) actually gives
+    // different seeds different outcomes — BOSS above has chargedMoves: []
+    // and so is deterministic regardless of seed (used below to pin the
+    // "no jitter -> stdDev exactly 0" case).
+    const BOSS_CHARGED_MOVE: ChargedMove = {
+      id: "boss-charged",
+      name: "Boss Charged",
+      type: "normal",
+      power: 80,
+      energyCost: 50,
+      durationSeconds: 2,
+      vulnerableWindowSeconds: 2,
+    };
+    const BOSS_WITH_CHARGED: SpeciesDefinition = {
+      id: "boss-with-charged",
+      name: "Boss With Charged",
+      types: ["normal"],
+      baseAttack: 40,
+      baseDefense: 50,
+      baseStamina: 3000,
+      fastMoves: [WEAK_FAST],
+      chargedMoves: [BOSS_CHARGED_MOVE],
+      statsArePrecomputed: true,
+    };
+
+    // A higher-variance boss/level combo, tuned (via a throwaway script
+    // driving this engine's own optimizePowerUps, not hand arithmetic) so
+    // that at iterations=2 the only available power-up (20 -> 20.5) for
+    // BOTH slots comes out with a small POSITIVE deltaTeamDps that still
+    // sits below noiseFloorTeamDps — the "real but unmeasurable" case this
+    // feature exists to surface.
+    const VARIANCE_CHARGED_MOVE: ChargedMove = {
+      id: "variance-charged",
+      name: "Variance Charged",
+      type: "normal",
+      power: 80,
+      energyCost: 50,
+      durationSeconds: 2,
+      vulnerableWindowSeconds: 2,
+    };
+    const VARIANCE_BOSS: SpeciesDefinition = {
+      id: "variance-boss",
+      name: "Variance Boss",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 60,
+      baseStamina: 4000,
+      fastMoves: [WEAK_FAST],
+      chargedMoves: [VARIANCE_CHARGED_MOVE],
+      statsArePrecomputed: true,
+    };
+
+    it("teamDpsPerSeed has length == iterations and its mean equals teamDps", () => {
+      const result = optimizePowerUps(baseInputs({ maxLevel: 50, iterations: 5 }));
+      expect(result.baseline.teamDpsPerSeed).toHaveLength(5);
+      const manualMean = result.baseline.teamDpsPerSeed.reduce((a, b) => a + b, 0) / 5;
+      expect(manualMean).toBeCloseTo(result.baseline.teamDps, 10);
+      expect(result.iterations).toBe(5);
+    });
+
+    it("teamDpsStdDev and noiseFloorTeamDps are exactly 0 for a single iteration", () => {
+      const result = optimizePowerUps(baseInputs({ maxLevel: 50, iterations: 1 }));
+      expect(result.baseline.teamDpsStdDev).toBe(0);
+      expect(result.noiseFloorTeamDps).toBe(0);
+      expect(result.iterations).toBe(1);
+    });
+
+    it("teamDpsStdDev and noiseFloorTeamDps are exactly 0 for a boss with no charged move at all (no jitter to sample)", () => {
+      // BOSS's chargedMoves is [] — there is nothing for
+      // boundedJitteredChargedMoveInterval to ever randomize, so every seed
+      // in the seed set produces an identical run.
+      const result = optimizePowerUps(baseInputs({ maxLevel: 50, iterations: 6 }));
+      expect(result.baseline.teamDpsStdDev).toBe(0);
+      expect(result.noiseFloorTeamDps).toBe(0);
+    });
+
+    it("teamDpsStdDev is non-zero for a boss whose charged-move timing is actually jittered across seeds", () => {
+      const result = optimizePowerUps(
+        baseInputs({
+          maxLevel: 25,
+          boss: BOSS_WITH_CHARGED,
+          bossChargedMoveMeanIntervalSeconds: 8,
+          iterations: 10,
+          slots: [makeSlot({ level: 20 }), makeSlot({ level: 20 })],
+        }),
+      );
+      expect(result.baseline.teamDpsStdDev).toBeGreaterThan(0);
+    });
+
+    it("noiseFloorTeamDps matches 2 * baseline.teamDpsStdDev * sqrt(2 / iterations)", () => {
+      const result = optimizePowerUps(
+        baseInputs({
+          maxLevel: 25,
+          boss: BOSS_WITH_CHARGED,
+          bossChargedMoveMeanIntervalSeconds: 8,
+          iterations: 10,
+          slots: [makeSlot({ level: 20 }), makeSlot({ level: 20 })],
+        }),
+      );
+      const expected = 2 * result.baseline.teamDpsStdDev * Math.sqrt(2 / result.iterations);
+      expect(result.noiseFloorTeamDps).toBe(expected);
+    });
+
+    it("a candidate with a positive delta below the noise floor has deltaExceedsNoise false, and both bestAffordable* are null when EVERY affordable positive delta is below the floor", () => {
+      const result = optimizePowerUps(
+        baseInputs({
+          maxLevel: 20.5, // only one power-up (20 -> 20.5) is even offered per slot
+          boss: VARIANCE_BOSS,
+          bossChargedMoveMeanIntervalSeconds: 6,
+          iterations: 2,
+          slots: [makeSlot({ level: 20 }), makeSlot({ level: 20 })],
+        }),
+      );
+
+      expect(result.candidates).toHaveLength(2); // one candidate per slot
+      for (const candidate of result.candidates) {
+        expect(candidate.affordable).toBe(true);
+        expect(candidate.deltaTeamDps).toBeGreaterThan(0); // real, positive effect...
+        expect(candidate.deltaTeamDps).toBeLessThan(result.noiseFloorTeamDps); // ...but not a measurable one
+        expect(candidate.deltaExceedsNoise).toBe(false);
+      }
+      expect(result.bestAffordableByDelta).toBeNull();
+      expect(result.bestAffordableByStardustEfficiency).toBeNull();
+    });
+  });
 });
