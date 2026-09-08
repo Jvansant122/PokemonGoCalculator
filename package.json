@@ -12,7 +12,9 @@
     "build": "npm run build --workspaces --if-present",
     "sync-data": "tsx scripts/sync-data.ts",
     "check-mega-gaps": "tsx scripts/check-mega-gaps.ts",
-    "check-scenario-roundtrip": "node scripts/check-scenario-roundtrip.mjs"
+    "check-mega-gates": "tsx scripts/check-mega-gates.ts",
+    "check-scenario-roundtrip": "node scripts/check-scenario-roundtrip.mjs",
+    "check-raid-history-sources": "node scripts/check-raid-history-sources.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.2",
