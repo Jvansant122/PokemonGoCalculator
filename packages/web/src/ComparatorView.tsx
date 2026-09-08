@@ -10,6 +10,7 @@ import {
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
 import { AssumptionPanel, type Assumptions } from "./AssumptionPanel.js";
+import type { BossChargedMoveCadence } from "./bossCadence.js";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BossMovesetSweep } from "./BossMovesetSweep.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
@@ -51,6 +52,7 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
   holdChargedMoveUntilSafe: false,
   minFightLengthSeconds: 0,
   bossChargedMoveFrequencySeconds: 15,
+  bossChargedMoveCadence: "fixed-interval",
   partySize: 4,
   teammateDps: 26.5,
   matchingTeammateCount: 4,
@@ -72,6 +74,17 @@ const DEFAULT_ASSUMPTIONS: Assumptions = {
  */
 interface ComparatorScenario extends Scenario {
   candidateShadow: [boolean, boolean];
+  /**
+   * Same "extend rather than edit packages/engine" reasoning as
+   * candidateShadow just above — see bossCadence.tsx's BossChargedMoveCadence.
+   * Optional (unlike candidateShadow, which is always written) specifically
+   * so a decode-side `??` guard reads naturally as "field absent" for a link
+   * shared before this existed, matching every other cadence-adjacent field's
+   * own convention on this type (bossChargedMoveFrequencySeconds itself is
+   * required precisely because it predates the add-scenario-assumption
+   * discipline; this one doesn't need to repeat that).
+   */
+  bossChargedMoveCadence?: BossChargedMoveCadence;
 }
 
 function assumptionsToScenario(a: Assumptions): ComparatorScenario {
@@ -94,6 +107,7 @@ function assumptionsToScenario(a: Assumptions): ComparatorScenario {
     teammateDps: a.teammateDps,
     matchingTeammateCount: a.matchingTeammateCount,
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
+    bossChargedMoveCadence: a.bossChargedMoveCadence,
     bossStartsPrimed: a.bossStartsPrimed,
     bossStartingEnergyFraction: a.bossStartingEnergyFraction,
     weather: a.weather,
@@ -131,6 +145,10 @@ function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_ASSUMPTIONS.holdChargedMoveUntilSafe,
     minFightLengthSeconds: s.minFightLengthSeconds ?? DEFAULT_ASSUMPTIONS.minFightLengthSeconds,
     bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
+    // `??` guards a scenario URL encoded before this field existed rather than
+    // surfacing `undefined` into the cadence <select> — see ComparatorScenario
+    // above for why this field is optional on the encoded type at all.
+    bossChargedMoveCadence: s.bossChargedMoveCadence ?? DEFAULT_ASSUMPTIONS.bossChargedMoveCadence,
     partySize: s.partySize,
     teammateDps: s.teammateDps,
     matchingTeammateCount: s.matchingTeammateCount ?? Math.min(DEFAULT_ASSUMPTIONS.matchingTeammateCount, s.partySize),
@@ -375,6 +393,13 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           dodgeFastAttacks: assumptions.dodgeFastAttacks,
           holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
           bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
+          // See bossCadence.tsx — "energy-driven" makes the mean-interval
+          // field just above stop mattering entirely (the engine ignores it
+          // outright rather than blending the two models). AFFECTS: this
+          // field doesn't exist on SustainedComparisonInputs yet as of
+          // 2026-09-08 — see this feature's own AFFECTS note at the end of
+          // this session's report.
+          bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
           bossStartingEnergy,
           weather: assumptions.weather,
           candidateMegaBoostDisabled: assumptions.candidateMegaBoostDisabled,
@@ -400,6 +425,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
     assumptions.dodgeFastAttacks,
     assumptions.holdChargedMoveUntilSafe,
     assumptions.bossChargedMoveFrequencySeconds,
+    assumptions.bossChargedMoveCadence,
     bossStartingEnergy,
     assumptions.weather,
     assumptions.candidateMegaBoostDisabled,
@@ -450,6 +476,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
         dodgeFastAttacks: assumptions.dodgeFastAttacks,
         holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
         bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
+        bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: assumptions.weather,
         candidateMegaBoostDisabled: assumptions.candidateMegaBoostDisabled,
@@ -472,6 +499,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
     assumptions.dodgeFastAttacks,
     assumptions.holdChargedMoveUntilSafe,
     assumptions.bossChargedMoveFrequencySeconds,
+    assumptions.bossChargedMoveCadence,
     bossStartingEnergy,
     assumptions.weather,
     assumptions.candidateMegaBoostDisabled,
@@ -784,7 +812,12 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           whether the boss has thrown a charged move yet is a computed fact (see "Boss ready for its first charged
           move" above), derived from the target's own fast-move energy gain and its charged move's cost. That
           derivation is a lower bound: it counts only the boss's own fast-move casts, not the energy real raid bosses
-          also gain from damage taken, so a boss could in principle go off sooner, never later. "Mean charged damage"
+          also gain from damage taken, so a boss could in principle go off sooner, never later — except when "Boss
+          charged-move cadence model" above is switched to "Energy-driven," which closes exactly that gap by driving
+          the whole fight's cadence off the boss's energy instead. That mode is experimental and off by default: see
+          its own explanation text for what's independently sourced (the 0.5-energy-per-HP rate) versus what's a
+          reasoned inference this project made itself (the roll's trigger) versus what's simply unvalidated (the
+          15-34% survival-time impact this project measured). "Mean charged damage"
           and "mean fast-move damage" above are tracked separately. "Died mid own-animation" describes only the
           final, fatal charged-move attempt of a run — that specific attempt lands 0 damage, since the candidate
           dies before its own cast resolves. It does not mean the run's charged damage total is zero: a candidate

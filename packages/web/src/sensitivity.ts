@@ -164,6 +164,13 @@ export function computeSensitivity(
       dodgeFastAttacks: a.dodgeFastAttacks,
       holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
       bossChargedMoveMeanIntervalSeconds: overrides.bossChargedMoveMeanIntervalSeconds ?? a.bossChargedMoveFrequencySeconds,
+      // AFFECTS: not yet on SustainedComparisonInputs as of 2026-09-08 — see
+      // this feature's AFFECTS note. bossChargedMoveMeanIntervalSeconds above
+      // is ignored entirely by the engine whenever this is "energy-driven",
+      // which is exactly why check 7 below (which sweeps that same field)
+      // reports itself as inapplicable in that mode rather than pretending to
+      // scan a knob the sim isn't reading.
+      bossChargedMoveCadence: a.bossChargedMoveCadence,
       iterations: SENSITIVITY_ITERATIONS,
       weather: a.weather,
       candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
@@ -403,7 +410,26 @@ export function computeSensitivity(
   // re-simulation (this value feeds the stepwise simulator directly, unlike
   // teammateDps above), scanning outward in both directions from the current
   // setting within a 1-40s bound (covers real raid cadences).
-  {
+  // This check specifically scans bossChargedMoveMeanIntervalSeconds, which
+  // the engine ignores entirely once bossChargedMoveCadence is
+  // "energy-driven" (see bossCadence.tsx) — sweeping it in that mode would
+  // silently report a scan of a knob that no longer does anything, exactly
+  // the "control looks live but isn't" failure this project keeps hitting.
+  // Reported as an explicit inapplicable row instead, matching check 3's own
+  // "n/a" precedent for a candidate with no active boost to scan.
+  if (a.bossChargedMoveCadence === "energy-driven") {
+    checks.push({
+      label: "Boss charged-move cadence",
+      currentValue: "n/a (energy-driven mode active)",
+      flips: false,
+      distance: Infinity,
+      distanceLabel: "mean-interval setting is ignored under the energy-driven cadence model",
+      rangeMin: 0,
+      rangeMax: 0,
+      currentNumericValue: 0,
+      flipNumericValue: null,
+    });
+  } else {
     const current = a.bossChargedMoveFrequencySeconds;
     const step = 2;
     const minBound = 1;

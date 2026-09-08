@@ -10,6 +10,7 @@ import {
   type TeamScenario,
 } from "@pogo-analyzer/engine";
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
+import type { BossChargedMoveCadence } from "./bossCadence.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
 import { applyShadowToggle } from "./shadowToggle.js";
@@ -47,6 +48,7 @@ const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   holdChargedMoveUntilSafe: false,
   weather: "none",
   bossChargedMoveFrequencySeconds: 15,
+  bossChargedMoveCadence: "fixed-interval",
   bossStartsPrimed: false,
   bossStartingEnergyFraction: 0.5,
   raidTimerSeconds: 300,
@@ -75,6 +77,14 @@ interface TeamScenarioSlotWithShadow {
 }
 interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
   slots: TeamScenarioSlotWithShadow[];
+  /**
+   * Same "extend rather than edit packages/engine" reasoning as isShadow
+   * above — see ComparatorView.tsx's identical ComparatorScenario.
+   * bossChargedMoveCadence?: for a link shared before this field existed to
+   * decode via `??` below, matching every optional field's convention on
+   * this type.
+   */
+  bossChargedMoveCadence?: BossChargedMoveCadence;
 }
 
 function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
@@ -96,6 +106,7 @@ function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
     holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
     weather: a.weather,
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
+    bossChargedMoveCadence: a.bossChargedMoveCadence,
     bossStartsPrimed: a.bossStartsPrimed,
     bossStartingEnergyFraction: a.bossStartingEnergyFraction,
     raidTimerSeconds: a.raidTimerSeconds,
@@ -136,6 +147,11 @@ function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssumptions {
     holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_TEAM_ASSUMPTIONS.holdChargedMoveUntilSafe,
     weather: s.weather ?? "none",
     bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_TEAM_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
+    // `??` guards a scenario URL encoded before this field existed (it isn't
+    // even declared on the engine's own TeamScenario — see
+    // TeamScenarioWithShadow above) rather than surfacing `undefined` into
+    // the cadence <select>.
+    bossChargedMoveCadence: s.bossChargedMoveCadence ?? DEFAULT_TEAM_ASSUMPTIONS.bossChargedMoveCadence,
     bossStartsPrimed: s.bossStartsPrimed ?? DEFAULT_TEAM_ASSUMPTIONS.bossStartsPrimed,
     bossStartingEnergyFraction: s.bossStartingEnergyFraction ?? DEFAULT_TEAM_ASSUMPTIONS.bossStartingEnergyFraction,
     raidTimerSeconds: s.raidTimerSeconds ?? DEFAULT_TEAM_ASSUMPTIONS.raidTimerSeconds,
@@ -279,6 +295,13 @@ export function TeamRaidView() {
         dodgeFastAttacks: assumptions.dodgeFastAttacks,
         holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
         bossChargedMoveMeanIntervalSeconds: assumptions.bossChargedMoveFrequencySeconds,
+        // See bossCadence.tsx — "energy-driven" makes the mean-interval field
+        // just above stop mattering entirely. AFFECTS: this field doesn't
+        // exist on TeamRaidInputs yet as of 2026-09-08, and how boss energy
+        // carries across a slot handoff/wipe-and-revive under this mode is an
+        // engine-side design question this view has no visibility into — see
+        // this feature's own AFFECTS note.
+        bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: assumptions.weather,
         raidTimerSeconds: assumptions.raidTimerSeconds,
@@ -301,6 +324,7 @@ export function TeamRaidView() {
     assumptions.dodgeFastAttacks,
     assumptions.holdChargedMoveUntilSafe,
     assumptions.bossChargedMoveFrequencySeconds,
+    assumptions.bossChargedMoveCadence,
     bossStartingEnergy,
     assumptions.weather,
     assumptions.raidTimerSeconds,
@@ -437,6 +461,11 @@ export function TeamRaidView() {
           (MAX_TEAM_RAID_CYCLES). The boss's charged-move cooldown carries forward continuously across every slot
           handoff and every wipe-and-revive — it's one continuous encounter from the boss's own side; it doesn't
           reset just because the trainer swapped Pokémon or briefly returned to the lobby to heal.
+          "Boss charged-move cadence model" (in Assumptions) defaults to the fixed mean-interval model this tab has
+          always used; the experimental "Energy-driven" alternative instead derives the boss's timing from its own
+          energy across the WHOLE encounter (every slot, every cycle) — see that control's own explanation for what's
+          independently sourced, what's this project's own reasoned inference, and what's simply unvalidated. Left off
+          by default so a shared link's meaning never silently changes.
           swapCostSeconds/reviveCostSeconds have no confirmed real value from any official or community source —
           both default to 0 (fastest-possible play) rather than a fabricated "realistic" number; a labeled ~13s
           community estimate is offered as an optional preset for reviveCostSeconds only. A boss badged

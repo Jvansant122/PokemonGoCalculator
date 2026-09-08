@@ -3,6 +3,7 @@ import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
+import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 
 const WEATHER_LABELS: Record<WeatherCondition, string> = {
   none: "None",
@@ -65,6 +66,16 @@ export interface TeamAssumptions {
   holdChargedMoveUntilSafe: boolean;
   weather: WeatherCondition;
   bossChargedMoveFrequencySeconds: number;
+  /**
+   * Which model derives the boss's charged-move timing across the WHOLE
+   * encounter (every slot, every cycle) — see bossCadence.tsx's
+   * BOSS_CADENCE_HINT for the full sourcing/caveat story, and this feature's
+   * AFFECTS note on how boss energy is expected to carry across a slot
+   * handoff or wipe-and-revive the same way the fixed-interval model's own
+   * cooldown already does. "energy-driven" makes bossChargedMoveFrequencySeconds
+   * above stop mattering entirely.
+   */
+  bossChargedMoveCadence: BossChargedMoveCadence;
   bossStartsPrimed: boolean;
   bossStartingEnergyFraction: number;
   /**
@@ -465,15 +476,24 @@ export function TeamAssumptionPanel({
           </select>
         </div>
 
+        <BossCadenceSelect idPrefix="team" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
+
         <div className="field">
-          <label htmlFor="team-bossFreq">Boss charged-move mean frequency (s)</label>
+          <label htmlFor="team-bossFreq">
+            Boss charged-move mean frequency (s)
+            {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
+          </label>
           <input
             id="team-bossFreq"
             type="number"
             min={1}
             value={value.bossChargedMoveFrequencySeconds}
             onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
+            disabled={value.bossChargedMoveCadence === "energy-driven"}
           />
+          {value.bossChargedMoveCadence === "energy-driven" && (
+            <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
+          )}
         </div>
 
         <div className="field">

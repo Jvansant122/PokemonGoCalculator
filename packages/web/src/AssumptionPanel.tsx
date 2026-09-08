@@ -2,6 +2,7 @@ import { WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
+import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 
 /**
  * Human-readable labels for the select below, built from weather.ts's own
@@ -75,6 +76,16 @@ export interface Assumptions {
   /** Extends the damage-over-time chart's window beyond the auto-computed natural minimum (never below it) — 0 means no override. */
   minFightLengthSeconds: number;
   bossChargedMoveFrequencySeconds: number;
+  /**
+   * Which model derives the boss's charged-move timing — see bossCadence.tsx's
+   * BOSS_CADENCE_HINT for the full sourcing/caveat story. "fixed-interval"
+   * (the default) is bossChargedMoveFrequencySeconds above, jittered +/-40%,
+   * unchanged from this project's original behavior. "energy-driven" instead
+   * derives cadence from the boss's own energy gained from damage taken, and
+   * makes bossChargedMoveFrequencySeconds above stop mattering entirely — see
+   * AssumptionPanel's render of BOSS_FREQUENCY_INAPPLICABLE_HINT below.
+   */
+  bossChargedMoveCadence: BossChargedMoveCadence;
   partySize: number;
   teammateDps: number;
   /** How many of partySize match the lead candidate's boosted type — see convertUptimeToTeamDamage. The rest still get a smaller, non-zero boost, never none. */
@@ -499,16 +510,25 @@ export function AssumptionPanel({
           </select>
         </div>
 
+        <BossCadenceSelect idPrefix="candidate" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
+
         <div className="field">
-          <label htmlFor="bossFreq">Boss charged-move mean frequency (s)</label>
+          <label htmlFor="bossFreq">
+            Boss charged-move mean frequency (s)
+            {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
+          </label>
           <input
             id="bossFreq"
             type="number"
             min={1}
             value={value.bossChargedMoveFrequencySeconds}
             onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
+            disabled={value.bossChargedMoveCadence === "energy-driven"}
             title="Mean seconds between the boss's charged moves once it's ready to use them (randomized +/-40% per run). Below the boss charged-move duration (commonly 2-3s) its attacks overlap, so dodging cannot help and the dodge setting stops affecting results entirely."
           />
+          {value.bossChargedMoveCadence === "energy-driven" && (
+            <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
+          )}
         </div>
 
         <div className="field">

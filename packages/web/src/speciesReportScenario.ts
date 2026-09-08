@@ -1,4 +1,5 @@
 import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type WeatherCondition } from "@pogo-analyzer/engine";
+import type { BossChargedMoveCadence } from "./bossCadence.js";
 
 /**
  * Which column the results table is ranked by — a display-only choice (it
@@ -40,6 +41,18 @@ export interface SpeciesReportScenario {
   weather: WeatherCondition;
   /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption swept across every boss, same field name/meaning as Scenario's own bossChargedMoveFrequencySeconds. */
   bossChargedMoveFrequencySeconds: number;
+  /**
+   * Which model derives every swept boss's charged-move timing — see
+   * bossCadence.tsx's BOSS_CADENCE_HINT for the full sourcing/caveat story.
+   * Unlike scenario.ts's Scenario/teamScenario.ts's TeamScenario (which live
+   * in packages/engine, so web-developer extends them locally rather than
+   * editing packages/engine — see ComparatorView.tsx's ComparatorScenario),
+   * SpeciesReportScenario already lives in packages/web, so this field is
+   * declared directly here rather than through an extension type. Optional
+   * so a link shared before this field existed decodes via `??` below rather
+   * than surfacing `undefined`.
+   */
+  bossChargedMoveCadence?: BossChargedMoveCadence;
   /** Which column the results table is sorted by — see SpeciesReportSortMode. */
   sortMode: SpeciesReportSortMode;
   /**

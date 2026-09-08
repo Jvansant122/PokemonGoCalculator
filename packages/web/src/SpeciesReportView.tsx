@@ -14,6 +14,7 @@ import {
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
+import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
@@ -120,6 +121,8 @@ export interface SpeciesReportAssumptions {
   weather: WeatherCondition;
   /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption swept across every boss target. */
   bossChargedMoveFrequencySeconds: number;
+  /** Which model derives every swept boss's charged-move timing — see bossCadence.tsx. "energy-driven" makes bossChargedMoveFrequencySeconds above stop mattering entirely for every boss in the sweep. */
+  bossChargedMoveCadence: BossChargedMoveCadence;
   /** Which column the results table is sorted by — display-only, but still a real setting a shared link must preserve. */
   sortMode: SpeciesReportSortMode;
   /** null = every tier (including one that shows up later); an array is an explicit checked-tier allow-list. See the tier checkbox group below. */
@@ -140,6 +143,7 @@ const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
   dodgeFastAttacks: false,
   weather: "none",
   bossChargedMoveFrequencySeconds: 15,
+  bossChargedMoveCadence: "fixed-interval",
   sortMode: "damage",
   includedTiers: null,
   includePastRaids: false,
@@ -156,6 +160,7 @@ function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesReportScenar
     dodgeFastAttacks: a.dodgeFastAttacks,
     weather: a.weather,
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
+    bossChargedMoveCadence: a.bossChargedMoveCadence,
     sortMode: a.sortMode,
     includedTiers: a.includedTiers,
     includePastRaids: a.includePastRaids,
@@ -178,6 +183,9 @@ function scenarioToAssumptions(s: SpeciesReportScenario): SpeciesReportAssumptio
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
     weather: s.weather ?? "none",
     bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
+    // `??` guards a scenario URL encoded before this field existed rather than
+    // surfacing `undefined` into the cadence <select>.
+    bossChargedMoveCadence: s.bossChargedMoveCadence ?? DEFAULT_ASSUMPTIONS.bossChargedMoveCadence,
     // `??` guards a scenario URL encoded before this field existed (the bug
     // this exact change is fixing) rather than surfacing `undefined` into the
     // sort-mode toggle's active-button check.
@@ -334,6 +342,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       dodgeFastAttacks: assumptions.dodgeFastAttacks,
       weather: assumptions.weather,
       bossChargedMoveFrequencySeconds: assumptions.bossChargedMoveFrequencySeconds,
+      bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
       includedTiers: assumptions.includedTiers,
       includePastRaids: assumptions.includePastRaids,
     }),
@@ -349,6 +358,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       assumptions.dodgeFastAttacks,
       assumptions.weather,
       assumptions.bossChargedMoveFrequencySeconds,
+      assumptions.bossChargedMoveCadence,
       assumptions.includedTiers,
       assumptions.includePastRaids,
     ],
@@ -457,6 +467,11 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           dodgeFastAttacks: debouncedSweepInputs.dodgeFastAttacks,
           weather: debouncedSweepInputs.weather,
           bossChargedMoveMeanIntervalSeconds: debouncedSweepInputs.bossChargedMoveFrequencySeconds,
+          // See bossCadence.tsx — "energy-driven" makes the mean-interval
+          // field above stop mattering for every boss in this sweep. AFFECTS:
+          // this field doesn't exist on SpeciesReportInputs yet as of
+          // 2026-09-08 — see this feature's own AFFECTS note.
+          bossChargedMoveCadence: debouncedSweepInputs.bossChargedMoveCadence,
           targets,
           typeMatchupCorpus,
         }),
@@ -477,6 +492,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
     debouncedSweepInputs.dodgeFastAttacks,
     debouncedSweepInputs.weather,
     debouncedSweepInputs.bossChargedMoveFrequencySeconds,
+    debouncedSweepInputs.bossChargedMoveCadence,
     targets,
     typeMatchupCorpus,
   ]);
@@ -706,16 +722,29 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             </select>
           </div>
 
+          <BossCadenceSelect
+            idPrefix="species-report"
+            value={assumptions.bossChargedMoveCadence}
+            onChange={(v) => setAssumptions({ ...assumptions, bossChargedMoveCadence: v })}
+          />
+
           <div className="field">
-            <label htmlFor="species-report-bossFreq">Boss charged-move mean frequency (s)</label>
+            <label htmlFor="species-report-bossFreq">
+              Boss charged-move mean frequency (s)
+              {assumptions.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
+            </label>
             <input
               id="species-report-bossFreq"
               type="number"
               min={1}
               value={assumptions.bossChargedMoveFrequencySeconds}
               onChange={(e) => setAssumptions({ ...assumptions, bossChargedMoveFrequencySeconds: Number(e.target.value) })}
+              disabled={assumptions.bossChargedMoveCadence === "energy-driven"}
               title="Mean seconds between each boss's charged moves once it's ready to use them (randomized +/-40% per run) — one shared assumption swept across every boss below. Below the boss charged-move duration (commonly 2-3s) its attacks overlap, so dodging cannot help and the dodge setting stops affecting results entirely."
             />
+            {assumptions.bossChargedMoveCadence === "energy-driven" && (
+              <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
+            )}
           </div>
 
           <div className="field">
@@ -1010,7 +1039,11 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           section 2). Every swept boss attacks with its own FIRST fast move and FIRST charged move only — unlike the
           two-candidate comparator's dedicated boss-moveset sweep, there's no per-boss moveset selection here, so a
           boss whose real threat comes from a rarer second charged move will look easier in the "Mean survival" column
-          than it actually is. Scoped to the currently-active real raid bosses by default, per the live community raid
+          than it actually is. "Boss charged-move cadence model" above defaults to the fixed mean-interval model
+          every number on this tab has always used; the experimental "Energy-driven" alternative instead derives
+          EVERY swept boss's timing from its own energy, independently per boss — see that control's own explanation
+          for what's sourced, what's this project's own reasoned inference, and what's simply unvalidated. Left off
+          by default so a shared link's meaning never silently changes. Scoped to the currently-active real raid bosses by default, per the live community raid
           feed, plus past/inactive raids this pipeline has separately recorded when that toggle above is on — two real,
           sourced historical archives (pogoapi's previous-raids archive and Bulbapedia's raid-boss-change pages, both
           badged "past (archive)"), this pipeline's own live-feed sightings since 2026-09-07 (badged "past"), and a
