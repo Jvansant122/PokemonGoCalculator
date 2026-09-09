@@ -9,6 +9,18 @@ import type { BossChargedMoveCadence } from "./bossCadence.js";
  */
 export type PowerUpRankBy = "stardust" | "candy" | "xlCandy";
 
+/**
+ * Which of the tab's two computations this scenario drives — see
+ * PLAN_multi_raid_roster_optimizer.md §4.1. "single-raid" is the ORIGINAL
+ * behavior and must decode byte-for-byte unchanged for a pre-existing share
+ * link (see decodePowerUpOptimizerScenario's own `mode ?? "single-raid"`
+ * fallback in PowerUpOptimizerView.tsx's scenarioToAssumptions). "multi-raid"
+ * ranks power-ups across a whole imported roster (rosterPool.ts, kept OUT of
+ * this scenario — see §3.2) against a SET of raid bosses (see
+ * multiRaidBossIds below) instead of one 6-slot roster vs. one boss.
+ */
+export type PowerUpOptimizerMode = "single-raid" | "multi-raid";
+
 /** One roster slot's own configuration — mirrors PowerUpSlotAssumption exactly, field for field. */
 export interface PowerUpScenarioSlot {
   speciesId: string | null;
@@ -35,7 +47,15 @@ export interface PowerUpScenarioSlot {
  * from the engine's own scenario.ts export rather than forked again.
  */
 export interface PowerUpOptimizerScenario {
-  /** Always exactly MAX_TEAM_RAID_SLOTS entries, in fight order — pad with empty slots rather than shortening the array, same convention as TeamScenario.slots. */
+  /**
+   * Which computation this scenario drives — see PowerUpOptimizerMode.
+   * Optional so a link built before multi-raid mode existed decodes as
+   * "single-raid" via `s.mode ?? "single-raid"` (PowerUpOptimizerView.tsx's
+   * scenarioToAssumptions) rather than surfacing `undefined` — the ORIGINAL
+   * single-raid behavior must stay byte-for-byte unchanged for such a link.
+   */
+  mode?: PowerUpOptimizerMode;
+  /** Always exactly MAX_TEAM_RAID_SLOTS entries, in fight order — pad with empty slots rather than shortening the array, same convention as TeamScenario.slots. Only used in "single-raid" mode. */
   slots: PowerUpScenarioSlot[];
   stardustOnHand: number;
   /**
@@ -51,9 +71,13 @@ export interface PowerUpOptimizerScenario {
   rareCandyOnHand?: number;
   /** Same shared-pool mechanic as rareCandyOnHand, but for the wholly separate Rare Candy XL item (1:1 into XL Candy only — see RARE_CANDY_XL_TO_XL_CANDY_RATIO). Optional for the same old-link reason. */
   rareCandyXlOnHand?: number;
+  /** Single-raid mode only. */
   target: string;
+  /** Single-raid mode only. */
   bossFastMoveId: string | null;
+  /** Single-raid mode only. */
   bossChargedMoveId: string | null;
+  /** Shared by both modes. */
   dodgeModel: DodgeBehavior;
   dodgeFastAttacks: boolean;
   holdChargedMoveUntilSafe: boolean;
@@ -61,13 +85,44 @@ export interface PowerUpOptimizerScenario {
   bossChargedMoveFrequencySeconds: number;
   /** See bossCadence.tsx's BOSS_CADENCE_HINT. Optional so a link shared before this field existed decodes via `??` rather than surfacing `undefined`. */
   bossChargedMoveCadence?: BossChargedMoveCadence;
+  /** Single-raid mode only — RosterPlannerInputs (multi-raid) has no equivalent "boss starts primed" field. */
   bossStartsPrimed: boolean;
+  /** Single-raid mode only. */
   bossStartingEnergyFraction: number;
+  /** Shared by both modes. */
   raidTimerSeconds: number;
   swapCostSeconds: number;
   reviveCostSeconds: number;
-  /** Which resource column the ranked table is sorted by — see PowerUpRankBy. */
+  /** Which resource column the ranked table is sorted by — see PowerUpRankBy. Single-raid mode only (the multi-raid ranked table has no equivalent rank-by control this phase — see PLAN §5 Phase 3's deliberately basic results UI). */
   rankBy: PowerUpRankBy;
+  /**
+   * The RESOLVED, authoritative boss id list for multi-raid mode — see
+   * multiRaidBossSet.ts's own doc comment and PLAN §3.1. NEVER re-derived
+   * from `multiRaidIncludePastRaids`/`multiRaidIncludedTiers`/
+   * `multiRaidMaxBossCount` below on load; those three exist ONLY to restore
+   * the filter UI's display state, and this array is what the sweep actually
+   * runs against. Optional/defaults to `[]` so a pre-multi-raid link decodes
+   * cleanly (that link's `mode` is also absent, so this never mattered to it
+   * anyway).
+   */
+  multiRaidBossIds?: string[];
+  /** Display-only restoration of the boss-set filter UI — see multiRaidBossIds above for why this is NEVER what the sweep itself reads. Optional, defaults to false. */
+  multiRaidIncludePastRaids?: boolean;
+  /** See multiRaidIncludePastRaids. null = every tier; an array is an explicit checked-tier allow-list. Optional, defaults to null. */
+  multiRaidIncludedTiers?: string[] | null;
+  /** See multiRaidIncludePastRaids. Optional, defaults to 30. */
+  multiRaidMaxBossCount?: number;
+  /**
+   * Candy on hand, pooled per `candyFamilyId` — see
+   * RosterPlannerInputs.candyByFamilyId in rosterPlanner.ts and PLAN §3.4's
+   * "UPDATE 2026-09-09" note (pooled per FAMILY, not per species, since 25+
+   * families hold more than one roster entry on a real export). A family
+   * absent from this map means "unknown," never "0" — every candidate
+   * drawing on that family is reported `costUnverified: true` rather than
+   * silently treated as unaffordable. Optional/defaults to `{}` (every
+   * family unknown) so a pre-multi-raid link decodes cleanly.
+   */
+  candyByFamilyId?: Record<string, { candy: number; xlCandy: number } | undefined>;
 }
 
 export function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {

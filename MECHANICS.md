@@ -853,6 +853,82 @@ regardless of Trainer Level; judging reachability is left to the user. This is a
 deliberate scope choice, **not an oversight** — do not add a trainer-level input
 without asking.
 
+### Evolution: candy-only, and it never pays to power up first
+
+Researched 2026-09-08 (`pogo-researcher`) while scoping the whole-roster
+Power-Up Optimizer. `[community-consensus]` — Bulbapedia-derived, cross-checked
+across sources, no contrary evidence found; no single first-party Niantic table
+covers it.
+
+- Evolution costs **candy only, never stardust**. Species-specific, ~12
+  (Caterpie → Metapod) to ~400 (Magikarp → Gyarados, Meltan → Melmetal), with
+  typical two-stage lines around 50.
+- **Evolving changes neither level nor IVs.** The base stats swap at the same
+  level and the same IVs, which is why CP jumps on evolution.
+
+The consequence is a hard rule for any investment advice this tool gives:
+**powering up an unevolved Pokémon is never correct.** The power-up cost table
+is species-agnostic and level/IV progress carries through evolution exactly, so
+the same stardust always buys strictly more after evolving than before. No
+counter-example was found.
+
+**Engine: implemented (as an exclusion).** `SpeciesDefinition.isFullyEvolved` /
+`evolvesToIds` are populated by data-sync from GAME_MASTER's `evolutionBranch`,
+and `rosterPlanner.ts` excludes an entry with `isFullyEvolved === false` from
+power-up candidates, reporting it as "evolve first (into X)" rather than hiding
+it. **Not modelled:** pricing "evolve, then power up to L" as a single candidate
+— that needs per-species evolution candy costs, which GAME_MASTER does carry
+(`candyCost`/`candyCostPurified` per branch) but this project does not yet
+normalize. See `IDEAS.md`.
+
+> **Derivation trap, verified 2026-09-08:** `isFullyEvolved` must come from
+> "has a branch carrying an `evolution` field," **not** from `evolutionBranch`
+> being non-empty. 984 templates carry a real evolution branch, but a further
+> **123 carry a branch whose only entries are TEMPORARY (mega) evolutions** —
+> Venusaur, Charizard, Blastoise, Beedrill and Metagross among them. The naive
+> check marks those unevolved and silently deletes the best attackers from any
+> candidate set while still looking like it works.
+
+### Candy is shared across an evolutionary FAMILY, not a species
+
+Same research pass. GAME_MASTER publishes `familyId` on all 2472
+`pokemonSettings` templates (e.g. Beldum, Metang and Metagross all carry
+`FAMILY_BELDUM`), and real candy is held per family — powering up Metagross
+spends Beldum candy.
+
+**Engine: implemented.** `SpeciesDefinition.candyFamilyId` is populated by
+data-sync, and the roster planner pools candy on it. This is not cosmetic at
+roster scale: on a real 164-Pokémon Poke Genie export, **25 families hold more
+than one entry**, with `FAMILY_HOUNDOUR` holding 14 and `FAMILY_CHARMANDER` 9.
+Pooling per species id instead would let a planner spend the same candy
+repeatedly. Mega/primal species carry no `familyId` of their own — resolve
+theirs through the base species (`blaziken-mega` → `FAMILY_TORCHIC`).
+
+### Second charged move unlock — same budget, different Purified rate
+
+Researched 2026-09-08 (`pogo-researcher`). `[community-consensus]` — Pokémon GO
+Fandom's "List of second Charged Attack cost", cross-referenced with Pokémon GO
+Hub; no first-party Niantic table found.
+
+Cost is tiered by the family's buddy-walking distance: 1 km → 10,000 stardust /
+25 candy, 3 km → 50,000 / 50, 5 km → 75,000 / 75, 20 km → 100,000 / 100.
+Starters and babies (except Toxel) are a flat 10,000 / 25. Sixteen species
+(Caterpie, Metapod, Weedle, Kakuna, Magikarp, Ditto, Wynaut, Wobbuffet,
+Smeargle, Wurmple, Silcoon, Cascoon, Taillow, Feebas, Beldum, Kricketot) cannot
+learn one at all unless Shadow or Purified.
+
+> **Trap:** Shadow is ×1.2 for both resources, but **Purified is ×0.8** here —
+> *not* the ×0.9 this project's power-up cost table correctly uses. Do not reuse
+> `PowerUpCostModifiers` for second-move costs.
+
+**Engine: not modelled.** This draws on the *same* stardust and candy pool the
+power-up planner allocates, and is often a better team-DPS-per-stardust purchase
+than several half-levels — so a plan that prices only power-ups can recommend
+the wrong purchase. Surfaced as a UI caveat, not simulated. By contrast **Elite
+TMs do not compete for this budget at all** (earned via GO Battle League
+milestones, Community Day boxes, or Special Research — never bought with
+stardust or candy), so they need no caveat.
+
 ---
 
 ## Shadow raids

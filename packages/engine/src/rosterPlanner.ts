@@ -6,8 +6,11 @@ import {
   noiseFloorFor,
   powerUpCost,
   powerUpLevelMetrics,
+  shortfallsForCandidate,
   summarizeResults,
   usefulPowerUpLevelsAbove,
+  type PowerUpBudgetResourceShortfall,
+  type PowerUpBudgetStopReason,
   type PowerUpCostModifiers,
   type PowerUpCostTable,
   type PowerUpEncounterSummary,
@@ -611,6 +614,34 @@ function estimateScreenScore(currentScreenScore: number, currentProxy: number, n
   return null;
 }
 
+/**
+ * Module-level composition of proxyDps/estimateScreenScore, taking an
+ * explicit `fromLevel` rather than reading `entry.level` — factored out
+ * 2026-09-09 so BOTH `runRosterPlanner` (where `fromLevel` is always the
+ * entry's own imported level) and `planRosterBudget` (where `fromLevel` is
+ * whichever level the greedy search has currently committed the entry to,
+ * which can differ from its imported starting level after earlier rounds)
+ * share ONE implementation of "estimate this entry's screen score at
+ * `toLevel`, falling back to a real measurement when the ratio-scaling proxy
+ * isn't sound." See `estimateScreenScore`'s own doc comment for why a raw,
+ * un-scaled proxy value must never be substituted on a `null` return —
+ * `measureFallback` is exactly that real, cheap, memoized measurement.
+ */
+function estimateOrMeasureScore(
+  metricsInputs: Omit<PowerUpLevelMetricsParams, "level">,
+  fromLevel: number,
+  toLevel: number,
+  currentScore: number,
+  measureFallback: () => number,
+): number {
+  const currentMetrics = powerUpLevelMetrics({ ...metricsInputs, level: fromLevel });
+  const newMetrics = powerUpLevelMetrics({ ...metricsInputs, level: toLevel });
+  const currentProxy = proxyDps(currentMetrics, metricsInputs.fastMove, metricsInputs.chargedMove);
+  const newProxy = proxyDps(newMetrics, metricsInputs.fastMove, metricsInputs.chargedMove);
+  const scaled = estimateScreenScore(currentScore, currentProxy, newProxy);
+  return scaled ?? measureFallback();
+}
+
 /** Everything powerUpLevelMetrics/usefulPowerUpLevelsAbove need for one (entry, boss) pair, built once and cached (see getMetricsInputs) since only `level` varies call to call. */
 function entryBossMetricsInputs(entry: RosterEntry, target: WeightedRaidTarget, weather: WeatherCondition): Omit<PowerUpLevelMetricsParams, "level"> {
   const fastMove = resolveMove(entry.species.fastMoves, entry.fastMoveId);
@@ -674,13 +705,14 @@ interface PricedCandidate {
 function priceCandidate(
   costTable: PowerUpCostTable,
   entry: RosterEntry,
+  fromLevel: number,
   toLevel: number,
   stardustOnHand: number,
   candyByFamilyId: Record<string, { candy: number; xlCandy: number } | undefined>,
   rareCandyOnHand: number,
   rareCandyXlOnHand: number,
 ): PricedCandidate {
-  const cost = powerUpCost(costTable, entry.level, toLevel, entry.costModifiers);
+  const cost = powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers);
   const familyId = resolveCandyFamilyId(entry);
   const pool = familyId !== undefined ? candyByFamilyId[familyId] : undefined;
   const costUnverified = pool === undefined;
@@ -827,15 +859,10 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     target: WeightedRaidTarget,
     targetIndex: number,
     currentScore: number,
-  ): number => {
-    const metricsInputs = getMetricsInputs(entry, target, targetIndex);
-    const currentMetrics = powerUpLevelMetrics({ ...metricsInputs, level: entry.level });
-    const newMetrics = powerUpLevelMetrics({ ...metricsInputs, level: toLevel });
-    const currentProxy = proxyDps(currentMetrics, metricsInputs.fastMove, metricsInputs.chargedMove);
-    const newProxy = proxyDps(newMetrics, metricsInputs.fastMove, metricsInputs.chargedMove);
-    const scaled = estimateScreenScore(currentScore, currentProxy, newProxy);
-    return scaled ?? getScreenScore(entry, toLevel, target, targetIndex);
-  };
+  ): number =>
+    estimateOrMeasureScore(getMetricsInputs(entry, target, targetIndex), entry.level, toLevel, currentScore, () =>
+      getScreenScore(entry, toLevel, target, targetIndex),
+    );
 
   // --- Stage 1 + 2: baseline screen & team selection, per boss --------------
   const bossHpByTarget = targets.map((t) => bossEffectiveHp(t.species, t.tier, t.bossMaxHpOverride));
@@ -932,7 +959,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
 
     let anyTouched = false;
     for (const toLevel of affordableLevels) {
-      const priced = priceCandidate(costTable, entry, toLevel, stardustOnHand, candyByFamilyId, rareCandyOnHand, rareCandyXlOnHand);
+      const priced = priceCandidate(costTable, entry, entry.level, toLevel, stardustOnHand, candyByFamilyId, rareCandyOnHand, rareCandyXlOnHand);
       const touchedTargetIndices: number[] = [];
       let weightedImpact = 0;
 
@@ -1110,5 +1137,957 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     candidates,
     benchedButPromising,
     neverCompetitive,
+  };
+}
+
+// =============================================================================
+// === planRosterBudget — Phase 4 of PLAN_multi_raid_roster_optimizer.md =====
+// =============================================================================
+//
+// `runRosterPlanner` above answers "what's the best power-up, priced as if it
+// were the only thing you buy?" (§4.3's ranked table). `planRosterBudget`
+// answers the DIFFERENT question: "here is my stardust, my per-family candy,
+// and my two shared Rare Candy pools — what SET of power-ups should I
+// actually make?" — a joint allocation, not a ranking of independent single
+// steps. This is `powerUp.ts`'s `planPowerUpBudget` generalized from "6 fixed
+// slots vs. one boss" to "N pool entries vs. M weighted bosses" (plan §3.4,
+// §3.6, §4.3's "Fixed-budget planner" paragraph, §5 Phase 4) — same greedy
+// round-loop shape, same three hard-won properties preserved verbatim:
+//
+//   1. THE NOISE FLOOR IS PER-ROUND, NOT FIXED. Recomputed after every
+//      committed step from whichever TOUCHED boss(es) that step actually
+//      changed — see `perBossNoiseFloors`/`aggregateNoiseFloorFrom` below.
+//      Untouched bosses' own floors are left exactly as they were (their
+//      team never changed, so their variance didn't either).
+//   2. `bestBlockedCandidate` — "blocked, not done." A bounded (NOT
+//      exhaustive), one-time post-search pass over each eligible entry's
+//      useful-but-currently-unaffordable levels, judged against the FINAL
+//      floor. `null` means genuine convergence; non-null names a real gain
+//      that exists but couldn't be committed. Same distinction, same
+//      one-time-after-the-loop timing as `planPowerUpBudget`'s.
+//   3. MULTI-LEVEL JUMPS, NOT CHAINS. Every useful level is offered as its
+//      own direct jump from an entry's CURRENTLY-PLANNED level (never a
+//      forced chain through intermediate half-steps) — see
+//      `PowerUpBudgetInputs.candidateLevelsPerSlotPerRound`'s REGRESSION
+//      HISTORY doc comment in powerUp.ts for the real bug this guards
+//      against; `candidateLevelsPerEntryPerRound` below is the same knob,
+//      defaulting the same way (unbounded).
+//
+// TWO THINGS DELIBERATELY DIFFER FROM THE SINGLE-BOSS ANCESTOR (both
+// documented in the plan because Phase 2 got them wrong first, and this
+// function reuses Phase 2's ALREADY-FIXED formulas rather than re-deriving
+// either):
+//
+//   - THE AGGREGATE NOISE FLOOR COMBINES PER-BOSS FLOORS IN QUADRATURE —
+//     `sqrt(sum((normalizedWeight * thatBoss'sOwnFloor)^2))` — never by
+//     pooling raw `teamDpsPerSeed` samples across bosses (which measures
+//     BETWEEN-BOSS spread, not noise, and made Phase 2's first build report
+//     0 of 60 candidates significant at every iteration count — see
+//     `runRosterPlanner`'s own top doc comment for the measured numbers).
+//     `aggregateNoiseFloorFrom` below is the SAME formula `runRosterPlanner`
+//     already uses, just recomputed per round instead of once.
+//   - ACCEPTANCE IS AGGREGATE OR PER-BOSS, never the diluted mean alone —
+//     same reasoning as `RosterPowerUpCandidate.exceedsNoise`'s doc comment
+//     (a benched entry's real gain against ONE boss can read as "no
+//     measurable change" once averaged over a dozen untouched ones). See
+//     `candidateClearsBudgetFloor`'s own doc comment for one deliberate
+//     REFINEMENT on top of `exceedsNoise`'s literal OR-of-absolute-values
+//     rule: this function's COMMIT gate (unlike the ranked table's read-only
+//     `exceedsNoise` flag) requires the clearing delta to be POSITIVE, not
+//     merely large in magnitude — a budget planner should never spend real
+//     stardust/candy to knowingly commit a change whose own measured effect
+//     is a wash or a loss just because it also happens to swing some OTHER
+//     boss's result by a lot in either direction.
+//
+// COST CONTROL (plan's "Cost" section, target < ~15s for a realistic
+// 164-entry x 13-boss pool): unlike `runRosterPlanner`'s ONE sweep, a greedy
+// plan is MANY sweeps — but each round's own cost is kept far below a full
+// Stage-1-through-4 sweep by exploiting two invariants specific to this
+// domain:
+//   - Stage 1 screen scores are a PURE function of (entry, level, boss) —
+//     independent of every OTHER entry's level — so `screenScoreCache`
+//     persists across rounds for free; only the ONE entryId committed each
+//     round ever needs a fresh score at its new level.
+//   - A committed step can only change team COMPOSITION on a boss where the
+//     stepped entry is ALREADY fielded or NEWLY enters (exactly the
+//     `touchedTargetIndices` set `evaluateCandidate` below already computes
+//     to price the step) — every OTHER boss's team, and therefore its own
+//     `runFullRosterCached` result and noise floor, is provably unaffected
+//     and is left untouched rather than re-simulated.
+// So a round's real simulation cost is bounded by `maxCandidatesPerRound` x
+// (candidates' own touched-boss count) x `iterations`, not by
+// `pool.length x targets.length`. See this engine-developer's final report
+// for the measured wall-clock on a real 164x13 sweep.
+
+/**
+ * Every real per-boss effect of ONE candidate power-up, evaluated against
+ * whatever `currentTeamsByTarget`/`currentTeamSummaryByTarget` are RIGHT NOW
+ * (i.e. relative to the roster's currently-planned state, not the original
+ * imported baseline) — the budget-loop analogue of `runRosterPlanner`'s
+ * per-draft `perBoss` computation, but re-evaluated fresh every time it's
+ * called (a round considers many candidates; only the WINNING one is ever
+ * committed) rather than once per (entry, level) pair.
+ */
+interface RosterBudgetCandidateEval {
+  perBoss: RosterPerBossImpact[];
+  meanDeltaTeamDps: number;
+  bestBossDeltaTeamDps: number | null;
+  bestBossId: string | null;
+  significantBossCount: number;
+  touchedTargetIndices: number[];
+}
+
+/**
+ * Whether a candidate clears the bar this function's greedy search commits
+ * against — "aggregate OR per-boss," per this module's top doc comment.
+ *
+ * ONE DELIBERATE REFINEMENT over `RosterPowerUpCandidate.exceedsNoise`'s
+ * literal rule (which this function's OWN `RosterBudgetStep.significantBossCount`
+ * still mirrors exactly, for reporting/auditing consistency with the ranked
+ * table): `exceedsNoise` uses `Math.abs(delta) > floor` on BOTH the
+ * aggregate mean and every per-boss delta, so it also flags a candidate that
+ * MEASURABLY HURTS the team (useful there — "don't power this up, it hurts"
+ * is a real, useful answer for a READ-ONLY ranked row). A budget planner
+ * that's about to actually SPEND resources must not commit a step on the
+ * strength of a large-magnitude HARM on one boss alone — so this test
+ * requires the aggregate mean OR at least one per-boss delta to be
+ * POSITIVE and beyond its floor, not merely large. Every POSITIVE per-boss
+ * clearance here is automatically also counted by the abs-based
+ * `significantBossCount` (a positive delta greater than a non-negative floor
+ * is trivially also greater in absolute value), so the two never disagree
+ * about a genuine positive gain — this refinement only ever excludes a
+ * candidate whose ONLY qualifying signal was a significant HARM, never one
+ * with a real, exploitable gain.
+ */
+function candidateClearsBudgetFloor(evalResult: RosterBudgetCandidateEval, perBossFloors: number[], aggregateFloor: number): boolean {
+  if (evalResult.meanDeltaTeamDps > aggregateFloor) return true;
+  return evalResult.perBoss.some((p, ti) => p.deltaTeamDps > perBossFloors[ti]!);
+}
+
+export interface RosterBudgetInputs extends Omit<RosterPlannerInputs, "maxCandidates" | "maxLevelsPerEntry"> {
+  /**
+   * Pure engineering safety cap on greedy rounds (each round commits at most
+   * one step) — same role as `powerUp.ts`'s `PowerUpBudgetInputs.maxRounds`/
+   * `teamRaid.ts`'s `MAX_TEAM_RAID_CYCLES`. Defaults to 200. Unlike the
+   * 6-slot ancestor (worst case ~98 half-levels x 6 slots, but almost always
+   * stopped by "max-level-reached"/"budget-exhausted" long before that), a
+   * 100-200 entry pool has vastly more DISTINCT entries that could each want
+   * one committed step, so this default is higher — see this module's
+   * "Cost control" doc comment above for why each round stays cheap enough
+   * that raising this is safe.
+   */
+  maxRounds?: number;
+  /**
+   * How many of ONE eligible entry's own useful-level candidates survive
+   * into a round's global ranking — see this module's top doc comment
+   * ("Cost control") for why this is a DELIBERATE DEPARTURE from
+   * `PowerUpBudgetInputs.candidateLevelsPerSlotPerRound`'s semantics, not
+   * just a renamed reuse:
+   *
+   * The 6-slot ancestor selects a round's candidates via ROUND-ROBIN BY
+   * DEPTH (every slot's nearest candidate first, then every slot's
+   * 2nd-nearest, etc.) — correct at 6 slots, where even a 60-candidate cap
+   * reaches 10 levels deep per slot. VERIFIED EMPIRICALLY while building
+   * this function (real 164-entry pool, real synced species/bosses): the
+   * SAME mechanism at pool scale means depth 0 ALONE (every entry's own
+   * single nearest level) already exceeds a 60-candidate cap, so NO entry
+   * ever gets a look at its 2nd-nearest level, let alone a genuine
+   * multi-level jump — a real Gengar 30 -> 49 jump (the single most
+   * valuable candidate in that run) was silently unreachable this way.
+   *
+   * This field instead bounds how many of an entry's own candidates are
+   * kept after ranking them by a CHEAP, PURE-ARITHMETIC proxy (no
+   * simulation — see `proxyDps`/`cachedProxyDps`), before every surviving
+   * candidate across the WHOLE pool competes in ONE global top-`maxCandidatesPerRound`
+   * cut (also by that same proxy) for the round's REAL simulated
+   * evaluation. A genuinely valuable deep jump (a big stat/damage
+   * improvement) scores highly on this proxy and is therefore likely to
+   * survive BOTH cuts, unlike a nearest-first depth cut which excludes it
+   * purely by its POSITION in the level list, never its actual value.
+   * Defaults to 5 (a per-entry cap mainly to bound the cheap-proxy pass's
+   * own cost on an entry with many affordable levels — the global cap is
+   * what actually governs round quality/diversity on a large pool).
+   */
+  candidateLevelsPerEntryPerRound?: number;
+  /**
+   * Hard cap on how many candidates get a REAL (simulated) evaluation in a
+   * single round, across every eligible pool entry combined, after the
+   * cheap-proxy ranking above — see `candidateLevelsPerEntryPerRound`'s doc
+   * comment for why this is proxy-ranked rather than round-robin-by-depth
+   * at this scale. Defaults to 60 (same default as the single-boss
+   * ancestor's `maxCandidatesPerRound`).
+   */
+  maxCandidatesPerRound?: number;
+  /**
+   * Bounds the post-search "best blocked candidate" pass, per eligible
+   * entry — same cheap-proxy-ranked selection as the main round loop (see
+   * `candidateLevelsPerEntryPerRound`'s doc comment), applied to each
+   * entry's UNAFFORDABLE levels instead of its affordable ones. Defaults
+   * to 8.
+   */
+  blockedCandidateLevelsPerEntry?: number;
+  /** See `PowerUpBudgetInputs.maxBlockedCandidatesToCheck`'s doc comment — same role, proxy-ranked selection instead of round-robin-by-depth. Defaults to 60. */
+  maxBlockedCandidatesToCheck?: number;
+}
+
+export interface RosterBudgetStep {
+  entryId: string;
+  speciesId: string;
+  speciesName: string;
+  fromLevel: number;
+  toLevel: number;
+  /** This step's total resource cost (fromLevel -> toLevel), same shape as powerUpCost's return. */
+  cost: PowerUpResourceCost;
+  /** How much of cost.candy was drawn from this entry's resolved candy-FAMILY pool (spent first, shared across every OTHER pool entry of that family — §3.4) — ownCandySpent + sharedCandySpent === cost.candy. */
+  ownCandySpent: number;
+  /** How much of cost.candy was drawn from the shared rareCandyOnHand pool, only after the family's own candy ran out. */
+  sharedCandySpent: number;
+  /** Same own-first breakdown as ownCandySpent, for cost.xlCandy against this entry's family's own xlCandy. */
+  ownXlCandySpent: number;
+  /** Same own-first breakdown as sharedCandySpent, for cost.xlCandy against the shared rareCandyXlOnHand pool. */
+  sharedXlCandySpent: number;
+  /** Weighted mean across EVERY target (untouched bosses correctly pull this toward 0) — this step's marginal team-DPS gain, real full-team simulations before/after, never an estimate. */
+  meanDeltaTeamDps: number;
+  /** See RosterPowerUpCandidate.bestBossDeltaTeamDps — the single largest-magnitude perBoss delta this step produced, signed. Null only when every perBoss delta is exactly 0. */
+  bestBossDeltaTeamDps: number | null;
+  /** See RosterPowerUpCandidate.bestBossId. Null exactly when bestBossDeltaTeamDps is null. */
+  bestBossId: string | null;
+  /** Count of perBoss entries individually clearing THAT boss's own floor (Math.abs test — same convention as RosterPowerUpCandidate.significantBossCount, kept abs-based here for reporting/auditing consistency even though the COMMIT decision itself required a positive clearance — see candidateClearsBudgetFloor's doc comment). */
+  significantBossCount: number;
+  /** Whether meanDeltaTeamDps alone (the AGGREGATE test) cleared noiseFloorTeamDps at the time this step was judged — false is possible even for a committed step, when a per-boss clearance alone is what qualified it (see candidateClearsBudgetFloor). Recorded per-step per this module's "record on each step which test it passed" requirement. */
+  clearsAggregateFloor: boolean;
+  /** The AGGREGATE noise floor THIS step was actually judged against (i.e. RosterBudgetPlan.noiseFloorTeamDps's value at the moment this round ran, BEFORE the post-commit recompute) — see this module's top doc comment, "THE NOISE FLOOR IS PER-ROUND, NOT FIXED." A later step can be judged against a meaningfully different floor than an earlier one. */
+  noiseFloorTeamDps: number;
+  /** Boss ids where this entry wasn't on that boss's team immediately before this step but is on it immediately after — the same "headline" surface as RosterPowerUpCandidate.bossesNewlyFielded, per-step instead of per-ranked-row. */
+  bossesNewlyFielded: string[];
+  /** The full per-boss breakdown behind meanDeltaTeamDps — one entry per RosterBudgetInputs.targets, in order, never collapsed away (CLAUDE.md's "where the ranking flips" thesis applies to a committed plan too, not just the ranked table). */
+  perBoss: RosterPerBossImpact[];
+}
+
+export interface RosterBudgetFinalLevel {
+  entryId: string;
+  speciesId: string;
+  speciesName: string;
+  /** This entry's starting (imported) level — equals toLevel if the plan never touched this entry. */
+  fromLevel: number;
+  /** This entry's level at the end of the plan. */
+  toLevel: number;
+}
+
+export interface RosterBudgetResourceLedgerEntry {
+  spent: number;
+  remaining: number;
+}
+
+/** One candy-FAMILY's own ledger — see RosterBudgetLedger.candyByFamilyId. */
+export interface RosterBudgetCandyFamilyLedgerEntry {
+  candy: RosterBudgetResourceLedgerEntry;
+  xlCandy: RosterBudgetResourceLedgerEntry;
+}
+
+export interface RosterBudgetLedger {
+  stardust: RosterBudgetResourceLedgerEntry;
+  /**
+   * Keyed by `candyFamilyId` (never by species id or entryId — §3.4), one
+   * entry per family that at least one ELIGIBLE pool entry resolved to AND
+   * that had a KNOWN starting pool in `RosterPlannerInputs.candyByFamilyId`
+   * (an unknown-candy family never enters this ledger at all — its entries
+   * are reported in `RosterBudgetPlan.excludedEntries` instead, never
+   * silently treated as a 0-candy family that happens to spend nothing).
+   */
+  candyByFamilyId: Record<string, RosterBudgetCandyFamilyLedgerEntry>;
+  /** The shared rareCandyOnHand pool. */
+  sharedRareCandy: RosterBudgetResourceLedgerEntry;
+  /** The shared rareCandyXlOnHand pool. */
+  sharedRareCandyXl: RosterBudgetResourceLedgerEntry;
+}
+
+/**
+ * The best (highest meanDeltaTeamDps) USEFUL level, for any eligible pool
+ * entry, that cleared the FINAL noise floor (candidateClearsBudgetFloor
+ * against RosterBudgetPlan's own final aggregate/per-boss floors) but could
+ * not be committed because it wasn't affordable against what was left of the
+ * budget when the search stopped — see RosterBudgetPlan.bestBlockedCandidate's
+ * doc comment for the "blocked, not done" distinction, and
+ * PowerUpBudgetBlockedCandidate (powerUp.ts) for the single-boss ancestor
+ * this generalizes.
+ */
+export interface RosterBudgetBlockedCandidate {
+  entryId: string;
+  speciesId: string;
+  speciesName: string;
+  /** This entry's level at the point the search stopped (== its starting level if the plan never touched this entry). */
+  fromLevel: number;
+  toLevel: number;
+  cost: PowerUpResourceCost;
+  meanDeltaTeamDps: number;
+  bestBossDeltaTeamDps: number | null;
+  bestBossId: string | null;
+  /** Every resource this candidate is short on right now, against what's left of the budget when the search stopped — see powerUp.ts's shortfallsForCandidate (reused verbatim, not re-derived). Never empty. */
+  shortfalls: PowerUpBudgetResourceShortfall[];
+}
+
+export interface RosterBudgetPlan {
+  /** The plan, in the order the greedy search chose each step. */
+  steps: RosterBudgetStep[];
+  /** One entry per ELIGIBLE pool entry (RosterBudgetPlan.excludedEntries covers the rest) — unchanged entries included, toLevel === fromLevel. */
+  finalLevels: RosterBudgetFinalLevel[];
+  /** The do-nothing state (every pool entry, eligible or not, at its imported level) and its measured encounter summary, for every boss — same shape as RosterPlanResult.baselinePerBoss. */
+  baselinePerBoss: RosterBaselineBossSummary[];
+  /** The FINISHED plan's state and measured encounter summary, for every boss — an accumulated real simulation (memoized by team composition throughout the search), not a fresh dedicated re-run, since every touched boss's summary was already a real simulation of its exact final team/seed set (see this module's top doc comment, "Cost control"). */
+  finalPerBoss: RosterBaselineBossSummary[];
+  /** The iteration count actually used for Stage 4 paired evaluation (baseline AND every step). */
+  iterations: number;
+  /** The iteration count actually used for Stage 1's screen. */
+  screenIterations: number;
+  /**
+   * The FINAL aggregate noise floor — the value in effect when the round
+   * loop actually stopped (quadrature-combined per-boss floors, same formula
+   * as RosterPlanResult.noiseFloorTeamDps — see this module's top doc
+   * comment). NOT one fixed floor that governed the whole plan — see
+   * RosterBudgetStep.noiseFloorTeamDps for auditing a specific step's own
+   * acceptance.
+   */
+  noiseFloorTeamDps: number;
+  /** Total spend and what's left, broken out per resource — stardust and every candy pool kept strictly separate, never blended into one number (CLAUDE.md standing decision). */
+  ledger: RosterBudgetLedger;
+  /** Why the search stopped — see powerUp.ts's PowerUpBudgetStopReason (reused, same four reasons, same meanings). */
+  stopReason: PowerUpBudgetStopReason;
+  /** "You're done" vs. "you're blocked" — see this interface's own top-level doc comment and RosterBudgetBlockedCandidate. Null means genuine convergence; non-null means a real, unaffordable gain exists. */
+  bestBlockedCandidate: RosterBudgetBlockedCandidate | null;
+  /**
+   * Pool entries excluded from candidate generation entirely (§3.4/§3.6),
+   * reported with why rather than silently dropped — two cases:
+   * `isFullyEvolved === false` ("evolve first," same message/evolvesToIds
+   * convention as RosterPlanResult.neverCompetitive), and an entry whose
+   * resolved candy-family pool is UNKNOWN (either no family resolves at
+   * all — an unmapped mega/primal entry missing its required
+   * RosterEntry.candyFamilyId override — or the family resolves but has no
+   * entry in RosterPlannerInputs.candyByFamilyId). These entries can still
+   * be FIELDED on a baseline/final team (team selection always considers
+   * the FULL pool); they just never become power-up candidates here.
+   */
+  excludedEntries: RosterNeverCompetitiveEntry[];
+}
+
+/**
+ * A fixed-budget, whole-roster-x-boss-set power-up planner — see this
+ * module's top doc comment (search "planRosterBudget") for the algorithm,
+ * the three properties preserved from `planPowerUpBudget`, and the two
+ * deliberate differences from it. A NEW export alongside `runRosterPlanner`
+ * (completely unchanged by this addition).
+ */
+export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
+  const {
+    pool,
+    targets,
+    costTable,
+    stardustOnHand,
+    rareCandyOnHand = 0,
+    rareCandyXlOnHand = 0,
+    candyByFamilyId,
+    maxLevel = costTable.maxLevel,
+    screenIterations = 4,
+    iterations = 5,
+    seed = 1,
+    weather = "none",
+    maxRounds = 200,
+    candidateLevelsPerEntryPerRound = 5,
+    maxCandidatesPerRound = 60,
+    blockedCandidateLevelsPerEntry = 8,
+    maxBlockedCandidatesToCheck = 60,
+    ...rest
+  } = inputs;
+
+  if (pool.length === 0) throw new Error("planRosterBudget requires a non-empty pool.");
+  if (targets.length === 0) throw new Error("planRosterBudget requires at least one raid target.");
+
+  const seenEntryIds = new Set<string>();
+  for (const entry of pool) {
+    if (seenEntryIds.has(entry.entryId)) {
+      throw new Error(
+        `Duplicate RosterEntry.entryId "${entry.entryId}" — every pool entry needs a unique id even when the same species appears more than once.`,
+      );
+    }
+    seenEntryIds.add(entry.entryId);
+    if (entry.canMega && !entry.species.boost) {
+      throw new Error(`Roster entry ${entry.entryId} (${entry.species.id}) is flagged canMega but its species has no boost mechanic defined.`);
+    }
+  }
+
+  const shared: SharedAssumptions = {
+    dodge: rest.dodge,
+    dodgeFastAttacks: rest.dodgeFastAttacks,
+    holdChargedMoveUntilSafe: rest.holdChargedMoveUntilSafe,
+    bossChargedMoveMeanIntervalSeconds: rest.bossChargedMoveMeanIntervalSeconds,
+    bossChargedMoveCadence: rest.bossChargedMoveCadence,
+    weather,
+    raidTimerSeconds: rest.raidTimerSeconds,
+    swapCostSeconds: rest.swapCostSeconds,
+    reviveCostSeconds: rest.reviveCostSeconds,
+    maxSecondsPerSlot: rest.maxSecondsPerSlot,
+  };
+
+  const evalSeeds = Array.from({ length: iterations }, (_, i) => seed + i * 7919);
+
+  // Caches persist across the WHOLE search (every round), not just one call —
+  // see this module's top doc comment, "Cost control": both caches are keyed
+  // on values that never change retroactively (a screen score is a pure
+  // function of (entry, level, boss); a team summary is a pure function of
+  // (team composition incl. every member's CURRENT level, boss, seeds)), so
+  // reuse across rounds is always correct, never stale.
+  const screenScoreCache = new Map<string, number>();
+  const metricsInputsCache = new Map<string, Omit<PowerUpLevelMetricsParams, "level">>();
+  const teamSummaryCache = new Map<string, PowerUpEncounterSummary>();
+
+  const getMetricsInputs = (entry: RosterEntry, target: WeightedRaidTarget, targetIndex: number): Omit<PowerUpLevelMetricsParams, "level"> => {
+    const key = `${entry.entryId}|${targetIndex}`;
+    let v = metricsInputsCache.get(key);
+    if (!v) {
+      v = entryBossMetricsInputs(entry, target, weather);
+      metricsInputsCache.set(key, v);
+    }
+    return v;
+  };
+
+  const getScreenScore = (entry: RosterEntry, level: number, target: WeightedRaidTarget, targetIndex: number): number =>
+    screenScoreFor(entry, level, target, targetIndex, shared, screenIterations, screenScoreCache);
+
+  // --- Exclude entries from candidate generation (§3.4/§3.6) — team
+  // selection below still sees the FULL pool; only Stage-3-style candidate
+  // generation is restricted to what's left. ------------------------------
+  const excludedEntries: RosterNeverCompetitiveEntry[] = [];
+  const eligiblePool: RosterEntry[] = [];
+  const entryFamilyId = new Map<string, string>();
+  const remainingCandyByFamilyId = new Map<string, { candy: number; xlCandy: number }>();
+
+  for (const entry of pool) {
+    if (entry.species.isFullyEvolved === false) {
+      const evolvesToIds = entry.species.evolvesToIds ?? [];
+      excludedEntries.push({
+        entryId: entry.entryId,
+        speciesId: entry.species.id,
+        speciesName: entry.species.name,
+        reason:
+          evolvesToIds.length > 0
+            ? `Evolve first (into ${evolvesToIds.join(", ")}) before budgeting for a power-up — evolution costs candy only, preserves level/IVs exactly, and always buys more team DPS per stardust afterward.`
+            : "This species has a further evolution on record (though the specific target isn't) — evolve first before budgeting for a power-up.",
+        evolvesToIds,
+      });
+      continue;
+    }
+
+    const familyId = resolveCandyFamilyId(entry);
+    const familyPool = familyId !== undefined ? candyByFamilyId[familyId] : undefined;
+    if (familyId === undefined || familyPool === undefined) {
+      excludedEntries.push({
+        entryId: entry.entryId,
+        speciesId: entry.species.id,
+        speciesName: entry.species.name,
+        reason:
+          familyId === undefined
+            ? "No candy-family pool could be resolved for this entry (a mega/primal entry needs an explicit RosterEntry.candyFamilyId naming its BASE species' family) — the fixed-budget plan needs a real candy count, unlike the un-budgeted ranked table."
+            : `Candy on hand for family "${familyId}" is unknown — fill it in to include this entry in the fixed-budget plan (it still ranks normally, as costUnverified, in runRosterPlanner's un-budgeted table).`,
+      });
+      continue;
+    }
+
+    eligiblePool.push(entry);
+    entryFamilyId.set(entry.entryId, familyId);
+    if (!remainingCandyByFamilyId.has(familyId)) {
+      remainingCandyByFamilyId.set(familyId, { candy: familyPool.candy, xlCandy: familyPool.xlCandy });
+    }
+  }
+  // Snapshot BEFORE any round mutates the pools above, for the final ledger's
+  // per-family "spent" accounting (spent = initial - remaining).
+  const initialCandyByFamilyId = new Map<string, { candy: number; xlCandy: number }>(
+    [...remainingCandyByFamilyId].map(([familyId, v]) => [familyId, { ...v }]),
+  );
+
+  // --- Stage 1 + 2 (once): baseline screen scores & team selection, over
+  // the FULL pool — mirrors runRosterPlanner exactly, except the resulting
+  // `scoredAllByTarget`/`currentTeamsByTarget` are MUTATED in place as the
+  // search commits steps, rather than staying fixed for one call. ----------
+  const bossHpByTarget = targets.map((t) => bossEffectiveHp(t.species, t.tier, t.bossMaxHpOverride));
+
+  const scoredAllByTarget: { entry: RosterEntry; score: number }[][] = targets.map((target, ti) =>
+    pool.map((entry) => ({ entry, score: getScreenScore(entry, entry.level, target, ti) })),
+  );
+  const currentTeamsByTarget: RosterEntry[][] = scoredAllByTarget.map((scored) => selectTeam(scored));
+
+  const currentLevelByEntryId = new Map<string, number>(pool.map((e) => [e.entryId, e.level]));
+  const liveEntry = (entry: RosterEntry): RosterEntry => {
+    const level = currentLevelByEntryId.get(entry.entryId)!;
+    return level === entry.level ? entry : { ...entry, level };
+  };
+
+  const currentTeamSummaryByTarget: PowerUpEncounterSummary[] = targets.map((target, ti) =>
+    runFullRosterCached(currentTeamsByTarget[ti]!.map(liveEntry), ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache),
+  );
+
+  const baselinePerBoss: RosterBaselineBossSummary[] = targets.map((target, ti) => ({
+    bossId: target.species.id,
+    bossName: target.species.name,
+    team: currentTeamsByTarget[ti]!.map((e) => e.entryId),
+    summary: currentTeamSummaryByTarget[ti]!,
+  }));
+
+  const totalTargetWeight = targets.reduce((sum, t) => sum + (t.weight ?? 1), 0);
+  /** Same quadrature formula as RosterPlanResult.noiseFloorTeamDps (see runRosterPlanner's top doc comment) — recomputed per round from CURRENT per-boss floors instead of once. */
+  const aggregateNoiseFloorFrom = (perBossFloors: number[]): number =>
+    totalTargetWeight > 0
+      ? Math.sqrt(
+          targets.reduce((sum, t, ti) => {
+            const normalizedWeight = (t.weight ?? 1) / totalTargetWeight;
+            return sum + (normalizedWeight * perBossFloors[ti]!) ** 2;
+          }, 0),
+        )
+      : 0;
+
+  const perBossNoiseFloors = currentTeamSummaryByTarget.map((s) => noiseFloorFor(s, iterations));
+  let aggregateNoiseFloor = aggregateNoiseFloorFrom(perBossNoiseFloors);
+
+  // --- Candidate evaluation (Stage 3+4, re-run per round-candidate) -------
+  const usefulLevelsForEntry = (entry: RosterEntry, fromLevel: number): number[] => {
+    if (fromLevel >= maxLevel) return [];
+    const levelsUnion = new Set<number>();
+    for (let ti = 0; ti < targets.length; ti++) {
+      const metricsInputs = getMetricsInputs(entry, targets[ti]!, ti);
+      for (const lvl of usefulPowerUpLevelsAbove({ ...metricsInputs, table: costTable, fromLevel, maxLevel })) levelsUnion.add(lvl);
+    }
+    return [...levelsUnion].sort((a, b) => a - b);
+  };
+
+  // --- Cheap, pure-arithmetic candidate ranking (no simulation) — see
+  // RosterBudgetInputs.candidateLevelsPerEntryPerRound's doc comment for WHY
+  // this replaces round-robin-by-depth at pool scale. `proxyDps` is a pure
+  // function of (entry, level, boss), so caching across the WHOLE search
+  // (not just one round) is always correct, exactly like screenScoreCache
+  // above. --------------------------------------------------------------
+  const proxyCache = new Map<string, number>();
+  const cachedProxyDps = (entry: RosterEntry, level: number, target: WeightedRaidTarget, targetIndex: number): number => {
+    const key = `${entry.entryId}|${level}|${targetIndex}`;
+    let v = proxyCache.get(key);
+    if (v === undefined) {
+      const metricsInputs = getMetricsInputs(entry, target, targetIndex);
+      const metrics = powerUpLevelMetrics({ ...metricsInputs, level });
+      v = proxyDps(metrics, metricsInputs.fastMove, metricsInputs.chargedMove);
+      proxyCache.set(key, v);
+    }
+    return v;
+  };
+
+  /**
+   * Weighted-summed ABSOLUTE improvement across every target — ranking-only,
+   * never compared against a noise floor or surfaced in any output.
+   * Anchored against each target's REAL (already-cached, or cheaply
+   * one-off-simulated) current screen score via `estimateScreenScore`'s SAME
+   * scaling technique `evaluateCandidate`'s own touched-determination uses
+   * (see runRosterPlanner's top doc comment for the full reasoning) —
+   * NOT a raw, un-anchored `proxyDps` delta. This matters specifically for
+   * an ALREADY-FIELDED, strong entry: its raw proxyDps delta for one more
+   * useful level is often SMALL relative to a weak/benched entry's own raw
+   * delta (which can look proportionally huge purely from starting near
+   * zero), so ranking on the raw delta alone systematically buried a
+   * real, high-value fielded-entry jump under many low-value benched-entry
+   * candidates — verified empirically on a real 164-species/13-boss sweep
+   * (a genuine ~1.6 team-DPS Gengar jump never even reached a real
+   * simulation) while building this function.
+   *
+   * DELIBERATELY NOT divided by cost (unlike the round-loop's OWN knapsack
+   * `score`, which IS cost-aware — see the round loop below): the noise
+   * floor a candidate must clear to be COMMITTABLE is an ABSOLUTE bar, not a
+   * per-stardust one, so a "value per stardust" pre-filter systematically
+   * excludes exactly the large, expensive, multi-level jumps this whole
+   * design exists to surface — a SECOND real bug found empirically while
+   * building this function (a genuine ~1.8 team-DPS Entei 29 -> 50 jump
+   * never even reached a real simulation once ranked by per-stardust
+   * efficiency, because many cheap, tiny, low-absolute-value candidates
+   * scored "more efficient" per stardust despite being individually
+   * worthless against the floor). `getScreenScore` at `fromLevel` is a
+   * cache hit for the common case (an entry not yet committed this search,
+   * or committed on THIS target already); a fresh (cheap, single)
+   * simulation only when an entry was committed on some OTHER target and
+   * this target's score at its new level was never queried before — bounded
+   * by committed-steps x targets.length across the whole search, not by
+   * candidate count.
+   */
+  const cheapRankProxy = (entry: RosterEntry, fromLevel: number, toLevel: number): number => {
+    let improvement = 0;
+    for (let ti = 0; ti < targets.length; ti++) {
+      const target = targets[ti]!;
+      const currentProxy = cachedProxyDps(entry, fromLevel, target, ti);
+      const newProxy = cachedProxyDps(entry, toLevel, target, ti);
+      const currentScore = getScreenScore(entry, fromLevel, target, ti);
+      const scaledNewScore = estimateScreenScore(currentScore, currentProxy, newProxy);
+      const delta = scaledNewScore !== null ? scaledNewScore - currentScore : Math.max(0, newProxy - currentProxy);
+      improvement += (target.weight ?? 1) * Math.max(0, delta);
+    }
+    return improvement;
+  };
+
+  /**
+   * Diversify (keep each entry's own top `perEntryCap` raw candidates by the
+   * cheap proxy above) THEN globally rank the survivors by the SAME proxy
+   * and cap at `globalCap` — the pool-scale replacement for
+   * `interleaveCandidatesRoundRobin`'s round-robin-by-depth (see
+   * RosterBudgetInputs.candidateLevelsPerEntryPerRound's doc comment).
+   * Shared by the main round loop (ranking AFFORDABLE candidates) and the
+   * post-search "best blocked candidate" pass (ranking UNAFFORDABLE ones).
+   */
+  const selectTopCandidatesByProxy = <T extends { entry: RosterEntry; fromLevel: number; toLevel: number }>(
+    perEntryLists: T[][],
+    perEntryCap: number,
+    globalCap: number,
+  ): T[] => {
+    const rank = (c: T) => cheapRankProxy(c.entry, c.fromLevel, c.toLevel);
+    const diversified: T[] = [];
+    for (const list of perEntryLists) {
+      if (list.length === 0) continue;
+      diversified.push(...[...list].sort((a, b) => rank(b) - rank(a)).slice(0, perEntryCap));
+    }
+    return diversified.sort((a, b) => rank(b) - rank(a)).slice(0, globalCap);
+  };
+
+  /**
+   * The single real evaluation primitive this round loop and the
+   * post-search "blocked candidate" pass both call — see
+   * RosterBudgetCandidateEval's own doc comment. Every touched boss's team
+   * is re-simulated via runFullRosterCached (memoized by team composition —
+   * a repeat is free); every untouched boss contributes a real, computed 0
+   * with zero simulation, exactly as runRosterPlanner's own simulateDraft
+   * does.
+   */
+  const evaluateCandidate = (entry: RosterEntry, fromLevel: number, toLevel: number, perBossFloors: number[]): RosterBudgetCandidateEval => {
+    const perBoss: RosterPerBossImpact[] = [];
+    const touchedTargetIndices: number[] = [];
+
+    for (let ti = 0; ti < targets.length; ti++) {
+      const target = targets[ti]!;
+      const team = currentTeamsByTarget[ti]!;
+      const fieldedIdx = team.findIndex((e) => e.entryId === entry.entryId);
+      const rankBefore = fieldedIdx >= 0 ? fieldedIdx + 1 : null;
+      const fieldedNow = fieldedIdx >= 0;
+      const currentScore = getScreenScore(entry, fromLevel, target, ti);
+
+      let touched = fieldedNow;
+      let estimated = currentScore;
+      if (!fieldedNow) {
+        estimated = estimateOrMeasureScore(getMetricsInputs(entry, target, ti), fromLevel, toLevel, currentScore, () =>
+          getScreenScore(entry, toLevel, target, ti),
+        );
+        const sixthPlace =
+          team.length >= MAX_TEAM_RAID_SLOTS
+            ? Math.min(...team.map((e) => scoredAllByTarget[ti]!.find((s) => s.entry.entryId === e.entryId)!.score))
+            : -Infinity;
+        touched = estimated > sixthPlace;
+      }
+
+      if (!touched) {
+        perBoss.push({ bossId: target.species.id, bossName: target.species.name, deltaTeamDps: 0, rankBefore, rankAfter: rankBefore, simulated: false });
+        continue;
+      }
+      touchedTargetIndices.push(ti);
+
+      let candidateTeam: RosterEntry[];
+      if (fieldedNow) {
+        candidateTeam = team.map((e) => (e.entryId === entry.entryId ? { ...e, level: toLevel } : liveEntry(e)));
+      } else {
+        const scoredWithout = scoredAllByTarget[ti]!.filter((s) => s.entry.entryId !== entry.entryId);
+        candidateTeam = selectTeam([...scoredWithout, { entry: { ...entry, level: toLevel }, score: estimated }]).map((e) =>
+          e.entryId === entry.entryId ? e : liveEntry(e),
+        );
+      }
+
+      const candidateSummary = runFullRosterCached(candidateTeam, ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache);
+      const deltaTeamDps = candidateSummary.teamDps - currentTeamSummaryByTarget[ti]!.teamDps;
+      const rankAfterIdx = candidateTeam.findIndex((e) => e.entryId === entry.entryId);
+      const rankAfter = rankAfterIdx >= 0 ? rankAfterIdx + 1 : null;
+      perBoss.push({ bossId: target.species.id, bossName: target.species.name, deltaTeamDps, rankBefore, rankAfter, simulated: true });
+    }
+
+    const meanDeltaTeamDps =
+      totalTargetWeight > 0 ? targets.reduce((sum, t, ti) => sum + (t.weight ?? 1) * perBoss[ti]!.deltaTeamDps, 0) / totalTargetWeight : 0;
+
+    let bestBossDeltaTeamDps: number | null = null;
+    let bestBossId: string | null = null;
+    let significantBossCount = 0;
+    for (let ti = 0; ti < targets.length; ti++) {
+      const delta = perBoss[ti]!.deltaTeamDps;
+      if (bestBossDeltaTeamDps === null || Math.abs(delta) > Math.abs(bestBossDeltaTeamDps)) {
+        bestBossDeltaTeamDps = delta;
+        bestBossId = targets[ti]!.species.id;
+      }
+      if (Math.abs(delta) > perBossFloors[ti]!) significantBossCount++;
+    }
+    if (bestBossDeltaTeamDps === 0) {
+      bestBossDeltaTeamDps = null;
+      bestBossId = null;
+    }
+
+    return { perBoss, meanDeltaTeamDps, bestBossDeltaTeamDps, bestBossId, significantBossCount, touchedTargetIndices };
+  };
+
+  // --- Ledger state, mutated as steps commit -------------------------------
+  let remainingStardust = stardustOnHand;
+  let remainingSharedCandy = rareCandyOnHand;
+  let remainingSharedXl = rareCandyXlOnHand;
+
+  const steps: RosterBudgetStep[] = [];
+  let stopReason: PowerUpBudgetStopReason = "round-cap-reached";
+
+  interface RawRosterBudgetCandidate {
+    entry: RosterEntry;
+    fromLevel: number;
+    toLevel: number;
+    cost: PowerUpResourceCost;
+    familyId: string;
+  }
+
+  roundLoop: for (let round = 0; round < maxRounds; round++) {
+    // Captured before any mutation below, so RosterBudgetStep.noiseFloorTeamDps
+    // records exactly what governed THIS round's decision — see this
+    // module's top doc comment, "THE NOISE FLOOR IS PER-ROUND, NOT FIXED."
+    const floorForThisRound = aggregateNoiseFloor;
+    const perBossFloorsForThisRound = [...perBossNoiseFloors];
+
+    const perEntryUseful = new Map<string, number[]>();
+    for (const entry of eligiblePool) {
+      perEntryUseful.set(entry.entryId, usefulLevelsForEntry(entry, currentLevelByEntryId.get(entry.entryId)!));
+    }
+
+    if ([...perEntryUseful.values()].every((levels) => levels.length === 0)) {
+      stopReason = "max-level-reached";
+      break roundLoop;
+    }
+
+    const perEntryCandidates: RawRosterBudgetCandidate[][] = eligiblePool.map((entry) => {
+      const fromLevel = currentLevelByEntryId.get(entry.entryId)!;
+      const familyId = entryFamilyId.get(entry.entryId)!;
+      const familyPool = remainingCandyByFamilyId.get(familyId)!;
+      const maxSpendableCandy = familyPool.candy + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+      const maxSpendableXl = familyPool.xlCandy + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+
+      // Every AFFORDABLE useful level, full stop — no early break by depth
+      // here (see RosterBudgetInputs.candidateLevelsPerEntryPerRound's doc
+      // comment: a depth-based cap BEFORE proxy-ranking would silently
+      // exclude a genuinely valuable far-out jump exactly the same way
+      // round-robin-by-depth did). `selectTopCandidatesByProxy` below is the
+      // ONLY place this entry's candidate count actually gets reduced.
+      const affordable: RawRosterBudgetCandidate[] = [];
+      for (const toLevel of perEntryUseful.get(entry.entryId)!) {
+        const cost = powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers);
+        if (cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl) break;
+        affordable.push({ entry, fromLevel, toLevel, cost, familyId });
+      }
+      return affordable;
+    });
+
+    const roundCandidates = selectTopCandidatesByProxy(perEntryCandidates, candidateLevelsPerEntryPerRound, maxCandidatesPerRound);
+
+    if (roundCandidates.length === 0) {
+      stopReason = "budget-exhausted";
+      break roundLoop;
+    }
+
+    let best: { candidate: RawRosterBudgetCandidate; evalResult: RosterBudgetCandidateEval; score: number } | null = null;
+    for (const candidate of roundCandidates) {
+      const evalResult = evaluateCandidate(candidate.entry, candidate.fromLevel, candidate.toLevel, perBossFloorsForThisRound);
+      if (!candidateClearsBudgetFloor(evalResult, perBossFloorsForThisRound, floorForThisRound)) continue;
+
+      // Multi-dimensional-knapsack-style scalarization — a SEARCH HEURISTIC
+      // ONLY (same as planPowerUpBudget's own scoring), never surfaced in
+      // the output: cost as a fraction of what's actually left of each
+      // constrained resource, summed, ranking by the WEIGHTED MEAN delta
+      // (the joint objective) per unit of that fraction.
+      const familyPool = remainingCandyByFamilyId.get(candidate.familyId)!;
+      const candyAvail = familyPool.candy + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+      const xlAvail = familyPool.xlCandy + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+      const stardustFraction = remainingStardust > 0 ? candidate.cost.stardust / remainingStardust : 0;
+      const candyFraction = candyAvail > 0 ? candidate.cost.candy / candyAvail : 0;
+      const xlFraction = xlAvail > 0 ? candidate.cost.xlCandy / xlAvail : 0;
+      const costFraction = Math.max(stardustFraction + candyFraction + xlFraction, 1e-9);
+      const score = evalResult.meanDeltaTeamDps / costFraction;
+
+      if (best === null || score > best.score) best = { candidate, evalResult, score };
+    }
+
+    if (!best) {
+      stopReason = "no-significant-candidate";
+      break roundLoop;
+    }
+
+    const { candidate, evalResult } = best;
+    const familyPool = remainingCandyByFamilyId.get(candidate.familyId)!;
+
+    const ownCandySpent = Math.min(candidate.cost.candy, familyPool.candy);
+    const sharedCandySpent = candidate.cost.candy - ownCandySpent;
+    const ownXlCandySpent = Math.min(candidate.cost.xlCandy, familyPool.xlCandy);
+    const sharedXlCandySpent = candidate.cost.xlCandy - ownXlCandySpent;
+
+    remainingStardust -= candidate.cost.stardust;
+    familyPool.candy -= ownCandySpent;
+    familyPool.xlCandy -= ownXlCandySpent;
+    remainingSharedCandy -= sharedCandySpent / RARE_CANDY_TO_CANDY_RATIO;
+    remainingSharedXl -= sharedXlCandySpent / RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+
+    currentLevelByEntryId.set(candidate.entry.entryId, candidate.toLevel);
+
+    // Only TOUCHED bosses can have changed — see this module's top doc
+    // comment, "Cost control." Update scores/team/summary/floor for exactly
+    // those, leaving every other boss's state (and therefore its own noise
+    // floor) untouched.
+    for (const ti of evalResult.touchedTargetIndices) {
+      const target = targets[ti]!;
+      const newScore = getScreenScore(candidate.entry, candidate.toLevel, target, ti);
+      const row = scoredAllByTarget[ti]!.find((s) => s.entry.entryId === candidate.entry.entryId)!;
+      row.score = newScore;
+      currentTeamsByTarget[ti] = selectTeam(scoredAllByTarget[ti]!);
+      const liveTeam = currentTeamsByTarget[ti]!.map(liveEntry);
+      const newSummary = runFullRosterCached(liveTeam, ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache);
+      currentTeamSummaryByTarget[ti] = newSummary;
+      perBossNoiseFloors[ti] = noiseFloorFor(newSummary, iterations);
+    }
+    aggregateNoiseFloor = aggregateNoiseFloorFrom(perBossNoiseFloors);
+
+    const bossesNewlyFielded = evalResult.perBoss.filter((p) => p.rankBefore === null && p.rankAfter !== null).map((p) => p.bossId);
+
+    steps.push({
+      entryId: candidate.entry.entryId,
+      speciesId: candidate.entry.species.id,
+      speciesName: candidate.entry.species.name,
+      fromLevel: candidate.fromLevel,
+      toLevel: candidate.toLevel,
+      cost: candidate.cost,
+      ownCandySpent,
+      sharedCandySpent,
+      ownXlCandySpent,
+      sharedXlCandySpent,
+      meanDeltaTeamDps: evalResult.meanDeltaTeamDps,
+      bestBossDeltaTeamDps: evalResult.bestBossDeltaTeamDps,
+      bestBossId: evalResult.bestBossId,
+      significantBossCount: evalResult.significantBossCount,
+      clearsAggregateFloor: evalResult.meanDeltaTeamDps > floorForThisRound,
+      noiseFloorTeamDps: floorForThisRound,
+      bossesNewlyFielded,
+      perBoss: evalResult.perBoss,
+    });
+  }
+
+  // --- Best blocked candidate (one-time, post-search only) ------------------
+  // Same bounded-not-exhaustive design as planPowerUpBudget's own pass (see
+  // that export's top doc comment in powerUp.ts), reused here per pool entry
+  // instead of per slot — but selected via the SAME cheap-proxy ranking as
+  // the main round loop (see RosterBudgetInputs.candidateLevelsPerEntryPerRound's
+  // doc comment) rather than round-robin-by-depth: the raw per-entry list
+  // below intentionally takes the FULL unaffordable tail (bounded in
+  // practice by usefulPowerUpLevelsAbove's own dominated-level reduction,
+  // ~98 levels worst case), cheap to proxy-rank in full, and
+  // `selectTopCandidatesByProxy` is what actually applies
+  // `blockedCandidateLevelsPerEntry`/`maxBlockedCandidatesToCheck` — a
+  // "nearest N unaffordable levels" pre-slice here would reproduce the exact
+  // scale bug this module's top doc comment already found once for the main
+  // round loop.
+  const perEntryBlocked: RawRosterBudgetCandidate[][] = eligiblePool.map((entry) => {
+    const fromLevel = currentLevelByEntryId.get(entry.entryId)!;
+    const usefulLevels = usefulLevelsForEntry(entry, fromLevel);
+    if (usefulLevels.length === 0) return [];
+
+    const familyId = entryFamilyId.get(entry.entryId)!;
+    const familyPool = remainingCandyByFamilyId.get(familyId)!;
+    const maxSpendableCandy = familyPool.candy + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+    const maxSpendableXl = familyPool.xlCandy + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+
+    const firstUnaffordableIndex = usefulLevels.findIndex((toLevel) => {
+      const cost = powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers);
+      return cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl;
+    });
+    if (firstUnaffordableIndex === -1) return [];
+
+    return usefulLevels.slice(firstUnaffordableIndex).map((toLevel) => ({
+      entry,
+      fromLevel,
+      toLevel,
+      cost: powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers),
+      familyId,
+    }));
+  });
+
+  const blockedCandidatesToCheck = selectTopCandidatesByProxy(perEntryBlocked, blockedCandidateLevelsPerEntry, maxBlockedCandidatesToCheck);
+
+  let bestBlockedCandidate: RosterBudgetBlockedCandidate | null = null;
+  let bestBlockedScore = -Infinity;
+  for (const candidate of blockedCandidatesToCheck) {
+    const evalResult = evaluateCandidate(candidate.entry, candidate.fromLevel, candidate.toLevel, perBossNoiseFloors);
+    if (!candidateClearsBudgetFloor(evalResult, perBossNoiseFloors, aggregateNoiseFloor)) continue;
+    if (evalResult.meanDeltaTeamDps > bestBlockedScore) {
+      bestBlockedScore = evalResult.meanDeltaTeamDps;
+      const familyPool = remainingCandyByFamilyId.get(candidate.familyId)!;
+      bestBlockedCandidate = {
+        entryId: candidate.entry.entryId,
+        speciesId: candidate.entry.species.id,
+        speciesName: candidate.entry.species.name,
+        fromLevel: candidate.fromLevel,
+        toLevel: candidate.toLevel,
+        cost: candidate.cost,
+        meanDeltaTeamDps: evalResult.meanDeltaTeamDps,
+        bestBossDeltaTeamDps: evalResult.bestBossDeltaTeamDps,
+        bestBossId: evalResult.bestBossId,
+        shortfalls: shortfallsForCandidate(
+          candidate.cost,
+          remainingStardust,
+          familyPool.candy,
+          familyPool.xlCandy,
+          remainingSharedCandy,
+          remainingSharedXl,
+        ),
+      };
+    }
+  }
+
+  // --- Final reporting ------------------------------------------------------
+  const finalPerBoss: RosterBaselineBossSummary[] = targets.map((target, ti) => ({
+    bossId: target.species.id,
+    bossName: target.species.name,
+    team: currentTeamsByTarget[ti]!.map((e) => e.entryId),
+    summary: currentTeamSummaryByTarget[ti]!,
+  }));
+
+  const finalLevels: RosterBudgetFinalLevel[] = eligiblePool.map((entry) => ({
+    entryId: entry.entryId,
+    speciesId: entry.species.id,
+    speciesName: entry.species.name,
+    fromLevel: entry.level,
+    toLevel: currentLevelByEntryId.get(entry.entryId)!,
+  }));
+
+  const candyLedger: Record<string, RosterBudgetCandyFamilyLedgerEntry> = {};
+  for (const [familyId, initial] of initialCandyByFamilyId) {
+    const remaining = remainingCandyByFamilyId.get(familyId)!;
+    candyLedger[familyId] = {
+      candy: { spent: initial.candy - remaining.candy, remaining: remaining.candy },
+      xlCandy: { spent: initial.xlCandy - remaining.xlCandy, remaining: remaining.xlCandy },
+    };
+  }
+
+  const ledger: RosterBudgetLedger = {
+    stardust: { spent: stardustOnHand - remainingStardust, remaining: remainingStardust },
+    candyByFamilyId: candyLedger,
+    sharedRareCandy: { spent: rareCandyOnHand - remainingSharedCandy, remaining: remainingSharedCandy },
+    sharedRareCandyXl: { spent: rareCandyXlOnHand - remainingSharedXl, remaining: remainingSharedXl },
+  };
+
+  return {
+    steps,
+    finalLevels,
+    baselinePerBoss,
+    finalPerBoss,
+    iterations,
+    screenIterations,
+    noiseFloorTeamDps: aggregateNoiseFloor,
+    ledger,
+    stopReason,
+    bestBlockedCandidate,
+    excludedEntries,
   };
 }

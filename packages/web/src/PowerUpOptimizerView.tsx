@@ -4,10 +4,15 @@ import {
   bossEffectiveHp,
   MAX_TEAM_RAID_SLOTS,
   type PowerUpBudgetBlockedCandidate,
-  type PowerUpBudgetPlan,
   type PowerUpBudgetResourceShortfall,
+  type PowerUpBudgetStopReason,
   type PowerUpCandidate,
+  type RosterBudgetBlockedCandidate,
+  type RosterBudgetStep,
+  type RosterNeverCompetitiveEntry,
+  type RosterPerBossImpact,
   type SpeciesDefinition,
+  type WeightedRaidTarget,
 } from "@pogo-analyzer/engine";
 import {
   emptyPowerUpSlot,
@@ -23,17 +28,29 @@ import {
 } from "./powerUpOptimizerScenario.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
 import { RosterImportPanel } from "./RosterImportPanel.js";
+import { hydrateRosterPool, loadRosterPool, type RosterPool } from "./rosterPool.js";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 import { getBaseUrl } from "./urlUtils.js";
 import {
   candidatePickerOptions,
   powerUpCostsFetchedAt,
   raidTierForSpeciesId,
+  resolveMegaBaseSpecies,
   speciesRegistry,
   targetPickerOptions,
   unmatchedActiveRaids,
 } from "./registry.js";
 import { runPowerUpOptimizerScenario } from "./run/runPowerUpOptimizer.js";
+import {
+  resolveRosterPlannerInputs,
+  type RosterBudgetPlanRunResult,
+  type RosterPlannerBlockedReason,
+  type RosterPlannerResolution,
+  type RosterPlannerRunResult,
+} from "./run/runRosterPlanner.js";
+import { runRosterBudgetOffMainThread, runRosterPlannerOffMainThread } from "./rosterPlannerWorkerClient.js";
+import { dedupeInterchangeableCandidates, type DedupedRosterCandidateGroup } from "./rosterCandidateDedupe.js";
+import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates real
 // ranked results immediately, not an empty form — same precedent as every
@@ -63,6 +80,10 @@ function defaultSlot(speciesId: string, level: number, isMega: boolean): PowerUp
 }
 
 export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
+  // "single-raid" is the ORIGINAL behavior and must stay the default so an
+  // existing share link with no `mode` field (PLAN §4.1) decodes exactly as
+  // it always has.
+  mode: "single-raid",
   slots: [
     defaultSlot("latios-mega", 35, true),
     defaultSlot("garchomp", 30, false),
@@ -99,10 +120,21 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   // ~12-15s estimate (see teamRaid.ts's reviveCostSeconds doc comment).
   reviveCostSeconds: 15,
   rankBy: "stardust",
+  // Multi-raid mode fields — see BossSetPanel.tsx / multiRaidBossSet.ts. Left
+  // empty/default here (rather than pre-resolved) since the whole POINT of
+  // this mode is a whole imported roster this static default can't have;
+  // PowerUpOptimizerAssumptionPanel's setMode auto-populates a real boss set
+  // the first time the mode switch flips to "multi-raid".
+  multiRaidBossIds: [],
+  multiRaidIncludePastRaids: false,
+  multiRaidIncludedTiers: null,
+  multiRaidMaxBossCount: 30,
+  candyByFamilyId: {},
 };
 
 export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
   return {
+    mode: a.mode,
     slots: a.slots.map((s) => ({
       speciesId: s.speciesId,
       fastMoveId: s.fastMoveId,
@@ -134,6 +166,11 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,
     rankBy: a.rankBy,
+    multiRaidBossIds: a.multiRaidBossIds,
+    multiRaidIncludePastRaids: a.multiRaidIncludePastRaids,
+    multiRaidIncludedTiers: a.multiRaidIncludedTiers,
+    multiRaidMaxBossCount: a.multiRaidMaxBossCount,
+    candyByFamilyId: a.candyByFamilyId,
   };
 }
 
@@ -161,6 +198,11 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
   // TeamRaidView's teamScenarioToAssumptions.
   while (slots.length < MAX_TEAM_RAID_SLOTS) slots.push(emptyPowerUpSlot());
   return {
+    // `??` guards a link built before multi-raid mode existed — see
+    // powerUpOptimizerScenario.ts's own PowerUpOptimizerMode doc comment for
+    // why "single-raid" (the ORIGINAL, byte-for-byte-unchanged behavior)
+    // must be the fallback.
+    mode: s.mode ?? "single-raid",
     slots: slots.slice(0, MAX_TEAM_RAID_SLOTS),
     stardustOnHand: s.stardustOnHand ?? DEFAULT_ASSUMPTIONS.stardustOnHand,
     rareCandyOnHand: s.rareCandyOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyOnHand,
@@ -186,6 +228,15 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     // missing field decodes to DEFAULT_ASSUMPTIONS, i.e. 15s.
     reviveCostSeconds: s.reviveCostSeconds ?? DEFAULT_ASSUMPTIONS.reviveCostSeconds,
     rankBy: s.rankBy ?? "stardust",
+    // `??` guards a link built before multi-raid mode existed — see
+    // multiRaidBossIds' own doc comment in powerUpOptimizerScenario.ts for
+    // why this is AUTHORITATIVE and never re-derived from the three filter
+    // fields below.
+    multiRaidBossIds: s.multiRaidBossIds ?? DEFAULT_ASSUMPTIONS.multiRaidBossIds,
+    multiRaidIncludePastRaids: s.multiRaidIncludePastRaids ?? DEFAULT_ASSUMPTIONS.multiRaidIncludePastRaids,
+    multiRaidIncludedTiers: s.multiRaidIncludedTiers ?? DEFAULT_ASSUMPTIONS.multiRaidIncludedTiers,
+    multiRaidMaxBossCount: s.multiRaidMaxBossCount ?? DEFAULT_ASSUMPTIONS.multiRaidMaxBossCount,
+    candyByFamilyId: s.candyByFamilyId ?? DEFAULT_ASSUMPTIONS.candyByFamilyId,
   };
 }
 
@@ -261,16 +312,20 @@ function formatResourceSplit(ownSpent: number, sharedSpent: number, sharedLabel:
  * "Why it stopped" in plain language — mirrors the ranked table's own
  * noise-floor caveat wording ("nothing else measurably beats the noise
  * floor") so the two sections read as one consistent voice, not two
- * differently-worded tools bolted together.
+ * differently-worded tools bolted together. Takes the two fields it actually
+ * needs, not the whole plan object, so it's reusable for BOTH the single-raid
+ * `PowerUpBudgetPlan` and the multi-raid `RosterBudgetPlan` — they share the
+ * same `PowerUpBudgetStopReason` union and the same "noise floor" concept
+ * even though everything else about the two plan shapes differs.
  */
-function budgetStopReasonSentence(plan: PowerUpBudgetPlan): string {
-  switch (plan.stopReason) {
+function budgetStopReasonSentence(stopReason: PowerUpBudgetStopReason, noiseFloorTeamDps: number): string {
+  switch (stopReason) {
     case "max-level-reached":
       return "Stopped because every fielded slot has already reached level 50 — there's no further power-up headroom left to spend on, regardless of budget.";
     case "budget-exhausted":
       return "Stopped because useful power-up headroom remains on at least one slot, but nothing left is affordable within the stardust/candy/XL you have on hand.";
     case "no-significant-candidate":
-      return `You still have budget left because nothing else measurably beats the ±${plan.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor — the remaining stardust/candy is left unspent on purpose, not overlooked.`;
+      return `You still have budget left because nothing else measurably beats the ±${noiseFloorTeamDps.toFixed(2)} team-DPS noise floor — the remaining stardust/candy is left unspent on purpose, not overlooked.`;
     case "round-cap-reached":
       return "Stopped only because the search hit its internal round-safety cap, before resolving naturally via budget or a real breakpoint — unusual for a normal roster/budget; treat this plan as a lower bound, not a definitive optimum.";
   }
@@ -304,7 +359,793 @@ export function blockedCandidateSentence(blocked: PowerUpBudgetBlockedCandidate)
   return `Next real gain: ${blocked.speciesName} Lv${blocked.fromLevel} → Lv${blocked.toLevel}, +${blocked.deltaTeamDps.toFixed(2)} team DPS — you're short ${shortfallText}.`;
 }
 
+/**
+ * Same "blocked, not done" sentence as `blockedCandidateSentence` above, for
+ * `RosterBudgetBlockedCandidate` (the multi-raid/Phase-4 sibling) instead of
+ * `PowerUpBudgetBlockedCandidate` — a SEPARATE function rather than a shared
+ * one because the two types name their own delta field differently
+ * (`meanDeltaTeamDps` here vs. `deltaTeamDps` there — the multi-raid type has
+ * no single-boss "the" delta, only a weighted mean across the whole boss set,
+ * see RosterBudgetBlockedCandidate's own doc comment). Exported for the same
+ * CLI-reuse reason as `blockedCandidateSentence`.
+ */
+export function rosterBlockedCandidateSentence(blocked: RosterBudgetBlockedCandidate): string {
+  const shortfallText = joinWithAnd(blocked.shortfalls.map(formatShortfall));
+  return `Next real gain: ${blocked.speciesName} Lv${blocked.fromLevel} → Lv${blocked.toLevel}, +${blocked.meanDeltaTeamDps.toFixed(2)} mean team DPS — you're short ${shortfallText}.`;
+}
+
 const CANDIDATE_TABLE_INITIAL_ROWS = 30;
+const MULTI_RAID_TABLE_INITIAL_ROWS = 30;
+
+/**
+ * One boss's real, computed effect of a candidate power-up (or budget-plan
+ * step) — the expandable detail under each `MultiRaidCandidateRow` (Phase
+ * 3b) AND each `MultiRaidBudgetStepRow` (Phase 4 — `RosterBudgetStep.perBoss`
+ * is the SAME `RosterPerBossImpact[]` shape as `RosterPowerUpCandidate.perBoss`,
+ * so this table takes the array directly rather than a full candidate,
+ * letting both callers share it). Per CLAUDE.md's own headline thesis: the
+ * interesting output is WHERE the ranking flips, not one collapsed number.
+ * Sorted by |Δ team DPS| descending — the bosses this power-up actually
+ * matters for, first.
+ */
+function MultiRaidPerBossTable({ perBoss, columnCount }: { perBoss: RosterPerBossImpact[]; columnCount: number }) {
+  const sorted = useMemo(() => [...perBoss].sort((a, b) => Math.abs(b.deltaTeamDps) - Math.abs(a.deltaTeamDps)), [perBoss]);
+  return (
+    <tr>
+      <td colSpan={columnCount} style={{ padding: "4px 0 10px" }}>
+        <div className="table-scroll">
+          <table className="time-series-table">
+            <thead>
+              <tr>
+                <th>Boss</th>
+                <th>Δ team DPS</th>
+                <th>Rank before</th>
+                <th>Rank after</th>
+                <th>What changed</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((p) => (
+                <tr key={p.bossId}>
+                  <td>{p.bossName}</td>
+                  <td>
+                    {p.simulated ? (
+                      <>
+                        {p.deltaTeamDps >= 0 ? "+" : ""}
+                        {p.deltaTeamDps.toFixed(3)}
+                      </>
+                    ) : (
+                      "0.000"
+                    )}
+                  </td>
+                  <td>{p.rankBefore ?? "—"}</td>
+                  <td>{p.rankAfter ?? "—"}</td>
+                  <td>
+                    {!p.simulated && (
+                      <span className="species-picker-hint">
+                        not fielded before or after — a real computed zero, this boss was never re-simulated
+                      </span>
+                    )}
+                    {p.simulated && p.rankBefore === null && p.rankAfter !== null && (
+                      <span className="badge badge-breakpoint">enters team</span>
+                    )}
+                    {p.simulated && p.rankBefore !== null && p.rankAfter === null && (
+                      <span className="badge badge-approximate">drops from team</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+const MULTI_RAID_ROW_COLUMN_COUNT = 9;
+
+/**
+ * One row of the multi-raid ranked/benched candidate tables — shared so the
+ * two tables (and their column meanings) stay in sync. Renders a DEDUPED
+ * `group` (see rosterCandidateDedupe.ts), not a raw candidate — `group.count
+ * > 1` means several interchangeable pool entries collapsed into this one
+ * row, and either satisfies the recommendation equally (they're identical in
+ * every way this planner's own math can see). Expandable via the species
+ * name button to reveal the per-boss breakdown (MultiRaidPerBossTable),
+ * collapsed by default so 30 rows doesn't become 30 tables on load.
+ *
+ * `identity` is not decoration: a real imported roster holds MANY entries of
+ * the same species (the reference Poke Genie export has 4 Mewtwo, 12 Houndour
+ * and 11 Inkay, and 27 species duplicated overall), so a row reading only
+ * "Mewtwo 20 → 26.5" can appear twice with DIFFERENT deltas and leaves the
+ * user unable to tell which of their four Mewtwo to actually power up. The
+ * IV spread is what makes a recommendation actionable. Two entries that are
+ * still identical after dedup ARE genuinely interchangeable, so either one
+ * satisfies the recommendation — hence a count, not a list of which ones.
+ */
+function MultiRaidCandidateRow({ group, identity }: { group: DedupedRosterCandidateGroup; identity?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const c = group.representative;
+  return (
+    <>
+      <tr style={{ opacity: c.exceedsNoise ? 1 : 0.6 }}>
+        <td>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title="Show the per-boss breakdown — where this power-up actually helps, not just the averaged headline number."
+            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+          >
+            {expanded ? "▾" : "▸"} {c.speciesName}
+          </button>
+          {group.count > 1 && (
+            <span className="species-picker-hint">
+              {" "}
+              ×{group.count} interchangeable entries
+            </span>
+          )}
+          {identity && (
+            <span className="caveats" style={{ display: "block", fontSize: "0.85em" }}>
+              {identity}
+            </span>
+          )}
+          {c.costUnverified && (
+            <span className="badge badge-approximate" title="This entry's candy family has no known candy-on-hand — ranked normally, but this cost can't be confirmed affordable.">
+              candy unverified
+            </span>
+          )}
+        </td>
+        <td>
+          {c.fromLevel} → {c.toLevel}
+        </td>
+        <td>{c.cost.stardust.toLocaleString()}</td>
+        <td>{c.cost.candy || "—"}</td>
+        <td>{c.cost.xlCandy || "—"}</td>
+        <td>
+          {c.exceedsNoise ? (
+            <>
+              {c.meanDeltaTeamDps >= 0 ? "+" : ""}
+              {c.meanDeltaTeamDps.toFixed(3)}
+            </>
+          ) : (
+            "≈0 (no measurable change)"
+          )}
+        </td>
+        <td>
+          {c.bestBossDeltaTeamDps === null
+            ? "—"
+            : `${c.bestBossDeltaTeamDps >= 0 ? "+" : ""}${c.bestBossDeltaTeamDps.toFixed(3)} vs ${c.perBoss.find((p) => p.bossId === c.bestBossId)?.bossName ?? c.bestBossId}`}
+        </td>
+        <td>{c.significantBossCount}</td>
+        <td>{c.bossesNewlyFielded.length}</td>
+      </tr>
+      {expanded && <MultiRaidPerBossTable perBoss={c.perBoss} columnCount={MULTI_RAID_ROW_COLUMN_COUNT} />}
+    </>
+  );
+}
+
+/**
+ * A "not silently dropped" table for `RosterNeverCompetitiveEntry[]` —
+ * shared by the ranked sweep's `neverCompetitive` (Phase 3b) AND the
+ * fixed-budget plan's `excludedEntries` (Phase 4, same underlying type: an
+ * unevolved species, or — budget-plan-only — an unresolved/unknown candy
+ * family). Reused rather than duplicated so both surfaces render this
+ * "excluded, here's why" list identically. Owns its own `showAll` state
+ * (collapsed to `initialRows` by default) since two independent instances of
+ * this component can be on screen at once with independently-sized lists.
+ */
+function ExcludedEntriesTable({
+  heading,
+  description,
+  entries,
+  initialRows = MULTI_RAID_TABLE_INITIAL_ROWS,
+}: {
+  heading: string;
+  description: string;
+  entries: RosterNeverCompetitiveEntry[];
+  initialRows?: number;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  if (entries.length === 0) return null;
+  const visible = showAll ? entries : entries.slice(0, initialRows);
+  return (
+    <>
+      <h3 style={{ marginTop: 16 }}>
+        {heading} ({entries.length})
+      </h3>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        {description}
+      </p>
+      <div className="table-scroll">
+        <table className="time-series-table">
+          <thead>
+            <tr>
+              <th>Species</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visible.map((e, i) => (
+              <tr key={`${e.entryId}-${i}`}>
+                <td>{e.speciesName}</td>
+                <td>{e.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {entries.length > initialRows && (
+        <button type="button" style={{ marginTop: 8 }} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? `Show top ${initialRows} only` : `Show all ${entries.length}`}
+        </button>
+      )}
+    </>
+  );
+}
+
+interface MultiRaidResultsSectionProps {
+  hydratedPoolCount: number;
+  /** entryId -> a short human identity (IV spread) for the ranked tables — see MultiRaidCandidateRow's `identity`. */
+  entryIdentities: Map<string, string>;
+  /** The hydrated pool itself — needed (not just entryIdentities) so dedupeInterchangeableCandidates can compare full IV/moveset/cost-modifier identity, not just its display string. */
+  pool: ImportedRosterEntry[];
+  rosterDroppedCount: number;
+  bossCount: number;
+  run: RosterPlannerRunResult | null;
+  isRunning: boolean;
+  isStale: boolean;
+  /** null before any sweep has completed, or when the most recent one was blocked before an engine call was even attempted. */
+  ranOn: "worker" | "main-thread-fallback" | null;
+  elapsedMs: number;
+  onRunSweep: () => void;
+}
+
+/**
+ * Multi-raid mode's results: a ranked candidate table (deduped —
+ * rosterCandidateDedupe.ts — and expandable per row into its per-boss
+ * breakdown), `benchedButPromising`/`neverCompetitive` surfaced as their own
+ * tables (never silently dropped — see rosterPlanner.ts's own doc comment on
+ * why those two are the answer to "would a benched Pokémon be better if
+ * powered up"), and a clear reason whenever nothing was computed. Runs off
+ * the main thread via rosterPlannerWorkerClient.ts (Phase 3b) — `ranOn`
+ * reports which path actually executed, since a broken/unavailable worker
+ * degrades to the same synchronous behavior this tab always had rather than
+ * breaking the tab.
+ */
+function MultiRaidResultsSection({
+  hydratedPoolCount,
+  entryIdentities,
+  pool,
+  rosterDroppedCount,
+  bossCount,
+  run,
+  isRunning,
+  isStale,
+  ranOn,
+  elapsedMs,
+  onRunSweep,
+}: MultiRaidResultsSectionProps) {
+  const [showAllMultiRaidCandidates, setShowAllMultiRaidCandidates] = useState(false);
+
+  // `run?.data?.X ?? []` is deliberately NOT pulled out into its own
+  // `const` above these — a fresh `[]` on every render (whenever data is
+  // null) would make useMemo's own dependency array change every render too
+  // (react-hooks/exhaustive-deps). Depending on `run` itself instead is
+  // stable across renders where nothing actually changed.
+  const dedupedCandidates = useMemo(() => dedupeInterchangeableCandidates(run?.data?.candidates ?? [], pool), [run, pool]);
+  const visibleCandidateGroups = showAllMultiRaidCandidates ? dedupedCandidates : dedupedCandidates.slice(0, MULTI_RAID_TABLE_INITIAL_ROWS);
+
+  const dedupedBenched = useMemo(() => dedupeInterchangeableCandidates(run?.data?.benchedButPromising ?? [], pool), [run, pool]);
+
+  const neverCompetitive = run?.data?.neverCompetitive ?? [];
+
+  return (
+    <section className="panel">
+      <h2>Multi-raid sweep</h2>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        Ranks every power-up across your WHOLE imported roster against the boss set above — including currently
+        BENCHED Pokémon that would only earn a team spot if powered up first (see &ldquo;Benched but
+        promising&rdquo; below). Runs off the main thread in a background Web Worker when one is available (falling
+        back to computing right here, briefly freezing the tab, only if a worker genuinely can&rsquo;t be used).
+      </p>
+
+      <div className="result-row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <button type="button" onClick={onRunSweep} disabled={isRunning || hydratedPoolCount === 0 || bossCount === 0}>
+          {isRunning ? "Running sweep…" : run ? "Run sweep again" : "Run sweep"}
+        </button>
+        {isRunning && <span className="species-picker-hint">{(elapsedMs / 1000).toFixed(1)}s elapsed</span>}
+        {!isRunning && run && ranOn && (
+          <span
+            className="species-picker-hint"
+            title={
+              ranOn === "worker"
+                ? "This sweep ran in a background Web Worker — the tab stayed responsive while it computed."
+                : "The background worker couldn't be used (construction failed, or it errored before replying) — this sweep ran on the main thread instead, same as before this tab had a worker."
+            }
+          >
+            {ranOn === "worker" ? "computed off the main thread" : "computed on the main thread (worker unavailable)"} in{" "}
+            {(elapsedMs / 1000).toFixed(1)}s
+          </span>
+        )}
+        {isStale && run && !isRunning && (
+          <span className="badge badge-pending" title="Settings or roster changed since this result was computed.">
+            stale — click Run sweep again
+          </span>
+        )}
+        {rosterDroppedCount > 0 && (
+          <span className="caveats">
+            {rosterDroppedCount} stored roster entr{rosterDroppedCount === 1 ? "y" : "ies"} reference a species this
+            data layer no longer has.
+          </span>
+        )}
+      </div>
+
+      {!run && !isRunning && (
+        <p className="caveats">
+          {hydratedPoolCount === 0
+            ? "No roster imported in this browser yet — import a Poke Genie CSV export in “Import a whole roster” below, then click “Run sweep”."
+            : bossCount === 0
+              ? "No bosses selected — pick at least one under “Boss set” above, then click “Run sweep”."
+              : "Click “Run sweep” to rank power-ups across this roster and boss set."}
+        </p>
+      )}
+
+      {run?.error && (
+        <p className="error-text">Could not compute this sweep: {run.error}</p>
+      )}
+
+      {run?.blockedReason === "no-roster" && (
+        <p className="caveats">
+          No roster imported in this browser yet — this shared link carries every SETTING (boss set, budgets,
+          dodge/weather/timer) but never the roster itself (see the note under &ldquo;Share this scenario&rdquo;).
+          Import a Poke Genie CSV export in &ldquo;Import a whole roster&rdquo; below, then click &ldquo;Run
+          sweep&rdquo; again.
+        </p>
+      )}
+
+      {run?.blockedReason === "no-bosses" && (
+        <p className="caveats">
+          None of this scenario&rsquo;s boss ids resolved to a registered species — the boss set may have rotated
+          out entirely since this link was built. Pick a boss set under &ldquo;Boss set&rdquo; above, then click
+          &ldquo;Run sweep&rdquo; again.
+        </p>
+      )}
+
+      {run?.data && (
+        <>
+          <div className="result-card" style={{ marginBottom: 12 }}>
+            <dl>
+              <dt>Bosses swept</dt>
+              <dd>{run.targets.length}</dd>
+              <dt>Baseline team DPS range</dt>
+              <dd>
+                {Math.min(...run.data.baselinePerBoss.map((b) => b.summary.teamDps)).toFixed(1)}
+                {" – "}
+                {Math.max(...run.data.baselinePerBoss.map((b) => b.summary.teamDps)).toFixed(1)}
+              </dd>
+              <dt title="Combined across bosses in quadrature — see rosterPlanner.ts's own doc comment for why raw teamDps can't be pooled across bosses of very different difficulty.">
+                Aggregate noise floor
+              </dt>
+              <dd>±{run.data.noiseFloorTeamDps.toFixed(3)} team DPS ({run.data.iterations} seeds, {run.data.screenIterations} screen)</dd>
+              <dt>Benched but promising</dt>
+              <dd>{run.data.benchedButPromising.length}</dd>
+              <dt title="Excluded from candidate generation entirely — an unevolved species, one with no affordable level, or one where no affordable level touches any boss's team. Never silently hidden.">
+                Never competitive
+              </dt>
+              <dd>{run.data.neverCompetitive.length}</dd>
+            </dl>
+          </div>
+
+          <h3>Ranked candidates</h3>
+          <div className="table-scroll">
+            <table className="time-series-table">
+              <thead>
+                <tr>
+                  <th>Species</th>
+                  <th>Level</th>
+                  <th>Stardust</th>
+                  <th>Candy</th>
+                  <th>XL candy</th>
+                  <th title="Weighted mean across every swept boss">Mean Δ team DPS</th>
+                  <th title="The single largest-magnitude per-boss effect — dilution by untouched bosses can otherwise hide a real single-boss gain">Best boss Δ</th>
+                  <th title="Bosses where this candidate's own effect clears THAT boss's own noise floor">Significant bosses</th>
+                  <th title="Bosses where this Pokémon was NOT on the baseline team but enters it after this power-up">Newly fielded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCandidateGroups.map((group) => (
+                  <MultiRaidCandidateRow key={group.key} group={group} identity={entryIdentities.get(group.representative.entryId)} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {dedupedCandidates.length > MULTI_RAID_TABLE_INITIAL_ROWS && (
+            <button type="button" style={{ marginTop: 8 }} onClick={() => setShowAllMultiRaidCandidates((v) => !v)}>
+              {showAllMultiRaidCandidates ? `Show top ${MULTI_RAID_TABLE_INITIAL_ROWS} only` : `Show all ${dedupedCandidates.length}`}
+            </button>
+          )}
+
+          {run.data.benchedButPromising.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 16 }}>Benched but promising</h3>
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                Not on any boss&rsquo;s baseline team today, but the cheapest power-up level that would earn one a
+                spot — the headline &ldquo;would a benched Pokémon beat a fielded one if powered up&rdquo; question
+                this mode exists to ask.
+              </p>
+              <div className="table-scroll">
+                <table className="time-series-table">
+                  <thead>
+                    <tr>
+                      <th>Species</th>
+                      <th>Level</th>
+                      <th>Stardust</th>
+                      <th>Candy</th>
+                      <th>XL candy</th>
+                      <th>Mean Δ team DPS</th>
+                      <th>Best boss Δ</th>
+                      <th>Significant bosses</th>
+                      <th>Newly fielded</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dedupedBenched.map((group) => (
+                      <MultiRaidCandidateRow key={`bench-${group.key}`} group={group} identity={entryIdentities.get(group.representative.entryId)} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          <ExcludedEntriesTable
+            heading="Never competitive"
+            description="Excluded from candidate generation entirely — reported, not hidden, so this sweep never silently ignores most of the roster. An unevolved species is excluded because evolution (candy only, no stardust) always buys strictly more team DPS per stardust afterward — power it up AFTER evolving."
+            entries={neverCompetitive}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+const MULTI_RAID_BUDGET_STEP_COLUMN_COUNT = 10;
+
+/**
+ * One committed step of the multi-raid fixed-budget plan (Phase 4) —
+ * expandable into its own per-boss breakdown via the SAME `MultiRaidPerBossTable`
+ * `MultiRaidCandidateRow` uses (`RosterBudgetStep.perBoss` is the identical
+ * `RosterPerBossImpact[]` shape as `RosterPowerUpCandidate.perBoss`). Unlike
+ * the ranked sweep's rows, a step is never deduped — it's a specific, ordered
+ * action the greedy search actually took, not an interchangeable candidate.
+ *
+ * Surfaces `clearsAggregateFloor` explicitly (task's own requirement — "make
+ * it legible rather than hiding it"): `true` means this step's OWN marginal
+ * gain, averaged across the WHOLE boss set, beat the round's aggregate noise
+ * floor on its own; `false` means it was committed anyway because it was
+ * individually significant on at least one boss (`significantBossCount > 0`)
+ * even though the diluted aggregate mean didn't clear the bar by itself —
+ * exactly the "where the ranking flips" thesis applied to a spend decision,
+ * not just a read-only ranked row.
+ */
+function MultiRaidBudgetStepRow({ step, identity, index }: { step: RosterBudgetStep; identity?: string; index: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const bestBossName = step.bestBossId ? (step.perBoss.find((p) => p.bossId === step.bestBossId)?.bossName ?? step.bestBossId) : null;
+  return (
+    <>
+      <tr>
+        <td>{index + 1}</td>
+        <td>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title="Show the per-boss breakdown behind this step's own numbers."
+            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+          >
+            {expanded ? "▾" : "▸"} {step.speciesName}
+          </button>
+          {identity && (
+            <span className="caveats" style={{ display: "block", fontSize: "0.85em" }}>
+              {identity}
+            </span>
+          )}
+        </td>
+        <td>
+          {step.fromLevel} → {step.toLevel}
+        </td>
+        <td>{step.cost.stardust.toLocaleString()}</td>
+        <td>{formatResourceSplit(step.ownCandySpent, step.sharedCandySpent, "Rare")}</td>
+        <td>{formatResourceSplit(step.ownXlCandySpent, step.sharedXlCandySpent, "Rare XL")}</td>
+        <td>
+          {step.meanDeltaTeamDps >= 0 ? "+" : ""}
+          {step.meanDeltaTeamDps.toFixed(3)}
+        </td>
+        <td>
+          {step.bestBossDeltaTeamDps === null
+            ? "—"
+            : `${step.bestBossDeltaTeamDps >= 0 ? "+" : ""}${step.bestBossDeltaTeamDps.toFixed(3)} vs ${bestBossName}`}
+        </td>
+        <td>{step.significantBossCount}</td>
+        <td
+          title={
+            step.clearsAggregateFloor
+              ? `Cleared this round's own aggregate noise floor (±${step.noiseFloorTeamDps.toFixed(2)}) on its own weighted-mean delta.`
+              : `Did NOT clear this round's aggregate noise floor (±${step.noiseFloorTeamDps.toFixed(2)}) — committed because it was individually significant on ${step.significantBossCount} boss(es), not because the averaged mean cleared the bar.`
+          }
+        >
+          {step.clearsAggregateFloor ? "Aggregate" : "Per-boss only"}
+        </td>
+      </tr>
+      {expanded && <MultiRaidPerBossTable perBoss={step.perBoss} columnCount={MULTI_RAID_BUDGET_STEP_COLUMN_COUNT} />}
+    </>
+  );
+}
+
+interface MultiRaidBudgetPlanSectionProps {
+  /** entryId -> a short human identity (IV spread) — same map MultiRaidResultsSection's rows use, so a step naming "Mewtwo" is just as disambiguated as a ranked-table row. */
+  entryIdentities: Map<string, string>;
+  /** familyId -> a representative display label — same list PowerUpOptimizerAssumptionPanel's candy editor already builds, reused here so the ledger table names families the same way the editor that unlocks them does. */
+  rosterFamilyOptions: { familyId: string; label: string }[];
+  run: RosterBudgetPlanRunResult | null;
+  isRunning: boolean;
+  isStale: boolean;
+  ranOn: "worker" | "main-thread-fallback" | null;
+  elapsedMs: number;
+}
+
+/**
+ * The Phase 4 fixed-budget plan for multi-raid mode — a DIFFERENT question
+ * from `MultiRaidResultsSection`'s ranked table above it (CLAUDE.md's
+ * standing decision: the ranked table prices each candidate as if it were
+ * the only purchase; this section is ONE joint allocation across the whole
+ * budget). Deliberately has NO run button of its own — it's computed
+ * together with the ranked sweep by that section's own "Run sweep" click
+ * (see PowerUpOptimizerView's handleRunMultiRaidSweep), off the main thread
+ * via the SAME worker file (`rosterPlanner.worker.ts`'s second, "plan",
+ * request type) — so the two sections can never describe two different
+ * (inputs, pool) snapshots.
+ */
+function MultiRaidBudgetPlanSection({ entryIdentities, rosterFamilyOptions, run, isRunning, isStale, ranOn, elapsedMs }: MultiRaidBudgetPlanSectionProps) {
+  const familyLabel = (familyId: string) => rosterFamilyOptions.find((f) => f.familyId === familyId)?.label ?? familyId;
+
+  return (
+    <section className="panel">
+      <h2>Fixed-budget plan</h2>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        A DIFFERENT question than the ranked sweep above: given your WHOLE stardust/candy/Rare
+        Candy budget across the ENTIRE roster at once — not one candidate priced alone, which is
+        what the ranked table above answers — what SET of power-ups should you actually make? A
+        greedy, step-by-step search: a step is only committed once its own marginal team-DPS gain
+        measurably clears EITHER the round's aggregate noise floor across the whole boss set, OR
+        its own noise floor on at least one individual boss (see each step&rsquo;s
+        &ldquo;Acceptance test&rdquo; column below for which one applied — that distinction is the
+        whole point of the rule, not an implementation detail). Computed together with the ranked
+        sweep above, by that same &ldquo;Run sweep&rdquo; click, off the main thread.
+      </p>
+
+      {isRunning && <p className="species-picker-hint">{(elapsedMs / 1000).toFixed(1)}s elapsed</p>}
+      {!isRunning && run && ranOn && (
+        <p
+          className="species-picker-hint"
+          title={
+            ranOn === "worker"
+              ? "This plan ran in a background Web Worker — the tab stayed responsive while it computed."
+              : "The background worker couldn't be used — this plan ran on the main thread instead."
+          }
+        >
+          {ranOn === "worker" ? "computed off the main thread" : "computed on the main thread (worker unavailable)"} in{" "}
+          {(elapsedMs / 1000).toFixed(1)}s
+        </p>
+      )}
+      {isStale && run && !isRunning && (
+        <p>
+          <span className="badge badge-pending" title="Settings or roster changed since this result was computed.">
+            stale — click Run sweep again above
+          </span>
+        </p>
+      )}
+
+      {!run && !isRunning && (
+        <p className="caveats">Click &ldquo;Run sweep&rdquo; above to compute a joint budget plan alongside the ranked candidates.</p>
+      )}
+
+      {run?.error && <p className="error-text">Could not compute this plan: {run.error}</p>}
+
+      {run?.blockedReason === "no-roster" && (
+        <p className="caveats">
+          No roster imported in this browser yet — see the ranked sweep section above (this link carries every
+          SETTING but never the roster itself).
+        </p>
+      )}
+
+      {run?.blockedReason === "no-bosses" && (
+        <p className="caveats">No bosses resolved for this plan either — see the ranked sweep section above.</p>
+      )}
+
+      {run?.data && (
+        <>
+          {run.data.bestBlockedCandidate ? (
+            <div className="blocked-gain-callout">
+              <strong>Blocked, not done</strong>
+              {rosterBlockedCandidateSentence(run.data.bestBlockedCandidate)} This plan stopped here because that
+              upgrade isn&rsquo;t affordable yet — not because it wouldn&rsquo;t help.
+            </div>
+          ) : (
+            <div className="blocked-gain-callout">
+              <strong>Nothing further measurably helps</strong>
+              Beyond the steps below, no further useful power-up anywhere on this roster clears the ±
+              {run.data.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor against this boss set and budget — this
+              plan is genuinely done, not just out of money.
+            </div>
+          )}
+
+          <div className="result-card" style={{ marginBottom: 12 }}>
+            <dl>
+              <dt>Steps committed</dt>
+              <dd>{run.data.steps.length}</dd>
+              <dt title="Combined across bosses in quadrature, same as the ranked sweep's own aggregate noise floor — see rosterPlanner.ts's own doc comment.">
+                Final aggregate noise floor
+              </dt>
+              <dd>
+                ±{run.data.noiseFloorTeamDps.toFixed(3)} team DPS ({run.data.iterations} seeds, {run.data.screenIterations} screen)
+              </dd>
+              <dt>Stardust</dt>
+              <dd>
+                {run.data.ledger.stardust.spent.toLocaleString()} spent ({run.data.ledger.stardust.remaining.toLocaleString()} left)
+              </dd>
+              <dt>Shared Rare Candy</dt>
+              <dd>
+                {run.data.ledger.sharedRareCandy.spent} spent ({run.data.ledger.sharedRareCandy.remaining} left)
+              </dd>
+              <dt>Shared Rare Candy XL</dt>
+              <dd>
+                {run.data.ledger.sharedRareCandyXl.spent} spent ({run.data.ledger.sharedRareCandyXl.remaining} left)
+              </dd>
+            </dl>
+          </div>
+
+          <h3>Steps</h3>
+          {run.data.steps.length > 0 ? (
+            <div className="table-scroll">
+              <table className="time-series-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Species</th>
+                    <th>Level</th>
+                    <th>Stardust</th>
+                    <th>Candy</th>
+                    <th>XL candy</th>
+                    <th title="Weighted mean across every swept boss">Mean Δ team DPS</th>
+                    <th title="The single largest-magnitude per-boss effect this step produced">Best boss Δ</th>
+                    <th title="Bosses where this step's own effect clears THAT boss's own noise floor">Significant bosses</th>
+                    <th title="Which of the two acceptance tests this step actually cleared — aggregate mean, or per-boss significance alone">
+                      Acceptance test
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {run.data.steps.map((step, i) => (
+                    <MultiRaidBudgetStepRow key={`${step.entryId}-${step.toLevel}-${i}`} step={step} identity={entryIdentities.get(step.entryId)} index={i} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="caveats" style={{ color: "var(--text)" }}>
+              No power-up was added to this plan.
+            </p>
+          )}
+
+          <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
+            {budgetStopReasonSentence(run.data.stopReason, run.data.noiseFloorTeamDps)}
+          </p>
+
+          <h3 style={{ marginTop: 16 }}>Candy ledger, per family</h3>
+          <p className="caveats" style={{ marginBottom: 12 }}>
+            Never a single blended candy total — spent/remaining tracked separately per candy FAMILY (never per
+            species), plus the two shared, account-wide Rare Candy pools above. Only families with a KNOWN starting
+            pool (filled in above) and at least one eligible entry drawing on them appear here — an unknown family's
+            entries are reported below instead, never silently treated as free.
+          </p>
+          {Object.keys(run.data.ledger.candyByFamilyId).length === 0 ? (
+            <p className="species-picker-hint">No candy family both had a known on-hand pool and was drawn on by this plan.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="time-series-table">
+                <thead>
+                  <tr>
+                    <th>Family (example species)</th>
+                    <th>Candy spent (remaining)</th>
+                    <th>XL candy spent (remaining)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(run.data.ledger.candyByFamilyId).map(([familyId, entry]) => (
+                    <tr key={familyId}>
+                      <td>{familyLabel(familyId)}</td>
+                      <td>
+                        {entry.candy.spent} spent ({entry.candy.remaining} left)
+                      </td>
+                      <td>
+                        {entry.xlCandy.spent} spent ({entry.xlCandy.remaining} left)
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <ExcludedEntriesTable
+            heading="Excluded from this plan"
+            description="Never silently dropped: an unevolved species (evolve first, same reasoning as the ranked sweep's own 'never competitive' list) or an entry whose resolved candy family has no known on-hand pool yet — fill it in in the candy editor above to unlock that species for this plan (it can still be RANKED in the sweep above, just not planned against here)."
+            entries={run.data.excludedEntries}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+/** Shared shape of both multi-raid engine calls' final result — structurally identical to RosterPlannerRunResult (TData = RosterPlanResult) and RosterBudgetPlanRunResult (TData = RosterBudgetPlan), see runMultiRaidTrackedComputation below. */
+interface MultiRaidTrackedResult<TData> {
+  targets: WeightedRaidTarget[];
+  data: TData | null;
+  blockedReason: RosterPlannerBlockedReason | null;
+  error: string | null;
+}
+
+/**
+ * Shared timer/promise-tracking plumbing for ONE multi-raid engine call
+ * (either the ranked sweep or the Phase 4 fixed-budget plan) — both are
+ * separate Web Worker round trips (rosterPlannerWorkerClient.ts's two
+ * functions) kicked off TOGETHER by the SAME "Run sweep" click
+ * (handleRunMultiRaidSweep below), each tracked through its OWN
+ * running/elapsed/result state since the two calls finish at different times
+ * (the budget plan measured 1.7-2.5s vs. the sweep's ~1s on a real
+ * 164-entry/13-boss roster — see this feature's own task description), but
+ * always judged against the exact same `resolution` (targets + blockedReason
+ * + inputs) the caller resolved ONCE and handed to both, so the two result
+ * sections can never describe two different (inputs, pool) snapshots. Not a
+ * React hook — called directly from the click handler, which is why timer
+ * state is threaded through explicit setState callbacks rather than
+ * useEffect/useState internally (same reasoning the pre-Phase-4 single-call
+ * version of this logic already used).
+ */
+function runMultiRaidTrackedComputation<TData>(
+  resolution: RosterPlannerResolution,
+  offMainThread: () => Promise<{ data: TData; ranOn: "worker" | "main-thread-fallback" }>,
+  setIsRunning: (v: boolean) => void,
+  setElapsedMs: (v: number) => void,
+  onFinish: (result: MultiRaidTrackedResult<TData>, ranOn: "worker" | "main-thread-fallback" | null) => void,
+): void {
+  setIsRunning(true);
+  const startedAt = performance.now();
+  setElapsedMs(0);
+  const tick = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 200);
+
+  function finish(result: MultiRaidTrackedResult<TData>, ranOn: "worker" | "main-thread-fallback" | null) {
+    window.clearInterval(tick);
+    setElapsedMs(performance.now() - startedAt);
+    onFinish(result, ranOn);
+    setIsRunning(false);
+  }
+
+  if (resolution.blockedReason) {
+    finish({ targets: resolution.targets, data: null, blockedReason: resolution.blockedReason, error: null }, null);
+    return;
+  }
+
+  offMainThread()
+    .then((outcome) => finish({ targets: resolution.targets, data: outcome.data, blockedReason: null, error: null }, outcome.ranOn))
+    .catch((err: unknown) =>
+      finish({ targets: resolution.targets, data: null, blockedReason: null, error: err instanceof Error ? err.message : String(err) }, null),
+    );
+}
 
 /**
  * The Power-Up Optimizer: ranks a candidate power-up (one fielded roster
@@ -319,6 +1160,56 @@ export function PowerUpOptimizerView() {
   const [assumptions, setAssumptionsRaw] = useState<PowerUpOptimizerAssumptions>(initialAssumptions);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showAllCandidates, setShowAllCandidates] = useState(false);
+
+  // Lifted up from RosterImportPanel (which used to own this itself) so the
+  // multi-raid sweep below can read the SAME pool a CSV import just produced
+  // without requiring a page reload — see RosterImportPanel.tsx's own Props
+  // doc comment. RosterImportPanel still owns PERSISTENCE (saveRosterPool as
+  // a side effect of its own import/clear actions); this is just the
+  // canonical in-memory value both it and the sweep now share.
+  const [rosterPool, setRosterPool] = useState<RosterPool>(loadRosterPool);
+  const { entries: hydratedPool, droppedCount: rosterDroppedCount } = useMemo(
+    () => hydrateRosterPool(rosterPool, speciesRegistry),
+    [rosterPool],
+  );
+
+  // entryId -> a short identity for the multi-raid result tables. A roster
+  // routinely holds several entries of the SAME species (4 Mewtwo, 12
+  // Houndour on the reference export), which would otherwise render as
+  // repeated, indistinguishable rows carrying different numbers — see
+  // MultiRaidCandidateRow's `identity` doc comment.
+  const entryIdentities = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of hydratedPool) {
+      const { attack, defense, stamina } = entry.ivs;
+      map.set(entry.entryId, `IV ${attack}/${defense}/${stamina}${entry.ivsAreApproximate ? " (approx)" : ""}`);
+    }
+    return map;
+  }, [hydratedPool]);
+
+  // Distinct candyFamilyId values present in the roster pool, each with a
+  // representative species name — feeds the assumption panel's minimal
+  // inline candy-on-hand editor (PLAN §3.4). A mega/primal entry's OWN
+  // candyFamilyId is always undefined (every real mega/primal species — see
+  // rosterPlanner.ts's RosterEntry.candyFamilyId doc comment), so it's
+  // resolved from its BASE species instead (registry.ts's
+  // resolveMegaBaseSpecies — Phase 3b closed this gap; see
+  // run/runRosterPlanner.ts's toEngineRosterPool for the matching engine-call
+  // side of the same resolution), labeled to make clear WHOSE candy this row
+  // actually spends (e.g. "Blaziken (for Mega Blaziken)").
+  const rosterFamilyOptions = useMemo(() => {
+    const byFamily = new Map<string, string>();
+    for (const entry of hydratedPool) {
+      const isMegaEntry = entry.canMega && !!entry.species.boost;
+      const baseSpecies = isMegaEntry ? resolveMegaBaseSpecies(entry.species) : undefined;
+      const familyId = baseSpecies ? baseSpecies.candyFamilyId : entry.species.candyFamilyId;
+      if (!familyId || byFamily.has(familyId)) continue;
+      byFamily.set(familyId, baseSpecies ? `${baseSpecies.name} (for ${entry.species.name})` : entry.species.name);
+    }
+    return [...byFamily.entries()]
+      .map(([familyId, label]) => ({ familyId, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [hydratedPool]);
 
   function setAssumptions(next: PowerUpOptimizerAssumptions) {
     setAssumptionsRaw(normalizePowerUpAssumptions(next));
@@ -368,6 +1259,13 @@ export function PowerUpOptimizerView() {
   // assumption panel needs instantly, unrelated to this expensive call.
   const optimizerAssumptions = useMemo<PowerUpOptimizerAssumptions>(
     () => ({
+      // Every field below this point through rankBy is what
+      // runPowerUpOptimizerScenario (single-raid) actually reads; the
+      // multi-raid fields are irrelevant to it and held at fixed placeholder
+      // values purely to satisfy PowerUpOptimizerAssumptions' shape — see
+      // multiRaidRunInputs below for the SEPARATE memo that feeds the
+      // multi-raid sweep instead.
+      mode: "single-raid",
       slots: assumptions.slots,
       stardustOnHand: assumptions.stardustOnHand,
       rareCandyOnHand: assumptions.rareCandyOnHand,
@@ -390,6 +1288,12 @@ export function PowerUpOptimizerView() {
       // memo's own recompute trigger (see the doc comment above); the exact
       // value doesn't matter since runPowerUpOptimizerScenario never reads it.
       rankBy: "stardust",
+      // Placeholders — see this memo's own doc comment above.
+      multiRaidBossIds: [],
+      multiRaidIncludePastRaids: false,
+      multiRaidIncludedTiers: null,
+      multiRaidMaxBossCount: 30,
+      candyByFamilyId: {},
     }),
     [
       assumptions.slots,
@@ -420,11 +1324,149 @@ export function PowerUpOptimizerView() {
   const debouncedOptimizerAssumptions = useDebouncedValue(optimizerAssumptions, 400);
   const isOptimizerPending = optimizerAssumptions !== debouncedOptimizerAssumptions;
 
+  // Only ever computed in single-raid mode — skipping this in multi-raid
+  // mode avoids wasting a ~1s engine call every 400ms while the user is
+  // tuning the OTHER computation this tab now offers.
   const runResult = useMemo(
-    () => runPowerUpOptimizerScenario(debouncedOptimizerAssumptions, speciesRegistry),
-    [debouncedOptimizerAssumptions],
+    () => (assumptions.mode === "single-raid" ? runPowerUpOptimizerScenario(debouncedOptimizerAssumptions, speciesRegistry) : null),
+    [assumptions.mode, debouncedOptimizerAssumptions],
   );
-  const result = { data: runResult.data, plan: runResult.plan, error: runResult.error };
+  const result = { data: runResult?.data ?? null, plan: runResult?.plan ?? null, error: runResult?.error ?? null };
+
+  // --- Multi-raid mode ---------------------------------------------------
+  // Everything runRosterPlannerScenario ACTUALLY reads, EXCLUDING the pool
+  // (passed separately — see runRosterPlanner.ts's own doc comment on why
+  // the pool can't live in Assumptions/Scenario at all, per PLAN §3.2).
+  // Built by hand-picking each field (never `{...assumptions}`) — same
+  // convention as `optimizerAssumptions` above, so this memo's own
+  // dependency array can list exactly what it reads instead of the whole
+  // `assumptions` object, which would defeat the point of narrowing it at
+  // all. Single-raid-only fields (slots, targetId, boss moves, etc.) are
+  // fixed placeholders purely to satisfy PowerUpOptimizerAssumptions' shape.
+  const multiRaidInputs = useMemo<PowerUpOptimizerAssumptions>(
+    () => ({
+      mode: "multi-raid",
+      slots: [],
+      targetId: "",
+      bossFastMoveId: null,
+      bossChargedMoveId: null,
+      bossStartsPrimed: false,
+      bossStartingEnergyFraction: 0,
+      rankBy: "stardust",
+      multiRaidIncludePastRaids: assumptions.multiRaidIncludePastRaids,
+      multiRaidIncludedTiers: assumptions.multiRaidIncludedTiers,
+      multiRaidMaxBossCount: assumptions.multiRaidMaxBossCount,
+      multiRaidBossIds: assumptions.multiRaidBossIds,
+      candyByFamilyId: assumptions.candyByFamilyId,
+      stardustOnHand: assumptions.stardustOnHand,
+      rareCandyOnHand: assumptions.rareCandyOnHand,
+      rareCandyXlOnHand: assumptions.rareCandyXlOnHand,
+      dodge: assumptions.dodge,
+      dodgeFastAttacks: assumptions.dodgeFastAttacks,
+      holdChargedMoveUntilSafe: assumptions.holdChargedMoveUntilSafe,
+      bossChargedMoveFrequencySeconds: assumptions.bossChargedMoveFrequencySeconds,
+      bossChargedMoveCadence: assumptions.bossChargedMoveCadence,
+      weather: assumptions.weather,
+      raidTimerSeconds: assumptions.raidTimerSeconds,
+      swapCostSeconds: assumptions.swapCostSeconds,
+      reviveCostSeconds: assumptions.reviveCostSeconds,
+    }),
+    [
+      assumptions.multiRaidIncludePastRaids,
+      assumptions.multiRaidIncludedTiers,
+      assumptions.multiRaidMaxBossCount,
+      assumptions.multiRaidBossIds,
+      assumptions.candyByFamilyId,
+      assumptions.stardustOnHand,
+      assumptions.rareCandyOnHand,
+      assumptions.rareCandyXlOnHand,
+      assumptions.dodge,
+      assumptions.dodgeFastAttacks,
+      assumptions.holdChargedMoveUntilSafe,
+      assumptions.bossChargedMoveFrequencySeconds,
+      assumptions.bossChargedMoveCadence,
+      assumptions.weather,
+      assumptions.raidTimerSeconds,
+      assumptions.swapCostSeconds,
+      assumptions.reviveCostSeconds,
+    ],
+  );
+
+  // No debounce here and NO auto-run — a multi-raid computation is real,
+  // non-trivial compute (~1-4s for the ranked sweep, ~1.7-2.5s for the
+  // Phase 4 fixed-budget plan on a real 164-entry/13-boss roster) and
+  // there's no benefit to re-running either on every keystroke the way the
+  // single-raid path's 400ms debounce does. Run BOTH only when the user
+  // explicitly clicks "Run sweep" below (PLAN §5 Phase 3's own instruction,
+  // extended by Phase 4 to cover the budget plan too) — each of
+  // `multiRaidRun`/`multiRaidBudgetRun` holds BOTH its own result and the
+  // exact (inputs, pool) it was computed from, so staleness is detected by
+  // reference comparison (isMultiRaidStale/isMultiRaidBudgetStale below)
+  // without a useEffect.
+  const [multiRaidRun, setMultiRaidRun] = useState<{
+    inputs: PowerUpOptimizerAssumptions;
+    pool: typeof hydratedPool;
+    result: RosterPlannerRunResult;
+    /** null when the run was blocked before any engine call was even attempted (no-roster/no-bosses) — see RosterPlannerWorkerRunOutcome.ranOn. */
+    ranOn: "worker" | "main-thread-fallback" | null;
+  } | null>(null);
+  const [isRunningMultiRaidSweep, setIsRunningMultiRaidSweep] = useState(false);
+  // Coarse progress ONLY — running/done/failed, plus elapsed wall-clock time.
+  // Deliberately NOT a fabricated percentage: runRosterPlanner has no yield
+  // points of its own inside the worker (a genuine per-boss progress event
+  // needs an onProgress hook inside packages/engine/src/rosterPlanner.ts —
+  // out of scope here, see rosterPlanner.worker.ts's own doc comment).
+  // Ticks every 200ms while running via a plain setInterval in the EVENT
+  // HANDLER below (not a useEffect — no react-hooks/set-state-in-effect
+  // concern), then set once more precisely on completion.
+  const [sweepElapsedMs, setSweepElapsedMs] = useState(0);
+  const isMultiRaidStale = multiRaidRun !== null && (multiRaidRun.inputs !== multiRaidInputs || multiRaidRun.pool !== hydratedPool);
+
+  // Phase 4's fixed-budget plan — SAME (inputs, pool)-snapshot/staleness
+  // convention as multiRaidRun above, but its own independent running/
+  // elapsed/result state since it's a SEPARATE worker round trip that
+  // finishes at a different time than the ranked sweep (see
+  // runMultiRaidTrackedComputation's own doc comment).
+  const [multiRaidBudgetRun, setMultiRaidBudgetRun] = useState<{
+    inputs: PowerUpOptimizerAssumptions;
+    pool: typeof hydratedPool;
+    result: RosterBudgetPlanRunResult;
+    ranOn: "worker" | "main-thread-fallback" | null;
+  } | null>(null);
+  const [isRunningMultiRaidBudget, setIsRunningMultiRaidBudget] = useState(false);
+  const [budgetElapsedMs, setBudgetElapsedMs] = useState(0);
+  const isMultiRaidBudgetStale =
+    multiRaidBudgetRun !== null && (multiRaidBudgetRun.inputs !== multiRaidInputs || multiRaidBudgetRun.pool !== hydratedPool);
+
+  function handleRunMultiRaidSweep() {
+    // RESOLUTION happens ONCE, right here, shared by BOTH engine calls below
+    // — it's cheap (id lookups + pool mapping, no simulation) and needs
+    // registry.ts, which the worker deliberately never imports (see
+    // run/runRosterPlanner.ts's own top doc comment). Only the actual engine
+    // calls (runRosterPlannerOffMainThread / runRosterBudgetOffMainThread) go
+    // to the worker — and BOTH are kicked off from this single click, so the
+    // ranked-sweep and fixed-budget-plan sections below can never describe
+    // two different (inputs, pool) snapshots.
+    const resolution = resolveRosterPlannerInputs(multiRaidInputs, speciesRegistry, hydratedPool);
+    const snapshotInputs = multiRaidInputs;
+    const snapshotPool = hydratedPool;
+
+    runMultiRaidTrackedComputation(
+      resolution,
+      () => runRosterPlannerOffMainThread(resolution.inputs!),
+      setIsRunningMultiRaidSweep,
+      setSweepElapsedMs,
+      (result, ranOn) => setMultiRaidRun({ inputs: snapshotInputs, pool: snapshotPool, result, ranOn }),
+    );
+
+    runMultiRaidTrackedComputation(
+      resolution,
+      () => runRosterBudgetOffMainThread(resolution.inputs!),
+      setIsRunningMultiRaidBudget,
+      setBudgetElapsedMs,
+      (result, ranOn) => setMultiRaidBudgetRun({ inputs: snapshotInputs, pool: snapshotPool, result, ranOn }),
+    );
+  }
 
   // Sorting is over the ALREADY-COMPUTED candidates and is cheap — kept bound
   // to the LIVE rankBy (not the debounced snapshot) so switching the sort
@@ -476,9 +1518,20 @@ export function PowerUpOptimizerView() {
   return (
     <>
       <p className="subtitle">
-        {rosterNames.length > 0 ? rosterNames.join(", ") : "Build a 6-slot roster"} vs{" "}
-        {bossSpecies ? speciesLabel(bossSpecies) : "a raid boss"} — ranks every affordable power-up by team-DPS
-        gained per stardust/candy spent, not raw CP or Attack.
+        {assumptions.mode === "single-raid" ? (
+          <>
+            {rosterNames.length > 0 ? rosterNames.join(", ") : "Build a 6-slot roster"} vs{" "}
+            {bossSpecies ? speciesLabel(bossSpecies) : "a raid boss"} — ranks every affordable power-up by team-DPS
+            gained per stardust/candy spent, not raw CP or Attack.
+          </>
+        ) : (
+          <>
+            {hydratedPool.length > 0 ? `${hydratedPool.length}-Pokémon imported roster` : "Import a roster below"} vs{" "}
+            {assumptions.multiRaidBossIds.length} raid boss{assumptions.multiRaidBossIds.length === 1 ? "" : "es"} —
+            ranks every power-up across the WHOLE set, including currently-benched Pokémon that would only earn a
+            spot on the team if powered up first.
+          </>
+        )}
       </p>
 
       <PowerUpOptimizerAssumptionPanel
@@ -491,8 +1544,11 @@ export function PowerUpOptimizerView() {
         bossSpecies={bossSpecies}
         bossReadySeconds={bossReadySeconds}
         bossHp={bossHp}
+        rosterFamilyOptions={rosterFamilyOptions}
       />
 
+      {assumptions.mode === "single-raid" && (
+      <>
       {result.error && (
         <section className="panel">
           <p className="error-text">Could not compute this optimizer run: {result.error}</p>
@@ -740,7 +1796,7 @@ export function PowerUpOptimizerView() {
               )}
 
               <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
-                {budgetStopReasonSentence(result.plan)}
+                {budgetStopReasonSentence(result.plan.stopReason, result.plan.noiseFloorTeamDps)}
               </p>
 
               <h3 style={{ marginTop: 16 }}>What's left, per slot</h3>
@@ -856,14 +1912,6 @@ export function PowerUpOptimizerView() {
       )}
 
       <section className="panel">
-        <h2>Share this scenario</h2>
-        <div className="share-row">
-          <button onClick={handleShare}>Build link</button>
-          {shareUrl && <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />}
-        </div>
-      </section>
-
-      <section className="panel">
         <h2>Known caveats</h2>
         <p className="caveats note-block">
           v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
@@ -893,9 +1941,54 @@ export function PowerUpOptimizerView() {
           resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
         </p>
       </section>
+      </>
+      )}
+
+      {assumptions.mode === "multi-raid" && (
+        <>
+          <MultiRaidResultsSection
+            hydratedPoolCount={hydratedPool.length}
+            entryIdentities={entryIdentities}
+            pool={hydratedPool}
+            rosterDroppedCount={rosterDroppedCount}
+            bossCount={assumptions.multiRaidBossIds.length}
+            run={multiRaidRun?.result ?? null}
+            isRunning={isRunningMultiRaidSweep}
+            isStale={isMultiRaidStale}
+            ranOn={multiRaidRun?.ranOn ?? null}
+            elapsedMs={sweepElapsedMs}
+            onRunSweep={handleRunMultiRaidSweep}
+          />
+          <MultiRaidBudgetPlanSection
+            entryIdentities={entryIdentities}
+            rosterFamilyOptions={rosterFamilyOptions}
+            run={multiRaidBudgetRun?.result ?? null}
+            isRunning={isRunningMultiRaidBudget}
+            isStale={isMultiRaidBudgetStale}
+            ranOn={multiRaidBudgetRun?.ranOn ?? null}
+            elapsedMs={budgetElapsedMs}
+          />
+        </>
+      )}
 
       <section className="panel">
-        <RosterImportPanel />
+        <h2>Share this scenario</h2>
+        <div className="share-row">
+          <button onClick={handleShare}>Build link</button>
+          {shareUrl && <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />}
+        </div>
+        {assumptions.mode === "multi-raid" && (
+          <p className="caveats" style={{ marginTop: 8 }}>
+            This link carries every SETTING above (boss set, budgets, dodge/weather/timer, etc.) but NOT your
+            imported roster — the roster lives only in THIS browser&rsquo;s local storage (a deliberate exception,
+            see PLAN_multi_raid_roster_optimizer.md §3.2). A recipient opening this link needs to import their own
+            Poke Genie CSV (or yours, exported as JSON below) before they see a sweep.
+          </p>
+        )}
+      </section>
+
+      <section className="panel">
+        <RosterImportPanel pool={rosterPool} onPoolChange={setRosterPool} />
       </section>
     </>
   );

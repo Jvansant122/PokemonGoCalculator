@@ -379,6 +379,50 @@ export function raidTierForSpeciesId(id: string): RaidTier | null {
   return isKnownRaidTier(entry.tier) ? entry.tier : null;
 }
 
+/**
+ * Strips one of the four real mega/primal id suffixes (`-mega`, `-mega-x`,
+ * `-mega-y`, `-primal`) to get a species id's BASE form's id — `null` when
+ * `id` doesn't carry one of those suffixes at all (not a mega/primal id).
+ * WEB-LAYER, string-convention resolution only — see
+ * `resolveMegaBaseSpecies`'s own doc comment for why this can't live in the
+ * no-I/O engine layer instead.
+ */
+function megaBaseSpeciesId(id: string): string | null {
+  const baseId = id.replace(/-primal$/, "").replace(/-mega-x$/, "").replace(/-mega-y$/, "").replace(/-mega$/, "");
+  return baseId === id ? null : baseId;
+}
+
+/**
+ * Resolves a mega/primal `SpeciesDefinition`'s BASE species — `undefined`
+ * when `species.id` doesn't carry a recognized mega/primal suffix, or when
+ * the stripped base id isn't itself registered (never guesses). This is a
+ * WEB-LAYER, string-convention resolution, not an engine capability: a mega
+ * draws its BASE species' candy, but `SpeciesDefinition` carries no
+ * `baseSpeciesId` link the no-I/O engine layer could resolve on its own (see
+ * `rosterPlanner.ts`'s `RosterEntry.candyFamilyId` doc comment). Confirmed
+ * against all 61 real mega/primal species in the current data (2026-09-09):
+ * 61/61 resolve to a registered base species via this exact suffix
+ * convention.
+ */
+export function resolveMegaBaseSpecies(species: SpeciesDefinition): SpeciesDefinition | undefined {
+  const baseId = megaBaseSpeciesId(species.id);
+  return baseId && speciesRegistry.has(baseId) ? speciesRegistry.get(baseId) : undefined;
+}
+
+/**
+ * Resolves a mega/primal species' candy family from its BASE species'
+ * `candyFamilyId` — `SpeciesDefinition.candyFamilyId` is `undefined` for
+ * every one of the 61 real mega/primal species today (see
+ * `resolveMegaBaseSpecies`'s own doc comment). Falls back to `undefined`
+ * (the same honest "candy unverified" default as before this existed) when
+ * `resolveMegaBaseSpecies` can't resolve a base species at all — never
+ * guesses.
+ */
+export function resolveMegaBaseCandyFamilyId(species: SpeciesDefinition): string | undefined {
+  if (species.candyFamilyId) return species.candyFamilyId;
+  return resolveMegaBaseSpecies(species)?.candyFamilyId;
+}
+
 export interface TargetPickerOption {
   id: string;
   label: string;

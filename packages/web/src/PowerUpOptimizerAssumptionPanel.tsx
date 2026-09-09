@@ -5,7 +5,9 @@ import { SpeciesBadges } from "./SpeciesBadges.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
-import type { PowerUpRankBy } from "./powerUpOptimizerScenario.js";
+import { BossSetPanel } from "./BossSetPanel.js";
+import type { PowerUpOptimizerMode, PowerUpRankBy } from "./powerUpOptimizerScenario.js";
+import { resolveMultiRaidBossIds } from "./multiRaidBossSet.js";
 
 /** One roster slot's own configuration — mirrors powerUpOptimizerScenario.ts's PowerUpScenarioSlot exactly, field for field. */
 export interface PowerUpSlotAssumption {
@@ -53,7 +55,9 @@ export function emptyPowerUpSlot(): PowerUpSlotAssumption {
 }
 
 export interface PowerUpOptimizerAssumptions {
-  /** Always exactly MAX_TEAM_RAID_SLOTS entries, in fight order — pad with empty slots rather than shortening the array. */
+  /** Which of the tab's two computations is active — see powerUpOptimizerScenario.ts's PowerUpOptimizerMode. */
+  mode: PowerUpOptimizerMode;
+  /** Always exactly MAX_TEAM_RAID_SLOTS entries, in fight order — pad with empty slots rather than shortening the array. Single-raid mode only. */
   slots: PowerUpSlotAssumption[];
   /** Stardust currently held — shared across the whole roster (real Pokémon GO stardust is one account-wide pool, unlike candy which is per-species). */
   stardustOnHand: number;
@@ -76,8 +80,18 @@ export interface PowerUpOptimizerAssumptions {
   raidTimerSeconds: number;
   swapCostSeconds: number;
   reviveCostSeconds: number;
-  /** Which resource column the ranked candidate table is sorted by — display-only (never affects optimizePowerUps' own math), same "still a real setting" reasoning as Species Report's sortMode. */
+  /** Which resource column the ranked candidate table is sorted by — display-only (never affects optimizePowerUps' own math), same "still a real setting" reasoning as Species Report's sortMode. Single-raid mode only. */
   rankBy: PowerUpRankBy;
+  /** Multi-raid mode only — see powerUpOptimizerScenario.ts's multiRaidBossIds. AUTHORITATIVE for the sweep; never re-derived from the three filter fields below on scenario load — see multiRaidBossSet.ts. */
+  multiRaidBossIds: string[];
+  /** Multi-raid mode only — display-state restoration for BossSetPanel's own control. See multiRaidBossIds above for why the sweep itself never reads this directly. */
+  multiRaidIncludePastRaids: boolean;
+  /** Multi-raid mode only — see multiRaidIncludePastRaids. null = every tier. */
+  multiRaidIncludedTiers: string[] | null;
+  /** Multi-raid mode only — see multiRaidIncludePastRaids. */
+  multiRaidMaxBossCount: number;
+  /** Multi-raid mode only — account-wide candy on hand pooled per candyFamilyId. See RosterPlannerInputs.candyByFamilyId (rosterPlanner.ts) and PLAN §3.4. A family absent here is UNKNOWN candy, never 0. */
+  candyByFamilyId: Record<string, { candy: number; xlCandy: number } | undefined>;
 }
 
 interface Props {
@@ -91,6 +105,8 @@ interface Props {
   bossSpecies: SpeciesDefinition | null;
   bossReadySeconds: number | null;
   bossHp: number | null;
+  /** Multi-raid mode only — distinct candyFamilyId values present in the imported roster pool, each with a representative species name for display. Drives the minimal inline candy-on-hand editor (PLAN §3.4: "let you fill candy in inline, per FAMILY, for the rows you actually care about" — entering every family is not a real workflow). */
+  rosterFamilyOptions: { familyId: string; label: string }[];
 }
 
 /**
@@ -111,9 +127,30 @@ export function PowerUpOptimizerAssumptionPanel({
   bossSpecies,
   bossReadySeconds,
   bossHp,
+  rosterFamilyOptions,
 }: Props) {
   function set<K extends keyof PowerUpOptimizerAssumptions>(key: K, next: PowerUpOptimizerAssumptions[K]) {
     onChange({ ...value, [key]: next });
+  }
+
+  function setMode(mode: PowerUpOptimizerMode) {
+    if (mode === value.mode) return;
+    // Switching INTO multi-raid mode with no boss set resolved yet gets a
+    // real, non-empty default (today's active raids, no tier filter, capped
+    // at the default 30) — same "a fresh state should demonstrate something
+    // real, not an empty form" precedent every other tab's own DEFAULT_*
+    // follows. Only auto-populates when truly empty, so re-toggling the mode
+    // switch back and forth never clobbers a boss set the user already tuned.
+    if (mode === "multi-raid" && value.multiRaidBossIds.length === 0) {
+      const filters = {
+        includePastRaids: value.multiRaidIncludePastRaids,
+        includedTiers: value.multiRaidIncludedTiers,
+        maxBossCount: value.multiRaidMaxBossCount,
+      };
+      onChange({ ...value, mode, multiRaidBossIds: resolveMultiRaidBossIds(filters) });
+      return;
+    }
+    set("mode", mode);
   }
 
   function updateSlot(i: number, patch: Partial<PowerUpSlotAssumption>) {
@@ -143,12 +180,126 @@ export function PowerUpOptimizerAssumptionPanel({
     <section className="panel">
       <h2>Assumptions</h2>
 
+      <div className="tab-switcher" role="group" aria-label="Power-up optimizer mode" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`tab-button${value.mode === "single-raid" ? " active" : ""}`}
+          onClick={() => setMode("single-raid")}
+        >
+          Single raid — 6-slot roster vs. one boss
+        </button>
+        <button
+          type="button"
+          className={`tab-button${value.mode === "multi-raid" ? " active" : ""}`}
+          onClick={() => setMode("multi-raid")}
+        >
+          Multi-raid — whole imported roster vs. a boss set
+        </button>
+      </div>
+
+      {value.mode === "multi-raid" && (
+        <div>
+          <BossSetPanel
+            value={{
+              includePastRaids: value.multiRaidIncludePastRaids,
+              includedTiers: value.multiRaidIncludedTiers,
+              maxBossCount: value.multiRaidMaxBossCount,
+              bossIds: value.multiRaidBossIds,
+            }}
+            onChange={(next) =>
+              onChange({
+                ...value,
+                multiRaidIncludePastRaids: next.includePastRaids,
+                multiRaidIncludedTiers: next.includedTiers,
+                multiRaidMaxBossCount: next.maxBossCount,
+                multiRaidBossIds: next.bossIds,
+              })
+            }
+          />
+
+          <div style={{ marginTop: 12 }}>
+            <p className="field-group-label">Candy on hand, per candy family (multi-raid mode)</p>
+            <p className="species-picker-hint">
+              Poke Genie exports no candy-on-hand column at all — every family starts UNKNOWN, not zero. Fill in only
+              the families you care about below; an unknown family's candidates are still ranked, just marked
+              &ldquo;cost unverified&rdquo; and excluded from the fixed-budget plan below (filling a family in here is
+              what UNLOCKS it for that plan — see the &ldquo;Fixed-budget plan&rdquo; section&rsquo;s own
+              &ldquo;Excluded from this plan&rdquo; table for exactly which families/species are still missing).
+              Pooled per candy FAMILY (e.g. Houndour and Houndoom share one pool), never per species — a mega/primal roster
+              entry&rsquo;s candy is resolved from its BASE species&rsquo; family automatically (e.g. Mega Blaziken
+              draws Blaziken&rsquo;s candy; labeled below as &ldquo;Blaziken (for Mega Blaziken)&rdquo;), since that
+              is whose candy a real power-up actually spends.
+            </p>
+            {rosterFamilyOptions.length === 0 ? (
+              <p className="species-picker-hint">No roster imported yet — import one below to see its candy families here.</p>
+            ) : (
+              <div className="table-scroll">
+                <table className="time-series-table">
+                  <thead>
+                    <tr>
+                      <th>Family (example species)</th>
+                      <th>Candy on hand</th>
+                      <th>XL candy on hand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rosterFamilyOptions.map(({ familyId, label }) => {
+                      const pool = value.candyByFamilyId[familyId];
+                      return (
+                        <tr key={familyId}>
+                          <td>{label}</td>
+                          <td>
+                            <input
+                              type="number"
+                              min={0}
+                              value={pool?.candy ?? ""}
+                              placeholder="unknown"
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const candy = raw === "" ? undefined : Math.max(0, Math.floor(Number(raw) || 0));
+                                set("candyByFamilyId", {
+                                  ...value.candyByFamilyId,
+                                  [familyId]: candy === undefined ? undefined : { candy, xlCandy: pool?.xlCandy ?? 0 },
+                                });
+                              }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              min={0}
+                              value={pool?.xlCandy ?? ""}
+                              placeholder="unknown"
+                              onChange={(e) => {
+                                const raw = e.target.value;
+                                const xlCandy = raw === "" ? undefined : Math.max(0, Math.floor(Number(raw) || 0));
+                                set("candyByFamilyId", {
+                                  ...value.candyByFamilyId,
+                                  [familyId]: xlCandy === undefined ? undefined : { candy: pool?.candy ?? 0, xlCandy },
+                                });
+                              }}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {value.mode === "single-raid" && (
       <div style={{ marginBottom: 10 }}>
         <button type="button" onClick={clearAllMega} disabled={!value.slots.some((s) => s.isMega)}>
           No mega/primal this raid
         </button>
       </div>
+      )}
 
+      {value.mode === "single-raid" && (
       <div className="team-roster">
         {value.slots.map((slot, i) => {
           const species = slotSpecies[i];
@@ -323,9 +474,12 @@ export function PowerUpOptimizerAssumptionPanel({
           );
         })}
       </div>
+      )}
 
       <div className="assumption-grid">
         <div>
+        {value.mode === "single-raid" && (
+        <>
           <SpeciesPicker
             idPrefix="pu-target"
             label="Raid target"
@@ -359,6 +513,8 @@ export function PowerUpOptimizerAssumptionPanel({
               />
             </>
           )}
+        </>
+        )}
         </div>
 
         <div className="field">
@@ -397,6 +553,7 @@ export function PowerUpOptimizerAssumptionPanel({
           />
         </div>
 
+        {value.mode === "single-raid" && (
         <div className="field">
           <label htmlFor="pu-rankBy">Rank candidates by</label>
           <select id="pu-rankBy" value={value.rankBy} onChange={(e) => set("rankBy", e.target.value as PowerUpRankBy)}>
@@ -410,6 +567,7 @@ export function PowerUpOptimizerAssumptionPanel({
             blended score, since they aren't fungible resources for a real player.
           </p>
         </div>
+        )}
 
         <div className="field">
           <label htmlFor="pu-dodge">Dodge boss's charged attacks</label>
@@ -479,6 +637,8 @@ export function PowerUpOptimizerAssumptionPanel({
           )}
         </div>
 
+        {value.mode === "single-raid" && (
+        <>
         <div className="field">
           <label>Boss ready for its first charged move</label>
           <p className="computed-value">
@@ -525,6 +685,8 @@ export function PowerUpOptimizerAssumptionPanel({
               onChange={(e) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, Number(e.target.value) / 100)))}
             />
           </div>
+        )}
+        </>
         )}
 
         <WeatherSelect idPrefix="pu" value={value.weather} onChange={(w) => set("weather", w)} />

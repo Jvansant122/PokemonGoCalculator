@@ -341,6 +341,7 @@ describe("AttackDefenseBreakpointsScenario round-trip", () => {
 
 describe("PowerUpOptimizerScenario round-trip", () => {
   const nonDefault: PowerUpOptimizerAssumptions = {
+    mode: "multi-raid",
     slots: [
       {
         speciesId: "rayquaza",
@@ -395,6 +396,11 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     swapCostSeconds: 2,
     reviveCostSeconds: 14,
     rankBy: "candy",
+    multiRaidBossIds: ["kyogre-primal", "tyranitar-mega", "rayquaza"],
+    multiRaidIncludePastRaids: true,
+    multiRaidIncludedTiers: ["Tier 5", "Mega"],
+    multiRaidMaxBossCount: 12,
+    candyByFamilyId: { FAMILY_HOUNDOUR: { candy: 40, xlCandy: 3 } },
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {

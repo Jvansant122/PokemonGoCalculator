@@ -116,3 +116,44 @@ Ordered by how much they'd change results, not by effort.
 
 Standing caveat for all of the above: the sourcing is ~2 years old and Niantic re-tunes raid
 internals without notice. Re-verify before building on any of it.
+
+---
+
+## Deferred from the multi-raid roster optimizer (2026-09-09)
+
+Each of these was scoped, deliberately not built, and is written down so it isn't rediscovered
+as a bug. Nothing here is committed work.
+
+9. **"Evolve, then power up to L" as a single priced candidate.** The roster planner currently
+   *excludes* an unevolved entry and says "evolve first (into X)" — correct advice, but it can't
+   rank a cheap unevolved Pokémon that would be excellent once evolved. Pricing it needs
+   per-species evolution candy costs; GAME_MASTER already carries them per branch
+   (`candyCost`/`candyCostPurified`) but data-sync doesn't normalize them yet. See MECHANICS.md,
+   "Evolution: candy-only".
+
+10. **Second charged move unlock as a budget-candidate type.** It draws on the *same* stardust
+    and candy the planner allocates and is often a better team-DPS-per-stardust buy than several
+    half-levels, so a plan that prices only power-ups can recommend the wrong purchase. Costs and
+    the Purified **×0.8** trap (not ×0.9) are recorded in MECHANICS.md.
+
+11. **A "best available moveset" toggle.** 60% of a real Poke Genie export has no recorded
+    charged move, so those entries simulate on `chargedMoves[0]` and are under-ranked even when a
+    cheap TM would fix it. Correct for "what should I power up", wrong for "what should I invest
+    in" — a toggle, not a default change.
+
+12. **Re-selecting a different six after a wipe.** `runTeamRaid` models the wipe/revive cost but
+    always re-fields the same roster; a real trainer with 164 Pokémon returns to the lobby and
+    picks a fresh six, with no documented cap on repeats. Newly meaningful only at pool scale.
+    **This is not the ruled-out Teambuilding Analyzer** — that exclusion is about *multi-trainer*
+    mega staggering across a lobby; this is one trainer sequentially re-selecting from their own
+    roster, the same framing the Team Raid Simulator already uses. Read this before dismissing it.
+
+13. **Real per-boss progress for the multi-raid sweep.** The worker reports coarse
+    running/done/failed plus elapsed time; genuine progress needs an `onProgress` hook inside
+    `packages/engine/src/rosterPlanner.ts` (an `engine-developer` change). Deliberately not faked
+    with a percentage that doesn't track real work.
+
+14. **`TeamRaidInputs` has no `bossMaxHpOverride`**, unlike `SustainedComparisonInputs`. So an
+    archived boss carrying a real recorded `eraHp` is cleared against today's tier HP inside
+    `runTeamRaid`'s own clear-timer detection. Harmless while the multi-raid sweep defaults to
+    currently-active bosses; it bites as soon as past bosses are routinely swept.

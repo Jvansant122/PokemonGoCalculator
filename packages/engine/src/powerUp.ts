@@ -1467,6 +1467,18 @@ interface RawPowerUpBudgetCandidate {
  * loop (interleaving each slot's AFFORDABLE candidates) and its post-search
  * "best blocked candidate" pass (interleaving each slot's UNAFFORDABLE
  * ones) — same shape, different input lists.
+ *
+ * NOT reused by rosterPlanner.ts's planRosterBudget (Phase 4) despite that
+ * function generalizing this same round loop — round-robin-BY-DEPTH stops
+ * scaling once "slots" becomes a 100-200-entry pool: depth 0 ALONE (every
+ * entry's own nearest candidate) already exceeds a 60-candidate round cap,
+ * so no entry ever gets a look at its 2nd-nearest level, let alone a
+ * multi-level jump — verified empirically while implementing that phase
+ * (a real Gengar 30->49 jump was silently unreachable under this exact
+ * mechanism on a 164-entry pool). planRosterBudget instead pre-ranks every
+ * round's raw candidates with a cheap arithmetic proxy before capping — see
+ * that module's own top doc comment. Kept private here since nothing
+ * outside this file uses it.
  */
 function interleaveCandidatesRoundRobin<T>(perSlotLists: T[][], depthLimit: number, maxTotal: number): T[] {
   const result: T[] = [];
@@ -1488,8 +1500,13 @@ function interleaveCandidatesRoundRobin<T>(perSlotLists: T[][], depthLimit: numb
  * this module, just surfaced per-resource instead of collapsed to a
  * boolean. Never blends resources into one number (per CLAUDE.md's standing
  * decision) — a candidate short on two resources at once gets two entries.
+ *
+ * EXPORTED (2026-09-09) for rosterPlanner.ts's planRosterBudget, whose own
+ * "best blocked candidate" pass needs the identical per-resource shortfall
+ * accounting, just keyed against a candy-FAMILY pool instead of a single
+ * slot's own candy — reused verbatim, not re-derived.
  */
-function shortfallsForCandidate(
+export function shortfallsForCandidate(
   cost: PowerUpResourceCost,
   remainingStardust: number,
   ownCandy: number,

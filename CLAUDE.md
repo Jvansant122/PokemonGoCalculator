@@ -46,7 +46,20 @@ The handful of product-level calls that must survive no matter which agent touch
   Never treat this as a cosmetic tuning knob.
 - **Every user-facing assumption must round-trip through `Scenario`.** A setting that works live
   but silently reverts to a default on a shared link is a real, recurring bug class here — use
-  the `add-scenario-assumption` skill whenever a new setting is added.
+  the `add-scenario-assumption` skill whenever a new setting is added. **One deliberate,
+  user-chosen exception (2026-09-09):** the Power-Up Optimizer's *imported roster* (up to ~200
+  Pokémon from a Poke Genie CSV) lives in `localStorage` only, never the URL — it is ~16 KB of
+  base64 and does not belong in a link. It is therefore kept **out of
+  `PowerUpOptimizerAssumptions` entirely** (its own `rosterPool.ts` state), so the exception is
+  structural and visible rather than a field quietly missing from the codec, and
+  `check-scenario-roundtrip` still passes honestly. Every *setting* still round-trips. Any UI
+  producing a share link must say the roster isn't in it, and a recipient without one gets an
+  explicit empty state. Real cross-device persistence stays `PLAN_login_and_roster_persistence.md`'s job.
+- **A multi-boss sweep encodes RESOLVED boss ids, never a filter.** The active-raid roster
+  rotates, so encoding "active raids" would silently sweep a different boss set than the sender
+  ran. The Power-Up Optimizer's `multiRaidBossIds` is authoritative for the computation; the
+  include-past/tier/max-count fields exist only to restore the filter UI and are never re-derived
+  on decode.
 - **Pinned acceptance tests are backed by test-only fixtures, not product data.** The original 4
   hand-authored "hypothetical" species (Mega Raichu X/Y, Primal Kyogre, Mega Skarmory) were
   deleted at the user's explicit request (2026-09-06) — they were reachable from `packages/web`'s
@@ -134,8 +147,26 @@ npm workspaces monorepo, two packages:
   (`rareCandyOnHand`/`rareCandyXlOnHand`) are account-wide and fungible across slots, 1:1, and a
   slot always spends its OWN per-species candy first; plain Rare Candy can never become XL Candy
   (MECHANICS.md, "Fungible candy currencies").
-  v1 has no login — the roster lives in the URL like every other tab; real persistence is
-  `PLAN_login_and_roster_persistence.md`'s job). Each has its own shareable `Scenario`-family
+  **The tab has TWO MODES as of 2026-09-09** (`mode` in its scenario; absent decodes as
+  `"single-raid"`, which is unchanged). **Multi-raid** swaps the 6 hand-entered slots for a whole
+  roster imported from a **Poke Genie CSV** (`packages/web/src/import/`, ~164 entries on a real
+  export) and the single boss for a **set** of them, and its candidates are deliberately NOT
+  limited to the six already fielded — a benched Pokémon that would displace a fielded one after
+  a power-up is the headline question (`benchedButPromising`), and one that never would is
+  reported in `neverCompetitive` rather than silently ignored. The engine half is
+  `packages/engine/src/rosterPlanner.ts` (`runRosterPlanner` = the ranked table,
+  `planRosterBudget` = the joint allocation — same two-questions split as above, don't merge
+  them); the sweep runs in `rosterPlanner.worker.ts`, which must import ONLY
+  `@pogo-analyzer/engine` and never `registry.ts`, or `species.json` gets bundled twice.
+  Three multi-raid rules that cost real debugging to find: **candy pools per `candyFamilyId`,
+  never per species id** (25 families hold >1 entry on a real roster); an entry is excluded only
+  when `isFullyEvolved === false`, **never `!== true`** (it is `undefined` for all 61 megas, and
+  excluding on "not true" drops Mega Blaziken, the best real recommendation); and the aggregate
+  noise floor **combines per-boss floors in quadrature** — pooling raw teamDps across bosses
+  measures between-boss spread (8-92 on a real roster), which cancels in a paired delta and made
+  the first build report 0 of 60 candidates significant. Significance is aggregate **OR**
+  per-boss, since a gain worth +1.29 against one boss reads as 0.11 averaged over 13.
+  The imported roster is `localStorage`-only — see the standing decision above). Each has its own shareable `Scenario`-family
   type and URL query param (`s` / `ts` / `sr` / `ivc` / `adb` / `pu`) — don't conflate them.
   Each view's computation is a pure, React-free `run<Tab>Scenario` in `packages/web/src/run/`,
   called via `useMemo`; `scripts/run-scenario.ts` and `run/run.smoke.test.ts` call the same

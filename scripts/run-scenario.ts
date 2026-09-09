@@ -72,6 +72,7 @@ import {
 } from "../packages/web/src/PowerUpOptimizerView.js";
 import { parsePowerUpOptimizerScenarioFromUrl } from "../packages/web/src/powerUpOptimizerScenario.js";
 import { runPowerUpOptimizerScenario } from "../packages/web/src/run/runPowerUpOptimizer.js";
+import { runRosterBudgetScenario, runRosterPlannerScenario } from "../packages/web/src/run/runRosterPlanner.js";
 
 import { speciesRegistry } from "../packages/web/src/registry.js";
 
@@ -255,6 +256,30 @@ function main(): void {
     case "power-up-optimizer": {
       const fromUrl = parsePowerUpOptimizerScenarioFromUrl(urlString);
       const assumptions = fromUrl ? normalizePowerUpAssumptions(puScenarioToAssumptions(fromUrl)) : PU_DEFAULTS;
+
+      if (assumptions.mode === "multi-raid") {
+        // The CLI structurally CANNOT have a roster — it lives only in the
+        // browser's own localStorage, never the share link (PLAN
+        // §3.2/CLAUDE.md's documented exception). Calling with an empty pool
+        // exercises the SAME "no-roster" path a recipient opening this link
+        // in a fresh browser would see, so this is still a real, honest
+        // reproduction of what the CLI (or `skeptic`/`engine-verifier`) can
+        // learn from a multi-raid share link: the resolved boss set and every
+        // other setting, never the roster itself. Both the ranked sweep AND
+        // the Phase 4 fixed-budget plan share this same limitation (both need
+        // resolveRosterPlannerInputs' pool, which is empty here) — report
+        // both honestly rather than only the sweep, per the task's own
+        // instruction not to silently drop the plan from this CLI path.
+        const rosterResult = runRosterPlannerScenario(assumptions, speciesRegistry, []);
+        const budgetResult = runRosterBudgetScenario(assumptions, speciesRegistry, []);
+        summary = [
+          `Power-Up Optimizer (multi-raid mode): ${assumptions.multiRaidBossIds.length} boss(es) resolved in this scenario, ${rosterResult.targets.length} still resolve to a registered species today.`,
+          `  Roster not available to this CLI (for either the ranked sweep or the fixed-budget plan) — it lives only in the browser's local storage, never the share link (see CLAUDE.md's roster/localStorage exception). Open this link in a browser and import a roster to compute a real sweep/plan.`,
+        ];
+        jsonResult = { sweep: rosterResult, budgetPlan: budgetResult };
+        break;
+      }
+
       const result = runPowerUpOptimizerScenario(assumptions, speciesRegistry);
       if (result.error) {
         summary = [`Power-Up Optimizer: could not compute — ${result.error}`];

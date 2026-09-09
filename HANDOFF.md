@@ -1,9 +1,52 @@
 # Handoff
 
-Last updated: 2026-09-09 (overnight research session: GAME_MASTER settings sweep). Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-09 (multi-raid whole-roster Power-Up Optimizer shipped). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-09 (latest): overnight `pogo-researcher` session — 15 research passes, no code changed
+## 2026-09-09 (latest): multi-raid, whole-roster Power-Up Optimizer — SHIPPED
+
+`PLAN_multi_raid_roster_optimizer.md` is **complete and deleted** (all five phases). The
+Power-Up Optimizer now has two modes; `"single-raid"` is byte-for-byte unchanged and an old
+share link with no `mode` field still decodes to it.
+
+**What it does.** Import a Poke Genie CSV (164/164 rows matched on the reference export), sweep
+the whole roster against a *set* of bosses, and rank power-ups — with candidates deliberately
+NOT limited to the six already fielded. `runRosterPlanner` gives the ranked table (each
+candidate priced as if it were the only purchase); `planRosterBudget` gives the joint
+allocation. Same two-questions split as the single-raid tab — don't merge them.
+
+**On the real 164-Pokémon roster**, 250k stardust: commits Mega Blaziken L20→40.5 (+1.416 mean,
++15.13 on its best boss, 5 significant bosses) then Kyurem L20→22.5, leaving 1,000 dust and a
+blocked Mewtwo at +0.92. 74 entries excluded as unevolved, 24 benched-but-promising.
+
+**Four bugs worth remembering** (all now guarded by tests, all also in `CLAUDE.md` as rules):
+
+1. The aggregate noise floor pooled raw teamDps across bosses — that measures between-boss
+   spread (8-92), which cancels in a paired delta. First build reported **0 of 60 candidates
+   significant at every iteration count**; the feature was inert while 304 tests passed green.
+   Fixed by combining per-boss floors in quadrature.
+2. Significance was aggregate-only, so a benched Kyurem worth +1.29 against one boss read as
+   0.11 averaged over 13. Now aggregate **OR** per-boss.
+3. `isFullyEvolved` derived from "has an evolutionBranch" marks Charizard/Venusaur/Blastoise/
+   Beedrill/Metagross unevolved (123 templates carry a mega-only branch). Must be "has a branch
+   with an `evolution` field", and the exclusion test is `=== false`, never `!== true`.
+4. A relevance-gate fallback compared an arithmetic proxy against simulated scores, admitting a
+   **level-14 Vaporeon as rank 1** and tanking team DPS by 20.
+
+**Deliberate exception to a standing decision:** the imported roster lives in `localStorage`,
+not the URL (user's call, ~16 KB base64). It is kept *out* of `PowerUpOptimizerAssumptions`
+entirely so the exception is structural, not a silently-missing codec field.
+
+**Research that changed the plan:** Elite Raids turned out to need no work at all —
+`RAID_LEVEL_ELITE_LEGACY` is already excluded by `POKEBATTLER_LEGACY_EXCLUDED_TIERS`, so no
+Elite boss can reach the sweep. The `~1.00` attack/defense multiplier previously recorded for
+that tier was **debunked** (it is 0.79, shared with five tiers already at 0.79).
+
+**Next:** `IDEAS.md` items 9-14 are the deferred follow-ups — evolve-then-power-up pricing,
+second-move unlocks as a budget candidate, a best-moveset toggle, wipe-and-reselect, real
+per-boss progress, and `TeamRaidInputs.bossMaxHpOverride`.
+
+## 2026-09-09: overnight `pogo-researcher` session — 15 research passes, no code changed
 
 An overnight knowledge-expansion run: recursive rounds of `pogo-researcher`, each round's
 "questions I could not answer" seeding the next. **No product code was touched.** Changes are

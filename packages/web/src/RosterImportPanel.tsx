@@ -6,7 +6,6 @@ import {
   deserializeRosterPoolFromJson,
   emptyRosterPool,
   hydrateRosterPool,
-  loadRosterPool,
   RosterPoolFormatError,
   saveRosterPool,
   serializeRosterPoolToJson,
@@ -60,18 +59,30 @@ function entryFlags(entry: {
   return flags;
 }
 
+interface Props {
+  /**
+   * Controlled from PowerUpOptimizerView.tsx (which owns the canonical
+   * `useState<RosterPool>(loadRosterPool)` — this panel used to own that
+   * state itself, but the multi-raid sweep (Phase 3) needs to read the SAME
+   * pool a CSV import just produced without requiring a page reload, so the
+   * state was lifted up. This panel still owns PERSISTENCE (calling
+   * saveRosterPool as a side effect of every import/clear action) — only the
+   * canonical in-memory value moved.
+   */
+  pool: RosterPool;
+  onPoolChange: (next: RosterPool) => void;
+}
+
 /**
- * Whole-roster import for the not-yet-built (Phase 3) multi-raid Power-Up
- * Optimizer mode — see PLAN_multi_raid_roster_optimizer.md. Phase 1 scope
- * only: import a Poke Genie CSV export, persist it to THIS BROWSER's
- * localStorage (deliberately NOT the share-link URL — §3.2 of the plan, a
- * documented exception to this project's usual "every setting round-trips
- * through Scenario" rule — CLAUDE.md records the exception once this ships),
- * and display a match report + roster table. Does NOT feed the optimizer
- * yet (Phase 3's job, alongside the multi-raid mode switch).
+ * Whole-roster import for the multi-raid Power-Up Optimizer mode — see
+ * PLAN_multi_raid_roster_optimizer.md. Import a Poke Genie CSV export,
+ * persist it to THIS BROWSER's localStorage (deliberately NOT the share-link
+ * URL — §3.2 of the plan, a documented exception to this project's usual
+ * "every setting round-trips through Scenario" rule), and display a match
+ * report + roster table. Feeds `runRosterPlannerScenario` via the pool/
+ * onPoolChange props this component is now controlled by.
  */
-export function RosterImportPanel() {
-  const [pool, setPool] = useState<RosterPool>(loadRosterPool);
+export function RosterImportPanel({ pool, onPoolChange }: Props) {
   const [pasteText, setPasteText] = useState("");
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -82,7 +93,7 @@ export function RosterImportPanel() {
   function applyImportedRoster(result: RosterImportResult, parseResult: PokeGenieParseResult) {
     const nextPool: RosterPool = { ...pool, entries: result.matched.map(dehydrateRosterEntry) };
     const saveResult = saveRosterPool(nextPool);
-    setPool(nextPool);
+    onPoolChange(nextPool);
     setPersistWarning(
       saveResult.persisted
         ? null
@@ -121,7 +132,7 @@ export function RosterImportPanel() {
       .then((text) => {
         const imported = deserializeRosterPoolFromJson(text);
         const saveResult = saveRosterPool(imported);
-        setPool(imported);
+        onPoolChange(imported);
         setPersistWarning(
           saveResult.persisted ? null : "Could not save this roster to this browser's local storage — it will be lost on reload.",
         );
@@ -142,7 +153,7 @@ export function RosterImportPanel() {
   function handleClear() {
     const next = emptyRosterPool();
     saveRosterPool(next);
-    setPool(next);
+    onPoolChange(next);
     setSummary(null);
     setErrorMessage(null);
     setPersistWarning(null);
@@ -153,10 +164,10 @@ export function RosterImportPanel() {
       <summary>Import a whole roster (Poke Genie CSV) — {hydratedEntries.length} Pokémon stored in this browser</summary>
 
       <p className="caveats" style={{ marginTop: 12 }}>
-        Whole-roster import for the upcoming multi-raid Power-Up Optimizer mode. This roster is stored ONLY in this
-        browser's local storage, never in a share link — a shared link from this tab carries settings, not this
-        roster. Export it as a file below to move it to another browser/device or back it up. It does not yet feed
-        any recommendation on this tab.
+        Whole-roster import for this tab's multi-raid Power-Up Optimizer mode (switch to it above). This roster is
+        stored ONLY in this browser's local storage, never in a share link — a shared link from this tab carries
+        settings, not this roster (see the note under &ldquo;Share this scenario&rdquo;). Export it as a file below to
+        move it to another browser/device or back it up.
       </p>
 
       {errorMessage && <p className="error-text">{errorMessage}</p>}
