@@ -15,9 +15,9 @@
  * published Pokémon GO base stats/typing/costs, as mirrored by GAME_MASTER
  * and cross-checked by community references) — NOT re-derived from the
  * pipeline itself, so this test has independent teeth. A couple of sentinels
- * (Shadow Abra's stats, the Giratina shadow-raid row) assert an internal
- * pipeline INVARIANT instead (raw-copy, id-resolution) rather than an
- * external fact, and are labeled as such.
+ * (Shadow Abra's stats, the Shadow Thundurus (Incarnate) active-raid row)
+ * assert an internal pipeline INVARIANT instead (raw-copy, id-resolution)
+ * rather than an external fact, and are labeled as such.
  *
  * Run via `npm run test:scripts` (scripts/vitest.config.ts).
  */
@@ -122,6 +122,21 @@ describe("species.json sentinels", () => {
     expect(alolan.baseStamina).toBe(base.baseStamina);
   });
 
+  // Sandslash (Alola): a regional form differing from base Sandslash by
+  // BOTH type (ground -> ice/steel) AND base stats — the compound-form
+  // sibling of the "Shadow Alolan Sandslash" activeRaids sentinel below.
+  // [Real Pokémon GO base stats, e.g. GamePress "Alolan Sandslash" page.]
+  it("Sandslash (Alola): a regional form differing from base Sandslash by type AND stats (ice/steel, 177/195/181)", () => {
+    const base = speciesById.get("sandslash")!;
+    const alolan = speciesById.get("sandslash-alola")!;
+    expect(base.types).toEqual(["ground"]);
+    expect(alolan).toBeDefined();
+    expect(alolan.types).toEqual(["ice", "steel"]);
+    expect(alolan.baseAttack).toBe(177);
+    expect(alolan.baseDefense).toBe(195);
+    expect(alolan.baseStamina).toBe(181);
+  });
+
   // Mega Charizard X: real, published mega stats/typing, boost 1.3 — the
   // load-bearing constant per CLAUDE.md ("a real conclusion in this project
   // flips at 1.1"). [Niantic GAME_MASTER tempEvoOverrides, cross-checked by
@@ -216,12 +231,40 @@ describe("activeRaids.json / raidHistory.json sentinels", () => {
   // A currently-active raid boss row with a parenthetical-form + Shadow
   // species — exercises both the "Shadow " prefix handling and the
   // multi-word qualified-name lookup in the same row.
-  it("Shadow Giratina (Altered) is an active 5-Star raid boss, resolved (not approximate)", () => {
-    const row = activeRaids.find((r) => r.raidName === "Shadow Giratina (Altered)");
+  //
+  // Updated 2026-09-09 (raid rotation): the previous sentinel here, "Shadow
+  // Giratina (Altered)", rotated OUT of the live ScrapedDuck feed this run
+  // (replaced by Shadow Thundurus (Incarnate) at the same 5-Star tier) — a
+  // real rotation, not a pipeline regression; Shadow Giratina (Altered)
+  // still exists as a raidHistory.json row (accumulate-only, see the
+  // raidHistory-focused sentinels below), just no longer in activeRaids.json.
+  it("Shadow Thundurus (Incarnate) is an active 5-Star raid boss, resolved (not approximate)", () => {
+    const row = activeRaids.find((r) => r.raidName === "Shadow Thundurus (Incarnate)");
     expect(row).toBeDefined();
     expect(row!.tier).toBe("5-Star Raids");
-    expect(row!.speciesId).toBe("giratina-altered-shadow");
+    expect(row!.speciesId).toBe("thundurus-incarnate-shadow");
     expect(row!.isApproximate).toBe(false);
+  });
+
+  // 2026-09-09 fix: "Shadow " + a regional adjective composed in ONE raid
+  // name ("Shadow Alolan Sandslash") used to resolve to speciesId: null —
+  // the matcher stripped "Shadow " first, then tried "shadow|alolan
+  // sandslash" against a registry that only ever holds "alolan|sandslash",
+  // and separately tried an exact-name match on "Alolan Sandslash" against
+  // a species actually named "Sandslash (Alola)". Both failed silently.
+  // Pins that it now resolves to the Alolan form's OWN Shadow variant (ice/
+  // steel typing/stats), never base Sandslash's (ground) or null.
+  it("Shadow Alolan Sandslash is an active 3-Star boss resolved to sandslash-alola-shadow, not approximate", () => {
+    const row = activeRaids.find((r) => r.raidName === "Shadow Alolan Sandslash");
+    expect(row).toBeDefined();
+    expect(row!.tier).toBe("3-Star Raids");
+    expect(row!.speciesId).toBe("sandslash-alola-shadow");
+    expect(row!.isApproximate).toBe(false);
+
+    const resolved = speciesById.get("sandslash-alola-shadow");
+    expect(resolved).toBeDefined();
+    expect(resolved!.isShadow).toBe(true);
+    expect(resolved!.types).toEqual(["ice", "steel"]); // the Alolan form's own typing, never base Sandslash's ["ground"]
   });
 
   // A historical raid-history row carrying a real, Bulbapedia-sourced eraHp

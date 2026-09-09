@@ -11812,7 +11812,8 @@
     "dexNumber": 131,
     "isFullyEvolved": true,
     "candyFamilyId": "FAMILY_LAPRAS",
-    "evolvesToIds": []
+    "evolvesToIds": [],
+    "lastKnownRaidTier": "3-Star Raids"
   },
   {
     "id": "ditto",
@@ -18726,7 +18727,8 @@
     "candyFamilyId": "FAMILY_DUNSPARCE",
     "evolvesToIds": [
       "dudunsparce-two"
-    ]
+    ],
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "gligar",
@@ -47774,7 +47776,8 @@
     "candyFamilyId": "FAMILY_SCRAGGY",
     "evolvesToIds": [
       "scrafty"
-    ]
+    ],
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "scrafty",
@@ -72701,7 +72704,8 @@
     "dexNumber": 870,
     "isFullyEvolved": true,
     "candyFamilyId": "FAMILY_FALINKS",
-    "evolvesToIds": []
+    "evolvesToIds": [],
+    "lastKnownRaidTier": "3-Star Raids"
   },
   {
     "id": "pincurchin",
@@ -74001,7 +74005,8 @@
     "dexNumber": 888,
     "isFullyEvolved": true,
     "candyFamilyId": "FAMILY_ZACIAN",
-    "evolvesToIds": []
+    "evolvesToIds": [],
+    "lastKnownRaidTier": "5-Star Raids"
   },
   {
     "id": "zamazenta-hero",
@@ -77137,7 +77142,8 @@
     "candyFamilyId": "FAMILY_FIDOUGH",
     "evolvesToIds": [
       "dachsbun"
-    ]
+    ],
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "dachsbun",
@@ -84136,7 +84142,8 @@
     "candyFamilyId": "FAMILY_RATTATA",
     "evolvesToIds": [
       "raticate-alola"
-    ]
+    ],
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "raticate-alola",
@@ -84869,7 +84876,8 @@
     "dexNumber": 51,
     "isFullyEvolved": true,
     "candyFamilyId": "FAMILY_DIGLETT",
-    "evolvesToIds": []
+    "evolvesToIds": [],
+    "lastKnownRaidTier": "3-Star Raids"
   },
   {
     "id": "meowth-alola",
@@ -102858,7 +102866,8 @@
     "evolvesToIds": [
       "shelgon"
     ],
-    "isShadow": true
+    "isShadow": true,
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "barboach-shadow",
@@ -103143,7 +103152,8 @@
     "evolvesToIds": [
       "weepinbell"
     ],
-    "isShadow": true
+    "isShadow": true,
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "cacnea-shadow",
@@ -106405,7 +106415,8 @@
     "evolvesToIds": [
       "machoke"
     ],
-    "isShadow": true
+    "isShadow": true,
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "magmar-shadow",
@@ -108792,6 +108803,119 @@
     "isShadow": true
   },
   {
+    "id": "quagsire-shadow",
+    "name": "Shadow Quagsire",
+    "types": [
+      "water",
+      "ground"
+    ],
+    "baseAttack": 152,
+    "baseDefense": 143,
+    "baseStamina": 216,
+    "fastMoves": [
+      {
+        "id": "WATER_GUN_FAST",
+        "name": "Water Gun",
+        "type": "water",
+        "power": 5,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "MUD_SHOT_FAST",
+        "name": "Mud Shot",
+        "type": "ground",
+        "power": 4,
+        "energyGain": 6,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "SLUDGE_BOMB",
+        "name": "Sludge Bomb",
+        "type": "poison",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "EARTHQUAKE",
+        "name": "Earthquake",
+        "type": "ground",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "STONE_EDGE",
+        "name": "Stone Edge",
+        "type": "rock",
+        "power": 105,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "ACID_SPRAY",
+        "name": "Acid Spray",
+        "type": "poison",
+        "power": 20,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "MUD_BOMB",
+        "name": "Mud Bomb",
+        "type": "ground",
+        "power": 60,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "DRAIN_PUNCH",
+        "name": "Drain Punch",
+        "type": "fighting",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "AQUA_TAIL",
+        "name": "Aqua Tail",
+        "type": "water",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/195.png",
+    "rarity": "STANDARD",
+    "dexNumber": 195,
+    "isFullyEvolved": true,
+    "candyFamilyId": "FAMILY_WOOPER",
+    "evolvesToIds": [],
+    "isShadow": true,
+    "lastKnownRaidTier": "3-Star Raids"
+  },
+  {
     "id": "quilava-shadow",
     "name": "Shadow Quilava",
     "types": [
@@ -109393,6 +109517,119 @@
     "candyFamilyId": "FAMILY_SABLEYE",
     "evolvesToIds": [],
     "isShadow": true
+  },
+  {
+    "id": "sandslash-alola-shadow",
+    "name": "Shadow Sandslash (Alola)",
+    "types": [
+      "ice",
+      "steel"
+    ],
+    "baseAttack": 177,
+    "baseDefense": 195,
+    "baseStamina": 181,
+    "fastMoves": [
+      {
+        "id": "METAL_CLAW_FAST",
+        "name": "Metal Claw",
+        "type": "steel",
+        "power": 6,
+        "energyGain": 5,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "POWDER_SNOW_FAST",
+        "name": "Powder Snow",
+        "type": "ice",
+        "power": 6,
+        "energyGain": 15,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "SHADOW_CLAW_FAST",
+        "name": "Shadow Claw",
+        "type": "ghost",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "BLIZZARD",
+        "name": "Blizzard",
+        "type": "ice",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "GYRO_BALL",
+        "name": "Gyro Ball",
+        "type": "steel",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "BULLDOZE",
+        "name": "Bulldoze",
+        "type": "ground",
+        "power": 80,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "ICE_PUNCH",
+        "name": "Ice Punch",
+        "type": "ice",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "DRILL_RUN",
+        "name": "Drill Run",
+        "type": "ground",
+        "power": 85,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "AERIAL_ACE",
+        "name": "Aerial Ace",
+        "type": "flying",
+        "power": 55,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/28.png",
+    "rarity": "STANDARD",
+    "dexNumber": 28,
+    "isFullyEvolved": true,
+    "candyFamilyId": "FAMILY_SANDSHREW",
+    "evolvesToIds": [],
+    "isShadow": true,
+    "lastKnownRaidTier": "3-Star Raids"
   },
   {
     "id": "sawk-shadow",
@@ -110788,6 +111025,163 @@
     "candyFamilyId": "FAMILY_THROH",
     "evolvesToIds": [],
     "isShadow": true
+  },
+  {
+    "id": "thundurus-incarnate-shadow",
+    "name": "Shadow Thundurus (Incarnate)",
+    "types": [
+      "electric",
+      "flying"
+    ],
+    "baseAttack": 266,
+    "baseDefense": 164,
+    "baseStamina": 188,
+    "fastMoves": [
+      {
+        "id": "ASTONISH_FAST",
+        "name": "Astonish",
+        "type": "ghost",
+        "power": 7,
+        "energyGain": 13,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      },
+      {
+        "id": "THUNDER_SHOCK_FAST",
+        "name": "Thunder Shock",
+        "type": "electric",
+        "power": 4,
+        "energyGain": 7,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "CRUNCH",
+        "name": "Crunch",
+        "type": "dark",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "THUNDER",
+        "name": "Thunder",
+        "type": "electric",
+        "power": 100,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "BRICK_BREAK",
+        "name": "Brick Break",
+        "type": "fighting",
+        "power": 40,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
+      },
+      {
+        "id": "THUNDER_PUNCH",
+        "name": "Thunder Punch",
+        "type": "electric",
+        "power": 50,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/642.png",
+    "rarity": "LEGENDARY",
+    "dexNumber": 642,
+    "isFullyEvolved": true,
+    "candyFamilyId": "FAMILY_THUNDURUS",
+    "evolvesToIds": [],
+    "isShadow": true,
+    "lastKnownRaidTier": "5-Star Raids"
+  },
+  {
+    "id": "torchic-shadow",
+    "name": "Shadow Torchic",
+    "types": [
+      "fire"
+    ],
+    "baseAttack": 130,
+    "baseDefense": 87,
+    "baseStamina": 128,
+    "fastMoves": [
+      {
+        "id": "SCRATCH_FAST",
+        "name": "Scratch",
+        "type": "normal",
+        "power": 6,
+        "energyGain": 4,
+        "energyCost": 0,
+        "durationSeconds": 0.5,
+        "vulnerableWindowSeconds": 0.5
+      },
+      {
+        "id": "EMBER_FAST",
+        "name": "Ember",
+        "type": "fire",
+        "power": 10,
+        "energyGain": 10,
+        "energyCost": 0,
+        "durationSeconds": 1,
+        "vulnerableWindowSeconds": 1
+      }
+    ],
+    "chargedMoves": [
+      {
+        "id": "FLAME_CHARGE",
+        "name": "Flame Charge",
+        "type": "fire",
+        "power": 70,
+        "energyGain": 0,
+        "energyCost": 33,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "FLAMETHROWER",
+        "name": "Flamethrower",
+        "type": "fire",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "ROCK_TOMB",
+        "name": "Rock Tomb",
+        "type": "rock",
+        "power": 65,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
+      }
+    ],
+    "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/255.png",
+    "rarity": "STANDARD",
+    "dexNumber": 255,
+    "isFullyEvolved": false,
+    "candyFamilyId": "FAMILY_TORCHIC",
+    "evolvesToIds": [
+      "combusken"
+    ],
+    "isShadow": true,
+    "lastKnownRaidTier": "1-Star Raids"
   },
   {
     "id": "totodile-shadow",

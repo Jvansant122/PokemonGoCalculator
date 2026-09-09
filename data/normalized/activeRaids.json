@@ -1,20 +1,50 @@
 [
   {
-    "raidName": "Regirock",
-    "tier": "5-Star Raids",
-    "speciesId": "regirock",
+    "raidName": "Alolan Rattata",
+    "tier": "1-Star Raids",
+    "speciesId": "rattata-alola",
     "isApproximate": false
   },
   {
-    "raidName": "Regice",
-    "tier": "5-Star Raids",
-    "speciesId": "regice",
+    "raidName": "Dunsparce",
+    "tier": "1-Star Raids",
+    "speciesId": "dunsparce",
     "isApproximate": false
   },
   {
-    "raidName": "Registeel",
+    "raidName": "Scraggy",
+    "tier": "1-Star Raids",
+    "speciesId": "scraggy",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Fidough",
+    "tier": "1-Star Raids",
+    "speciesId": "fidough",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Alolan Dugtrio",
+    "tier": "3-Star Raids",
+    "speciesId": "dugtrio-alola",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Lapras",
+    "tier": "3-Star Raids",
+    "speciesId": "lapras",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Falinks",
+    "tier": "3-Star Raids",
+    "speciesId": "falinks",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Zacian (Hero)",
     "tier": "5-Star Raids",
-    "speciesId": "registeel",
+    "speciesId": "zacian-hero",
     "isApproximate": false
   },
   {
@@ -24,45 +54,39 @@
     "isApproximate": false
   },
   {
-    "raidName": "Mega Gyarados",
-    "tier": "Mega Raids",
-    "speciesId": "gyarados-mega",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Shadow Slowpoke",
+    "raidName": "Shadow Machop",
     "tier": "1-Star Raids",
-    "speciesId": "slowpoke-shadow",
+    "speciesId": "machop-shadow",
     "isApproximate": false
   },
   {
-    "raidName": "Shadow Aipom",
+    "raidName": "Shadow Bellsprout",
     "tier": "1-Star Raids",
-    "speciesId": "aipom-shadow",
+    "speciesId": "bellsprout-shadow",
     "isApproximate": false
   },
   {
-    "raidName": "Shadow Croagunk",
+    "raidName": "Shadow Torchic",
     "tier": "1-Star Raids",
-    "speciesId": "croagunk-shadow",
+    "speciesId": "torchic-shadow",
     "isApproximate": false
   },
   {
-    "raidName": "Shadow Grubbin",
+    "raidName": "Shadow Bagon",
     "tier": "1-Star Raids",
-    "speciesId": "grubbin-shadow",
+    "speciesId": "bagon-shadow",
     "isApproximate": false
   },
   {
-    "raidName": "Shadow Snorlax",
+    "raidName": "Shadow Alolan Sandslash",
     "tier": "3-Star Raids",
-    "speciesId": "snorlax-shadow",
+    "speciesId": "sandslash-alola-shadow",
     "isApproximate": false
   },
   {
-    "raidName": "Shadow Hitmontop",
+    "raidName": "Shadow Quagsire",
     "tier": "3-Star Raids",
-    "speciesId": "hitmontop-shadow",
+    "speciesId": "quagsire-shadow",
     "isApproximate": false
   },
   {
@@ -72,9 +96,9 @@
     "isApproximate": false
   },
   {
-    "raidName": "Shadow Giratina (Altered)",
+    "raidName": "Shadow Thundurus (Incarnate)",
     "tier": "5-Star Raids",
-    "speciesId": "giratina-altered-shadow",
+    "speciesId": "thundurus-incarnate-shadow",
     "isApproximate": false
   }
 ]

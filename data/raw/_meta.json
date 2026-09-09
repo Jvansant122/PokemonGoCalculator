@@ -24,31 +24,31 @@
     "bytes": 6706
   },
   "raids.json": {
-    "fetchedAt": "2026-09-09T04:11:49.919Z",
-    "bytes": 11466
+    "fetchedAt": "2026-09-09T23:11:34.588Z",
+    "bytes": 15623
   },
   "mega_pokemon.json": {
-    "fetchedAt": "2026-09-09T04:11:49.730Z",
+    "fetchedAt": "2026-09-09T23:11:34.357Z",
     "bytes": 19958
   },
   "game_master.json": {
-    "fetchedAt": "2026-09-09T04:11:50.320Z",
+    "fetchedAt": "2026-09-09T23:11:35.084Z",
     "bytes": 1624625
   },
   "raid_bosses.json": {
-    "fetchedAt": "2026-09-09T04:11:50.604Z",
+    "fetchedAt": "2026-09-09T23:11:35.478Z",
     "bytes": 381407
   },
   "bulbapedia_raid_history.json": {
-    "fetchedAt": "2026-09-09T04:11:55.006Z",
+    "fetchedAt": "2026-09-09T23:11:39.044Z",
     "bytes": 534376
   },
   "pokebattler_raids.json": {
-    "fetchedAt": "2026-09-09T04:11:55.548Z",
-    "bytes": 675538
+    "fetchedAt": "2026-09-09T23:11:39.508Z",
+    "bytes": 673893
   },
   "bulbapedia_shadow_raid_history.json": {
-    "fetchedAt": "2026-09-09T04:11:55.291Z",
+    "fetchedAt": "2026-09-09T23:11:39.248Z",
     "bytes": 3312
   }
 }

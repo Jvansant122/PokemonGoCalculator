@@ -201,6 +201,7 @@ import {
   spriteLookupIdFor,
 } from "./sync-data/megaPrimalParsing.ts";
 import { getOrCreateShadowVariant } from "./sync-data/shadowVariant.ts";
+import { matchRaidName } from "./sync-data/raidNameMatching.ts";
 import { diffSpecies, diffRaids } from "./sync-data/diff.ts";
 import { RELEASED_MEGA_PRIMAL_ALLOWLIST } from "./sync-data/releasedMegaPrimalAllowlist.ts";
 
@@ -1648,24 +1649,16 @@ species.push(...megaSpecies);
 
 // ---------------------------------------------------------------------------
 // Build normalized active raids list
+//
+// The raid-name -> species resolution cascade itself (KNOWN_PREFIXES,
+// findByExactName, matchRaidName — exact mega, exact species, regional-form
+// same-prefix, the "Shadow " + regional compound case, Shadow-variant
+// resolution, approximate generic-prefix stand-in) now lives in
+// ./sync-data/raidNameMatching.ts, shared verbatim by this loop and
+// resolveRaidNameForHistoryMigration below — see that module's own doc
+// comment for why (2026-09-09, the "Shadow Alolan Sandslash" compound-prefix
+// fix).
 // ---------------------------------------------------------------------------
-
-const KNOWN_PREFIXES = [
-  "Shadow ",
-  "Mega ",
-  "Primal ",
-  "Alolan ",
-  "Galarian ",
-  "Hisuian ",
-  "Dynamax ",
-  "Gigantamax ",
-];
-
-function findByExactName(name: string, pool: { id: string; name: string }[]): string | null {
-  const lower = name.toLowerCase();
-  const hit = pool.find((s) => s.name.toLowerCase() === lower);
-  return hit ? hit.id : null;
-}
 
 const megaSpeciesLookupPool = megaSpecies.map((s) => ({ id: s.id, name: s.name }));
 const speciesLookupPool = species.map((s) => ({ id: s.id, name: s.name }));
@@ -1825,78 +1818,24 @@ const shadowSeedDurableCount = shadowSpeciesByBaseId.size;
 
 const activeRaids: ActiveRaidEntry[] = [];
 
+// This loop OWNS species.json, so its resolveShadowVariant always
+// synthesizes (or reuses) a real Shadow-variant SpeciesDefinition — never
+// returns null — matching matchRaidName's documented contract for the
+// caller allowed to mutate species.json (see raidNameMatching.ts).
+const resolveShadowVariantForActiveRaids = (baseSpeciesId: string): string | null => {
+  const baseSpecies = speciesById.get(baseSpeciesId);
+  if (!baseSpecies) return null; // not expected — baseSpeciesId always comes from a pool built off speciesById's own keys
+  return getOrCreateShadowVariant(baseSpecies, shadowSpeciesByBaseId).id;
+};
+
 for (const raid of rawRaids) {
-  let speciesId: string | null = null;
-  let isApproximate = false;
-
-  // Priority 1: exact case-insensitive match against a real mega_pokemon.json
-  // `mega_name` — the real mega/primal's own real stats, never approximate.
-  const exactMega = findByExactName(raid.name, megaSpeciesLookupPool);
-  if (exactMega) {
-    speciesId = exactMega;
-  } else {
-    // Priority 2: exact match against the full normalized species pool
-    // (Normal-form real species, and now mega species too, though anything
-    // in megaSpeciesLookupPool was already tried above). This used to also
-    // check a hand-defined hypothetical-fixtures pool (Mega Raichu X/Y, Mega
-    // Skarmory) between this step and Priority 1 above — those fixtures were
-    // deleted from the engine's product-reachable exports entirely (see
-    // CLAUDE.md "Standing decisions", 2026-09-06), so there is nothing left
-    // to match against there.
-    const exactNormalized = findByExactName(raid.name, speciesLookupPool);
-    if (exactNormalized) {
-      speciesId = exactNormalized;
-    } else {
-      // Priority 3 (fallback, approximate): strip a known prefix (e.g.
-      // "Shadow ") and match the base species' Normal-form stats as a
-      // stand-in. Still legitimately needed for Shadow-prefixed raids,
-      // since this project doesn't model the real Shadow atk/def
-      // multiplier — see CLAUDE.md/task notes.
-      for (const prefix of KNOWN_PREFIXES) {
-        if (raid.name.startsWith(prefix)) {
-          const baseName = raid.name.slice(prefix.length);
-
-          // Priority 3a (real, not approximate): a regional-form prefix
-          // (e.g. "Hisuian ") this project now carries as its OWN
-          // mechanically-distinct species (see the "extra forms" pass above,
-          // 2026-09-08 fix for AUDIT_2026-09-08.md Defect 1) — checked
-          // before the generic base-species stand-in below so e.g. "Hisuian
-          // Lilligant" resolves to lilligant-hisuian's own real 208/159/172
-          // stats instead of base Lilligant's 214/155/172. A regional raid
-          // whose stats happen to be cosmetically identical to its base form
-          // (e.g. Hisuian Sneasel) was never added as its own species (see
-          // above), so it correctly falls through to the generic stand-in
-          // below unchanged.
-          const regionalId = regionalFormSpeciesByPrefixAndBase.get(`${prefix.trim().toLowerCase()}|${baseName.toLowerCase()}`);
-          if (regionalId) {
-            speciesId = regionalId;
-            isApproximate = false;
-            break;
-          }
-
-          const baseMatch = findByExactName(baseName, speciesLookupPool);
-          if (baseMatch) {
-            if (prefix === "Shadow ") {
-              // Real, not approximate: synthesize (or reuse) a distinct
-              // Shadow-variant SpeciesDefinition with isShadow: true rather
-              // than standing in the unboosted base species — see
-              // getOrCreateShadowVariant above.
-              const baseSpecies = speciesById.get(baseMatch);
-              if (baseSpecies) {
-                const shadowVariant = getOrCreateShadowVariant(baseSpecies, shadowSpeciesByBaseId);
-                speciesId = shadowVariant.id;
-                isApproximate = false;
-                break;
-              }
-            }
-            speciesId = baseMatch;
-            isApproximate = true;
-            break;
-          }
-        }
-      }
-    }
-  }
+  const match = matchRaidName(
+    raid.name,
+    { megaSpeciesLookupPool, speciesLookupPool, regionalFormSpeciesByPrefixAndBase },
+    resolveShadowVariantForActiveRaids,
+  );
+  const speciesId = match.speciesId;
+  const isApproximate = match.isApproximate;
 
   // Live-feed tier capture (Task 1 of the 2026-09-07 lastKnownRaidTier work):
   // whenever a species is successfully matched against a raid entry (exact
@@ -2203,42 +2142,22 @@ for (const [speciesId, entry] of [...raidHistoryById.entries()]) {
 
 /**
  * Re-resolves a historical raidHistory row's stored `raidName` through the
- * SAME priority order the activeRaids matching loop below uses (exact mega,
- * exact species, real regional-form match, real Shadow-variant match,
- * approximate generic-prefix stand-in) — used only by the Step 1.5 migration
- * above. Deliberately does NOT synthesize a brand-new Shadow-variant species
- * (unlike the activeRaids loop, which creates one on demand): migration must
- * only ever move/merge raidHistory rows, never mutate species.json, so a
- * Shadow-prefixed raidName with no ALREADY-existing shadow variant falls
- * through to the approximate base-species branch instead. Kept deliberately
- * in sync with the activeRaids priority order further down this file — if
- * that logic changes, mirror the change here too.
+ * exact SAME cascade the activeRaids matching loop above uses (matchRaidName
+ * in ./sync-data/raidNameMatching.ts) — used only by the Step 1.5 migration
+ * above. Deliberately does NOT synthesize a brand-new Shadow-variant
+ * species (unlike the activeRaids loop, which creates one on demand):
+ * migration must only ever move/merge raidHistory rows, never mutate
+ * species.json, so a Shadow-prefixed raidName (plain OR the "Shadow " +
+ * regional compound case) with no ALREADY-existing shadow variant falls
+ * through to whatever else the cascade offers instead — see
+ * matchRaidName's own resolveShadowVariant contract.
  */
 function resolveRaidNameForHistoryMigration(raidName: string): { speciesId: string | null; isApproximate: boolean } {
-  const exactMega = findByExactName(raidName, megaSpeciesLookupPool);
-  if (exactMega) return { speciesId: exactMega, isApproximate: false };
-
-  const exactNormalized = findByExactName(raidName, speciesLookupPool);
-  if (exactNormalized) return { speciesId: exactNormalized, isApproximate: false };
-
-  for (const prefix of KNOWN_PREFIXES) {
-    if (!raidName.startsWith(prefix)) continue;
-    const baseName = raidName.slice(prefix.length);
-
-    const regionalId = regionalFormSpeciesByPrefixAndBase.get(`${prefix.trim().toLowerCase()}|${baseName.toLowerCase()}`);
-    if (regionalId) return { speciesId: regionalId, isApproximate: false };
-
-    const baseMatch = findByExactName(baseName, speciesLookupPool);
-    if (baseMatch) {
-      if (prefix === "Shadow ") {
-        const existingShadow = shadowSpeciesByBaseId.get(baseMatch);
-        if (existingShadow) return { speciesId: existingShadow.id, isApproximate: false };
-      }
-      return { speciesId: baseMatch, isApproximate: true };
-    }
-  }
-
-  return { speciesId: null, isApproximate: true };
+  return matchRaidName(
+    raidName,
+    { megaSpeciesLookupPool, speciesLookupPool, regionalFormSpeciesByPrefixAndBase },
+    (baseSpeciesId) => shadowSpeciesByBaseId.get(baseSpeciesId)?.id ?? null,
+  );
 }
 
 /** Source strength for the Step 1.5 merge below — mirrors RaidHistoryEntry.source's own doc-comment precedence (live-feed > researched-tier > the three archive sources, which are peers). */
