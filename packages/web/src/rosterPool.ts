@@ -33,7 +33,6 @@ export interface StoredRosterEntry {
   ivsAreApproximate: boolean;
   levelIsApproximate: boolean;
   movesetIsDefaulted: boolean;
-  isFullyEvolved?: boolean;
   secondChargedMoveName?: string;
   sourceLineNumber: number;
   unmatchedMoveNames: string[];
@@ -75,7 +74,6 @@ export function dehydrateRosterEntry(entry: RosterEntry): StoredRosterEntry {
     ivsAreApproximate: entry.ivsAreApproximate,
     levelIsApproximate: entry.levelIsApproximate,
     movesetIsDefaulted: entry.movesetIsDefaulted,
-    isFullyEvolved: entry.isFullyEvolved,
     secondChargedMoveName: entry.secondChargedMoveName,
     sourceLineNumber: entry.sourceLineNumber,
     unmatchedMoveNames: entry.unmatchedMoveNames,
@@ -101,7 +99,6 @@ export function hydrateRosterEntry(stored: StoredRosterEntry, registry: SpeciesL
     ivsAreApproximate: stored.ivsAreApproximate,
     levelIsApproximate: stored.levelIsApproximate,
     movesetIsDefaulted: stored.movesetIsDefaulted,
-    isFullyEvolved: stored.isFullyEvolved,
     secondChargedMoveName: stored.secondChargedMoveName,
     sourceLineNumber: stored.sourceLineNumber,
     unmatchedMoveNames: stored.unmatchedMoveNames,

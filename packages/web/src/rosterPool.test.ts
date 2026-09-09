@@ -69,7 +69,7 @@ function fakeLocalStorage(initial: Record<string, string> = {}): Storage {
 
 describe("dehydrateRosterEntry / hydrateRosterEntry", () => {
   it("round-trips every field through the compact (species-id-only) stored shape", () => {
-    const entry = fakeEntry({ isFullyEvolved: false, secondChargedMoveName: "Ice Beam", unmatchedMoveNames: ["Return"] });
+    const entry = fakeEntry({ secondChargedMoveName: "Ice Beam", unmatchedMoveNames: ["Return"] });
     const stored = dehydrateRosterEntry(entry);
     expect(stored.speciesId).toBe("houndour");
     expect(stored).not.toHaveProperty("species"); // never the full SpeciesDefinition object

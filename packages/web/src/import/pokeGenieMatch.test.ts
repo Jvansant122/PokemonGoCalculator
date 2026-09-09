@@ -263,9 +263,20 @@ describe("matchPokeGenieRows — per-row interpretation", () => {
     expect(matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150" }).canMega).toBe(false);
   });
 
-  it("leaves isFullyEvolved unknown (undefined) — not inferred from any Poke Genie column in v1", () => {
+  it("carries no evolution field of its own — evolution comes from SpeciesDefinition, never inferred from a Poke Genie column", () => {
+    // The importer deliberately has NO isFullyEvolved/evolvesToIds of its own.
+    // data-sync writes both onto SpeciesDefinition from GAME_MASTER, and
+    // rosterPlanner.ts reads `entry.species.isFullyEvolved`. An import-layer
+    // field was drafted before that data existed and was dead on arrival;
+    // don't reintroduce one.
+    //
+    // In particular, never infer it from Poke Genie's "Name (G/U/L)" PvP-rank
+    // columns — those name whichever species holds a good PvP rank, frequently
+    // the FULLY EVOLVED form even for an unevolved catch. A usable one-off
+    // research proxy, not an evolution graph.
     const entry = matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150" });
-    expect(entry.isFullyEvolved).toBeUndefined();
+    expect(entry).not.toHaveProperty("isFullyEvolved");
+    expect(entry).not.toHaveProperty("evolvesToIds");
   });
 });
 

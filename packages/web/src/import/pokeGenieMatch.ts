@@ -23,17 +23,6 @@ export interface RosterEntry {
   levelIsApproximate: boolean;
   movesetIsDefaulted: boolean;
   /**
-   * Deliberately left `undefined` (unknown) for every row in v1 — Phase 0 of
-   * the plan adds real `evolvesToIds`/`isFullyEvolved` data this project
-   * doesn't have yet (see the plan's §3.6). Do NOT infer this from Poke
-   * Genie's own "Name (G/U/L)" PvP-rank columns in production code — those
-   * columns just name whichever species a good PvP rank happens to belong
-   * to (frequently the FULLY EVOLVED form even for an unevolved catch),
-   * which is a decent one-off research proxy (it's how the plan's own §2.2
-   * measured "69/164 unevolved") but not a real evolution-graph lookup.
-   */
-  isFullyEvolved?: boolean;
-  /**
    * Poke Genie's "Charge Move 2" column, when present — recorded, NEVER
    * modelled (the engine simulates one charged move per attacker; see the
    * plan's §3 "Charge Move 2" note).

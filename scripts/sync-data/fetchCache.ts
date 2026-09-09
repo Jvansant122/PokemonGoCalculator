@@ -273,13 +273,18 @@ export interface GameMasterFetchResult {
  * `evolutionBranch` entries are retained too (GameMasterPokemonRecord.
  * familyId/evolutionBranch — see that type's doc comment in rawShapes.ts),
  * in the SAME per-template extraction as tempEvoOverrides just below, not a
- * second pass over `ps.evolutionBranch`. These two fields are cached to
- * data/raw/game_master.json starting this run but are NOT YET consumed by
- * this script's species-building pass or written into
- * data/normalized/species.json — that needs a SpeciesDefinition schema
- * addition (`isFullyEvolved`/`evolvesToIds`/`candyFamilyId`) this script
- * doesn't own; see PLAN_multi_raid_roster_optimizer.md §5 "Phase 0" for the
- * scope this was cut from and why.
+ * second pass over `ps.evolutionBranch`. Both are cached to
+ * data/raw/game_master.json AND consumed by this script's species-building
+ * pass, which writes `isFullyEvolved`/`evolvesToIds`/`candyFamilyId` onto
+ * every real species in data/normalized/species.json (see sync-data.ts's own
+ * `definition.isFullyEvolved = isFullyEvolved(...)` assignments and
+ * gameMasterMatching.ts's `isFullyEvolved`/`realEvolutionTargets`).
+ *
+ * `isFullyEvolved` is derived from "has a branch carrying an `evolution`
+ * field," NOT from `evolutionBranch` being non-empty — 123 templates carry a
+ * branch whose only entries are TEMPORARY (mega) evolutions, Charizard and
+ * Metagross among them, and the naive check marks those unevolved. See
+ * MECHANICS.md, "Evolution: candy-only".
  * Deliberately NOT extracted: `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
  * POKEMON_ETERNATUS`, a real per-species override (30x candy cost) — v1 of
  * the power-up cost table this feeds only models the universal table (see

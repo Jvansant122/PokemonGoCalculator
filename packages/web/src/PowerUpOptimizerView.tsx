@@ -40,7 +40,7 @@ import {
   targetPickerOptions,
   unmatchedActiveRaids,
 } from "./registry.js";
-import { runPowerUpOptimizerScenario } from "./run/runPowerUpOptimizer.js";
+import { runPowerUpOptimizerScenario, type PowerUpOptimizerRunResult } from "./run/runPowerUpOptimizer.js";
 import {
   resolveRosterPlannerInputs,
   type RosterBudgetPlanRunResult,
@@ -585,6 +585,49 @@ function ExcludedEntriesTable({
   );
 }
 
+/**
+ * The 9-column header row shared by MultiRaidResultsSection's two candidate
+ * tables ("Ranked candidates" and "Benched but promising"). NOTE: the two
+ * call sites were NOT actually identical before this extraction — "Ranked
+ * candidates" carries a `title` tooltip on 4 of these columns and "Benched
+ * but promising" doesn't. Preserved exactly per call site via `withTooltips`
+ * rather than silently equalizing the two (that would be a real, if minor,
+ * behavior change) — see this file's own extraction notes for why.
+ */
+function MultiRaidCandidateTableHead({ withTooltips }: { withTooltips: boolean }) {
+  return (
+    <thead>
+      <tr>
+        <th>Species</th>
+        <th>Level</th>
+        <th>Stardust</th>
+        <th>Candy</th>
+        <th>XL candy</th>
+        <th title={withTooltips ? "Weighted mean across every swept boss" : undefined}>Mean Δ team DPS</th>
+        <th
+          title={
+            withTooltips
+              ? "The single largest-magnitude per-boss effect — dilution by untouched bosses can otherwise hide a real single-boss gain"
+              : undefined
+          }
+        >
+          Best boss Δ
+        </th>
+        <th title={withTooltips ? "Bosses where this candidate's own effect clears THAT boss's own noise floor" : undefined}>
+          Significant bosses
+        </th>
+        <th
+          title={
+            withTooltips ? "Bosses where this Pokémon was NOT on the baseline team but enters it after this power-up" : undefined
+          }
+        >
+          Newly fielded
+        </th>
+      </tr>
+    </thead>
+  );
+}
+
 interface MultiRaidResultsSectionProps {
   hydratedPoolCount: number;
   /** entryId -> a short human identity (IV spread) for the ranked tables — see MultiRaidCandidateRow's `identity`. */
@@ -741,19 +784,7 @@ function MultiRaidResultsSection({
           <h3>Ranked candidates</h3>
           <div className="table-scroll">
             <table className="time-series-table">
-              <thead>
-                <tr>
-                  <th>Species</th>
-                  <th>Level</th>
-                  <th>Stardust</th>
-                  <th>Candy</th>
-                  <th>XL candy</th>
-                  <th title="Weighted mean across every swept boss">Mean Δ team DPS</th>
-                  <th title="The single largest-magnitude per-boss effect — dilution by untouched bosses can otherwise hide a real single-boss gain">Best boss Δ</th>
-                  <th title="Bosses where this candidate's own effect clears THAT boss's own noise floor">Significant bosses</th>
-                  <th title="Bosses where this Pokémon was NOT on the baseline team but enters it after this power-up">Newly fielded</th>
-                </tr>
-              </thead>
+              <MultiRaidCandidateTableHead withTooltips />
               <tbody>
                 {visibleCandidateGroups.map((group) => (
                   <MultiRaidCandidateRow key={group.key} group={group} identity={entryIdentities.get(group.representative.entryId)} />
@@ -777,19 +808,7 @@ function MultiRaidResultsSection({
               </p>
               <div className="table-scroll">
                 <table className="time-series-table">
-                  <thead>
-                    <tr>
-                      <th>Species</th>
-                      <th>Level</th>
-                      <th>Stardust</th>
-                      <th>Candy</th>
-                      <th>XL candy</th>
-                      <th>Mean Δ team DPS</th>
-                      <th>Best boss Δ</th>
-                      <th>Significant bosses</th>
-                      <th>Newly fielded</th>
-                    </tr>
-                  </thead>
+                  <MultiRaidCandidateTableHead withTooltips={false} />
                   <tbody>
                     {dedupedBenched.map((group) => (
                       <MultiRaidCandidateRow key={`bench-${group.key}`} group={group} identity={entryIdentities.get(group.representative.entryId)} />
@@ -1145,6 +1164,462 @@ function runMultiRaidTrackedComputation<TData>(
     .catch((err: unknown) =>
       finish({ targets: resolution.targets, data: null, blockedReason: null, error: err instanceof Error ? err.message : String(err) }, null),
     );
+}
+
+interface SingleRaidBudgetPlanSectionProps {
+  plan: NonNullable<PowerUpOptimizerRunResult["plan"]>;
+  slotSpecies: (SpeciesDefinition | null)[];
+}
+
+/**
+ * Single-raid mode's fixed-budget power-up plan — extracted verbatim from
+ * what used to render inline in PowerUpOptimizerView's own JSX (no behavior
+ * change), mirroring how MultiRaidBudgetPlanSection is its own component
+ * alongside MultiRaidResultsSection. Rendered by SingleRaidResultsSection at
+ * the EXACT position it always occupied (between "Recommendation" and
+ * "Ranked power-up candidates") rather than hoisted to a trailing sibling
+ * section the way multi-raid's budget plan is — unlike multi-raid, this
+ * plan has always appeared inline between those two, and moving it after
+ * the ranked table would be a real, if small, ordering change.
+ */
+function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlanSectionProps) {
+  return (
+    <section className="panel">
+      <h2>Fixed-budget power-up plan</h2>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        A DIFFERENT question than the ranked table below: given your WHOLE stardust/Rare
+        Candy/Rare Candy XL budget across every fielded slot at once (not one candidate at
+        a time), what SET of power-ups should you make? A greedy multi-slot search — a
+        step is only committed once its own marginal team-DPS gain measurably beats the
+        noise floor. That floor is re-measured from the roster's own seed-to-seed variance
+        after every committed step rather than fixed once at the start, because powering a
+        roster up changes how much it varies run to run — so steps within one plan can be
+        held to different bars, and each step below shows the one it actually had to clear.
+        The ±{plan.noiseFloorTeamDps.toFixed(2)} quoted elsewhere in this section is
+        the FINAL floor, in effect when the search stopped.
+      </p>
+
+      {plan.bestBlockedCandidate ? (
+        <div className="blocked-gain-callout">
+          <strong>Blocked, not done</strong>
+          {blockedCandidateSentence(plan.bestBlockedCandidate)} This plan stopped
+          here because that upgrade isn't affordable yet — not because it wouldn't help.
+        </div>
+      ) : (
+        <div className="blocked-gain-callout">
+          <strong>Nothing further measurably helps</strong>
+          Beyond the steps below, no further useful power-up anywhere on this roster clears
+          the ±{plan.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor against this
+          boss and budget — this plan is genuinely done, not just out of money.
+        </div>
+      )}
+
+      <div className="result-card">
+        <dl>
+          <dt>Baseline team DPS (roster as-is)</dt>
+          <dd>{plan.baseline.teamDps.toFixed(2)}</dd>
+          <dt>Final team DPS (after this plan)</dt>
+          <dd>{plan.final.teamDps.toFixed(2)}</dd>
+          <dt>Change</dt>
+          <dd>
+            {plan.final.teamDps >= plan.baseline.teamDps ? "+" : ""}
+            {(plan.final.teamDps - plan.baseline.teamDps).toFixed(2)} team DPS
+            {plan.baseline.teamDps > 0 &&
+              ` (${(((plan.final.teamDps - plan.baseline.teamDps) / plan.baseline.teamDps) * 100).toFixed(1)}% over baseline)`}
+          </dd>
+          <dt>Stardust spent</dt>
+          <dd>
+            {plan.ledger.stardust.spent.toLocaleString()} ({plan.ledger.stardust.remaining.toLocaleString()}{" "}
+            left)
+          </dd>
+          <dt>Shared Rare Candy spent</dt>
+          <dd>
+            {plan.ledger.sharedRareCandy.spent} ({plan.ledger.sharedRareCandy.remaining} left)
+          </dd>
+          <dt>Shared Rare Candy XL spent</dt>
+          <dd>
+            {plan.ledger.sharedRareCandyXl.spent} ({plan.ledger.sharedRareCandyXl.remaining} left)
+          </dd>
+        </dl>
+      </div>
+
+      {plan.steps.length > 0 ? (
+        <div className="table-scroll" style={{ marginTop: 12 }}>
+          <table className="time-series-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Slot</th>
+                <th>Species</th>
+                <th>Level</th>
+                <th>Stardust</th>
+                <th>Candy</th>
+                <th>XL candy</th>
+                <th>Δ team DPS</th>
+                <th>Noise floor cleared</th>
+                <th>Team DPS after</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.steps.map((step, i) => (
+                <tr key={`${step.slotIndex}-${step.toLevel}-${i}`}>
+                  <td>{i + 1}</td>
+                  <td>{step.slotIndex + 1}</td>
+                  <td>{step.speciesName}</td>
+                  <td>
+                    {step.fromLevel} → {step.toLevel}
+                  </td>
+                  <td>{step.cost.stardust.toLocaleString()}</td>
+                  <td>{formatResourceSplit(step.ownCandySpent, step.sharedCandySpent, "Rare")}</td>
+                  <td>{formatResourceSplit(step.ownXlCandySpent, step.sharedXlCandySpent, "Rare XL")}</td>
+                  <td>
+                    +{step.deltaTeamDps.toFixed(2)}
+                  </td>
+                  {/* The floor in effect for THIS step's round, not the plan's final
+                      one — re-measured from the roster's variance after every commit,
+                      so it legitimately differs down the table. */}
+                  <td title="The noise floor this step had to beat, measured from the roster as it stood at that point in the plan">
+                    ±{step.noiseFloorTeamDps.toFixed(2)}
+                  </td>
+                  <td>{step.cumulativeTeamDps.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
+          No power-up was added to this plan.
+        </p>
+      )}
+
+      <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
+        {budgetStopReasonSentence(plan.stopReason, plan.noiseFloorTeamDps)}
+      </p>
+
+      <h3 style={{ marginTop: 16 }}>What's left, per slot</h3>
+      <div className="result-row" style={{ flexWrap: "wrap" }}>
+        {slotSpecies.map((species, i) => {
+          const finalLevel = plan.finalLevels[i];
+          const ownCandy = plan.ledger.ownCandy[i];
+          const ownXl = plan.ledger.ownXlCandy[i];
+          if (!species || !finalLevel || !ownCandy || !ownXl) return null;
+          return (
+            <div className="result-card" key={i} style={{ minWidth: 220 }}>
+              <h3>
+                Slot {i + 1}: {species.name}
+              </h3>
+              <dl>
+                <dt>Level</dt>
+                <dd>
+                  {finalLevel.fromLevel} → {finalLevel.toLevel}
+                </dd>
+                <dt>Own candy remaining</dt>
+                <dd>{ownCandy.remaining}</dd>
+                <dt>Own XL candy remaining</dt>
+                <dd>{ownXl.remaining}</dd>
+              </dl>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+interface SingleRaidResultsSectionProps {
+  error: string | null;
+  bossSpecies: SpeciesDefinition | null;
+  hasFieldedSlot: boolean;
+  slotSpecies: (SpeciesDefinition | null)[];
+  data: PowerUpOptimizerRunResult["data"];
+  plan: PowerUpOptimizerRunResult["plan"];
+  isOptimizerPending: boolean;
+  rankBy: PowerUpRankBy;
+  showAllCandidates: boolean;
+  onToggleShowAllCandidates: () => void;
+  visibleCandidates: PowerUpCandidate[];
+  sortedCandidatesCount: number;
+}
+
+/**
+ * Single-raid mode's whole results area — baseline card, per-slot damage
+ * ladder, recommendation, the fixed-budget plan (SingleRaidBudgetPlanSection,
+ * rendered inline at its original position), the ranked-candidates table,
+ * and the always-visible "Known caveats" block. Extracted verbatim from what
+ * used to render inline in PowerUpOptimizerView's own top-level JSX (no
+ * behavior change) — mirrors how multi-raid mode's own results already live
+ * in MultiRaidResultsSection/MultiRaidBudgetPlanSection rather than inline,
+ * shrinking PowerUpOptimizerView itself from ~837 to a thin orchestrator.
+ */
+function SingleRaidResultsSection({
+  error,
+  bossSpecies,
+  hasFieldedSlot,
+  slotSpecies,
+  data,
+  plan,
+  isOptimizerPending,
+  rankBy,
+  showAllCandidates,
+  onToggleShowAllCandidates,
+  visibleCandidates,
+  sortedCandidatesCount,
+}: SingleRaidResultsSectionProps) {
+  return (
+    <>
+      {error && (
+        <section className="panel">
+          <p className="error-text">Could not compute this optimizer run: {error}</p>
+        </section>
+      )}
+
+      {!bossSpecies && (
+        <section className="panel">
+          <p className="caveats">Pick a raid target above to see ranked power-up candidates.</p>
+        </section>
+      )}
+
+      {bossSpecies && !hasFieldedSlot && (
+        <section className="panel">
+          <p className="caveats">Add at least one Pokémon to the roster above to see ranked power-up candidates.</p>
+        </section>
+      )}
+
+      {data && (
+        <>
+          <section className="panel">
+            <h2>
+              Baseline — roster as-is
+              {isOptimizerPending && (
+                <span
+                  className="badge badge-pending"
+                  title="Inputs have changed since this was last computed — it still reflects the previous roster/boss/assumption settings and will refresh automatically a moment after you stop changing them."
+                >
+                  recomputing…
+                </span>
+              )}
+            </h2>
+            <div className="result-card" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
+              <div className="stat-tile-headline">
+                <span className="stat-tile-value">{data.baseline.teamDps.toFixed(1)}</span>
+                <span className="stat-tile-unit">team DPS</span>
+              </div>
+              <dl>
+                <dt>Boss HP</dt>
+                <dd>{data.bossHp.toLocaleString()}</dd>
+                <dt>Clear rate</dt>
+                <dd>{(data.baseline.clearRate * 100).toFixed(0)}%</dd>
+                <dt>Mean time to clear</dt>
+                <dd>
+                  {data.baseline.meanTimeToClearSeconds === null
+                    ? "never (in these simulated runs)"
+                    : `${data.baseline.meanTimeToClearSeconds.toFixed(1)}s`}
+                </dd>
+                <dt>Team DPS</dt>
+                <dd>{data.baseline.teamDps.toFixed(1)}</dd>
+                <dt
+                  title={`A candidate's |delta team DPS| below this band is indistinguishable from seed-to-seed jitter in these ${data.iterations} simulated runs, not a real effect — see the ranked table below for how this is applied.`}
+                >
+                  Noise floor
+                </dt>
+                <dd>
+                  ±{data.noiseFloorTeamDps.toFixed(2)} team DPS ({data.iterations} seeds)
+                </dd>
+              </dl>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Per-slot damage ladder against {bossSpecies ? speciesLabel(bossSpecies) : "this boss"}</h2>
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              Real Pokémon GO damage is floored per hit — a power-up can raise Attack and change nothing until it
+              crosses a real breakpoint here. "No further breakpoint before level 50" means every remaining power-up
+              for that move is cost with zero per-hit damage change against THIS boss's real Defense stat.
+            </p>
+            <div className="result-row" style={{ flexWrap: "wrap" }}>
+              {slotSpecies.map((species, i) => {
+                const ladder = data.ladders[i];
+                if (!species || !ladder) return null;
+                return (
+                  <div className="result-card" key={i} style={{ minWidth: 340 }}>
+                    <h3>
+                      Slot {i + 1}: {species.name} (Lv {ladder.current.level})
+                    </h3>
+                    <dl>
+                      <dt>Fast move dmg/hit now</dt>
+                      <dd>{ladder.current.fastMoveDamage}</dd>
+                      <dt>Next fast breakpoint</dt>
+                      <dd>
+                        {ladder.nextFastBreakpoint
+                          ? `Lv ${ladder.nextFastBreakpoint.level} (${ladder.nextFastBreakpoint.fastMoveDamage} dmg) — ${ladder.nextFastBreakpoint.cumulativeCost.stardust.toLocaleString()} stardust, ${ladder.nextFastBreakpoint.cumulativeCost.candy} candy${ladder.nextFastBreakpoint.cumulativeCost.xlCandy > 0 ? `, ${ladder.nextFastBreakpoint.cumulativeCost.xlCandy} XL` : ""}`
+                          : "no further breakpoint before level 50"}
+                      </dd>
+                      <dt>Charged move dmg/hit now</dt>
+                      <dd>{ladder.current.chargedMoveDamage}</dd>
+                      <dt>Next charged breakpoint</dt>
+                      <dd>
+                        {ladder.nextChargedBreakpoint
+                          ? `Lv ${ladder.nextChargedBreakpoint.level} (${ladder.nextChargedBreakpoint.chargedMoveDamage} dmg) — ${ladder.nextChargedBreakpoint.cumulativeCost.stardust.toLocaleString()} stardust, ${ladder.nextChargedBreakpoint.cumulativeCost.candy} candy${ladder.nextChargedBreakpoint.cumulativeCost.xlCandy > 0 ? `, ${ladder.nextChargedBreakpoint.cumulativeCost.xlCandy} XL` : ""}`
+                          : "no further breakpoint before level 50"}
+                      </dd>
+                    </dl>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>Recommendation</h2>
+            <p className="caveats" style={{ color: "var(--text)" }}>
+              {!data.bestAffordableByDelta && !data.bestAffordableByStardustEfficiency
+                ? `Nothing affordable improves team DPS beyond the ±${data.noiseFloorTeamDps.toFixed(2)} noise floor — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss.`
+                : (
+                    <>
+                      {data.bestAffordableByStardustEfficiency && (
+                        <>
+                          Best stardust efficiency: Slot {data.bestAffordableByStardustEfficiency.slotIndex + 1} (
+                          {data.bestAffordableByStardustEfficiency.speciesName}) Lv{" "}
+                          {data.bestAffordableByStardustEfficiency.fromLevel} → {data.bestAffordableByStardustEfficiency.toLevel}{" "}
+                          (+{data.bestAffordableByStardustEfficiency.deltaTeamDps.toFixed(2)} team DPS,{" "}
+                          {data.bestAffordableByStardustEfficiency.deltaTeamDpsPer1000Stardust?.toFixed(3)} per 1000 stardust).{" "}
+                        </>
+                      )}
+                      {data.bestAffordableByDelta && (
+                        <>
+                          Biggest raw team-DPS gain: Slot {data.bestAffordableByDelta.slotIndex + 1} (
+                          {data.bestAffordableByDelta.speciesName}) Lv {data.bestAffordableByDelta.fromLevel} →{" "}
+                          {data.bestAffordableByDelta.toLevel} (+{data.bestAffordableByDelta.deltaTeamDps.toFixed(2)} team
+                          DPS)
+                          {data.bestAffordableByDelta.slotIndex === data.bestAffordableByStardustEfficiency?.slotIndex &&
+                          data.bestAffordableByDelta.toLevel === data.bestAffordableByStardustEfficiency?.toLevel
+                            ? " — the same candidate as above."
+                            : " — a DIFFERENT candidate than the most stardust-efficient one above, since a bigger absolute gain doesn't have to be the cheapest one."}
+                        </>
+                      )}
+                    </>
+                  )}
+            </p>
+          </section>
+
+          {plan && <SingleRaidBudgetPlanSection plan={plan} slotSpecies={slotSpecies} />}
+
+          <section className="panel">
+            <h2>
+              Ranked power-up candidates
+              <span className="species-picker-hint" style={{ marginLeft: 8 }}>
+                grouped: measurable gains first (sorted by {rankByLabel(rankBy)}, descending), then within-noise
+                rows (cheapest first), then measurable losses last (worst first)
+              </span>
+            </h2>
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              Rows with no {rankBy === "stardust" ? "stardust" : rankBy === "candy" ? "candy" : "XL candy"} cost
+              (e.g. a pure-XL step has no regular-candy cost, and vice versa) show "—" for that column's efficiency and sink to the
+              bottom of the first group — there is nothing to divide by, not a zero result. A row whose |Δ team DPS| is inside this
+              run's ±{data.noiseFloorTeamDps.toFixed(2)} noise floor shows "≈0" instead of a signed number and "—" for every
+              efficiency column, and sorts into the middle group by stardust cost (cheapest first) — the measured delta is
+              indistinguishable from seed-to-seed jitter, not a real gain or loss.
+            </p>
+            <div className="table-scroll" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
+              <table className="time-series-table">
+                <thead>
+                  <tr>
+                    <th>Slot</th>
+                    <th>Species</th>
+                    <th>Level</th>
+                    <th>Δ team DPS</th>
+                    <th>/1000 stardust</th>
+                    <th>/candy</th>
+                    <th>/XL candy</th>
+                    <th>Stardust</th>
+                    <th>Candy</th>
+                    <th>XL candy</th>
+                    <th>Affordable</th>
+                    <th>Breakpoints</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleCandidates.map((c, i) => (
+                    <tr key={`${c.slotIndex}-${c.toLevel}-${i}`} style={{ opacity: c.affordable ? 1 : 0.5 }}>
+                      <td>{c.slotIndex + 1}</td>
+                      <td>{c.speciesName}</td>
+                      <td>
+                        {c.fromLevel} → {c.toLevel}
+                      </td>
+                      <td
+                        title={
+                          c.deltaExceedsNoise
+                            ? undefined
+                            : `Within ±${data.noiseFloorTeamDps.toFixed(2)} noise floor; the measured delta was ${c.deltaTeamDps >= 0 ? "+" : ""}${c.deltaTeamDps.toFixed(2)}`
+                        }
+                      >
+                        {c.deltaExceedsNoise ? (
+                          <>
+                            {c.deltaTeamDps >= 0 ? "+" : ""}
+                            {c.deltaTeamDps.toFixed(2)}
+                          </>
+                        ) : (
+                          "≈0"
+                        )}
+                      </td>
+                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPer1000Stardust === null ? "—" : c.deltaTeamDpsPer1000Stardust.toFixed(3)}</td>
+                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPerCandy === null ? "—" : c.deltaTeamDpsPerCandy.toFixed(3)}</td>
+                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPerXlCandy === null ? "—" : c.deltaTeamDpsPerXlCandy.toFixed(3)}</td>
+                      <td>{c.cost.stardust.toLocaleString()}</td>
+                      <td>{c.cost.candy || "—"}</td>
+                      <td>{c.cost.xlCandy || "—"}</td>
+                      <td>{c.affordable ? "✓" : "✗"}</td>
+                      <td>
+                        {c.crossesFastBreakpoint && <span className="badge badge-breakpoint">fast</span>}
+                        {c.crossesChargedBreakpoint && <span className="badge badge-breakpoint">charged</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {sortedCandidatesCount > CANDIDATE_TABLE_INITIAL_ROWS && (
+              <button type="button" style={{ marginTop: 8 }} onClick={onToggleShowAllCandidates}>
+                {showAllCandidates ? `Show top ${CANDIDATE_TABLE_INITIAL_ROWS} only` : `Show all ${sortedCandidatesCount}`}
+              </button>
+            )}
+          </section>
+        </>
+      )}
+
+      <section className="panel">
+        <h2>Known caveats</h2>
+        <p className="caveats note-block">
+          v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
+          two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
+          the mean of {data ? data.iterations : 20} paired-seed (common-random-numbers) team-raid runs, not one
+          run — a level change shifts WHEN the boss's own charged-move RNG gets consumed, which decorrelates the
+          "same seed" runs more than a typical paired comparison, so this tool also computes a conservative noise floor
+          (shown on the baseline card and applied to the ranked table above) and treats any candidate whose |Δ team DPS|
+          falls inside it as "no measurable change" rather than a signed number. A candidate CAN still show a genuine
+          small negative delta beyond that floor, and that isn't necessarily a bug: with swap/revive costs at 0 a
+          bulkier, lower-DPS slot that gains no extra charged move from the power-up just delays the roster's stronger
+          slots behind it for no compensating survival benefit — it's the revive cost above (15s by default) that makes
+          a slot's extra bulk pay for itself by avoiding a paid full-roster wipe. The power-up cost table (universal
+          levels 1-50,
+          fetched {powerUpCostsFetchedAt.slice(0, 10)} from GAME_MASTER) ignores Eternatus's known per-species
+          candy-cost override — this tool does not special-case it. Best Buddy status (a real +1 level beyond the
+          normal level-50 cap) is not modelled at all. The Shadow-side
+          candy rounding rule is [inferred from the Purified rule, not independently confirmed] — see powerUp.ts's own
+          top doc comment. Stardust and candy/XL-candy efficiency are kept as two separate numbers on purpose (see the
+          "Rank by" control) — they are not fungible resources for a real player, so this tool never blends them into
+          one composite score. Every full-roster wipe costs the revive-and-rejoin time above (15s by default) of raid
+          clock in which nothing is dealt, and team DPS is the damage dealt within the raid timer divided by the timer
+          (or boss HP divided by time-to-clear when the roster clears) — so a slot's extra bulk only counts when it
+          buys damage, or avoids a paid revive. Team Raid v1's other assumptions carry over unchanged: unlimited
+          healing items on a full wipe, and no cap on wipe-and-rejoin cycles other than a purely-engineering safety guard. A raid target badged
+          "approximate" in the picker is one the live raid feed named but whose exact form this data layer couldn't
+          resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
+        </p>
+      </section>
+    </>
+  );
 }
 
 /**
@@ -1548,400 +2023,20 @@ export function PowerUpOptimizerView() {
       />
 
       {assumptions.mode === "single-raid" && (
-      <>
-      {result.error && (
-        <section className="panel">
-          <p className="error-text">Could not compute this optimizer run: {result.error}</p>
-        </section>
-      )}
-
-      {!bossSpecies && (
-        <section className="panel">
-          <p className="caveats">Pick a raid target above to see ranked power-up candidates.</p>
-        </section>
-      )}
-
-      {bossSpecies && !assumptions.slots.some((s) => s.speciesId) && (
-        <section className="panel">
-          <p className="caveats">Add at least one Pokémon to the roster above to see ranked power-up candidates.</p>
-        </section>
-      )}
-
-      {result.data && (
-        <>
-          <section className="panel">
-            <h2>
-              Baseline — roster as-is
-              {isOptimizerPending && (
-                <span
-                  className="badge badge-pending"
-                  title="Inputs have changed since this was last computed — it still reflects the previous roster/boss/assumption settings and will refresh automatically a moment after you stop changing them."
-                >
-                  recomputing…
-                </span>
-              )}
-            </h2>
-            <div className="result-card" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
-              <div className="stat-tile-headline">
-                <span className="stat-tile-value">{result.data.baseline.teamDps.toFixed(1)}</span>
-                <span className="stat-tile-unit">team DPS</span>
-              </div>
-              <dl>
-                <dt>Boss HP</dt>
-                <dd>{result.data.bossHp.toLocaleString()}</dd>
-                <dt>Clear rate</dt>
-                <dd>{(result.data.baseline.clearRate * 100).toFixed(0)}%</dd>
-                <dt>Mean time to clear</dt>
-                <dd>
-                  {result.data.baseline.meanTimeToClearSeconds === null
-                    ? "never (in these simulated runs)"
-                    : `${result.data.baseline.meanTimeToClearSeconds.toFixed(1)}s`}
-                </dd>
-                <dt>Team DPS</dt>
-                <dd>{result.data.baseline.teamDps.toFixed(1)}</dd>
-                <dt
-                  title={`A candidate's |delta team DPS| below this band is indistinguishable from seed-to-seed jitter in these ${result.data.iterations} simulated runs, not a real effect — see the ranked table below for how this is applied.`}
-                >
-                  Noise floor
-                </dt>
-                <dd>
-                  ±{result.data.noiseFloorTeamDps.toFixed(2)} team DPS ({result.data.iterations} seeds)
-                </dd>
-              </dl>
-            </div>
-          </section>
-
-          <section className="panel">
-            <h2>Per-slot damage ladder against {bossSpecies ? speciesLabel(bossSpecies) : "this boss"}</h2>
-            <p className="caveats" style={{ marginBottom: 12 }}>
-              Real Pokémon GO damage is floored per hit — a power-up can raise Attack and change nothing until it
-              crosses a real breakpoint here. "No further breakpoint before level 50" means every remaining power-up
-              for that move is cost with zero per-hit damage change against THIS boss's real Defense stat.
-            </p>
-            <div className="result-row" style={{ flexWrap: "wrap" }}>
-              {assumptions.slots.map((slot, i) => {
-                const species = slotSpecies[i];
-                const ladder = result.data!.ladders[i];
-                if (!species || !ladder) return null;
-                return (
-                  <div className="result-card" key={i} style={{ minWidth: 340 }}>
-                    <h3>
-                      Slot {i + 1}: {species.name} (Lv {ladder.current.level})
-                    </h3>
-                    <dl>
-                      <dt>Fast move dmg/hit now</dt>
-                      <dd>{ladder.current.fastMoveDamage}</dd>
-                      <dt>Next fast breakpoint</dt>
-                      <dd>
-                        {ladder.nextFastBreakpoint
-                          ? `Lv ${ladder.nextFastBreakpoint.level} (${ladder.nextFastBreakpoint.fastMoveDamage} dmg) — ${ladder.nextFastBreakpoint.cumulativeCost.stardust.toLocaleString()} stardust, ${ladder.nextFastBreakpoint.cumulativeCost.candy} candy${ladder.nextFastBreakpoint.cumulativeCost.xlCandy > 0 ? `, ${ladder.nextFastBreakpoint.cumulativeCost.xlCandy} XL` : ""}`
-                          : "no further breakpoint before level 50"}
-                      </dd>
-                      <dt>Charged move dmg/hit now</dt>
-                      <dd>{ladder.current.chargedMoveDamage}</dd>
-                      <dt>Next charged breakpoint</dt>
-                      <dd>
-                        {ladder.nextChargedBreakpoint
-                          ? `Lv ${ladder.nextChargedBreakpoint.level} (${ladder.nextChargedBreakpoint.chargedMoveDamage} dmg) — ${ladder.nextChargedBreakpoint.cumulativeCost.stardust.toLocaleString()} stardust, ${ladder.nextChargedBreakpoint.cumulativeCost.candy} candy${ladder.nextChargedBreakpoint.cumulativeCost.xlCandy > 0 ? `, ${ladder.nextChargedBreakpoint.cumulativeCost.xlCandy} XL` : ""}`
-                          : "no further breakpoint before level 50"}
-                      </dd>
-                    </dl>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="panel">
-            <h2>Recommendation</h2>
-            <p className="caveats" style={{ color: "var(--text)" }}>
-              {!result.data.bestAffordableByDelta && !result.data.bestAffordableByStardustEfficiency
-                ? `Nothing affordable improves team DPS beyond the ±${result.data.noiseFloorTeamDps.toFixed(2)} noise floor — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss.`
-                : (
-                    <>
-                      {result.data.bestAffordableByStardustEfficiency && (
-                        <>
-                          Best stardust efficiency: Slot {result.data.bestAffordableByStardustEfficiency.slotIndex + 1} (
-                          {result.data.bestAffordableByStardustEfficiency.speciesName}) Lv{" "}
-                          {result.data.bestAffordableByStardustEfficiency.fromLevel} → {result.data.bestAffordableByStardustEfficiency.toLevel}{" "}
-                          (+{result.data.bestAffordableByStardustEfficiency.deltaTeamDps.toFixed(2)} team DPS,{" "}
-                          {result.data.bestAffordableByStardustEfficiency.deltaTeamDpsPer1000Stardust?.toFixed(3)} per 1000 stardust).{" "}
-                        </>
-                      )}
-                      {result.data.bestAffordableByDelta && (
-                        <>
-                          Biggest raw team-DPS gain: Slot {result.data.bestAffordableByDelta.slotIndex + 1} (
-                          {result.data.bestAffordableByDelta.speciesName}) Lv {result.data.bestAffordableByDelta.fromLevel} →{" "}
-                          {result.data.bestAffordableByDelta.toLevel} (+{result.data.bestAffordableByDelta.deltaTeamDps.toFixed(2)} team
-                          DPS)
-                          {result.data.bestAffordableByDelta.slotIndex === result.data.bestAffordableByStardustEfficiency?.slotIndex &&
-                          result.data.bestAffordableByDelta.toLevel === result.data.bestAffordableByStardustEfficiency?.toLevel
-                            ? " — the same candidate as above."
-                            : " — a DIFFERENT candidate than the most stardust-efficient one above, since a bigger absolute gain doesn't have to be the cheapest one."}
-                        </>
-                      )}
-                    </>
-                  )}
-            </p>
-          </section>
-
-          {result.plan && (
-            <section className="panel">
-              <h2>Fixed-budget power-up plan</h2>
-              <p className="caveats" style={{ marginBottom: 12 }}>
-                A DIFFERENT question than the ranked table below: given your WHOLE stardust/Rare
-                Candy/Rare Candy XL budget across every fielded slot at once (not one candidate at
-                a time), what SET of power-ups should you make? A greedy multi-slot search — a
-                step is only committed once its own marginal team-DPS gain measurably beats the
-                noise floor. That floor is re-measured from the roster's own seed-to-seed variance
-                after every committed step rather than fixed once at the start, because powering a
-                roster up changes how much it varies run to run — so steps within one plan can be
-                held to different bars, and each step below shows the one it actually had to clear.
-                The ±{result.plan.noiseFloorTeamDps.toFixed(2)} quoted elsewhere in this section is
-                the FINAL floor, in effect when the search stopped.
-              </p>
-
-              {result.plan.bestBlockedCandidate ? (
-                <div className="blocked-gain-callout">
-                  <strong>Blocked, not done</strong>
-                  {blockedCandidateSentence(result.plan.bestBlockedCandidate)} This plan stopped
-                  here because that upgrade isn't affordable yet — not because it wouldn't help.
-                </div>
-              ) : (
-                <div className="blocked-gain-callout">
-                  <strong>Nothing further measurably helps</strong>
-                  Beyond the steps below, no further useful power-up anywhere on this roster clears
-                  the ±{result.plan.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor against this
-                  boss and budget — this plan is genuinely done, not just out of money.
-                </div>
-              )}
-
-              <div className="result-card">
-                <dl>
-                  <dt>Baseline team DPS (roster as-is)</dt>
-                  <dd>{result.plan.baseline.teamDps.toFixed(2)}</dd>
-                  <dt>Final team DPS (after this plan)</dt>
-                  <dd>{result.plan.final.teamDps.toFixed(2)}</dd>
-                  <dt>Change</dt>
-                  <dd>
-                    {result.plan.final.teamDps >= result.plan.baseline.teamDps ? "+" : ""}
-                    {(result.plan.final.teamDps - result.plan.baseline.teamDps).toFixed(2)} team DPS
-                    {result.plan.baseline.teamDps > 0 &&
-                      ` (${(((result.plan.final.teamDps - result.plan.baseline.teamDps) / result.plan.baseline.teamDps) * 100).toFixed(1)}% over baseline)`}
-                  </dd>
-                  <dt>Stardust spent</dt>
-                  <dd>
-                    {result.plan.ledger.stardust.spent.toLocaleString()} ({result.plan.ledger.stardust.remaining.toLocaleString()}{" "}
-                    left)
-                  </dd>
-                  <dt>Shared Rare Candy spent</dt>
-                  <dd>
-                    {result.plan.ledger.sharedRareCandy.spent} ({result.plan.ledger.sharedRareCandy.remaining} left)
-                  </dd>
-                  <dt>Shared Rare Candy XL spent</dt>
-                  <dd>
-                    {result.plan.ledger.sharedRareCandyXl.spent} ({result.plan.ledger.sharedRareCandyXl.remaining} left)
-                  </dd>
-                </dl>
-              </div>
-
-              {result.plan.steps.length > 0 ? (
-                <div className="table-scroll" style={{ marginTop: 12 }}>
-                  <table className="time-series-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Slot</th>
-                        <th>Species</th>
-                        <th>Level</th>
-                        <th>Stardust</th>
-                        <th>Candy</th>
-                        <th>XL candy</th>
-                        <th>Δ team DPS</th>
-                        <th>Noise floor cleared</th>
-                        <th>Team DPS after</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {result.plan.steps.map((step, i) => (
-                        <tr key={`${step.slotIndex}-${step.toLevel}-${i}`}>
-                          <td>{i + 1}</td>
-                          <td>{step.slotIndex + 1}</td>
-                          <td>{step.speciesName}</td>
-                          <td>
-                            {step.fromLevel} → {step.toLevel}
-                          </td>
-                          <td>{step.cost.stardust.toLocaleString()}</td>
-                          <td>{formatResourceSplit(step.ownCandySpent, step.sharedCandySpent, "Rare")}</td>
-                          <td>{formatResourceSplit(step.ownXlCandySpent, step.sharedXlCandySpent, "Rare XL")}</td>
-                          <td>
-                            +{step.deltaTeamDps.toFixed(2)}
-                          </td>
-                          {/* The floor in effect for THIS step's round, not the plan's final
-                              one — re-measured from the roster's variance after every commit,
-                              so it legitimately differs down the table. */}
-                          <td title="The noise floor this step had to beat, measured from the roster as it stood at that point in the plan">
-                            ±{step.noiseFloorTeamDps.toFixed(2)}
-                          </td>
-                          <td>{step.cumulativeTeamDps.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
-                  No power-up was added to this plan.
-                </p>
-              )}
-
-              <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
-                {budgetStopReasonSentence(result.plan.stopReason, result.plan.noiseFloorTeamDps)}
-              </p>
-
-              <h3 style={{ marginTop: 16 }}>What's left, per slot</h3>
-              <div className="result-row" style={{ flexWrap: "wrap" }}>
-                {slotSpecies.map((species, i) => {
-                  const finalLevel = result.plan!.finalLevels[i];
-                  const ownCandy = result.plan!.ledger.ownCandy[i];
-                  const ownXl = result.plan!.ledger.ownXlCandy[i];
-                  if (!species || !finalLevel || !ownCandy || !ownXl) return null;
-                  return (
-                    <div className="result-card" key={i} style={{ minWidth: 220 }}>
-                      <h3>
-                        Slot {i + 1}: {species.name}
-                      </h3>
-                      <dl>
-                        <dt>Level</dt>
-                        <dd>
-                          {finalLevel.fromLevel} → {finalLevel.toLevel}
-                        </dd>
-                        <dt>Own candy remaining</dt>
-                        <dd>{ownCandy.remaining}</dd>
-                        <dt>Own XL candy remaining</dt>
-                        <dd>{ownXl.remaining}</dd>
-                      </dl>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-
-          <section className="panel">
-            <h2>
-              Ranked power-up candidates
-              <span className="species-picker-hint" style={{ marginLeft: 8 }}>
-                grouped: measurable gains first (sorted by {rankByLabel(assumptions.rankBy)}, descending), then within-noise
-                rows (cheapest first), then measurable losses last (worst first)
-              </span>
-            </h2>
-            <p className="caveats" style={{ marginBottom: 12 }}>
-              Rows with no {assumptions.rankBy === "stardust" ? "stardust" : assumptions.rankBy === "candy" ? "candy" : "XL candy"} cost
-              (e.g. a pure-XL step has no regular-candy cost, and vice versa) show "—" for that column's efficiency and sink to the
-              bottom of the first group — there is nothing to divide by, not a zero result. A row whose |Δ team DPS| is inside this
-              run's ±{result.data.noiseFloorTeamDps.toFixed(2)} noise floor shows "≈0" instead of a signed number and "—" for every
-              efficiency column, and sorts into the middle group by stardust cost (cheapest first) — the measured delta is
-              indistinguishable from seed-to-seed jitter, not a real gain or loss.
-            </p>
-            <div className="table-scroll" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
-              <table className="time-series-table">
-                <thead>
-                  <tr>
-                    <th>Slot</th>
-                    <th>Species</th>
-                    <th>Level</th>
-                    <th>Δ team DPS</th>
-                    <th>/1000 stardust</th>
-                    <th>/candy</th>
-                    <th>/XL candy</th>
-                    <th>Stardust</th>
-                    <th>Candy</th>
-                    <th>XL candy</th>
-                    <th>Affordable</th>
-                    <th>Breakpoints</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleCandidates.map((c, i) => (
-                    <tr key={`${c.slotIndex}-${c.toLevel}-${i}`} style={{ opacity: c.affordable ? 1 : 0.5 }}>
-                      <td>{c.slotIndex + 1}</td>
-                      <td>{c.speciesName}</td>
-                      <td>
-                        {c.fromLevel} → {c.toLevel}
-                      </td>
-                      <td
-                        title={
-                          c.deltaExceedsNoise
-                            ? undefined
-                            : `Within ±${result.data!.noiseFloorTeamDps.toFixed(2)} noise floor; the measured delta was ${c.deltaTeamDps >= 0 ? "+" : ""}${c.deltaTeamDps.toFixed(2)}`
-                        }
-                      >
-                        {c.deltaExceedsNoise ? (
-                          <>
-                            {c.deltaTeamDps >= 0 ? "+" : ""}
-                            {c.deltaTeamDps.toFixed(2)}
-                          </>
-                        ) : (
-                          "≈0"
-                        )}
-                      </td>
-                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPer1000Stardust === null ? "—" : c.deltaTeamDpsPer1000Stardust.toFixed(3)}</td>
-                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPerCandy === null ? "—" : c.deltaTeamDpsPerCandy.toFixed(3)}</td>
-                      <td>{!c.deltaExceedsNoise || c.deltaTeamDpsPerXlCandy === null ? "—" : c.deltaTeamDpsPerXlCandy.toFixed(3)}</td>
-                      <td>{c.cost.stardust.toLocaleString()}</td>
-                      <td>{c.cost.candy || "—"}</td>
-                      <td>{c.cost.xlCandy || "—"}</td>
-                      <td>{c.affordable ? "✓" : "✗"}</td>
-                      <td>
-                        {c.crossesFastBreakpoint && <span className="badge badge-breakpoint">fast</span>}
-                        {c.crossesChargedBreakpoint && <span className="badge badge-breakpoint">charged</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {sortedCandidates.length > CANDIDATE_TABLE_INITIAL_ROWS && (
-              <button type="button" style={{ marginTop: 8 }} onClick={() => setShowAllCandidates((v) => !v)}>
-                {showAllCandidates ? `Show top ${CANDIDATE_TABLE_INITIAL_ROWS} only` : `Show all ${sortedCandidates.length}`}
-              </button>
-            )}
-          </section>
-        </>
-      )}
-
-      <section className="panel">
-        <h2>Known caveats</h2>
-        <p className="caveats note-block">
-          v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
-          two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
-          the mean of {result.data ? result.data.iterations : 20} paired-seed (common-random-numbers) team-raid runs, not one
-          run — a level change shifts WHEN the boss's own charged-move RNG gets consumed, which decorrelates the
-          "same seed" runs more than a typical paired comparison, so this tool also computes a conservative noise floor
-          (shown on the baseline card and applied to the ranked table above) and treats any candidate whose |Δ team DPS|
-          falls inside it as "no measurable change" rather than a signed number. A candidate CAN still show a genuine
-          small negative delta beyond that floor, and that isn't necessarily a bug: with swap/revive costs at 0 a
-          bulkier, lower-DPS slot that gains no extra charged move from the power-up just delays the roster's stronger
-          slots behind it for no compensating survival benefit — it's the revive cost above (15s by default) that makes
-          a slot's extra bulk pay for itself by avoiding a paid full-roster wipe. The power-up cost table (universal
-          levels 1-50,
-          fetched {powerUpCostsFetchedAt.slice(0, 10)} from GAME_MASTER) ignores Eternatus's known per-species
-          candy-cost override — this tool does not special-case it. Best Buddy status (a real +1 level beyond the
-          normal level-50 cap) is not modelled at all. The Shadow-side
-          candy rounding rule is [inferred from the Purified rule, not independently confirmed] — see powerUp.ts's own
-          top doc comment. Stardust and candy/XL-candy efficiency are kept as two separate numbers on purpose (see the
-          "Rank by" control) — they are not fungible resources for a real player, so this tool never blends them into
-          one composite score. Every full-roster wipe costs the revive-and-rejoin time above (15s by default) of raid
-          clock in which nothing is dealt, and team DPS is the damage dealt within the raid timer divided by the timer
-          (or boss HP divided by time-to-clear when the roster clears) — so a slot's extra bulk only counts when it
-          buys damage, or avoids a paid revive. Team Raid v1's other assumptions carry over unchanged: unlimited
-          healing items on a full wipe, and no cap on wipe-and-rejoin cycles other than a purely-engineering safety guard. A raid target badged
-          "approximate" in the picker is one the live raid feed named but whose exact form this data layer couldn't
-          resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
-        </p>
-      </section>
-      </>
+        <SingleRaidResultsSection
+          error={result.error}
+          bossSpecies={bossSpecies}
+          hasFieldedSlot={assumptions.slots.some((s) => s.speciesId)}
+          slotSpecies={slotSpecies}
+          data={result.data}
+          plan={result.plan}
+          isOptimizerPending={isOptimizerPending}
+          rankBy={assumptions.rankBy}
+          showAllCandidates={showAllCandidates}
+          onToggleShowAllCandidates={() => setShowAllCandidates((v) => !v)}
+          visibleCandidates={visibleCandidates}
+          sortedCandidatesCount={sortedCandidates.length}
+        />
       )}
 
       {assumptions.mode === "multi-raid" && (
