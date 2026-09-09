@@ -23,6 +23,7 @@ import type {
   GameMasterPokemonRecord,
   GameMasterMoveRecord,
   GameMasterUpgradeSettingsRecord,
+  GameMasterEvolutionBranchRecord,
   RawRaidBossesPreviousEntry,
   RawRaidBossesResponse,
 } from "./rawShapes.ts";
@@ -266,6 +267,19 @@ export interface GameMasterFetchResult {
  * thrown) if that specific template is missing or malformed this run;
  * sync-data.ts reports that in WARNINGS and skips writing
  * data/normalized/powerUpCosts.json that run rather than failing the sync.
+ *
+ * Also as of 2026-09-08 (Phase 0 of PLAN_multi_raid_roster_optimizer.md),
+ * each pokemonSettings template's `familyId` and REAL (non-mega/primal)
+ * `evolutionBranch` entries are retained too (GameMasterPokemonRecord.
+ * familyId/evolutionBranch — see that type's doc comment in rawShapes.ts),
+ * in the SAME per-template extraction as tempEvoOverrides just below, not a
+ * second pass over `ps.evolutionBranch`. These two fields are cached to
+ * data/raw/game_master.json starting this run but are NOT YET consumed by
+ * this script's species-building pass or written into
+ * data/normalized/species.json — that needs a SpeciesDefinition schema
+ * addition (`isFullyEvolved`/`evolvesToIds`/`candyFamilyId`) this script
+ * doesn't own; see PLAN_multi_raid_roster_optimizer.md §5 "Phase 0" for the
+ * scope this was cut from and why.
  * Deliberately NOT extracted: `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
  * POKEMON_ETERNATUS`, a real per-species override (30x candy cost) — v1 of
  * the power-up cost table this feeds only models the universal table (see
@@ -383,6 +397,22 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
                 megaEnergyRequired: branch?.temporaryEvolutionEnergyCostSubsequent,
               };
             }),
+          // 2026-09-08, Phase 0 of PLAN_multi_raid_roster_optimizer.md — same
+          // `ps.evolutionBranch` access as tempEvoOverrides just above, not a
+          // second pass. Deliberately keeps ONLY entries with a real
+          // `evolution` target (drops temporaryEvolution/mega entries, which
+          // are already captured above) — see GameMasterEvolutionBranchRecord's
+          // doc comment for why an unfiltered evolutionBranch.length is the
+          // wrong check (Venusaur/Charizard/Blastoise/Beedrill/Metagross all
+          // carry a non-empty evolutionBranch that is ENTIRELY temporary-
+          // evolution entries).
+          familyId: ps.familyId,
+          evolutionBranch: (ps.evolutionBranch ?? []).reduce<GameMasterEvolutionBranchRecord[]>((acc, b) => {
+            if (b.evolution) {
+              acc.push({ evolution: b.evolution, form: b.form, candyCost: b.candyCost, candyCostPurified: b.candyCostPurified });
+            }
+            return acc;
+          }, []),
         });
       }
 

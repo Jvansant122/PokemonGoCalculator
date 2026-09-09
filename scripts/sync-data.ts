@@ -187,6 +187,11 @@ import {
   resolveMegaFromGameMaster,
   pokemonClassToRarity,
   guessMovementIdForDisplayName,
+  // Phase 0 of PLAN_multi_raid_roster_optimizer.md §3.6/§3.4/§4.2 — the
+  // "unevolved Pokémon are not power-up candidates" filter's data source.
+  isFullyEvolved,
+  realEvolutionTargets,
+  type EvolutionTarget,
 } from "./sync-data/gameMasterMatching.ts";
 import {
   megaSpeciesIdFor,
@@ -509,6 +514,79 @@ const rarityFallenBackToStandard: string[] = [];
  */
 const typesByDefaultForm = new Map<number, [PokemonType] | [PokemonType, PokemonType]>();
 
+/**
+ * GAME_MASTER form key (e.g. "METANG_NORMAL", already enum-prefixed — see
+ * GameMasterPokemonRecord.form's doc comment) -> the species id built for
+ * that exact matched template, populated as each species below is pushed
+ * (both the primary loop and the "mechanically-distinct extra forms" pass
+ * further down). Phase 0 of PLAN_multi_raid_roster_optimizer.md §3.6/§3.4/
+ * §4.2: resolves a REAL evolution branch's `EvolutionTarget.form` (see
+ * realEvolutionTargets in ./sync-data/gameMasterMatching.ts) to the species
+ * id it actually evolves into. Only ever set for a species that resolved a
+ * real GAME_MASTER template — a species that fell all the way back to
+ * pogoapi has no GAME_MASTER form key to register under.
+ */
+const speciesIdByGameMasterFormKey = new Map<string, string>();
+/**
+ * GAME_MASTER pokemonId enum -> the DEFAULT-form species id built for that
+ * enum (primary loop only — the extra-forms pass deliberately never writes
+ * here, since every species it builds is by definition a non-default form).
+ * Fallback target for resolveEvolutionTargetSpeciesId below when a branch's
+ * own `form` doesn't exactly match any registered template, mirroring
+ * resolveGameMasterPokemonRecord's own NORMAL/bare-template fallback
+ * priority used everywhere else in this file for the identical
+ * (enum, form) -> record identity problem.
+ */
+const speciesIdByGameMasterEnum = new Map<string, string>();
+/**
+ * Every species built this run that resolved a real GAME_MASTER template,
+ * paired with that exact matched record — read by the evolution-resolution
+ * pass immediately after the "mechanically-distinct extra forms" loop below,
+ * once speciesIdByGameMasterFormKey/speciesIdByGameMasterEnum are fully
+ * populated. Deliberately a second pass rather than resolving inline per
+ * species: a target species can be built LATER in pokemon_stats.json's own
+ * row order than the species evolving into it (e.g. Beldum's row precedes
+ * Metang's), so resolution must wait until every species this run is going
+ * to build (short of mega/primal/Shadow, which no real evolution branch ever
+ * targets) has actually been built.
+ */
+const pendingEvolutionResolution: { definition: SpeciesDefinition; gmRecord: GameMasterPokemonRecord }[] = [];
+/**
+ * Evolution branches whose target enum/form never resolved to a registered
+ * species id — reported loudly in WARNINGS below, never silently dropped
+ * (a dropped branch is the dangerous direction: it reads exactly like a
+ * genuinely fully-evolved species, which would let the Power-Up Optimizer
+ * recommend powering up something that should be evolved first instead).
+ * Expected to stay empty or near-empty: Phase 0's own groundwork measured
+ * 859 distinct real evolution edges, all resolving at the enum level.
+ */
+const unresolvedEvolutionBranches: string[] = [];
+/**
+ * The OTHER inconsistency realEvolutionTargets's own doc comment (see
+ * ./sync-data/gameMasterMatching.ts) explicitly calls out for a caller like
+ * this one to cross-check: `isFullyEvolved(candidatesForEnum) === false`
+ * (the UNION across every template sharing this enum found a real branch
+ * SOMEWHERE) but `realEvolutionTargets(gmRecord)` on the SPECIFIC matched
+ * template returns `[]` (that one template's own branch is empty). Confirmed
+ * in the live 2026-09-09 dump for two genuinely different reasons, neither a
+ * bug in isFullyEvolved itself: (1) a regional-form-gated evolution — e.g.
+ * base/Kantonian Farfetch'd never evolves, only its Galarian sibling (->
+ * Sirfetch'd) does, same pattern for Mr. Mime/Qwilfish/Corsola/Linoone — so
+ * the union correctly flags the ENUM as "has an evolution somewhere" but
+ * that's not actually reachable from THIS specific matched form; (2) a
+ * multi-stage single-enum chain where a LATER stage has already reached its
+ * own final form — Zygarde Complete/Complete_ten_percent are matched exactly
+ * and carry no branch of their own, but Zygarde 10%/50%'s branches (elsewhere
+ * under the same ZYGARDE enum) make the union say false for every Zygarde
+ * form including Complete. Per that doc comment: NEVER silently fall back to
+ * isFullyEvolved: true for these — isFullyEvolved stays exactly as
+ * isFullyEvolved() computed it (the safe-er direction: worst case an already-
+ * final form is wrongly excluded from candidate generation, never the
+ * reverse) — but it must be reported loudly rather than left as an
+ * unexplained empty evolvesToIds.
+ */
+const isFullyEvolvedRealEvolutionTargetsInconsistencies: string[] = [];
+
 for (const stat of normalStats) {
   const pokemonId = stat.pokemon_id;
   const form = defaultFormByPokemonId.get(pokemonId)!;
@@ -622,6 +700,20 @@ for (const stat of normalStats) {
   // PokeAPI lookup for their own distinct internal ID).
   definition.imageUrl = spriteUrlForDexId(stat.pokemon_id);
   definition.rarity = rarity;
+  // Phase 0 of PLAN_multi_raid_roster_optimizer.md §5: dexNumber is available
+  // regardless of whether this species resolved a real GAME_MASTER template
+  // (pokemon_stats.json's own pokemon_id, already in scope) — the remaining
+  // three fields need GAME_MASTER's own evolutionBranch/familyId data, so
+  // they stay undefined for a species that fell all the way back to pogoapi
+  // (already logged above in speciesFallenBackToPogoapi).
+  definition.dexNumber = stat.pokemon_id;
+  if (gmRecord && enumName) {
+    definition.isFullyEvolved = isFullyEvolved(gameMasterPokemonByEnum.get(enumName) ?? []);
+    definition.candyFamilyId = gmRecord.familyId;
+    if (gmRecord.form) speciesIdByGameMasterFormKey.set(gmRecord.form, definition.id);
+    speciesIdByGameMasterEnum.set(enumName, definition.id);
+    pendingEvolutionResolution.push({ definition, gmRecord });
+  }
 
   species.push(definition);
 }
@@ -879,6 +971,20 @@ for (const [pokemonId, rows] of statsByPokemonId) {
 
     definition.imageUrl = spriteUrlForDexId(pokemonId);
     definition.rarity = rarity;
+    // Same Phase 0 wiring as the primary loop above — see that site's
+    // comment for the field-by-field rationale. `candidates` here is the
+    // full candidate array for this row's own enum, already resolved above
+    // for the stats/types-differ discriminator.
+    definition.dexNumber = pokemonId;
+    if (gmExactRecord) {
+      definition.isFullyEvolved = isFullyEvolved(candidates);
+      definition.candyFamilyId = gmExactRecord.familyId;
+      if (gmExactRecord.form) speciesIdByGameMasterFormKey.set(gmExactRecord.form, definition.id);
+      pendingEvolutionResolution.push({ definition, gmRecord: gmExactRecord });
+      // Deliberately NOT registered in speciesIdByGameMasterEnum — that map
+      // is reserved for each enum's DEFAULT-form species only (see its own
+      // doc comment above); this loop only ever builds a non-default form.
+    }
     species.push(definition);
     extraFormSpeciesCount++;
     extraFormSpeciesAdded.push({ id: definition.id, name: definition.name, statsDiffer, typesDiffer });
@@ -888,6 +994,64 @@ for (const [pokemonId, rows] of statsByPokemonId) {
       regionalFormSpeciesByPrefixAndBase.set(`${raidPrefix}|${row.pokemon_name.toLowerCase()}`, definition.id);
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Evolution-target resolution (Phase 0 of PLAN_multi_raid_roster_optimizer.md
+// §3.6/§4.3's "unevolved Pokémon are not power-up candidates" filter). Runs as
+// its own pass now that BOTH species-building loops above have finished (not
+// mega/primal or Shadow below — no real evolution branch ever targets one of
+// those), so speciesIdByGameMasterFormKey/speciesIdByGameMasterEnum are fully
+// populated regardless of pokemon_stats.json's own row order.
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves one EvolutionTarget (off a specific matched species' own real
+ * evolution branch — see realEvolutionTargets) to a registered species id,
+ * preferring an exact GAME_MASTER form-key match and falling back to that
+ * enum's own default-form species when no exact match exists — mirrors
+ * resolveGameMasterPokemonRecord's own form-key -> NORMAL/bare-template
+ * priority chain used everywhere else in this file for the identical
+ * (enum, form) -> record identity problem. Returns null (never guesses) when
+ * neither resolves; the caller reports that loudly rather than silently
+ * dropping the branch.
+ */
+function resolveEvolutionTargetSpeciesId(target: EvolutionTarget): string | null {
+  if (target.form) {
+    const byFormKey = speciesIdByGameMasterFormKey.get(target.form);
+    if (byFormKey) return byFormKey;
+  }
+  return speciesIdByGameMasterEnum.get(target.evolutionEnum) ?? null;
+}
+
+for (const { definition, gmRecord } of pendingEvolutionResolution) {
+  if (definition.isFullyEvolved) {
+    definition.evolvesToIds = [];
+    continue;
+  }
+  const targets = realEvolutionTargets(gmRecord);
+  if (targets.length === 0) {
+    // isFullyEvolved(...) said false (a sibling GAME_MASTER template for this
+    // enum carries a real branch) but THIS species' own matched template
+    // carries none — see isFullyEvolvedRealEvolutionTargetsInconsistencies's
+    // doc comment above for why this happens and why isFullyEvolved is
+    // deliberately NOT overridden to true here.
+    isFullyEvolvedRealEvolutionTargetsInconsistencies.push(`${definition.name} (${definition.id})`);
+    definition.evolvesToIds = [];
+    continue;
+  }
+  const resolvedIds = new Set<string>();
+  for (const target of targets) {
+    const resolvedId = resolveEvolutionTargetSpeciesId(target);
+    if (resolvedId) {
+      resolvedIds.add(resolvedId);
+    } else {
+      unresolvedEvolutionBranches.push(
+        `${definition.name} (${definition.id}) -> ${target.evolutionEnum}${target.form ? ` [${target.form}]` : ""} (no registered species id found for this evolution target — evolvesToIds omits it; isFullyEvolved stays correctly false regardless, computed independently)`,
+      );
+    }
+  }
+  definition.evolvesToIds = [...resolvedIds];
 }
 
 // This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y,
@@ -1770,6 +1934,18 @@ for (const raid of rawRaids) {
 // matching (the only thing that triggers synthesizing one) has finished.
 const shadowSpecies = [...shadowSpeciesByBaseId.values()];
 species.push(...shadowSpecies);
+
+// Phase 0 of PLAN_multi_raid_roster_optimizer.md §5 — population counts for
+// the four fields wired in this pass, computed over the FINAL species list
+// (so Shadow variants, which inherit all four fields unchanged from their
+// base species via getOrCreateShadowVariant's spread, are correctly counted
+// too; mega/primal never get any of the four — no real evolution branch ever
+// targets a mega/primal form, and this pass doesn't wire that build site).
+const fullyEvolvedCount = species.filter((s) => s.isFullyEvolved === true).length;
+const notFullyEvolvedCount = species.filter((s) => s.isFullyEvolved === false).length;
+const dexNumberCount = species.filter((s) => s.dexNumber !== undefined).length;
+const candyFamilyIdCount = species.filter((s) => s.candyFamilyId !== undefined).length;
+const evolvesToIdsPopulatedCount = species.filter((s) => (s.evolvesToIds?.length ?? 0) > 0).length;
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -2824,6 +3000,9 @@ if (formOverrideMismatches.length > 0) {
 }
 console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/moveset data: ${skippedSpecies.map((s) => `${s.pokemon_name} (${s.reason})`).join(", ") || "none"}`);
 console.log(`  - Unresolved move names referenced by a species' moveset but absent from BOTH GAME_MASTER's moveSettings AND pogoapi's fast_moves/charged_moves.json (likely retired/legacy/Dynamax-only moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
+console.log(
+  `  - Phase 0 of PLAN_multi_raid_roster_optimizer.md (evolution/candy-family/dex-number data, this run): isFullyEvolved set on ${fullyEvolvedCount + notFullyEvolvedCount}/${species.length} species (${fullyEvolvedCount} fully evolved, ${notFullyEvolvedCount} not); evolvesToIds is non-empty on ${evolvesToIdsPopulatedCount} of those ${notFullyEvolvedCount} not-fully-evolved species; candyFamilyId set on ${candyFamilyIdCount}/${species.length}; dexNumber set on ${dexNumberCount}/${species.length}. All four are set only via the primary and "mechanically-distinct extra forms" species-build loops (not mega/primal or Shadow — no real evolution branch ever targets one of those, and Shadow variants instead inherit all four fields unchanged from their base species via getOrCreateShadowVariant's spread, including a base-species-id evolvesToIds that intentionally does NOT repoint to the Shadow sibling); a species that fell all the way back to pogoapi-sourced data (see the fallback line above) gets dexNumber only, since the other three need GAME_MASTER's own evolutionBranch/familyId. ${unresolvedEvolutionBranches.length === 0 ? "Every real evolution branch resolved to a registered species id this run (Phase 0's own groundwork measured 859 distinct real evolution edges, all resolving at the enum level)." : `${unresolvedEvolutionBranches.length} evolution branch(es) could NOT be resolved to a registered species id this run (reported, not silently dropped — isFullyEvolved stays correctly false for the source species regardless, since it's computed independently of resolution success): ${unresolvedEvolutionBranches.join("; ")}`} ${isFullyEvolvedRealEvolutionTargetsInconsistencies.length === 0 ? "No isFullyEvolved/realEvolutionTargets inconsistencies this run (see gameMasterMatching.ts's realEvolutionTargets doc comment for what this would mean)." : `${isFullyEvolvedRealEvolutionTargetsInconsistencies.length} species have isFullyEvolved: false (a SIBLING GAME_MASTER template for their enum carries a real branch) but their OWN matched template carries none — evolvesToIds is [] for these, isFullyEvolved deliberately NOT overridden to true (see isFullyEvolvedRealEvolutionTargetsInconsistencies's doc comment in this file): ${isFullyEvolvedRealEvolutionTargetsInconsistencies.join(", ")}`}`,
+);
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);
 if (raidHistorySelfHealed.length > 0) {

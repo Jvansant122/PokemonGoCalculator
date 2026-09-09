@@ -109,7 +109,7 @@
     "raidName": "Shadow Aipom",
     "tier": "1-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -425,9 +425,8 @@
     "raidName": "Mega Beedrill",
     "tier": "Mega Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T01:01:53.395Z",
-    "source": "pogoapi-previous",
-    "eraHp": 15000
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
+    "source": "live-feed"
   },
   {
     "speciesId": "beldum",
@@ -1062,7 +1061,7 @@
     "raidName": "Shadow Croagunk",
     "tier": "1-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -1701,6 +1700,14 @@
     "source": "pokebattler-legacy"
   },
   {
+    "speciesId": "falinks-mega",
+    "raidName": "Mega Falinks",
+    "tier": "Mega Raids",
+    "firstSeenAt": "2026-09-09T04:09:45.779Z",
+    "lastSeenAt": "2026-09-09T04:09:45.779Z",
+    "source": "pokebattler-legacy"
+  },
+  {
     "speciesId": "farfetch’d",
     "raidName": "Farfetch’d",
     "tier": "3-Star Raids",
@@ -2058,7 +2065,7 @@
     "raidName": "Shadow Giratina (Altered)",
     "tier": "5-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -2360,7 +2367,7 @@
     "raidName": "Shadow Grubbin",
     "tier": "1-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -2420,7 +2427,7 @@
     "raidName": "Mega Gyarados",
     "tier": "Mega Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -2559,7 +2566,7 @@
     "raidName": "Shadow Hitmontop",
     "tier": "3-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -2953,7 +2960,7 @@
     "raidName": "Shadow Lampent",
     "tier": "3-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -4681,7 +4688,7 @@
     "raidName": "Regice",
     "tier": "5-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -4724,7 +4731,7 @@
     "raidName": "Regirock",
     "tier": "5-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -4740,7 +4747,7 @@
     "raidName": "Registeel",
     "tier": "5-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -5272,7 +5279,7 @@
     "raidName": "Shadow Slowpoke",
     "tier": "1-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {
@@ -5331,7 +5338,7 @@
     "raidName": "Shadow Snorlax",
     "tier": "3-Star Raids",
     "firstSeenAt": "2026-09-08T01:01:53.395Z",
-    "lastSeenAt": "2026-09-08T19:23:56.300Z",
+    "lastSeenAt": "2026-09-09T04:11:55.617Z",
     "source": "live-feed"
   },
   {

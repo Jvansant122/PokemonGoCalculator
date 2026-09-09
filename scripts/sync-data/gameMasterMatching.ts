@@ -15,6 +15,90 @@ import type { PokemonRarity } from "@pogo-analyzer/engine";
 import type { GameMasterPokemonRecord } from "./rawShapes.ts";
 
 /**
+ * Whether ANY of a pokemonId enum's own GAME_MASTER templates carries a REAL
+ * (non-mega/primal) evolution branch — i.e. whether this species still has
+ * somewhere to evolve. Checks the UNION of every candidate template sharing
+ * the enum (not just whichever one a specific normalized species entry
+ * happened to match against), because a costume-only template (e.g.
+ * `BULBASAUR_FALL_2019`) can legitimately carry no evolutionBranch data at
+ * all while that same enum's bare/`_NORMAL` template does — checking only
+ * one arbitrarily-picked template would risk a false "no evolution branch
+ * found" for the wrong reason. Confirmed safe by direct inspection of the
+ * live 2026-09-08 dump: every sampled species' bare and `_NORMAL` templates
+ * carry byte-identical evolutionBranch content, and non-`_NORMAL` regional
+ * forms that evolve differently (e.g. Shellos West/East Sea -> the matching
+ * Gastrodon form) each carry their OWN correct branch too, so the union
+ * never manufactures a false positive here — it only ever adds coverage a
+ * single-template check could miss.
+ *
+ * THE TRAP this function exists to avoid: `record.evolutionBranch.length > 0`
+ * is NOT sufficient on its own to mean "can still evolve" — 123 of 1107
+ * templates with a non-empty evolutionBranch in the 2026-09-06 audit had ONLY
+ * temporary (mega/primal) evolution entries in it, including Venusaur,
+ * Charizard, Blastoise, Beedrill and Metagross (Metagross's entire branch is
+ * a single `TEMP_EVOLUTION_MEGA` entry). Getting this wrong marks a fully-
+ * evolved species as still-evolvable, which — for
+ * PLAN_multi_raid_roster_optimizer.md §3.6's "unevolved Pokémon are not
+ * power-up candidates" filter this feeds — silently deletes the species'
+ * best attackers from the candidate set while looking like the feature is
+ * working. This is why `GameMasterPokemonRecord.evolutionBranch` (see
+ * rawShapes.ts) is filtered to REAL evolution entries only at extraction time
+ * (fetchGameMasterData in ./fetchCache.ts, not here) — checking its `.length`
+ * is correct only because that filtering already happened upstream.
+ */
+export function isFullyEvolved(candidatesForEnum: readonly GameMasterPokemonRecord[]): boolean {
+  return !candidatesForEnum.some((c) => c.evolutionBranch.length > 0);
+}
+
+/** One resolved (deduped) real evolution target off a specific matched GameMasterPokemonRecord — see realEvolutionTargets. */
+export interface EvolutionTarget {
+  /** The pokemonId enum this branch evolves into, e.g. "METANG". */
+  evolutionEnum: string;
+  /** GAME_MASTER's own form key for the evolved species, e.g. "METANG_NORMAL" — undefined for the handful of real branches that don't carry one (e.g. Totodile -> Croconaw). */
+  form?: string;
+  candyCost?: number;
+  candyCostPurified?: number;
+}
+
+/**
+ * The deduped list of real evolution targets a SPECIFIC matched
+ * GameMasterPokemonRecord's own evolutionBranch names. Deliberately reads
+ * only the ONE record actually matched for a given normalized species (unlike
+ * isFullyEvolved above, which unions across the whole enum) so a per-form
+ * evolution target resolves to the correct sibling form — e.g. Shellos West
+ * Sea's own template evolves to Gastrodon WEST Sea specifically, not East Sea
+ * (confirmed 2026-09-08: GAME_MASTER stores a distinct `form`-qualified
+ * branch per Shellos form, not one shared branch for the whole species).
+ *
+ * Returns `[]` for a record with no real evolution branch — which can mean
+ * either "this species is genuinely fully evolved" OR "this specific
+ * template happens to carry no evolutionBranch data even though a sibling
+ * template for the same enum does" (a costume/placeholder template). Callers
+ * that need to distinguish those two cases should cross-check against
+ * `isFullyEvolved(candidatesForThisEnum)` — an empty result here alongside
+ * `isFullyEvolved(...) === false` is a real inconsistency worth logging
+ * loudly (per this project's "report loudly, never silently wrong"
+ * discipline — see CLAUDE.md), not a signal to fall back to
+ * `isFullyEvolved: true`.
+ */
+export function realEvolutionTargets(record: GameMasterPokemonRecord): EvolutionTarget[] {
+  const seen = new Set<string>();
+  const targets: EvolutionTarget[] = [];
+  for (const branch of record.evolutionBranch) {
+    const key = `${branch.evolution}|${branch.form ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    targets.push({
+      evolutionEnum: branch.evolution,
+      form: branch.form,
+      candyCost: branch.candyCost,
+      candyCostPurified: branch.candyCostPurified,
+    });
+  }
+  return targets;
+}
+
+/**
  * GAME_MASTER's own pokemonId enum is USUALLY derivable from pokemon_name by
  * one of the two mechanical transforms below (see resolvePokemonEnum) —
  * confirmed by direct inspection 2026-09-06 across the full 1024-species

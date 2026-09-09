@@ -200,7 +200,32 @@ export interface RawGameMasterTempEvoOverrideFull {
   typeOverride2?: string;
 }
 
+/**
+ * One entry of a pokemonSettings template's `evolutionBranch` array. Widened
+ * 2026-09-08 (Phase 0 of PLAN_multi_raid_roster_optimizer.md) beyond the
+ * original three `temporaryEvolution*` fields to also model a REAL (non-mega/
+ * primal) evolution branch — confirmed directly against the live 2026-09-08
+ * GAME_MASTER dump: a branch carries EITHER a real `evolution` target (e.g.
+ * Beldum -> `{ evolution: "METANG", candyCost: 25, form: "METANG_NORMAL",
+ * candyCostPurified: 22 }`) OR a `temporaryEvolution` id (mega/primal), never
+ * both on the same entry. `form` is present on most real branches but not all
+ * (e.g. Totodile -> Croconaw carries no `form`). See
+ * GameMasterEvolutionBranchRecord below and isFullyEvolved's doc comment in
+ * ./gameMasterMatching.ts for the trap this exists to avoid: a template's
+ * ENTIRE evolutionBranch array can hold ONLY temporaryEvolution entries
+ * (confirmed for Venusaur/Charizard/Blastoise/Beedrill/Metagross among 123 of
+ * 1107 templates carrying a branch at all in the 2026-09-06 audit), so
+ * `evolutionBranch.length > 0` alone is NOT "has a real evolution left."
+ */
 export interface RawGameMasterEvolutionBranchFull {
+  /** The pokemonId enum this branch evolves into, e.g. "METANG" — present only on a REAL evolution branch, never a temporaryEvolution one. */
+  evolution?: string;
+  /** Candy cost of this real evolution (e.g. 25 for Beldum -> Metang). Undefined on a temporaryEvolution branch. */
+  candyCost?: number;
+  /** Purified-Pokémon candy cost for this same real evolution (Bulbapedia: ×0.8 discount — NOT the ×0.9 this project's power-up cost table uses for power-ups, see MECHANICS.md). Undefined on a temporaryEvolution branch. */
+  candyCostPurified?: number;
+  /** GAME_MASTER's own form key for the evolved species, e.g. "METANG_NORMAL". Present on most real branches, absent on a few (e.g. Totodile -> Croconaw). */
+  form?: string;
   temporaryEvolution?: string;
   temporaryEvolutionEnergyCost?: number;
   temporaryEvolutionEnergyCostSubsequent?: number;
@@ -224,6 +249,15 @@ export interface RawGameMasterPokemonSettingsFull {
   eliteCinematicMove?: string[];
   /** e.g. "POKEMON_CLASS_LEGENDARY" — absent means Standard. See pokemonClassToRarity. */
   pokemonClass?: string;
+  /**
+   * GAME_MASTER's own evolutionary-family grouping key, e.g. "FAMILY_BELDUM"
+   * for Beldum/Metang/Metagross — confirmed present on all 2472
+   * pokemonSettings templates in the 2026-09-08 audit, identical across every
+   * template sharing a pokemonId enum. Added 2026-09-08 for
+   * PLAN_multi_raid_roster_optimizer.md §3.4's candy-family pooling (not yet
+   * consumed by the pipeline itself — see GameMasterPokemonRecord.familyId).
+   */
+  familyId?: string;
   tempEvoOverrides?: RawGameMasterTempEvoOverrideFull[];
   evolutionBranch?: RawGameMasterEvolutionBranchFull[];
 }
@@ -313,6 +347,27 @@ export interface GameMasterTempEvoOverrideRecord {
   megaEnergyRequired?: number;
 }
 
+/**
+ * One REAL (non-mega/primal) evolution branch off a GAME_MASTER pokemonSettings
+ * template, extracted alongside tempEvoOverrides in the SAME pass over the
+ * live dump (see fetchGameMasterData in ./fetchCache.ts) — mega/primal
+ * temporaryEvolution branches are deliberately excluded from this array
+ * entirely (they're already captured in tempEvoOverrides), so every entry
+ * here always has a real `evolution` target. Added 2026-09-08, Phase 0 of
+ * PLAN_multi_raid_roster_optimizer.md §3.6 (the Power-Up Optimizer's
+ * "unevolved Pokémon are not power-up candidates" filter) — see
+ * isFullyEvolved's doc comment in ./gameMasterMatching.ts for why a
+ * template's evolutionBranch being non-empty is NOT itself sufficient to
+ * conclude a species can still evolve (that's exactly the trap this
+ * pre-filtered shape avoids downstream).
+ */
+export interface GameMasterEvolutionBranchRecord {
+  evolution: string;
+  form?: string;
+  candyCost?: number;
+  candyCostPurified?: number;
+}
+
 /** Compact per-template species record cached to data/raw/game_master.json. */
 export interface GameMasterPokemonRecord {
   pokemonId: string;
@@ -328,6 +383,24 @@ export interface GameMasterPokemonRecord {
   eliteCinematicMoves: string[];
   pokemonClass?: string;
   tempEvoOverrides: GameMasterTempEvoOverrideRecord[];
+  /**
+   * GAME_MASTER's own evolutionary-family grouping key (e.g. "FAMILY_BELDUM"),
+   * identical across every template sharing this pokemonId enum. Added
+   * 2026-09-08 for PLAN_multi_raid_roster_optimizer.md §3.4's candy-family
+   * pooling — see RawGameMasterPokemonSettingsFull.familyId. Not yet consumed
+   * by sync-data.ts's species-building pass itself — carrying this through
+   * data/normalized/species.json needs a SpeciesDefinition schema addition
+   * this script does not own; see PLAN_multi_raid_roster_optimizer.md §5
+   * "Phase 0" for the scope this was cut from and why.
+   */
+  familyId?: string;
+  /**
+   * This template's own REAL evolution branches (already filtered to exclude
+   * mega/primal — see GameMasterEvolutionBranchRecord). Added 2026-09-08,
+   * same task as `familyId` above and same "not yet wired into
+   * species.json" caveat.
+   */
+  evolutionBranch: GameMasterEvolutionBranchRecord[];
 }
 
 /** Compact per-move record cached to data/raw/game_master.json — this is GAME_MASTER's `moveSettings` (PvE) table, NEVER `combatMove` (PvP/Trainer-Battle-only, different balance numbers for the same move name — verified 2026-09-06 by direct inspection of both tables). */

@@ -197,6 +197,62 @@ export interface SpeciesDefinition {
    * to a species used in the candidate/attacker role.
    */
   lastKnownRaidTier?: RaidTier;
+  /**
+   * Whether this species has no further ordinary evolution — i.e. GAME_MASTER's
+   * `evolutionBranch` carries no entry with an `evolution` field. Populated by
+   * data-sync for every real synced species; undefined for hand-authored test
+   * fixtures that never went through fromGameMaster, same as `rarity`/
+   * `imageUrl` above.
+   *
+   * CRITICAL — this is NOT `evolutionBranch.length > 0`. Verified against the
+   * live dump 2026-09-08: 984 templates carry a real evolution branch, but a
+   * further **123 carry an `evolutionBranch` whose only entries are TEMPORARY
+   * (mega) branches** — Venusaur, Charizard, Blastoise, Beedrill and Metagross
+   * among them. Deriving this from branch presence alone marks those as
+   * unevolved, which would silently delete the best attackers from the
+   * Power-Up Optimizer's candidate set while still looking like it worked.
+   * See scripts/sync-data/gameMasterMatching.ts's `isFullyEvolved`, which is
+   * the single derivation and is pinned by test on exactly those species.
+   *
+   * Consumed by the roster planner to exclude unevolved Pokémon from power-up
+   * candidates: evolution costs candy only, preserves level and IVs exactly,
+   * and raises base stats, so stardust spent before evolving always buys less
+   * than the same stardust spent after (MECHANICS.md; PLAN_multi_raid_roster_optimizer.md §3.6).
+   */
+  isFullyEvolved?: boolean;
+  /**
+   * The species ids this species can evolve into by ordinary evolution —
+   * empty when `isFullyEvolved`. Excludes temporary (mega) evolution, which
+   * is `boost`/mega-form territory, not an evolution branch.
+   *
+   * Resolved PER FORM, not per species: Shellos (West Sea) evolves to
+   * Gastrodon (West Sea) and Shellos (East Sea) to Gastrodon (East Sea), so
+   * this reads the specifically-matched GAME_MASTER record rather than a
+   * union across the pokemonId enum (`isFullyEvolved` above correctly does
+   * union, since a costume template can lack the branch a sibling carries).
+   */
+  evolvesToIds?: string[];
+  /**
+   * GAME_MASTER's `familyId` (e.g. "FAMILY_BELDUM") — present on all 2472
+   * templates. Real Pokémon GO candy is shared across an evolutionary FAMILY,
+   * not a species: Beldum, Metang and Metagross all draw Beldum candy. Any
+   * candy-budget accounting must pool on this, never on `id`, or a roster
+   * holding twelve Houndour would let a planner spend the same candy twelve
+   * times.
+   */
+  candyFamilyId?: string;
+  /**
+   * National Pokédex number, from pogoapi's `pokemon_stats.json` `pokemon_id`
+   * (GAME_MASTER carries no `pokedexNumber` at all — confirmed 0 of 2472
+   * templates, 2026-09-08). Omitted rather than guessed when it can't be
+   * resolved.
+   *
+   * Note for anything matching external roster exports against this: a mega
+   * form's `imageUrl` does NOT carry its real dex number (PokeAPI serves megas
+   * under alternate-form ids, e.g. `delphox-mega` -> 10293, not Delphox's 655),
+   * which is why the Poke Genie importer resolves megas by name rather than dex.
+   */
+  dexNumber?: number;
 }
 
 export interface EffectiveStats {

@@ -8,6 +8,8 @@ import {
   displayNameForMovementId,
   guessMovementIdForDisplayName,
   resolveMegaFromGameMaster,
+  isFullyEvolved,
+  realEvolutionTargets,
   POKEMON_ENUM_OVERRIDES,
 } from "../gameMasterMatching.ts";
 import type { GameMasterPokemonRecord } from "../rawShapes.ts";
@@ -68,6 +70,7 @@ describe("resolveGameMasterPokemonRecord", () => {
     eliteQuickMoves: [],
     eliteCinematicMoves: [],
     tempEvoOverrides: [],
+    evolutionBranch: [],
   };
   const normalSuffixed: GameMasterPokemonRecord = { ...bare, form: "DUGTRIO_NORMAL", baseAttack: 2 };
   const exactForm: GameMasterPokemonRecord = { ...bare, form: "DUGTRIO_ALOLA", baseAttack: 3 };
@@ -147,6 +150,7 @@ describe("resolveMegaFromGameMaster", () => {
         hasTypeOverride: true,
       },
     ],
+    evolutionBranch: [],
   };
 
   it("returns null when no candidate carries the requested tempEvoId", () => {
@@ -184,5 +188,109 @@ describe("resolveMegaFromGameMaster", () => {
     };
     const result = resolveMegaFromGameMaster([aggronBase, conflicting], "TEMP_EVOLUTION_MEGA");
     expect(result!.ambiguous).toBe(true);
+  });
+});
+
+describe("isFullyEvolved / realEvolutionTargets", () => {
+  /**
+   * Minimal helper mirroring GAME_MASTER's real bare+`_NORMAL`-template
+   * pattern (see fetchGameMasterData's doc comment) — every species below is
+   * built from a base record plus one `_NORMAL`-suffixed sibling carrying
+   * byte-identical evolutionBranch content, exactly as confirmed by direct
+   * inspection of the live 2026-09-08 dump.
+   */
+  function recordPair(pokemonId: string, evolutionBranch: GameMasterPokemonRecord["evolutionBranch"]): GameMasterPokemonRecord[] {
+    const base: GameMasterPokemonRecord = {
+      pokemonId,
+      baseAttack: 1,
+      baseDefense: 1,
+      baseStamina: 1,
+      quickMoves: [],
+      cinematicMoves: [],
+      eliteQuickMoves: [],
+      eliteCinematicMoves: [],
+      tempEvoOverrides: [],
+      evolutionBranch,
+    };
+    return [base, { ...base, form: `${pokemonId}_NORMAL` }];
+  }
+
+  // Real evolutionBranch content per species, confirmed 2026-09-08 by direct
+  // inspection of the live GAME_MASTER dump (see this project's Phase 0 audit
+  // notes) — GameMasterPokemonRecord.evolutionBranch is already filtered to
+  // REAL (non-mega/primal) entries only, matching what fetchGameMasterData
+  // actually produces.
+  const FULLY_EVOLVED_CASES: [string, GameMasterPokemonRecord["evolutionBranch"]][] = [
+    // Charizard/Venusaur/Blastoise/Beedrill/Metagross: THE TRAP — each has a
+    // real (non-empty, pre-filter) evolutionBranch in GAME_MASTER, but every
+    // entry in it is a temporaryEvolution (mega) branch, so the FILTERED
+    // evolutionBranch this project actually stores is empty.
+    ["CHARIZARD", []],
+    ["VENUSAUR", []],
+    ["BLASTOISE", []],
+    ["BEEDRILL", []],
+    ["METAGROSS", []],
+  ];
+  const NOT_FULLY_EVOLVED_CASES: [string, GameMasterPokemonRecord["evolutionBranch"]][] = [
+    ["BELDUM", [{ evolution: "METANG", form: "METANG_NORMAL", candyCost: 25, candyCostPurified: 22 }]],
+    ["METANG", [{ evolution: "METAGROSS", form: "METAGROSS_NORMAL", candyCost: 100, candyCostPurified: 90 }]],
+    ["HOUNDOUR", [{ evolution: "HOUNDOOM", form: "HOUNDOOM_NORMAL", candyCost: 50, candyCostPurified: 45 }]],
+    ["INKAY", [{ evolution: "MALAMAR", form: "MALAMAR_NORMAL", candyCost: 50, candyCostPurified: 45 }]],
+    // Totodile -> Croconaw carries no `form` field in the real dump.
+    ["TOTODILE", [{ evolution: "CROCONAW", candyCost: 25, candyCostPurified: 22 }]],
+  ];
+
+  it.each(FULLY_EVOLVED_CASES)("treats %s as fully evolved (mega-only branch doesn't count)", (pokemonId, evolutionBranch) => {
+    expect(isFullyEvolved(recordPair(pokemonId, evolutionBranch))).toBe(true);
+  });
+
+  it.each(NOT_FULLY_EVOLVED_CASES)("treats %s as NOT fully evolved (has a real evolution branch)", (pokemonId, evolutionBranch) => {
+    expect(isFullyEvolved(recordPair(pokemonId, evolutionBranch))).toBe(false);
+  });
+
+  it("treats a species with zero templates at all as fully evolved (vacuous — no branch was ever found)", () => {
+    expect(isFullyEvolved([])).toBe(true);
+  });
+
+  it("realEvolutionTargets resolves Beldum's own matched template to Metang, with candy costs carried through", () => {
+    const [, normalForm] = recordPair("BELDUM", [{ evolution: "METANG", form: "METANG_NORMAL", candyCost: 25, candyCostPurified: 22 }]);
+    expect(realEvolutionTargets(normalForm!)).toEqual([
+      { evolutionEnum: "METANG", form: "METANG_NORMAL", candyCost: 25, candyCostPurified: 22 },
+    ]);
+  });
+
+  it("realEvolutionTargets returns [] for a record whose own evolutionBranch is empty (e.g. Metagross's matched template)", () => {
+    const [, normalForm] = recordPair("METAGROSS", []);
+    expect(realEvolutionTargets(normalForm!)).toEqual([]);
+  });
+
+  it("realEvolutionTargets dedupes identical evolution+form pairs", () => {
+    const record: GameMasterPokemonRecord = {
+      pokemonId: "EEVEE",
+      baseAttack: 1,
+      baseDefense: 1,
+      baseStamina: 1,
+      quickMoves: [],
+      cinematicMoves: [],
+      eliteQuickMoves: [],
+      eliteCinematicMoves: [],
+      tempEvoOverrides: [],
+      evolutionBranch: [
+        { evolution: "VAPOREON", form: "VAPOREON_NORMAL", candyCost: 25 },
+        { evolution: "VAPOREON", form: "VAPOREON_NORMAL", candyCost: 25 },
+        { evolution: "JOLTEON", form: "JOLTEON_NORMAL", candyCost: 25 },
+      ],
+    };
+    expect(realEvolutionTargets(record)).toEqual([
+      { evolutionEnum: "VAPOREON", form: "VAPOREON_NORMAL", candyCost: 25, candyCostPurified: undefined },
+      { evolutionEnum: "JOLTEON", form: "JOLTEON_NORMAL", candyCost: 25, candyCostPurified: undefined },
+    ]);
+  });
+
+  it("realEvolutionTargets keeps a branch with no `form` field (Totodile -> Croconaw)", () => {
+    const [, normalForm] = recordPair("TOTODILE", [{ evolution: "CROCONAW", candyCost: 25, candyCostPurified: 22 }]);
+    expect(realEvolutionTargets(normalForm!)).toEqual([
+      { evolutionEnum: "CROCONAW", form: undefined, candyCost: 25, candyCostPurified: 22 },
+    ]);
   });
 });

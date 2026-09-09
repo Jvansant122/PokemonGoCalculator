@@ -657,12 +657,23 @@ const stdDev = (values: number[]): number => {
  * PER-ROUND floor (recomputed from whichever roster is current — see
  * planPowerUpBudget's top doc comment for why a single static floor goes
  * stale as a roster is powered up).
+ *
+ * EXPORTED (2026-09-09) for rosterPlanner.ts's multi-boss noise floor — same
+ * derivation, applied to a POOLED sample across every boss's baseline seeds
+ * (see that module's top doc comment) rather than one boss's. Per this
+ * project's "reuse verbatim, don't invent a second one" rule.
  */
-function noiseFloorFor(summary: PowerUpEncounterSummary, iterations: number): number {
+export function noiseFloorFor(summary: PowerUpEncounterSummary, iterations: number): number {
   return 2 * summary.teamDpsStdDev * Math.sqrt(2 / iterations);
 }
 
-function summarizeResults(results: TeamRaidResult[], bossHp: number, raidTimerSeconds: number): PowerUpEncounterSummary {
+/**
+ * EXPORTED (2026-09-09) for rosterPlanner.ts, which calls this directly to
+ * summarize both the baseline and every simulated candidate team's
+ * TeamRaidResult[] per boss — same summarization every other caller in this
+ * file already uses, not a second implementation.
+ */
+export function summarizeResults(results: TeamRaidResult[], bossHp: number, raidTimerSeconds: number): PowerUpEncounterSummary {
   const dpsValues = results.map((r) =>
     r.clearsWithinTimer && r.timeToClearSeconds !== null
       ? bossHp / r.timeToClearSeconds

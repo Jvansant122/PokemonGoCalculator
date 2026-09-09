@@ -22,6 +22,7 @@ import {
   type PowerUpRankBy,
 } from "./powerUpOptimizerScenario.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
+import { RosterImportPanel } from "./RosterImportPanel.js";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 import { getBaseUrl } from "./urlUtils.js";
 import {
@@ -891,6 +892,10 @@ export function PowerUpOptimizerView() {
           "approximate" in the picker is one the live raid feed named but whose exact form this data layer couldn't
           resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
         </p>
+      </section>
+
+      <section className="panel">
+        <RosterImportPanel />
       </section>
     </>
   );

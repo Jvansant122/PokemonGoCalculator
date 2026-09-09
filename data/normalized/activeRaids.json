@@ -1,47 +1,5 @@
 [
   {
-    "raidName": "Dratini",
-    "tier": "1-Star Raids",
-    "speciesId": "dratini",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Honedge",
-    "tier": "1-Star Raids",
-    "speciesId": "honedge",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Tyrunt",
-    "tier": "1-Star Raids",
-    "speciesId": "tyrunt",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Amaura",
-    "tier": "1-Star Raids",
-    "speciesId": "amaura",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Hisuian Sneasel",
-    "tier": "3-Star Raids",
-    "speciesId": "sneasel-hisuian",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Hisuian Lilligant",
-    "tier": "3-Star Raids",
-    "speciesId": "lilligant-hisuian",
-    "isApproximate": false
-  },
-  {
-    "raidName": "Passimian",
-    "tier": "3-Star Raids",
-    "speciesId": "passimian",
-    "isApproximate": false
-  },
-  {
     "raidName": "Regirock",
     "tier": "5-Star Raids",
     "speciesId": "regirock",
@@ -57,6 +15,12 @@
     "raidName": "Registeel",
     "tier": "5-Star Raids",
     "speciesId": "registeel",
+    "isApproximate": false
+  },
+  {
+    "raidName": "Mega Beedrill",
+    "tier": "Mega Raids",
+    "speciesId": "beedrill-mega",
     "isApproximate": false
   },
   {
