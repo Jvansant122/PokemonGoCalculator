@@ -41,9 +41,44 @@ jobs:
         env:
           GITHUB_PAGES: "true"
 
+      # Playwright's Chromium download is the only step in this job that fetches from
+      # somewhere other than the npm registry, and it is where run #43 (2026-09-09)
+      # failed on a transient error with the verify step already green — the artifact
+      # was sound, only the deploy was lost. Two layers of defence: the browser
+      # binaries are cached per Playwright version, so the download only happens when
+      # @playwright/test is bumped, and the install itself is retried. On a cache hit
+      # `playwright install` finds the binaries and skips the download; --with-deps
+      # still installs the OS libraries, which are not cached.
+      - name: Resolve Playwright version
+        id: playwright
+        if: hashFiles('packages/web/playwright.config.ts') != ''
+        run: |
+          version="$(npx --workspace=packages/web playwright --version | awk '{print $2}')"
+          if [ -z "$version" ]; then
+            echo "::error::Could not resolve the installed Playwright version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        if: hashFiles('packages/web/playwright.config.ts') != ''
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
       - name: Install Playwright browsers
         if: hashFiles('packages/web/playwright.config.ts') != ''
-        run: npx --workspace=packages/web playwright install --with-deps chromium
+        run: |
+          for attempt in 1 2 3; do
+            if npx --workspace=packages/web playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "::warning::Playwright browser install attempt $attempt failed; retrying in $((attempt * 20))s"
+            sleep $((attempt * 20))
+          done
+          echo "::error::Playwright browser install failed after 3 attempts"
+          exit 1
 
       - name: Browser smoke tests
         if: hashFiles('packages/web/playwright.config.ts') != ''

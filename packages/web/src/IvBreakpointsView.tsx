@@ -173,7 +173,7 @@ export function IvBreakpointsView() {
   }
 
   const overallError = result.error;
-  const rows: IvComparisonRow[] = result.data?.rows ?? [];
+  const rows: IvComparisonRow[] = useMemo(() => runResult.data?.rows ?? [], [runResult.data]);
   const divergingCounts = useMemo(
     () => ({
       fastMoveDamage: rows.filter((r) => r.fastMoveDamageDiffers).length,
