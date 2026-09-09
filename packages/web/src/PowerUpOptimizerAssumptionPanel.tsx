@@ -1,4 +1,5 @@
 import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
@@ -177,9 +178,7 @@ export function PowerUpOptimizerAssumptionPanel({
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
 
   return (
-    <section className="panel">
-      <h2>Assumptions</h2>
-
+    <CollapsibleSection id="pu-assumptions" heading="Assumptions" defaultOpen>
       <div className="tab-switcher" role="group" aria-label="Power-up optimizer mode" style={{ marginBottom: 12 }}>
         <button
           type="button"
@@ -756,6 +755,6 @@ export function PowerUpOptimizerAssumptionPanel({
         SINGLE-SLOT power-up run through a full paired team-raid simulation against the other 5 slots exactly as
         configured — no multi-slot power-up plans and no "add a hypothetical 7th Pokémon" candidates in this v1.
       </p>
-    </section>
+    </CollapsibleSection>
   );
 }

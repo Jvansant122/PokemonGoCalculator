@@ -1,4 +1,5 @@
 import type { IVSpread, IvComparisonResult, IvComparisonRow } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { headline, ivLabel } from "./ivBreakpointsHelpers.js";
 
 interface Props {
@@ -20,8 +21,7 @@ interface Props {
  */
 export function IvPerLevelTable({ data, ivA, ivB, rows, rowsForTable, divergingCounts }: Props) {
   return (
-    <section className="panel">
-      <h2>Per-level breakdown</h2>
+    <CollapsibleSection id="iv-breakpoints-per-level" heading="Per-level breakdown" defaultOpen>
       <p className="crossover-note">{headline(data, ivA, ivB)}</p>
       <p className="caveats" style={{ margin: "8px 0 12px" }}>
         {divergingCounts.fastMoveDamage} of {rows.length} levels show a fast-move damage difference,{" "}
@@ -111,6 +111,6 @@ export function IvPerLevelTable({ data, ivA, ivB, rows, rowsForTable, divergingC
           </tbody>
         </table>
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

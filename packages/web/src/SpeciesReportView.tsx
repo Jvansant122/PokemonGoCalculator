@@ -10,6 +10,7 @@ import {
 } from "@pogo-analyzer/engine";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
@@ -401,8 +402,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
         — ranked by survival-weighted sustained output, not raw DPS.
       </p>
 
-      <section className="panel">
-        <h2>Assumptions</h2>
+      <CollapsibleSection id="species-report-assumptions" heading="Assumptions" defaultOpen>
         <div className="assumption-grid">
           <div>
             <SpeciesPicker
@@ -638,7 +638,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
           </p>
         )}
-      </section>
+      </CollapsibleSection>
 
       {overallError && (
         <section className="panel">
@@ -653,29 +653,34 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       )}
 
       {result.data && !noTiersSelected && (
-        <section className="panel">
-          <h2>
-            Ranked against {targets.length} raid boss{targets.length === 1 ? "" : "es"}
-            {/* Reads the DEBOUNCED includePastRaids, not live `assumptions` —
-                this heading describes `targets`/`result.data`, which are
-                themselves debounced, so it must describe the SAME snapshot
-                they came from rather than whatever the toggle currently says
-                mid-debounce (that mismatch would be exactly the "silently
-                stale-looking-authoritative" bug this task warns against). */}
-            {debouncedSweepInputs.includePastRaids
-              ? ` — ${activeTargetCount} currently active, ${pastTargetCount} past/inactive`
-              : activeTargetCount < bossOptions.length
-                ? ` of ${bossOptions.length} currently-active (tier filter applied)`
-                : " (currently active)"}
-            {isSweepPending && (
-              <span
-                className="badge badge-pending"
-                title="Inputs have changed since this table was last computed — it still reflects the previous Level/IV/dodge/weather/tier/species settings and will refresh automatically a moment after you stop changing them."
-              >
-                recomputing…
-              </span>
-            )}
-          </h2>
+        <CollapsibleSection
+          id="species-report-ranked"
+          heading={
+            <>
+              Ranked against {targets.length} raid boss{targets.length === 1 ? "" : "es"}
+              {/* Reads the DEBOUNCED includePastRaids, not live `assumptions` —
+                  this heading describes `targets`/`result.data`, which are
+                  themselves debounced, so it must describe the SAME snapshot
+                  they came from rather than whatever the toggle currently says
+                  mid-debounce (that mismatch would be exactly the "silently
+                  stale-looking-authoritative" bug this task warns against). */}
+              {debouncedSweepInputs.includePastRaids
+                ? ` — ${activeTargetCount} currently active, ${pastTargetCount} past/inactive`
+                : activeTargetCount < bossOptions.length
+                  ? ` of ${bossOptions.length} currently-active (tier filter applied)`
+                  : " (currently active)"}
+              {isSweepPending && (
+                <span
+                  className="badge badge-pending"
+                  title="Inputs have changed since this table was last computed — it still reflects the previous Level/IV/dodge/weather/tier/species settings and will refresh automatically a moment after you stop changing them."
+                >
+                  recomputing…
+                </span>
+              )}
+            </>
+          }
+          defaultOpen
+        >
           <p className="caveats" style={{ marginBottom: 12 }}>
             Each row is the same real stepwise/dodge/randomized-boss-cadence simulator the two-candidate comparator
             uses (200 randomized runs per boss, single-candidate) — a survival-weighted number, not a flat
@@ -855,7 +860,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             </tbody>
           </table>
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
       <section className="panel">
@@ -866,8 +871,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Known caveats</h2>
+      <CollapsibleSection id="species-report-known-caveats" heading="Known caveats" defaultOpen={false}>
         <p className="caveats note-block">
           There's no "opening burst vs sustained" mode to pick here either — every per-boss run is one continuous
           simulation. This view models the selected species alone: it has no second party, so a mega/primal boost
@@ -901,7 +905,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           species, its selected moveset, and that boss off to the two-candidate comparator, leaving the second
           candidate for you to pick there.
         </p>
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

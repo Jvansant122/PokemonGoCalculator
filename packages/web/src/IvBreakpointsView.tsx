@@ -6,6 +6,7 @@ import {
   type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { IvBreakpointsAssumptionPanel } from "./IvBreakpointsAssumptionPanel.js";
 import { IvPerLevelTable } from "./IvPerLevelTable.js";
 import { IvSweepReport } from "./IvSweepReport.js";
@@ -248,8 +249,7 @@ export function IvBreakpointsView() {
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Known caveats</h2>
+      <CollapsibleSection id="iv-breakpoints-known-caveats" heading="Known caveats" defaultOpen={false}>
         <p className="caveats note-block">
           Both the per-level table below and the all-raid-targets report above only check levels 35 through 50 (in
           the usual 0.5 steps, 31 levels total) — the range a player already investing candy/stardust into a
@@ -279,7 +279,7 @@ export function IvBreakpointsView() {
           dataset — no such dataset exists for this tool (see the Species Report tab's own documented scope for the
           same limitation).
         </p>
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

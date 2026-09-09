@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { BreakpointSheet } from "./BreakpointSheet.js";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
@@ -183,9 +184,7 @@ export function AttackDefenseBreakpointsView() {
         — the full damage-output (or damage-received) spreadsheet across every IV x level combination.
       </p>
 
-      <section className="panel">
-        <h2>Assumptions</h2>
-
+      <CollapsibleSection id="adb-assumptions" heading="Assumptions" defaultOpen>
         <div className="tab-switcher" role="group" aria-label="Breakpoints mode" style={{ marginBottom: 14 }}>
           <button
             type="button"
@@ -296,7 +295,7 @@ export function AttackDefenseBreakpointsView() {
             {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
           </p>
         )}
-      </section>
+      </CollapsibleSection>
 
       {result.error && (
         <section className="panel">
@@ -305,10 +304,15 @@ export function AttackDefenseBreakpointsView() {
       )}
 
       {result.attack && species && boss && (
-        <section className="panel">
-          <h2>
-            {speciesLabel(species)}'s own damage output vs {speciesLabel(boss)}'s effective Defense
-          </h2>
+        <CollapsibleSection
+          id="adb-attack-sheet"
+          heading={
+            <>
+              {speciesLabel(species)}'s own damage output vs {speciesLabel(boss)}'s effective Defense
+            </>
+          }
+          defaultOpen
+        >
           <div className="breakpoint-sheet-row">
             <BreakpointSheet
               title="Fast move"
@@ -325,14 +329,19 @@ export function AttackDefenseBreakpointsView() {
               ivLabel="Attack IV"
             />
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
       {result.defense && species && boss && (
-        <section className="panel">
-          <h2>
-            Damage {speciesLabel(species)} takes from {speciesLabel(boss)}'s effective Attack
-          </h2>
+        <CollapsibleSection
+          id="adb-defense-sheet"
+          heading={
+            <>
+              Damage {speciesLabel(species)} takes from {speciesLabel(boss)}'s effective Attack
+            </>
+          }
+          defaultOpen
+        >
           <div className="breakpoint-sheet-row">
             <BreakpointSheet
               title="Fast move"
@@ -349,7 +358,7 @@ export function AttackDefenseBreakpointsView() {
               ivLabel="Defense IV"
             />
           </div>
-        </section>
+        </CollapsibleSection>
       )}
 
       <section className="panel">
@@ -360,8 +369,7 @@ export function AttackDefenseBreakpointsView() {
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Known caveats</h2>
+      <CollapsibleSection id="adb-known-caveats" heading="Known caveats" defaultOpen={false}>
         <div className="note-block">
         <p className="caveats">
           Every sheet here is a single isolated hit's damage at one IV/level combination — there is no fight, no
@@ -387,7 +395,7 @@ export function AttackDefenseBreakpointsView() {
           yet — treat those results as directional, not exact.
         </p>
         </div>
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

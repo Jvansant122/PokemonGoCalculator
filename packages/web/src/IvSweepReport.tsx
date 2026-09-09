@@ -1,4 +1,5 @@
 import type { IVSpread } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TIER_4_PLUS_LABELS, bucketVerdictSentence, type IvSweepAggregate } from "./ivBreakpointsHelpers.js";
 
 interface Props {
@@ -18,8 +19,7 @@ interface Props {
  */
 export function IvSweepReport({ sweepAggregate, ivA, ivB }: Props) {
   return (
-    <section className="panel">
-      <h2>Impact across every raid target this tool can model</h2>
+    <CollapsibleSection id="iv-breakpoints-sweep-report" heading="Impact across every raid target this tool can model" defaultOpen>
       <p className="crossover-note">
         {bucketVerdictSentence(
           sweepAggregate.tier4Plus,
@@ -86,6 +86,6 @@ export function IvSweepReport({ sweepAggregate, ivA, ivB }: Props) {
         leaving {sweepAggregate.tier4Plus.total} targets (mostly real Legendaries, real mega/primal forms, and
         anything currently live at Mega Raids/5-Star Raids or higher) in the headline scope.
       </p>
-    </section>
+    </CollapsibleSection>
   );
 }

@@ -20,6 +20,7 @@ import {
   type PowerUpOptimizerAssumptions,
   type PowerUpSlotAssumption,
 } from "./PowerUpOptimizerAssumptionPanel.js";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import {
   buildPowerUpOptimizerScenarioUrl,
   parsePowerUpOptimizerScenarioFromUrl,
@@ -535,13 +536,19 @@ function MultiRaidCandidateRow({ group, identity }: { group: DedupedRosterCandid
  * "excluded, here's why" list identically. Owns its own `showAll` state
  * (collapsed to `initialRows` by default) since two independent instances of
  * this component can be on screen at once with independently-sized lists.
+ * Collapsed by default (a CollapsibleSection subsection, not the ranked
+ * table above it) — this is a "not silently dropped, but not the headline"
+ * list, and `sectionId` MUST differ per call site so two on-screen instances
+ * don't share one fold-state key.
  */
 function ExcludedEntriesTable({
+  sectionId,
   heading,
   description,
   entries,
   initialRows = MULTI_RAID_TABLE_INITIAL_ROWS,
 }: {
+  sectionId: string;
   heading: string;
   description: string;
   entries: RosterNeverCompetitiveEntry[];
@@ -551,10 +558,13 @@ function ExcludedEntriesTable({
   if (entries.length === 0) return null;
   const visible = showAll ? entries : entries.slice(0, initialRows);
   return (
-    <>
-      <h3 style={{ marginTop: 16 }}>
-        {heading} ({entries.length})
-      </h3>
+    <CollapsibleSection
+      id={sectionId}
+      heading={`${heading} — ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`}
+      headingLevel="h3"
+      defaultOpen={false}
+      variant="subsection"
+    >
       <p className="caveats" style={{ marginBottom: 12 }}>
         {description}
       </p>
@@ -581,7 +591,7 @@ function ExcludedEntriesTable({
           {showAll ? `Show top ${initialRows} only` : `Show all ${entries.length}`}
         </button>
       )}
-    </>
+    </CollapsibleSection>
   );
 }
 
@@ -685,8 +695,7 @@ function MultiRaidResultsSection({
   const neverCompetitive = run?.data?.neverCompetitive ?? [];
 
   return (
-    <section className="panel">
-      <h2>Multi-raid sweep</h2>
+    <CollapsibleSection id="pu-multi-raid-sweep" heading="Multi-raid sweep" defaultOpen>
       <p className="caveats" style={{ marginBottom: 12 }}>
         Ranks every power-up across your WHOLE imported roster against the boss set above — including currently
         BENCHED Pokémon that would only earn a team spot if powered up first (see &ldquo;Benched but
@@ -799,8 +808,13 @@ function MultiRaidResultsSection({
           )}
 
           {run.data.benchedButPromising.length > 0 && (
-            <>
-              <h3 style={{ marginTop: 16 }}>Benched but promising</h3>
+            <CollapsibleSection
+              id="pu-multi-benched"
+              heading={`Benched but promising — ${dedupedBenched.length} row${dedupedBenched.length === 1 ? "" : "s"}`}
+              headingLevel="h3"
+              defaultOpen={false}
+              variant="subsection"
+            >
               <p className="caveats" style={{ marginBottom: 12 }}>
                 Not on any boss&rsquo;s baseline team today, but the cheapest power-up level that would earn one a
                 spot — the headline &ldquo;would a benched Pokémon beat a fielded one if powered up&rdquo; question
@@ -816,17 +830,18 @@ function MultiRaidResultsSection({
                   </tbody>
                 </table>
               </div>
-            </>
+            </CollapsibleSection>
           )}
 
           <ExcludedEntriesTable
+            sectionId="pu-multi-never-competitive"
             heading="Never competitive"
             description="Excluded from candidate generation entirely — reported, not hidden, so this sweep never silently ignores most of the roster. An unevolved species is excluded because evolution (candy only, no stardust) always buys strictly more team DPS per stardust afterward — power it up AFTER evolving."
             entries={neverCompetitive}
           />
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -931,8 +946,7 @@ function MultiRaidBudgetPlanSection({ entryIdentities, rosterFamilyOptions, run,
   const familyLabel = (familyId: string) => rosterFamilyOptions.find((f) => f.familyId === familyId)?.label ?? familyId;
 
   return (
-    <section className="panel">
-      <h2>Fixed-budget plan</h2>
+    <CollapsibleSection id="pu-multi-budget-plan" heading="Fixed-budget plan" defaultOpen>
       <p className="caveats" style={{ marginBottom: 12 }}>
         A DIFFERENT question than the ranked sweep above: given your WHOLE stardust/candy/Rare
         Candy budget across the ENTIRE roster at once — not one candidate priced alone, which is
@@ -1100,13 +1114,14 @@ function MultiRaidBudgetPlanSection({ entryIdentities, rosterFamilyOptions, run,
           )}
 
           <ExcludedEntriesTable
+            sectionId="pu-multi-budget-excluded"
             heading="Excluded from this plan"
             description="Never silently dropped: an unevolved species (evolve first, same reasoning as the ranked sweep's own 'never competitive' list) or an entry whose resolved candy family has no known on-hand pool yet — fill it in in the candy editor above to unlock that species for this plan (it can still be RANKED in the sweep above, just not planned against here)."
             entries={run.data.excludedEntries}
           />
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -1184,8 +1199,7 @@ interface SingleRaidBudgetPlanSectionProps {
  */
 function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlanSectionProps) {
   return (
-    <section className="panel">
-      <h2>Fixed-budget power-up plan</h2>
+    <CollapsibleSection id="pu-single-budget-plan" heading="Fixed-budget power-up plan" defaultOpen>
       <p className="caveats" style={{ marginBottom: 12 }}>
         A DIFFERENT question than the ranked table below: given your WHOLE stardust/Rare
         Candy/Rare Candy XL budget across every fielded slot at once (not one candidate at
@@ -1323,7 +1337,7 @@ function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlan
           );
         })}
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -1388,18 +1402,23 @@ function SingleRaidResultsSection({
 
       {data && (
         <>
-          <section className="panel">
-            <h2>
-              Baseline — roster as-is
-              {isOptimizerPending && (
-                <span
-                  className="badge badge-pending"
-                  title="Inputs have changed since this was last computed — it still reflects the previous roster/boss/assumption settings and will refresh automatically a moment after you stop changing them."
-                >
-                  recomputing…
-                </span>
-              )}
-            </h2>
+          <CollapsibleSection
+            id="pu-baseline"
+            heading={
+              <>
+                Baseline — roster as-is
+                {isOptimizerPending && (
+                  <span
+                    className="badge badge-pending"
+                    title="Inputs have changed since this was last computed — it still reflects the previous roster/boss/assumption settings and will refresh automatically a moment after you stop changing them."
+                  >
+                    recomputing…
+                  </span>
+                )}
+              </>
+            }
+            defaultOpen
+          >
             <div className="result-card" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
               <div className="stat-tile-headline">
                 <span className="stat-tile-value">{data.baseline.teamDps.toFixed(1)}</span>
@@ -1428,10 +1447,13 @@ function SingleRaidResultsSection({
                 </dd>
               </dl>
             </div>
-          </section>
+          </CollapsibleSection>
 
-          <section className="panel">
-            <h2>Per-slot damage ladder against {bossSpecies ? speciesLabel(bossSpecies) : "this boss"}</h2>
+          <CollapsibleSection
+            id="pu-per-slot-ladder"
+            heading={`Per-slot damage ladder against ${bossSpecies ? speciesLabel(bossSpecies) : "this boss"}`}
+            defaultOpen={false}
+          >
             <p className="caveats" style={{ marginBottom: 12 }}>
               Real Pokémon GO damage is floored per hit — a power-up can raise Attack and change nothing until it
               crosses a real breakpoint here. "No further breakpoint before level 50" means every remaining power-up
@@ -1468,10 +1490,9 @@ function SingleRaidResultsSection({
                 );
               })}
             </div>
-          </section>
+          </CollapsibleSection>
 
-          <section className="panel">
-            <h2>Recommendation</h2>
+          <CollapsibleSection id="pu-recommendation" heading="Recommendation" defaultOpen>
             <p className="caveats" style={{ color: "var(--text)" }}>
               {!data.bestAffordableByDelta && !data.bestAffordableByStardustEfficiency
                 ? `Nothing affordable improves team DPS beyond the ±${data.noiseFloorTeamDps.toFixed(2)} noise floor — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss.`
@@ -1501,18 +1522,23 @@ function SingleRaidResultsSection({
                     </>
                   )}
             </p>
-          </section>
+          </CollapsibleSection>
 
           {plan && <SingleRaidBudgetPlanSection plan={plan} slotSpecies={slotSpecies} />}
 
-          <section className="panel">
-            <h2>
-              Ranked power-up candidates
-              <span className="species-picker-hint" style={{ marginLeft: 8 }}>
-                grouped: measurable gains first (sorted by {rankByLabel(rankBy)}, descending), then within-noise
-                rows (cheapest first), then measurable losses last (worst first)
-              </span>
-            </h2>
+          <CollapsibleSection
+            id="pu-ranked-candidates"
+            heading={
+              <>
+                Ranked power-up candidates
+                <span className="species-picker-hint" style={{ marginLeft: 8 }}>
+                  grouped: measurable gains first (sorted by {rankByLabel(rankBy)}, descending), then within-noise
+                  rows (cheapest first), then measurable losses last (worst first)
+                </span>
+              </>
+            }
+            defaultOpen
+          >
             <p className="caveats" style={{ marginBottom: 12 }}>
               Rows with no {rankBy === "stardust" ? "stardust" : rankBy === "candy" ? "candy" : "XL candy"} cost
               (e.g. a pure-XL step has no regular-candy cost, and vice versa) show "—" for that column's efficiency and sink to the
@@ -1584,12 +1610,11 @@ function SingleRaidResultsSection({
                 {showAllCandidates ? `Show top ${CANDIDATE_TABLE_INITIAL_ROWS} only` : `Show all ${sortedCandidatesCount}`}
               </button>
             )}
-          </section>
+          </CollapsibleSection>
         </>
       )}
 
-      <section className="panel">
-        <h2>Known caveats</h2>
+      <CollapsibleSection id="pu-known-caveats-single" heading="Known caveats" defaultOpen={false}>
         <p className="caveats note-block">
           v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
           two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
@@ -1617,7 +1642,7 @@ function SingleRaidResultsSection({
           "approximate" in the picker is one the live raid feed named but whose exact form this data layer couldn't
           resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
         </p>
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

@@ -1,4 +1,5 @@
 import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -32,8 +33,7 @@ export function IvBreakpointsAssumptionPanel({
   boss,
 }: Props) {
   return (
-    <section className="panel">
-      <h2>Assumptions</h2>
+    <CollapsibleSection id="iv-breakpoints-assumptions" heading="Assumptions" defaultOpen>
       <div className="assumption-grid">
         <div>
           <SpeciesPicker
@@ -238,6 +238,6 @@ export function IvBreakpointsAssumptionPanel({
           {unmatchedRaids.map((r) => `${r.raidName} (${r.tier})`).join(", ")}
         </p>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

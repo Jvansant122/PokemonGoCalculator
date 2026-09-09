@@ -58,7 +58,11 @@ test("power-up-optimizer: fixed-budget plan section renders a spend ledger", asy
   await page.goto("/?view=power-up-optimizer");
   const heading = page.getByRole("heading", { name: "Fixed-budget power-up plan" });
   await expect(heading).toBeVisible({ timeout: 20_000 });
-  const section = heading.locator("xpath=..");
+  // This section is a CollapsibleSection.tsx <details>, not a plain
+  // <section> — the heading now lives inside its own <summary>, so the
+  // panel containing the REST of the section's content is the heading's
+  // grandparent (<details>), not its immediate parent (<summary>).
+  const section = heading.locator("xpath=ancestor::details[1]");
   await expect(section).toContainText(/Baseline team DPS/);
   await expect(section).toContainText(/Final team DPS/);
   await expect(section).toContainText(/Stardust spent/);
@@ -86,9 +90,11 @@ test("team-raid: displayed outcome/wipe count matches runTeamRaidScenario", asyn
   await page.goto("/?view=team-raid");
   const heading = page.getByRole("heading", { name: "Raid result" });
   await expect(heading).toBeVisible();
-  // "Raid result" panel = the heading + its outcome <p> + the result-card dl,
-  // all siblings under the same <section>, not nested inside one another.
-  const raidResultSection = heading.locator("xpath=..");
+  // "Raid result" panel = the heading (inside its own <summary> — see
+  // CollapsibleSection.tsx) plus its outcome <p> and result-card dl as
+  // FURTHER children of the same <details>, so the containing panel is the
+  // heading's grandparent, not its immediate parent.
+  const raidResultSection = heading.locator("xpath=ancestor::details[1]");
   await expect(raidResultSection).toContainText(expected.outcomeText);
 
   const resultCard = raidResultSection.locator(".result-card").first();

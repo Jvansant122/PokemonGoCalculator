@@ -8,6 +8,7 @@ import {
 } from "@pogo-analyzer/engine";
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
 import { getBaseUrl } from "./urlUtils.js";
@@ -281,8 +282,7 @@ export function TeamRaidView() {
 
       {result.data && (
         <>
-          <section className="panel">
-            <h2>Raid result</h2>
+          <CollapsibleSection id="team-raid-result" heading="Raid result" defaultOpen>
             <p
               className={`raid-outcome ${result.data.outcome === "cleared" ? "raid-outcome-cleared" : "raid-outcome-failed"}`}
             >
@@ -326,10 +326,9 @@ export function TeamRaidView() {
                 </dd>
               </dl>
             </div>
-          </section>
+          </CollapsibleSection>
 
-          <section className="panel">
-            <h2>Cumulative team damage vs. boss HP over the raid timer</h2>
+          <CollapsibleSection id="team-raid-cumulative-chart" heading="Cumulative team damage vs. boss HP over the raid timer" defaultOpen>
             <TeamDamageChart
               slots={result.data.slots}
               bossHp={bossHp ?? 0}
@@ -337,16 +336,15 @@ export function TeamRaidView() {
               outcome={result.data.outcome}
               timeToClearSeconds={result.data.timeToClearSeconds}
             />
-          </section>
+          </CollapsibleSection>
 
-          <section className="panel">
-            <h2>Per-cycle/per-slot breakdown</h2>
+          <CollapsibleSection id="team-raid-breakdown" heading="Per-cycle/per-slot breakdown" defaultOpen={false}>
             <TeamRaidBreakdownTable
               rows={result.data.slots}
               clearingCycleIndex={result.data.clearingCycleIndex}
               clearingSlotIndex={result.data.clearingSlotIndex}
             />
-          </section>
+          </CollapsibleSection>
         </>
       )}
 
@@ -358,8 +356,7 @@ export function TeamRaidView() {
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Known caveats</h2>
+      <CollapsibleSection id="team-raid-known-caveats" heading="Known caveats" defaultOpen={false}>
         <p className="caveats note-block">
           Solo-trainer scope only: the mega/primal team-wide damage boost never applies to the mega-bringer's own
           party in the real game (only to OTHER trainers simultaneously present in the same raid) — so bringing a
@@ -385,7 +382,7 @@ export function TeamRaidView() {
           The other four tabs already spelled this out; this one didn't, which is the only reason it's stated here
           rather than being left to the badge alone.
         </p>
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

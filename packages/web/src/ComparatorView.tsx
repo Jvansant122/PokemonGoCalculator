@@ -10,6 +10,7 @@ import { AssumptionPanel, type Assumptions } from "./AssumptionPanel.js";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BossMovesetSweep } from "./BossMovesetSweep.js";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { SensitivityView } from "./SensitivityView.js";
@@ -366,8 +367,11 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
 
       {results.candidates && (
         <>
-          <section className="panel">
-            <h2>Fight results — distribution over {results.candidates[0]!.iterations} randomized runs</h2>
+          <CollapsibleSection
+            id="comparator-fight-results"
+            heading={`Fight results — distribution over ${results.candidates[0]!.iterations} randomized runs`}
+            defaultOpen
+          >
             <p className="caveats" style={{ marginBottom: 12 }}>
               The boss's charged-move timing is randomized each run (mean {assumptions.bossChargedMoveFrequencySeconds}s
               between casts once it's ready, +/-40%), so results are reported as a distribution rather than a single
@@ -501,10 +505,13 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                 </p>
               );
             })()}
-          </section>
+          </CollapsibleSection>
 
-          <section className="panel">
-            <h2>Own damage + attributable team damage over time (one representative run)</h2>
+          <CollapsibleSection
+            id="comparator-damage-over-time"
+            heading="Own damage + attributable team damage over time (one representative run)"
+            defaultOpen
+          >
             <p className="caveats" style={{ marginBottom: 12 }}>
               Simulated window: ~{chartMaxSeconds.toFixed(1)}s
               {assumptions.minFightLengthSeconds > (naturalFightLengthSeconds ?? 0) ? " (extended)" : ", sized to the longer-mean-surviving candidate"}.
@@ -561,13 +568,16 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
               matchingTeammateCount={assumptions.matchingTeammateCount}
               maxSeconds={chartMaxSeconds}
             />
-          </section>
+          </CollapsibleSection>
 
           <SensitivityView checks={sensitivity} />
 
           {bossMovesetSweep && bossMovesetSweep.length > 1 && species.candidates && (
-            <section className="panel">
-              <h2>Does the winner depend on the boss's charged-move roll?</h2>
+            <CollapsibleSection
+              id="comparator-boss-moveset-sweep"
+              heading="Does the winner depend on the boss's charged-move roll?"
+              defaultOpen={false}
+            >
               <p className="caveats" style={{ marginBottom: 12 }}>
                 {boss!.name} knows {bossMovesetSweep.length} charged moves — a real raid instance is locked to
                 whichever ONE of them it rolled for its whole lifetime, so a player choosing which mega to bring can't
@@ -594,7 +604,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                 teammateDps={assumptions.teammateDps}
                 matchingTeammateCount={assumptions.matchingTeammateCount}
               />
-            </section>
+            </CollapsibleSection>
           )}
         </>
       )}
@@ -607,8 +617,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
         </div>
       </section>
 
-      <section className="panel">
-        <h2>Known caveats</h2>
+      <CollapsibleSection id="comparator-known-caveats" heading="Known caveats" defaultOpen={false}>
         <p className="caveats note-block">
           There's no "opening burst vs sustained" mode to pick — every fight is one continuous simulation, and
           whether the boss has thrown a charged move yet is a computed fact (see "Boss ready for its first charged
@@ -646,7 +655,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           boss matched to its non-Shadow base stats) because no better data exists yet — treat those results as
           directional, not exact. Species marked "hypothetical" are not live-game content at all.
         </p>
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

@@ -1,4 +1,5 @@
 import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
@@ -140,8 +141,7 @@ export function TeamAssumptionPanel({
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
 
   return (
-    <section className="panel">
-      <h2>Assumptions</h2>
+    <CollapsibleSection id="team-raid-assumptions" heading="Assumptions" defaultOpen>
 
       <div style={{ marginBottom: 10 }}>
         <button type="button" onClick={clearAllMega} disabled={!value.slots.some((s) => s.isMega)}>
@@ -521,6 +521,6 @@ export function TeamAssumptionPanel({
         in the same raid), so there is no cross-slot team-boost math here at all — a slot's own `.boost` only ever
         affects that slot's own damage while it's the active attacker.
       </p>
-    </section>
+    </CollapsibleSection>
   );
 }

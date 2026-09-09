@@ -243,6 +243,89 @@ nav.tab-switcher {
   margin: 0 0 var(--space-2);
 }
 
+/*
+ * CollapsibleSection.tsx's two variants. "panel" replaces a top-level
+ * `section.panel` wholesale (`details.collapsible-panel` still gets every
+ * `.panel` rule above via the shared class, so a folded and unfolded panel
+ * look like the same product) — only the <summary> itself needs new rules:
+ * a pointer cursor, a custom chevron in place of the browser's native
+ * triangle (hidden via `list-style: none` / the -webkit pseudo below so it
+ * doesn't double up with ours), and a hover state matching `.tab-button`'s
+ * existing muted-to-bright convention. The heading inside <summary> keeps
+ * using the ordinary `.panel h2` rule (a descendant selector, so the extra
+ * <summary> wrapper doesn't break it).
+ *
+ * "subsection" is a lighter nested block for a collapsible sub-block living
+ * INSIDE an existing panel (e.g. Power-Up Optimizer's "Benched but
+ * promising" table nested inside its "Multi-raid sweep" panel) — a plain
+ * inset box rather than a second full `.panel`, so it doesn't read as
+ * double-boxing.
+ */
+details.collapsible-panel > summary,
+.collapsible-subsection > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+details.collapsible-panel > summary::-webkit-details-marker,
+.collapsible-subsection > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.collapsible-panel > summary::before,
+.collapsible-subsection > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 1em;
+  margin-right: 6px;
+  color: var(--muted);
+  transition: transform 0.12s ease;
+}
+
+details.collapsible-panel[open] > summary::before,
+.collapsible-subsection[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+details.collapsible-panel > summary:hover::before,
+.collapsible-subsection > summary:hover::before {
+  color: var(--text-dim);
+}
+
+details.collapsible-panel > summary:focus-visible,
+.collapsible-subsection > summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* The chevron sits before the h2's own accent-bar ::before — nudge the
+   heading's inline-block marker down slightly less so both stay aligned on
+   the same baseline as a plain, non-collapsible .panel h2. */
+details.collapsible-panel > summary h2,
+details.collapsible-panel > summary h3 {
+  display: inline;
+}
+
+.collapsible-subsection {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--inset);
+}
+
+.collapsible-subsection > summary h3 {
+  display: inline;
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.collapsible-subsection[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
 .subtitle {
   color: var(--muted);
   margin-top: 0;

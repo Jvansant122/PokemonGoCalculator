@@ -60,7 +60,15 @@ test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep o
   // in flight, then the real ranked-candidates result renders.
   await expect(page.getByRole("heading", { name: "Ranked candidates" })).toBeVisible({ timeout: 20_000 });
 
-  const resultCard = page.getByRole("heading", { name: "Multi-raid sweep" }).locator("xpath=..").locator(".result-card").first();
+  // "Multi-raid sweep" is a CollapsibleSection.tsx <details> — its heading
+  // lives inside its own <summary>, so the panel containing the rest of the
+  // section's content is the heading's grandparent (<details>), not its
+  // immediate parent (<summary>).
+  const resultCard = page
+    .getByRole("heading", { name: "Multi-raid sweep" })
+    .locator("xpath=ancestor::details[1]")
+    .locator(".result-card")
+    .first();
   await expect(resultCard).toContainText("Bosses swept");
 
   // "real rows render" — at least one candidate row in the ranked table
@@ -81,7 +89,7 @@ test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep o
   // (rosterPlanner.worker.ts's "plan" message) — its own section renders
   // once that second round trip completes too, never left stuck on "click
   // Run sweep above" once a real sweep has already finished.
-  const budgetSection = page.getByRole("heading", { name: "Fixed-budget plan" }).locator("xpath=..");
+  const budgetSection = page.getByRole("heading", { name: "Fixed-budget plan" }).locator("xpath=ancestor::details[1]");
   await expect(budgetSection.getByText(/computed (off|on) the main thread/)).toBeVisible({ timeout: 20_000 });
   await expect(budgetSection.getByText("Steps committed")).toBeVisible();
   // Either a real ledger line or the "blocked, not done"/"nothing further

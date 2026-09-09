@@ -1,4 +1,5 @@
 import type { DodgeBehavior, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -267,8 +268,7 @@ export function AssumptionPanel({
     hasActiveBoost(candidateSpecies[1], value.candidateMegaBoostDisabled[1]);
 
   return (
-    <section className="panel">
-      <h2>Assumptions</h2>
+    <CollapsibleSection id="comparator-assumptions" heading="Assumptions" defaultOpen>
       <div className="assumption-grid">
         <div>
           <SpeciesPicker
@@ -696,6 +696,6 @@ export function AssumptionPanel({
           )}
         </div>
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

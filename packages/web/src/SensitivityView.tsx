@@ -1,3 +1,4 @@
+import { CollapsibleSection } from "./CollapsibleSection.js";
 import type { SensitivityCheck } from "./sensitivity.js";
 
 interface Props {
@@ -63,8 +64,7 @@ function FlipBar({ check }: { check: SensitivityCheck }) {
 /** Phase 4, point 10: ranked list of which assumption sits closest to a flip. */
 export function SensitivityView({ checks }: Props) {
   return (
-    <section className="panel">
-      <h2>Sensitivity — what would flip the winner</h2>
+    <CollapsibleSection id="comparator-sensitivity" heading="Sensitivity — what would flip the winner" defaultOpen={false}>
       <ul className="sensitivity-list">
         {checks.map((check, i) => (
           <li key={check.label}>
@@ -79,6 +79,6 @@ export function SensitivityView({ checks }: Props) {
           </li>
         ))}
       </ul>
-    </section>
+    </CollapsibleSection>
   );
 }
