@@ -63,7 +63,25 @@ export function App() {
 
   return (
     <div className="app">
-      <h1>Pokémon GO Scenario Comparator</h1>
+      <header className="masthead">
+        <span className="masthead-mark" aria-hidden="true">
+          {/*
+            Hand-rolled inline SVG wordmark (no icon library, same convention
+            as the charts): two candidate lines in the app's own accent-x /
+            accent-y, crossing, with the flip point marked in --good — the
+            product's thesis as a 26px glyph.
+          */}
+          <svg width="26" height="26" viewBox="0 0 26 26" fill="none" focusable="false">
+            <path d="M3 20 L23 7" stroke="var(--accent-x)" strokeWidth="2.2" strokeLinecap="round" />
+            <path d="M3 8 L23 19" stroke="var(--accent-y)" strokeWidth="2.2" strokeLinecap="round" />
+            <circle cx="13" cy="13.4" r="3.1" fill="var(--surface-raised)" stroke="var(--good)" strokeWidth="2" />
+          </svg>
+        </span>
+        <div>
+          <h1>Pokémon GO Scenario Comparator</h1>
+          <p className="masthead-tagline">Survivability counted as team DPS, not raw damage.</p>
+        </div>
+      </header>
       <nav className="tab-switcher" role="tablist" aria-label="View">
         <button
           type="button"

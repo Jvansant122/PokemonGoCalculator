@@ -15,7 +15,7 @@ interface Props {
  */
 export function TeamRaidBreakdownTable({ rows, clearingCycleIndex, clearingSlotIndex }: Props) {
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div className="table-scroll">
       <table className="time-series-table">
         <thead>
           <tr>

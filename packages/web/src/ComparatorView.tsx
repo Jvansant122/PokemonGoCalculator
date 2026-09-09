@@ -360,7 +360,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
 
       {overallError && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this scenario: {overallError}</p>
+          <p className="error-text">Could not compute this scenario: {overallError}</p>
         </section>
       )}
 
@@ -413,6 +413,10 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                         isShadow={effectiveIsShadow(species.candidates?.[i], assumptions.candidateShadow[i] ?? false)}
                       />
                     </h3>
+                    <div className="stat-tile-headline">
+                      <span className="stat-tile-value">{ownDps === null ? "n/a" : ownDps.toFixed(1)}</span>
+                      <span className="stat-tile-unit">own DPS</span>
+                    </div>
                     <dl>
                       <dt>Mean survival</dt>
                       <dd>{c.meanSecondsSurvived.toFixed(1)}s</dd>
@@ -438,7 +442,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                           <dd>
                             {teamContribution.toFixed(0)}
                             {persistsThroughFaint && (
-                              <span className="badge badge-persists" style={{ marginLeft: 6 }}>
+                              <span className="badge badge-persists">
                                 persists past faint
                               </span>
                             )}
@@ -605,7 +609,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
 
       <section className="panel">
         <h2>Known caveats</h2>
-        <p className="caveats">
+        <p className="caveats note-block">
           There's no "opening burst vs sustained" mode to pick — every fight is one continuous simulation, and
           whether the boss has thrown a charged move yet is a computed fact (see "Boss ready for its first charged
           move" above), derived from the target's own fast-move energy gain and its charged move's cost. That

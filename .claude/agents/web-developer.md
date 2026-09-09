@@ -99,7 +99,7 @@ These are not cosmetic; they are the point of the product:
   `run/` function. New helper logic gets a test next to it; a new `Scenario` field gets a
   non-default case in `scenarioRoundtrip.test.ts`.
 - `npm run lint` has no **errors** (unused vars/imports are errors). The
-  `react-hooks/static-components` and `react-hooks/set-state-in-effect` warnings — six as of
+  `react-hooks/static-components` and `react-hooks/set-state-in-effect` warnings — three as of
   2026-09-08 — are yours: don't add to them, and retire one when you're in that file anyway.
 - `npm run build --workspace=packages/web` succeeds (a chunk-size warning is fine; an actual
   build error is not). `npm run verify` runs all of the above plus the checkers — run it before

@@ -1,9 +1,16 @@
 ---
 name: verification-without-browser-tool
-description: What "verify it actually works" looks like in a session with no browser-preview tool available — build+serve+node-level checks, plus scratch scripts against engine functions
+description: PARTLY SUPERSEDED — Playwright is drivable from Bash for real visual QA; this remains the fallback ladder (build+serve+node-level checks, scratch scripts against engine functions) when it is not
 metadata:
   type: project
 ---
+
+**SUPERSEDED IN PART, 2026-09-08** — the tool grant below is still accurate, but this
+ladder is no longer the BEST available evidence. Playwright + a Chromium binary are installed at
+the repo root and can be driven from a scratchpad node script through the Bash tool, giving real
+screenshots (readable with the Read tool), real `scrollWidth` numbers, and real console/network
+error capture. See [[feature-visual-redesign-pass]] for the exact recipe. Use the ladder below
+only when that is unavailable or overkill.
 
 This agent's declared tool grant is Read/Write/Edit/Bash/Grep/Glob — no browser tool, despite a
 `PostToolUse` hook message mentioning `preview_start`/a "Browser pane" after edits. That hook

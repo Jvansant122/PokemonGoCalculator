@@ -275,7 +275,7 @@ export function TeamRaidView() {
 
       {result.error && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this raid: {result.error}</p>
+          <p className="error-text">Could not compute this raid: {result.error}</p>
         </section>
       )}
 
@@ -284,16 +284,17 @@ export function TeamRaidView() {
           <section className="panel">
             <h2>Raid result</h2>
             <p
-              style={{
-                fontSize: "1.05rem",
-                fontWeight: 600,
-                marginTop: 0,
-                color: result.data.outcome === "cleared" ? "var(--good)" : "#ff6b6b",
-              }}
+              className={`raid-outcome ${result.data.outcome === "cleared" ? "raid-outcome-cleared" : "raid-outcome-failed"}`}
             >
               {result.data.outcome === "cleared" ? "Cleared" : "Timer expired — raid failed"}
             </p>
             <div className="result-card">
+              <div className="stat-tile-headline">
+                <span className="stat-tile-value">
+                  {result.data.timeToClearSeconds === null ? "n/a" : `${result.data.timeToClearSeconds.toFixed(1)}s`}
+                </span>
+                <span className="stat-tile-unit">time to clear</span>
+              </div>
               <dl>
                 <dt>Time to clear</dt>
                 <dd>
@@ -359,7 +360,7 @@ export function TeamRaidView() {
 
       <section className="panel">
         <h2>Known caveats</h2>
-        <p className="caveats">
+        <p className="caveats note-block">
           Solo-trainer scope only: the mega/primal team-wide damage boost never applies to the mega-bringer's own
           party in the real game (only to OTHER trainers simultaneously present in the same raid) — so bringing a
           mega into this roster only ever boosts that ONE slot's own damage while it's the active attacker, and

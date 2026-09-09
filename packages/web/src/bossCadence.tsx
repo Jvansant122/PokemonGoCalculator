@@ -84,7 +84,17 @@ export function BossCadenceSelect({ idPrefix, value, onChange }: BossCadenceSele
         <option value="fixed-interval">Fixed interval (default)</option>
         <option value="energy-driven">Energy-driven (experimental)</option>
       </select>
-      <p className="species-picker-hint">{BOSS_CADENCE_HINT}</p>
+      {/*
+        Explanatory prose only — collapsed by default because it is a
+        multi-paragraph account of the model's sourcing, not an input and not
+        a result caveat. The control itself, and every number it changes,
+        stay fully visible (this project's "assumptions are always visible"
+        rule applies to inputs and results, not to background reading).
+      */}
+      <details className="prose-details">
+        <summary>What this model does, and how well sourced it is</summary>
+        <p>{BOSS_CADENCE_HINT}</p>
+      </details>
     </div>
   );
 }

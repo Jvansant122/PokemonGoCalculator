@@ -100,7 +100,7 @@ export function DamageOverTimeTable({ x, y, teammateDps, partySize, matchingTeam
   const colsPerCandidate = showTotalColumn ? 3 : 2;
 
   return (
-    <div style={{ marginTop: 20, overflowX: "auto" }}>
+    <div className="table-scroll" style={{ marginTop: 20 }}>
       <table className="time-series-table">
         <thead>
           <tr>
@@ -139,7 +139,7 @@ export function DamageOverTimeTable({ x, y, teammateDps, partySize, matchingTeam
           })}
         </tbody>
       </table>
-      <p className="caveats" style={{ marginTop: 8 }}>
+      <p className="caveats note-block" style={{ marginTop: 12 }}>
         Same representative run (seed 1) as the chart above, sampled every {step}s across the same ~
         {maxSeconds.toFixed(0)}s window (final row snapped to the exact window end even where that isn't a multiple
         of {step}s) — not {times.length} independent measurements, but the same event-driven cumulative

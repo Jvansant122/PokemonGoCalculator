@@ -32,7 +32,7 @@ export function IvSweepReport({ sweepAggregate, ivA, ivB }: Props) {
       <p className="field-group-label" style={{ marginTop: 12 }}>
         Breakdown by raid tier (every tier, not just tier 4+)
       </p>
-      <div style={{ overflowX: "auto", margin: "4px 0 12px" }}>
+      <div className="table-scroll" style={{ margin: "4px 0 12px" }}>
         <table className="time-series-table">
           <thead>
             <tr>

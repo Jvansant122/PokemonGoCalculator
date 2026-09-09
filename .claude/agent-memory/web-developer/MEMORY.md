@@ -1,7 +1,7 @@
 # Web-Developer Memory Index
 
 - [Wiring persistsThroughFaint into the UI](wiring_persists_through_faint.md) — call-site plumbing, the chart's progressive-time formula trick, badge-priority convention
-- [Verifying without a browser tool](verification_without_browser_tool.md) — build/serve/curl/node-check ladder, and a scratch-script technique for proving a formula numerically
+- [Verifying without a browser tool](verification_without_browser_tool.md) — PARTLY SUPERSEDED (Playwright runs from Bash now); still the fallback build/serve/curl/node ladder and the scratch-script formula-proof technique
 - [Sensitivity flip-bar + result-card share bar](sensitivity_flip_bar_and_share_bar.md) — two delta-vs-absolute bugs found, per-row independent scan axes, node strip-types' import-resolution ceiling
 - [Shared trajectory-interpolation helpers](pattern_shared_trajectory_helpers.md) — DamageOverTimeChart.tsx owns ownDamageAt/teamContributionAt/totalAt; reuse, don't refork, for any new time-series view
 - [Prefer cumulative totals over rate columns](feedback_cumulative_not_rate.md) — a per-row DPS/rate column decays toward zero once a candidate dies but elapsed time keeps growing; use running totals instead; row step later fixed to always-1s (superseded pickRowStep)
@@ -41,3 +41,4 @@
 - [Shared WeatherSelect icon control](feature_weather_select_shared_icon_component.md) — replaced 6 copy-pasted weather `<select>`s; primitives-only hand-rolled SVG icons (no bezier), "none" = sunny + fixed-red slash not currentColor
 - [Default dodge to Perfect + Comparator per-candidate override](feature_default_perfect_dodge_and_candidate_override.md) — checklist wiring onto an already-shipped engine field, sensitivity.ts also needed the override threaded through, found a real pre-existing engine fast-attack-dodge lockout bug (flagged, not fixed)
 - [SpeciesPicker `primary` sizing prop](feature_species_picker_primary_sizing.md) — opt-in modifier class not a global `.species-picker` restyle, since 6+ Team Raid slots share the same component
+- [Whole-app visual redesign pass](feature_visual_redesign_pass.md) — Playwright IS drivable from Bash (screenshots + Read = real visual QA, supersedes the no-browser ladder); JSX ate a space in the flip sentence; .tab-switcher is shared by 3 controls; .table-scroll replaces 8 inline wrappers

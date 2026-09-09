@@ -80,7 +80,7 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
   const showOwnPlusTeamColumn = !noBoost[0] || !noBoost[1];
 
   return (
-    <div style={{ marginTop: 20, overflowX: "auto" }}>
+    <div className="table-scroll" style={{ marginTop: 20 }}>
       <table className="time-series-table">
         <thead>
           <tr>
@@ -119,12 +119,12 @@ export function BossMovesetSweep({ variants, candidateMeta, partySize, teammateD
           ))}
         </tbody>
       </table>
-      <p className="caveats" style={{ marginTop: 8 }}>
+      <p className="caveats note-block" style={{ marginTop: 12 }}>
         Every row uses the same assumptions above (level, dodge, other trainers, weather, etc.) — only the boss's charged move
         varies, since a real raid boss instance is locked to one fixed charged move for its whole lifetime, but
         different instances of "the same" boss can roll different ones from its known movepool.{" "}
         {rankingFlips ? (
-          <strong style={{ color: "var(--good)" }}>
+          <strong className="text-good">
             The winner between {candidateMeta[0].name} and {candidateMeta[1].name} depends on which charged move this
             boss instance rolled — it is not the same across every variant above.
           </strong>

@@ -29,7 +29,7 @@ export function IvPerLevelTable({ data, ivA, ivB, rows, rowsForTable, divergingC
         {divergingCounts.timeToFaint} of {rows.length} show a time-to-faint difference. Divergent cells are
         highlighted below, with the higher value in each diverging pair bolded.
       </p>
-      <div style={{ overflowX: "auto" }}>
+      <div className="table-scroll">
         <table className="time-series-table">
           <thead>
             <tr>

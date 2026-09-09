@@ -199,50 +199,52 @@ export function PowerUpOptimizerAssumptionPanel({
                     value={slot.chargedMoveId}
                     onChange={(id) => updateSlot(i, { chargedMoveId: id })}
                   />
-                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
-                    <input
-                      type="radio"
-                      name="pu-mega-slot"
-                      checked={slot.isMega}
-                      disabled={!species.boost}
-                      onChange={() => setMegaSlot(i)}
-                      title="Only one Pokémon may be Mega/Primal Evolved at a time, account-wide (real Pokémon GO restriction) — this radio enforces that across all 6 slots."
-                    />{" "}
-                    Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
-                  </label>
-                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
-                    <input
-                      type="checkbox"
-                      checked={shadowState.forcedOn || slot.isShadow}
-                      disabled={shadowDisabled}
-                      onChange={(e) => updateSlot(i, { isShadow: e.target.checked })}
-                      title={slot.isPurified ? "Shadow and Purified are mutually exclusive — uncheck Purified first." : shadowState.title}
-                    />{" "}
-                    Shadow
-                  </label>
-                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
-                    <input
-                      type="checkbox"
-                      checked={slot.isPurified}
-                      disabled={purifiedDisabled}
-                      onChange={(e) => updateSlot(i, { isPurified: e.target.checked })}
-                      title={
-                        purifiedDisabled
-                          ? "Shadow and Purified are mutually exclusive — uncheck Shadow first."
-                          : "Applies the Purified power-up cost discount (0.9x stardust and candy) — does not change this slot's combat stats."
-                      }
-                    />{" "}
-                    Purified
-                  </label>
-                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
-                    <input
-                      type="checkbox"
-                      checked={slot.isLucky}
-                      onChange={(e) => updateSlot(i, { isLucky: e.target.checked })}
-                      title="Applies the Lucky power-up cost discount (50% off stardust only — candy is unaffected). Does not change this slot's combat stats."
-                    />{" "}
-                    Lucky
-                  </label>
+                  <div className="team-slot-flags">
+                    <label className="species-picker-hint">
+                      <input
+                        type="radio"
+                        name="pu-mega-slot"
+                        checked={slot.isMega}
+                        disabled={!species.boost}
+                        onChange={() => setMegaSlot(i)}
+                        title="Only one Pokémon may be Mega/Primal Evolved at a time, account-wide (real Pokémon GO restriction) — this radio enforces that across all 6 slots."
+                      />{" "}
+                      Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
+                    </label>
+                    <label className="species-picker-hint">
+                      <input
+                        type="checkbox"
+                        checked={shadowState.forcedOn || slot.isShadow}
+                        disabled={shadowDisabled}
+                        onChange={(e) => updateSlot(i, { isShadow: e.target.checked })}
+                        title={slot.isPurified ? "Shadow and Purified are mutually exclusive — uncheck Purified first." : shadowState.title}
+                      />{" "}
+                      Shadow
+                    </label>
+                    <label className="species-picker-hint">
+                      <input
+                        type="checkbox"
+                        checked={slot.isPurified}
+                        disabled={purifiedDisabled}
+                        onChange={(e) => updateSlot(i, { isPurified: e.target.checked })}
+                        title={
+                          purifiedDisabled
+                            ? "Shadow and Purified are mutually exclusive — uncheck Shadow first."
+                            : "Applies the Purified power-up cost discount (0.9x stardust and candy) — does not change this slot's combat stats."
+                        }
+                      />{" "}
+                      Purified
+                    </label>
+                    <label className="species-picker-hint">
+                      <input
+                        type="checkbox"
+                        checked={slot.isLucky}
+                        onChange={(e) => updateSlot(i, { isLucky: e.target.checked })}
+                        title="Applies the Lucky power-up cost discount (50% off stardust only — candy is unaffected). Does not change this slot's combat stats."
+                      />{" "}
+                      Lucky
+                    </label>
+                  </div>
                   <div className="field">
                     <label htmlFor={`pu-slot-${i}-level`}>Current level</label>
                     <input
@@ -586,7 +588,7 @@ export function PowerUpOptimizerAssumptionPanel({
         </div>
       </div>
 
-      <p className="caveats" style={{ marginTop: 12 }}>
+      <p className="caveats note-block" style={{ marginTop: 12 }}>
         A team can field fewer than {MAX_TEAM_RAID_SLOTS} Pokémon — leave any slot empty ("clear" it) and it simply
         never enters the fight and never contributes a power-up candidate. Every power-up candidate below is a
         SINGLE-SLOT power-up run through a full paired team-raid simulation against the other 5 slots exactly as

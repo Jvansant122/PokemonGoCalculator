@@ -642,7 +642,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
 
       {overallError && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this report: {overallError}</p>
+          <p className="error-text">Could not compute this report: {overallError}</p>
         </section>
       )}
 
@@ -704,8 +704,11 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             </button>
           </div>
 
+          {/* This tab's analogue of the comparator's ranking-flip line: do the
+              two rankings agree or not? Same callout treatment, since it's the
+              headline conclusion of the whole table below it. */}
           {topByDamage && topByType && (
-            <p className="caveats" style={{ marginBottom: 12 }}>
+            <p className="crossover-note" style={{ marginTop: 0, marginBottom: 12 }}>
               {topByDamage.bossId === topByType.bossId
                 ? `Both rankings agree: ${bossMetaById.get(topByDamage.bossId)?.raidName ?? topByDamage.bossName} is the top result either way.`
                 : `The two rankings disagree on the top result — sustained mean damage favors ${bossMetaById.get(topByDamage.bossId)?.raidName ?? topByDamage.bossName}, while the cheap type-only percentile favors ${bossMetaById.get(topByType.bossId)?.raidName ?? topByType.bossName}. The simulated (damage/survival) ranking is the one to trust for a real decision; the type percentile is sanity-check context only.`}
@@ -717,7 +720,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               the CURRENT inputs anymore; the "recomputing…" badge above names
               the condition, this dimming makes it visible at a glance too
               without the jarring flash of clearing the table to empty. */}
-          <div style={{ overflowX: "auto", opacity: isSweepPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
+          <div className="table-scroll" style={{ opacity: isSweepPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
           <table className="time-series-table">
             <thead>
               <tr>
@@ -865,7 +868,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
 
       <section className="panel">
         <h2>Known caveats</h2>
-        <p className="caveats">
+        <p className="caveats note-block">
           There's no "opening burst vs sustained" mode to pick here either — every per-boss run is one continuous
           simulation. This view models the selected species alone: it has no second party, so a mega/primal boost
           (if this species has one) is shown only as a plain informational badge above and in the table, never folded

@@ -225,7 +225,7 @@ export function IvBreakpointsView() {
 
       {overallError && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this comparison: {overallError}</p>
+          <p className="error-text">Could not compute this comparison: {overallError}</p>
         </section>
       )}
 
@@ -250,7 +250,7 @@ export function IvBreakpointsView() {
 
       <section className="panel">
         <h2>Known caveats</h2>
-        <p className="caveats">
+        <p className="caveats note-block">
           Both the per-level table below and the all-raid-targets report above only check levels 35 through 50 (in
           the usual 0.5 steps, 31 levels total) — the range a player already investing candy/stardust into a
           specific Pokémon actually cares about, not the full 1-50 range this engine can compute. This is a fixed

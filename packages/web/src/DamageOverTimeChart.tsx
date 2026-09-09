@@ -112,6 +112,11 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
   const plotHeight = HEIGHT - PAD.top - PAD.bottom;
 
   const xScale = (t: number) => PAD.left + (maxSeconds > 0 ? t / maxSeconds : 0) * plotWidth;
+  // A "died ~Xs" label normally sits to the right of its marker; past ~70% of
+  // the plot it would run off the SVG's right edge (overflow is hidden), so
+  // flip it to end-anchored on the marker's left instead.
+  const deathLabelProps = (px: number) =>
+    px > PAD.left + plotWidth * 0.7 ? { x: px - 8, textAnchor: "end" as const } : { x: px + 8, textAnchor: "start" as const };
   const yScale = (value: number) => PAD.top + plotHeight - (value / maxValue) * plotHeight;
 
   const linePath = (values: number[]) => values.map((v, i) => `${i === 0 ? "M" : "L"} ${xScale(times[i]!)} ${yScale(v)}`).join(" ");
@@ -182,8 +187,12 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
   return (
     <div>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="img" aria-label="Own damage plus attributable team damage over time">
+        {/* Inset plot surface — the same --inset step the tables and inputs
+            use, so the chart reads as a recessed instrument face rather than
+            as transparent space on the panel. */}
+        <rect x={0} y={0} width={WIDTH} height={HEIGHT} rx={10} fill="var(--chart-bg)" />
         {yTicks.map((v) => (
-          <line key={`gy${v}`} x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(v)} y2={yScale(v)} stroke="var(--border)" strokeWidth={1} />
+          <line key={`gy${v}`} x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(v)} y2={yScale(v)} stroke="var(--grid)" strokeWidth={1} />
         ))}
         <path d={xPath.solidPath} fill="none" stroke="var(--accent-x)" strokeWidth={2.5} />
         {xPath.dashedPath && <path d={xPath.dashedPath} fill="none" stroke="var(--accent-x)" strokeWidth={2.5} strokeDasharray="6 4" />}
@@ -192,16 +201,16 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
 
         {xPath.deathPoint && (
           <g>
-            <circle cx={xScale(xPath.deathPoint.t)} cy={yScale(xPath.deathPoint.v)} r={5} fill="var(--bg)" stroke="var(--accent-x)" strokeWidth={2} />
-            <text x={xScale(xPath.deathPoint.t) + 8} y={yScale(xPath.deathPoint.v) - 8} fontSize={10} fill="var(--accent-x)">
+            <circle cx={xScale(xPath.deathPoint.t)} cy={yScale(xPath.deathPoint.v)} r={5} fill="var(--chart-bg)" stroke="var(--accent-x)" strokeWidth={2} />
+            <text {...deathLabelProps(xScale(xPath.deathPoint.t))} y={yScale(xPath.deathPoint.v) - 8} fontSize={10} fill="var(--accent-x)">
               {x.name} died ~{xPath.deathPoint.t.toFixed(1)}s{x.persistsThroughFaint ? " (boost persists)" : ""}
             </text>
           </g>
         )}
         {yPath.deathPoint && (
           <g>
-            <circle cx={xScale(yPath.deathPoint.t)} cy={yScale(yPath.deathPoint.v)} r={5} fill="var(--bg)" stroke="var(--accent-y)" strokeWidth={2} />
-            <text x={xScale(yPath.deathPoint.t) + 8} y={yScale(yPath.deathPoint.v) + 14} fontSize={10} fill="var(--accent-y)">
+            <circle cx={xScale(yPath.deathPoint.t)} cy={yScale(yPath.deathPoint.v)} r={5} fill="var(--chart-bg)" stroke="var(--accent-y)" strokeWidth={2} />
+            <text {...deathLabelProps(xScale(yPath.deathPoint.t))} y={yScale(yPath.deathPoint.v) + 14} fontSize={10} fill="var(--accent-y)">
               {y.name} died ~{yPath.deathPoint.t.toFixed(1)}s{y.persistsThroughFaint ? " (boost persists)" : ""}
             </text>
           </g>
@@ -226,35 +235,35 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
         {/* X-axis tick labels (seconds) + gridline ticks. */}
         {xTicks.map((t) => (
           <g key={`x${t}`}>
-            <line x1={xScale(t)} x2={xScale(t)} y1={PAD.top} y2={PAD.top + plotHeight} stroke="var(--border)" strokeWidth={1} opacity={0.5} />
+            <line x1={xScale(t)} x2={xScale(t)} y1={PAD.top} y2={PAD.top + plotHeight} stroke="var(--grid)" strokeWidth={1} />
             <text x={xScale(t)} y={HEIGHT - PAD.bottom + 16} fontSize={10} fill="var(--muted)" textAnchor="middle">
               {formatTick(t)}s
             </text>
           </g>
         ))}
       </svg>
-      <div style={{ display: "flex", gap: 16, fontSize: "0.85rem", marginTop: 4, alignItems: "center" }}>
-        <span style={{ color: "var(--accent-x)" }}>
+      <div className="chart-legend">
+        <span className="chart-legend-x">
           ■ {x.imageUrl && <img src={x.imageUrl} alt="" className="species-icon" />} {x.name}
         </span>
-        <span style={{ color: "var(--accent-y)" }}>
+        <span className="chart-legend-y">
           ■ {y.imageUrl && <img src={y.imageUrl} alt="" className="species-icon" />} {y.name}
         </span>
       </div>
       {crossing ? (
-        <p className="crossover-note">
-          Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window ({partySize}
+        <p className="crossover-note crossover-note--flip">
+          Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window ({partySize}{" "}
           other trainer{partySize === 1 ? "" : "s"} in this raid, {matchingTeammateCount} matching type, {teammateDps} DPS each).
         </p>
       ) : (
-        <p className="crossover-note">
+        <p className="crossover-note crossover-note--steady">
           No crossing in this window under these assumptions — {finalLeader} leads throughout ({partySize} other trainer
           {partySize === 1 ? "" : "s"} in this raid, {matchingTeammateCount} matching type, {teammateDps} DPS each).
         </p>
       )}
       <div className="damage-tally">
         <div>
-          <strong style={{ color: "var(--accent-x)" }}>{x.name}</strong>:{" "}
+          <strong className="chart-legend-x">{x.name}</strong>:{" "}
           {x.boostMultiplier === undefined ? (
             <>own {Math.round(finalOwnX)} damage total (no mega/primal boost active — N/A team contribution)</>
           ) : (
@@ -265,7 +274,7 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
           )}
         </div>
         <div>
-          <strong style={{ color: "var(--accent-y)" }}>{y.name}</strong>:{" "}
+          <strong className="chart-legend-y">{y.name}</strong>:{" "}
           {y.boostMultiplier === undefined ? (
             <>own {Math.round(finalOwnY)} damage total (no mega/primal boost active — N/A team contribution)</>
           ) : (

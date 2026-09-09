@@ -73,8 +73,10 @@ export function TeamDamageChart({ slots, bossHp, raidTimerSeconds, outcome, time
   return (
     <div>
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} width="100%" role="img" aria-label="Cumulative team damage vs boss HP over the raid timer">
+        {/* Inset plot surface — matches DamageOverTimeChart's own background. */}
+        <rect x={0} y={0} width={WIDTH} height={HEIGHT} rx={10} fill="var(--chart-bg)" />
         {yTicks.map((v) => (
-          <line key={`gy${v}`} x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(v)} y2={yScale(v)} stroke="var(--border)" strokeWidth={1} />
+          <line key={`gy${v}`} x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(v)} y2={yScale(v)} stroke="var(--grid)" strokeWidth={1} />
         ))}
 
         <line x1={PAD.left} x2={WIDTH - PAD.right} y1={yScale(bossHp)} y2={yScale(bossHp)} stroke="var(--accent-y)" strokeDasharray="4 3" strokeWidth={1.5} />
@@ -89,7 +91,7 @@ export function TeamDamageChart({ slots, bossHp, raidTimerSeconds, outcome, time
             x2={xScale(d.t)}
             y1={PAD.top}
             y2={PAD.top + plotHeight}
-            stroke={d.isWipe ? "#ff6b6b" : "var(--border)"}
+            stroke={d.isWipe ? "var(--warn)" : "var(--border-strong)"}
             strokeWidth={d.isWipe ? 2 : 1}
             strokeDasharray={d.isWipe ? "5 3" : undefined}
             opacity={0.85}
@@ -115,7 +117,7 @@ export function TeamDamageChart({ slots, bossHp, raidTimerSeconds, outcome, time
         ))}
         {xTicks.map((t) => (
           <g key={`x${t}`}>
-            <line x1={xScale(t)} x2={xScale(t)} y1={PAD.top} y2={PAD.top + plotHeight} stroke="var(--border)" strokeWidth={1} opacity={0.4} />
+            <line x1={xScale(t)} x2={xScale(t)} y1={PAD.top} y2={PAD.top + plotHeight} stroke="var(--grid)" strokeWidth={1} />
             <text x={xScale(t)} y={HEIGHT - PAD.bottom + 16} fontSize={10} fill="var(--muted)" textAnchor="middle">
               {formatTick(t)}s
             </text>
@@ -123,7 +125,7 @@ export function TeamDamageChart({ slots, bossHp, raidTimerSeconds, outcome, time
         ))}
         <line x1={xScale(maxSeconds)} x2={xScale(maxSeconds)} y1={PAD.top} y2={PAD.top + plotHeight} stroke="var(--muted)" strokeWidth={1.5} />
       </svg>
-      <p className="caveats" style={{ marginTop: 4 }}>
+      <p className="caveats note-block" style={{ marginTop: 10 }}>
         The x-axis IS the raid's real countdown timer ({raidTimerSeconds}s) — the dashed yellow line is the boss's
         fixed battle-HP pool for this tier. Vertical dividers mark each slot handoff: a thin gray line for an
         ordinary next-slot swap (swapCostSeconds paid), a dashed red line for a full-roster wipe-and-revive

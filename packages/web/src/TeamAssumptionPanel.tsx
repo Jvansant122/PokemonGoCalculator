@@ -210,32 +210,34 @@ export function TeamAssumptionPanel({
                     value={slot.chargedMoveId}
                     onChange={(id) => updateSlot(i, { chargedMoveId: id })}
                   />
-                  <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
-                    <input
-                      type="radio"
-                      name="team-mega-slot"
-                      checked={slot.isMega}
-                      disabled={!species.boost}
-                      onChange={() => setMegaSlot(i)}
-                      title="Only one Pokémon may be Mega/Primal Evolved at a time, account-wide (real Pokémon GO restriction) — this radio enforces that across all 6 slots."
-                    />{" "}
-                    Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
-                  </label>
-                  {(() => {
-                    const shadowState = shadowToggleUiState(species);
-                    return (
-                      <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
-                        <input
-                          type="checkbox"
-                          checked={shadowState.forcedOn || slot.isShadow}
-                          disabled={shadowState.disabled}
-                          onChange={(e) => updateSlot(i, { isShadow: e.target.checked })}
-                          title={shadowState.title}
-                        />{" "}
-                        Shadow
-                      </label>
-                    );
-                  })()}
+                  <div className="team-slot-flags">
+                    <label className="species-picker-hint">
+                      <input
+                        type="radio"
+                        name="team-mega-slot"
+                        checked={slot.isMega}
+                        disabled={!species.boost}
+                        onChange={() => setMegaSlot(i)}
+                        title="Only one Pokémon may be Mega/Primal Evolved at a time, account-wide (real Pokémon GO restriction) — this radio enforces that across all 6 slots."
+                      />{" "}
+                      Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
+                    </label>
+                    {(() => {
+                      const shadowState = shadowToggleUiState(species);
+                      return (
+                        <label className="species-picker-hint">
+                          <input
+                            type="checkbox"
+                            checked={shadowState.forcedOn || slot.isShadow}
+                            disabled={shadowState.disabled}
+                            onChange={(e) => updateSlot(i, { isShadow: e.target.checked })}
+                            title={shadowState.title}
+                          />{" "}
+                          Shadow
+                        </label>
+                      );
+                    })()}
+                  </div>
                 </>
               )}
             </div>
@@ -512,7 +514,7 @@ export function TeamAssumptionPanel({
         </div>
       </div>
 
-      <p className="caveats" style={{ marginTop: 12 }}>
+      <p className="caveats note-block" style={{ marginTop: 12 }}>
         A team can field fewer than {MAX_TEAM_RAID_SLOTS} Pokémon — leave any slot empty ("clear" it) and it simply
         never enters the fight. This tab models a SOLO trainer's own roster only: the mega/primal team-wide damage
         boost never applies to the mega-bringer's own party in the real game (only to OTHER trainers simultaneously

@@ -494,7 +494,7 @@ export function PowerUpOptimizerView() {
 
       {result.error && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this optimizer run: {result.error}</p>
+          <p className="error-text">Could not compute this optimizer run: {result.error}</p>
         </section>
       )}
 
@@ -525,6 +525,10 @@ export function PowerUpOptimizerView() {
               )}
             </h2>
             <div className="result-card" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
+              <div className="stat-tile-headline">
+                <span className="stat-tile-value">{result.data.baseline.teamDps.toFixed(1)}</span>
+                <span className="stat-tile-unit">team DPS</span>
+              </div>
               <dl>
                 <dt>Boss HP</dt>
                 <dd>{result.data.bossHp.toLocaleString()}</dd>
@@ -563,7 +567,7 @@ export function PowerUpOptimizerView() {
                 const ladder = result.data!.ladders[i];
                 if (!species || !ladder) return null;
                 return (
-                  <div className="result-card" key={i} style={{ minWidth: 260 }}>
+                  <div className="result-card" key={i} style={{ minWidth: 340 }}>
                     <h3>
                       Slot {i + 1}: {species.name} (Lv {ladder.current.level})
                     </h3>
@@ -685,7 +689,7 @@ export function PowerUpOptimizerView() {
               </div>
 
               {result.plan.steps.length > 0 ? (
-                <div style={{ overflowX: "auto", marginTop: 12 }}>
+                <div className="table-scroll" style={{ marginTop: 12 }}>
                   <table className="time-series-table">
                     <thead>
                       <tr>
@@ -783,7 +787,7 @@ export function PowerUpOptimizerView() {
               efficiency column, and sorts into the middle group by stardust cost (cheapest first) — the measured delta is
               indistinguishable from seed-to-seed jitter, not a real gain or loss.
             </p>
-            <div style={{ overflowX: "auto", opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
+            <div className="table-scroll" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
               <table className="time-series-table">
                 <thead>
                   <tr>
@@ -860,7 +864,7 @@ export function PowerUpOptimizerView() {
 
       <section className="panel">
         <h2>Known caveats</h2>
-        <p className="caveats">
+        <p className="caveats note-block">
           v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
           two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
           the mean of {result.data ? result.data.iterations : 20} paired-seed (common-random-numbers) team-raid runs, not one

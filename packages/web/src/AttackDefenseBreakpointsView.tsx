@@ -300,7 +300,7 @@ export function AttackDefenseBreakpointsView() {
 
       {result.error && (
         <section className="panel">
-          <p style={{ color: "#ff6b6b" }}>Could not compute this sheet: {result.error}</p>
+          <p className="error-text">Could not compute this sheet: {result.error}</p>
         </section>
       )}
 
@@ -362,6 +362,7 @@ export function AttackDefenseBreakpointsView() {
 
       <section className="panel">
         <h2>Known caveats</h2>
+        <div className="note-block">
         <p className="caveats">
           Every sheet here is a single isolated hit's damage at one IV/level combination — there is no fight, no
           combat phase, and no charged-move energy gating modeled at all, unlike the Comparator/Team Raid/Species
@@ -385,6 +386,7 @@ export function AttackDefenseBreakpointsView() {
           Raid targets marked "approximate" use a documented stand-in species' stats because no better data exists
           yet — treat those results as directional, not exact.
         </p>
+        </div>
       </section>
     </>
   );

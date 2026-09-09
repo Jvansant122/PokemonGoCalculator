@@ -61,7 +61,7 @@ export function BreakpointSheet({ title, cells, ivRange, levelsAscending, ivLabe
   return (
     <div className="breakpoint-sheet">
       <h3>{title}</h3>
-      <div style={{ overflowX: "auto" }}>
+      <div className="table-scroll">
         <table className="breakpoint-table">
           <thead>
             <tr>
