@@ -43,8 +43,10 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   ivAttack: 15,
   ivDefense: 15,
   ivStamina: 15,
-  dodge: { kind: "none" },
+  dodge: { kind: "perfect" },
   dodgeFastAttacks: false,
+  candidateDodge: [null, null],
+  candidateDodgeFastAttacks: [null, null],
   holdChargedMoveUntilSafe: false,
   minFightLengthSeconds: 0,
   bossChargedMoveFrequencySeconds: 15,
@@ -97,6 +99,8 @@ export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
     ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
     dodgeModel: a.dodge,
     dodgeFastAttacks: a.dodgeFastAttacks,
+    candidateDodge: a.candidateDodge,
+    candidateDodgeFastAttacks: a.candidateDodgeFastAttacks,
     holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
     minFightLengthSeconds: a.minFightLengthSeconds,
     partySize: a.partySize,
@@ -138,6 +142,10 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // `??` guards a scenario URL encoded before these fields existed rather
     // than surfacing `undefined` into a controlled input.
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
+    // `??` guards a scenario URL encoded before these fields existed rather
+    // than surfacing `undefined` into the per-candidate dodge overrides below.
+    candidateDodge: s.candidateDodge ?? DEFAULT_ASSUMPTIONS.candidateDodge,
+    candidateDodgeFastAttacks: s.candidateDodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.candidateDodgeFastAttacks,
     holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_ASSUMPTIONS.holdChargedMoveUntilSafe,
     minFightLengthSeconds: s.minFightLengthSeconds ?? DEFAULT_ASSUMPTIONS.minFightLengthSeconds,
     bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
@@ -209,6 +217,17 @@ function OwnTeamShareBar({ own, team, accent }: { own: number; team: number; acc
       <div className="share-bar-team" style={{ width: `${teamPct}%` }} />
     </div>
   );
+}
+
+/**
+ * A species' own icon, if it has one — module-level (not nested inside
+ * ComparatorView) so it isn't recreated on every render, which used to trip
+ * eslint's react-hooks/static-components (a component declared during render
+ * resets its state on every re-render; this one has none, but the lint rule
+ * can't tell that from a component defined inline).
+ */
+function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
+  return s.imageUrl ? <img src={s.imageUrl} alt="" className="species-icon" /> : null;
 }
 
 /** Same as runComparatorScenario's own internal resolution, but never throws — for normalization checks that need to run even when the id might be stale/invalid. */
@@ -303,10 +322,6 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
 
   function speciesLabel(s: SpeciesDefinition): string {
     return s.isHypothetical ? `${s.name} (hypothetical)` : s.name;
-  }
-
-  function SpeciesIcon({ s }: { s: SpeciesDefinition }) {
-    return s.imageUrl ? <img src={s.imageUrl} alt="" className="species-icon" /> : null;
   }
 
   return (

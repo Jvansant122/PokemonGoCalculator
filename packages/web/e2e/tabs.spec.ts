@@ -50,6 +50,20 @@ for (const tab of TABS) {
   });
 }
 
+// The fixed-budget planner is a second, DIFFERENT computation from the ranked
+// candidate table above it (same section-adjacent convention as every other
+// tab's multi-panel layout) — assert its own headline renders with a real
+// ledger, not just that the tab as a whole didn't throw.
+test("power-up-optimizer: fixed-budget plan section renders a spend ledger", async ({ page }) => {
+  await page.goto("/?view=power-up-optimizer");
+  const heading = page.getByRole("heading", { name: "Fixed-budget power-up plan" });
+  await expect(heading).toBeVisible({ timeout: 20_000 });
+  const section = heading.locator("xpath=..");
+  await expect(section).toContainText(/Baseline team DPS/);
+  await expect(section).toContainText(/Final team DPS/);
+  await expect(section).toContainText(/Stardust spent/);
+});
+
 // For Comparator and Team Raid, cross-check one displayed number against the
 // exact same pure run*Scenario function the view itself calls, run against
 // the same DEFAULT_ASSUMPTIONS a fresh page load uses — the point is

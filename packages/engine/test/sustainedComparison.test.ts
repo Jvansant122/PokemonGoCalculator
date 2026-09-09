@@ -238,6 +238,78 @@ describe("runSustainedComparison", () => {
   });
 });
 
+describe("runSustainedComparison: candidateDodge / candidateDodgeFastAttacks per-candidate override", () => {
+  // CANDIDATE_ALPHA/BETA's pinned 150 effective HP dies to BOSS_TIDE's fast
+  // move alone by 7.5s (see scenarioA.test.ts) — well before any charged-move
+  // dodge behavior could matter, so a much bulkier variant is needed here to
+  // actually observe a dodge-driven survival difference. Only baseStamina
+  // differs from the pinned fixture.
+  const bulkyAlpha = { ...CANDIDATE_ALPHA, id: "bulky-test-candidate-alpha", baseStamina: 1000 };
+
+  const common = {
+    candidates: [bulkyAlpha, CANDIDATE_BETA],
+    boss: BOSS_TIDE,
+    level: LEVEL,
+    ivs: PERFECT_IVS,
+    bossChargedMoveMeanIntervalSeconds: 10,
+    bossChargedMoveWarmupSeconds: 3,
+    maxSeconds: 60,
+    iterations: 60,
+  };
+
+  it("omitting candidateDodge/candidateDodgeFastAttacks is byte-identical to today's shared-dodge behavior", () => {
+    const withoutField = runSustainedComparison({ ...common, dodge: { kind: "none" } });
+    const explicitlyNull = runSustainedComparison({
+      ...common,
+      dodge: { kind: "none" },
+      candidateDodge: [null, null],
+      candidateDodgeFastAttacks: [null, null],
+    });
+
+    expect(explicitlyNull).toEqual(withoutField);
+  });
+
+  it("a per-candidate dodge override changes only that candidate's result, leaving the other candidate byte-identical to the shared-dodge baseline", () => {
+    const baseline = runSustainedComparison({ ...common, dodge: { kind: "none" } });
+    const overridden = runSustainedComparison({
+      ...common,
+      dodge: { kind: "none" },
+      candidateDodge: [{ kind: "perfect" }, null],
+    });
+
+    // Candidate B (index 1) used `null` -> falls back to the shared "none"
+    // dodge, so its whole result is untouched by A's override — each
+    // candidate is simulated independently, so this also guards against a
+    // future refactor accidentally sharing state across candidates.
+    expect(overridden[1]).toEqual(baseline[1]);
+
+    // Candidate A (index 0) now perfectly dodges the boss's charged
+    // attacks, so it should survive strictly longer than the shared-"none"
+    // baseline.
+    expect(overridden[0]!.meanSecondsSurvived).toBeGreaterThan(baseline[0]!.meanSecondsSurvived);
+    expect(overridden[0]).not.toEqual(baseline[0]);
+  });
+
+  it("candidateDodgeFastAttacks overrides only that candidate's fast-attack dodging, preserving an explicit false rather than treating it as null", () => {
+    const noFastDodge = runSustainedComparison({
+      ...common,
+      dodge: { kind: "none" },
+      dodgeFastAttacks: true, // shared default: both candidates dodge fast attacks
+      candidateDodgeFastAttacks: [false, null], // A explicitly opts out
+    });
+    const bothDodgeFast = runSustainedComparison({
+      ...common,
+      dodge: { kind: "none" },
+      dodgeFastAttacks: true,
+    });
+
+    // B (null -> shared true) is unaffected by A's explicit override.
+    expect(noFastDodge[1]).toEqual(bothDodgeFast[1]);
+    // A (explicit false) differs from the shared-true baseline.
+    expect(noFastDodge[0]).not.toEqual(bothDodgeFast[0]);
+  });
+});
+
 describe("runSustainedComparison: bossMaxHp / bossMaxHpOverride", () => {
   const common = {
     candidates: [CANDIDATE_ALPHA],

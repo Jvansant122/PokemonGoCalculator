@@ -1,34 +1,9 @@
-import { WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import type { DodgeBehavior, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { WeatherSelect } from "./WeatherSelect.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
-
-/**
- * Human-readable labels for the select below, built from weather.ts's own
- * WEATHER_BOOSTED_TYPES map (now re-exported from @pogo-analyzer/engine's
- * index) rather than a second hand-typed copy — the engine's mapping is the
- * one source of truth for which types each condition boosts.
- */
-const WEATHER_LABELS: Record<WeatherCondition, string> = {
-  none: "None",
-  sunny: "Sunny/Clear",
-  rainy: "Rain",
-  windy: "Windy",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  snow: "Snow",
-  partly_cloudy: "Partly Cloudy",
-};
-const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
-  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
-).map((value) => {
-  const boosted = WEATHER_BOOSTED_TYPES[value];
-  return {
-    value,
-    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
-  };
-});
 
 export interface Assumptions {
   candidateAId: string;
@@ -71,6 +46,23 @@ export interface Assumptions {
   dodge: DodgeBehavior;
   /** Whether the candidate also attempts to dodge the boss's fast attacks — a separate yes/no from dodge, since dodging every fast attack costs 0.5s per attempt and usually isn't worth it. */
   dodgeFastAttacks: boolean;
+  /**
+   * Per-candidate override for `dodge` above, matched by index to
+   * [candidateAId, candidateBId] — lets a user compare a bulky candidate
+   * played with no dodging against a glass cannon played with perfect
+   * dodging, a real A-vs-B question this product's ranking-flip thesis
+   * depends on (see Scenario.candidateDodge /
+   * SustainedComparisonInputs.candidateDodge). `null` for an index means "use
+   * the shared `dodge` setting above" for that candidate — the default
+   * [null, null], so this is opt-in per candidate.
+   */
+  candidateDodge: [DodgeBehavior | null, DodgeBehavior | null];
+  /**
+   * Per-candidate override for `dodgeFastAttacks` above — see candidateDodge.
+   * `null` means "use the shared `dodgeFastAttacks` above" for that
+   * candidate, NOT "false". Defaults to [null, null].
+   */
+  candidateDodgeFastAttacks: [boolean | null, boolean | null];
   /** Hold the charged move for a safer moment (right after dodging a boss charged hit, or when energy caps) instead of firing immediately. */
   holdChargedMoveUntilSafe: boolean;
   /** Extends the damage-over-time chart's window beyond the auto-computed natural minimum (never below it) — 0 means no override. */
@@ -96,7 +88,7 @@ export interface Assumptions {
   bossStartingEnergyFraction: number;
   /**
    * Active weather condition — boosts whichever move type it favors (see
-   * WEATHER_OPTIONS above / weather.ts's WEATHER_BOOSTED_TYPES) by 1.2x, for
+   * WeatherSelect.tsx / weather.ts's WEATHER_BOOSTED_TYPES) by 1.2x, for
    * BOTH the candidate's and the boss's own moves independently, checked
    * against each move's own type. "none" (the default) models no weather, the
    * pre-existing implicit behavior.
@@ -139,6 +131,98 @@ interface Props {
  */
 function hasActiveBoost(species: SpeciesDefinition | null, disabled: boolean): boolean {
   return !!species?.boost && !disabled;
+}
+
+/** DodgeBehavior["kind"], plus the extra "same" sentinel this control's <select> needs for "use the shared setting" (null on the underlying value). */
+type CandidateDodgeSelectValue = "same" | DodgeBehavior["kind"];
+
+/**
+ * Per-candidate override for the shared "Dodge boss's charged attacks" /
+ * "Also dodge boss's fast attacks?" controls further down this panel — one
+ * instance rendered under each candidate's move pickers (index 0 = A,
+ * index 1 = B). `null` in Assumptions.candidateDodge/candidateDodgeFastAttacks
+ * means "use the shared setting", surfaced here as an explicit "Same as
+ * shared setting" option rather than defaulting silently to one of the real
+ * choices — a user must deliberately opt into overriding a candidate.
+ */
+function CandidateDodgeOverride({
+  value,
+  index,
+  onChange,
+}: {
+  value: Assumptions;
+  index: 0 | 1;
+  onChange: (next: Assumptions) => void;
+}) {
+  const dodgeOverride = value.candidateDodge[index];
+  const fastOverride = value.candidateDodgeFastAttacks[index];
+  const isOverriding = dodgeOverride !== null || fastOverride !== null;
+  const idPrefix = index === 0 ? "candidate-a" : "candidate-b";
+
+  function setDodgeOverride(next: DodgeBehavior | null) {
+    const candidateDodge: [DodgeBehavior | null, DodgeBehavior | null] = [...value.candidateDodge];
+    candidateDodge[index] = next;
+    onChange({ ...value, candidateDodge });
+  }
+
+  function setFastOverride(next: boolean | null) {
+    const candidateDodgeFastAttacks: [boolean | null, boolean | null] = [...value.candidateDodgeFastAttacks];
+    candidateDodgeFastAttacks[index] = next;
+    onChange({ ...value, candidateDodgeFastAttacks });
+  }
+
+  return (
+    <div
+      className={`species-picker-hint${isOverriding ? " candidate-dodge-override-active" : ""}`}
+      style={{ display: "block", marginTop: 6 }}
+    >
+      <div style={{ fontWeight: isOverriding ? 700 : undefined }}>
+        Dodge override{isOverriding && " (active — differs from the shared setting below)"}
+      </div>
+      <select
+        id={`${idPrefix}-dodge-override`}
+        value={(dodgeOverride?.kind ?? "same") as CandidateDodgeSelectValue}
+        onChange={(e) => {
+          const kind = e.target.value as CandidateDodgeSelectValue;
+          setDodgeOverride(
+            kind === "same" ? null : kind === "percentage-missed" ? { kind, missedFraction: 0.5 } : ({ kind } as DodgeBehavior),
+          );
+        }}
+        title="Overrides the shared 'Dodge boss's charged attacks' setting below for just this candidate — lets you compare, e.g., a bulky pick played with no dodging against a glass cannon played with perfect dodging."
+      >
+        <option value="same">Same as shared setting</option>
+        <option value="none">None</option>
+        <option value="perfect">Perfect</option>
+        <option value="percentage-missed">Percentage missed</option>
+      </select>
+      {dodgeOverride?.kind === "percentage-missed" && (
+        <input
+          type="number"
+          min={0}
+          max={1}
+          step={0.05}
+          value={dodgeOverride.missedFraction}
+          onChange={(e) => setDodgeOverride({ kind: "percentage-missed", missedFraction: Number(e.target.value) })}
+          style={{ marginTop: 4, display: "block" }}
+          title="Fraction of this candidate's charged hits NOT dodged."
+        />
+      )}
+      <select
+        id={`${idPrefix}-dodge-fast-override`}
+        value={fastOverride === null ? "same" : fastOverride ? "yes" : "no"}
+        onChange={(e) => {
+          const v = e.target.value;
+          setFastOverride(v === "same" ? null : v === "yes");
+        }}
+        style={{ marginTop: 4 }}
+        title="Overrides the shared 'Also dodge boss's fast attacks?' setting below for just this candidate."
+      >
+        <option value="same">Fast-attack dodge: same as shared</option>
+        <option value="no">Fast-attack dodge: No</option>
+        <option value="yes">Fast-attack dodge: Yes</option>
+      </select>
+    </div>
+  );
 }
 
 /**
@@ -198,6 +282,7 @@ export function AssumptionPanel({
               // the same update rather than leaving a stale/invalid id.
               onChange({ ...value, candidateAId: id, candidateAFastMoveId: null, candidateAChargedMoveId: null })
             }
+            primary
           />
           {candidateSpecies[0] && (
             <>
@@ -250,6 +335,7 @@ export function AssumptionPanel({
                   </label>
                 );
               })()}
+              <CandidateDodgeOverride value={value} index={0} onChange={onChange} />
             </>
           )}
         </div>
@@ -262,6 +348,7 @@ export function AssumptionPanel({
             onChange={(id) =>
               onChange({ ...value, candidateBId: id, candidateBFastMoveId: null, candidateBChargedMoveId: null })
             }
+            primary
           />
           {candidateSpecies[1] && (
             <>
@@ -314,6 +401,7 @@ export function AssumptionPanel({
                   </label>
                 );
               })()}
+              <CandidateDodgeOverride value={value} index={1} onChange={onChange} />
             </>
           )}
         </div>
@@ -324,6 +412,7 @@ export function AssumptionPanel({
             options={targetOptions}
             value={value.targetId}
             onChange={(id) => onChange({ ...value, targetId: id, bossFastMoveId: null, bossChargedMoveId: null })}
+            primary
           />
           {unmatchedRaids.length > 0 && (
             <p className="species-picker-hint" title="These raids are currently active but have no usable stat data yet.">
@@ -494,21 +583,7 @@ export function AssumptionPanel({
           </div>
         )}
 
-        <div className="field">
-          <label htmlFor="weather">Weather</label>
-          <select
-            id="weather"
-            value={value.weather}
-            onChange={(e) => set("weather", e.target.value as WeatherCondition)}
-            title="Boosts damage 1.2x for moves whose type matches the active weather — applies independently to the candidate's and the boss's own moves, checked per move's own type."
-          >
-            {WEATHER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <WeatherSelect idPrefix="candidate" value={value.weather} onChange={(w) => set("weather", w)} />
 
         <BossCadenceSelect idPrefix="candidate" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 

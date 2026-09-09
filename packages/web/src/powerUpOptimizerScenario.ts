@@ -38,6 +38,19 @@ export interface PowerUpOptimizerScenario {
   /** Always exactly MAX_TEAM_RAID_SLOTS entries, in fight order — pad with empty slots rather than shortening the array, same convention as TeamScenario.slots. */
   slots: PowerUpScenarioSlot[];
   stardustOnHand: number;
+  /**
+   * A shared, fungible Rare Candy pool (account-wide, not per-species) —
+   * consumed only by the fixed-budget planner (planPowerUpBudget), which
+   * spends a slot's own candyOnHand first and only draws on this pool once
+   * that runs out. Rare Candy converts 1:1 into any species' regular Candy
+   * and can NEVER become XL Candy (see powerUp.ts's RARE_CANDY_TO_CANDY_RATIO
+   * and MECHANICS.md's "Fungible candy currencies" entry). Optional so a link
+   * shared before this field existed decodes via `??` rather than surfacing
+   * `undefined`.
+   */
+  rareCandyOnHand?: number;
+  /** Same shared-pool mechanic as rareCandyOnHand, but for the wholly separate Rare Candy XL item (1:1 into XL Candy only — see RARE_CANDY_XL_TO_XL_CANDY_RATIO). Optional for the same old-link reason. */
+  rareCandyXlOnHand?: number;
   target: string;
   bossFastMoveId: string | null;
   bossChargedMoveId: string | null;

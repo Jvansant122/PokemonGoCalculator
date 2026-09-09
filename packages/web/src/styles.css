@@ -263,6 +263,37 @@ h1 {
   line-height: 1.5;
 }
 
+/*
+ * "Blocked, not done" callout (Power-Up Optimizer's fixed-budget plan) — the
+ * plan's stop reason alone ("no-significant-candidate"/"budget-exhausted")
+ * reads as "nothing else helps," which is only true when the engine's
+ * bestBlockedCandidate is null. When it's non-null there's a real, bigger
+ * gain sitting just beyond the current budget, and that fact is usually the
+ * single most actionable line on the whole tab — deliberately NOT styled as
+ * a footnote caveat. Reuses accent-y (the same "pay attention" hue as
+ * badge-hypothetical) since this tab never uses accent-x/accent-y for
+ * anything else (no two-candidate comparison here to collide with).
+ */
+.blocked-gain-callout {
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--accent-y);
+  border-left-width: 5px;
+  border-radius: 6px;
+  background: rgba(255, 157, 91, 0.1);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.blocked-gain-callout strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent-y);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .share-row {
   display: flex;
   gap: 8px;
@@ -289,6 +320,55 @@ h1 {
   font-size: 0.82rem;
   cursor: pointer;
   font-weight: 600;
+}
+
+.candidate-dodge-override-active {
+  border-left: 2px solid var(--accent-x);
+  padding-left: 8px;
+  background: rgba(91, 157, 255, 0.08);
+  border-radius: 4px;
+}
+
+.weather-select-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weather-select-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  background: #0d0f14;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.weather-select-btn:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.weather-select-btn.selected {
+  color: var(--text);
+  border-color: var(--accent-x);
+  background: rgba(91, 157, 255, 0.12);
+}
+
+.weather-select-btn:focus-visible {
+  outline: 2px solid var(--accent-x);
+  outline-offset: 1px;
+}
+
+.weather-select-caption {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 .species-picker {
@@ -329,6 +409,34 @@ h1 {
   display: inline-block;
   background: var(--border);
   border-radius: 4px;
+}
+
+/*
+ * Opt-in "headline picker" styling (see SpeciesPicker.tsx's `primary` prop) —
+ * used only by the Comparator's candidate A/B and raid-target pickers, never
+ * `.species-picker` itself (shared by the Team Raid roster's 6 slots and
+ * every other tab's single picker, where 6+ oversized rows would be worse,
+ * not better). Scales the label, the input's height/font, and the input
+ * row's own species icon together; the move-select dropdowns and checkboxes
+ * rendered underneath a picker are unaffected — those aren't `.species-picker`
+ * at all.
+ */
+.species-picker--primary > label {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.species-picker--primary .species-picker-input-row input {
+  height: 46px;
+  font-size: 1.1rem;
+  padding-left: 54px;
+}
+
+.species-picker--primary .species-picker-input-row .species-icon {
+  left: 10px;
+  width: 34px;
+  height: 34px;
 }
 
 .species-picker-list {

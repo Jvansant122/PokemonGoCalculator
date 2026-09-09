@@ -371,6 +371,25 @@ export interface SustainedComparisonInputs {
   /** Whether the candidate also attempts to dodge the boss's fast attacks — a plain boolean, not a percentage. Costs DODGE_COST_SECONDS per attempt. Defaults to false. */
   dodgeFastAttacks?: boolean;
   /**
+   * Per-candidate override for `dodge` above, matched by index to
+   * `candidates` — lets a caller compare, e.g., a bulky candidate played
+   * with no dodging against a glass cannon played with perfect dodging,
+   * a real A-vs-B question this product's whole thesis is built on (two
+   * mega forms rarely have one "winner" once play style is factored in).
+   * `null` (or an omitted index/whole field) means "use the shared `dodge`
+   * above for this candidate" — today's behavior. Omitting the field
+   * entirely is byte-identical to before it existed.
+   */
+  candidateDodge?: (DodgeBehavior | null)[];
+  /**
+   * Per-candidate override for `dodgeFastAttacks` above — see
+   * candidateDodge. `null` means "use the shared `dodgeFastAttacks`
+   * above for this candidate", NOT "false" — an explicit `false` override
+   * is preserved (resolved via `??`, which only falls through on
+   * null/undefined).
+   */
+  candidateDodgeFastAttacks?: (boolean | null)[];
+  /**
    * Hold the charged move for a safer moment instead of firing the instant
    * energy allows — see simulate.ts's StepwiseAttacker.holdChargedMoveUntilSafe
    * for the exact trigger conditions. Defaults to false (today's
@@ -464,6 +483,10 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     const bossVsCandidate = typeEffectiveness(bossFastMove.type, species.types);
     const bossChargedVsCandidate = bossChargedMove ? typeEffectiveness(bossChargedMove.type, species.types) : 1;
     const boost = resolveBoost(species, candidateMegaBoostDisabled[i] ?? false);
+    // A null/absent per-candidate entry falls back to the shared dodge/
+    // dodgeFastAttacks above — see SustainedComparisonInputs.candidateDodge.
+    const resolvedDodge = inputs.candidateDodge?.[i] ?? dodge;
+    const resolvedDodgeFastAttacks = inputs.candidateDodgeFastAttacks?.[i] ?? dodgeFastAttacks;
 
     const distribution = runStepwiseDistribution(
       {
@@ -509,8 +532,8 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
           chargedMoveWarmupSeconds: bossChargedMoveWarmupSeconds,
           startingEnergy: bossStartingEnergy,
         },
-        dodge,
-        dodgeFastAttacks,
+        dodge: resolvedDodge,
+        dodgeFastAttacks: resolvedDodgeFastAttacks,
         maxSeconds,
       },
       iterations,

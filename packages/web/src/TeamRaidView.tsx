@@ -40,7 +40,7 @@ export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   ivAttack: 15,
   ivDefense: 15,
   ivStamina: 15,
-  dodge: { kind: "none" },
+  dodge: { kind: "perfect" },
   dodgeFastAttacks: false,
   holdChargedMoveUntilSafe: false,
   weather: "none",

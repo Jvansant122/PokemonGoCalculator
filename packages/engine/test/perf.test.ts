@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bossEffectiveStats, resolveMove, runSustainedComparison } from "../src/comparison.js";
 import { attackDamageGrid, defenseDamageGrid } from "../src/breakpoints.js";
-import { optimizePowerUps, type PowerUpSlotInput } from "../src/powerUp.js";
+import { optimizePowerUps, planPowerUpBudget, type PowerUpSlotInput } from "../src/powerUp.js";
 import { runSpeciesReverseLookup, type SpeciesReportBossTarget } from "../src/speciesReport.js";
 import { simulateStepwiseBattle } from "../src/simulate.js";
 import { runTeamRaid, type TeamRaidSlotInput } from "../src/teamRaid.js";
@@ -66,6 +66,21 @@ function powerUpSlots(level: number, ivs: IVSpread): PowerUpSlotInput[] {
     costModifiers: { isShadow: false, isPurified: false, isLucky: false },
     candyOnHand: 9999,
     xlCandyOnHand: 9999,
+  }));
+}
+
+/** Same as powerUpSlots, but with a caller-chosen (tight) per-slot candyOnHand — used to force planPowerUpBudget's post-search "best blocked candidate" pass to actually find and simulate real unaffordable candidates, rather than the unlimited-resource scenario above where nothing is ever blocked. */
+function powerUpSlotsWithCandy(level: number, ivs: IVSpread, candyOnHand: number): PowerUpSlotInput[] {
+  return rosterSpecies.map((species) => ({
+    species,
+    fastMoveId: null,
+    chargedMoveId: null,
+    isMega: species.id === PERF_ATTACKER_ID,
+    level,
+    ivs,
+    costModifiers: { isShadow: false, isPurified: false, isLucky: false },
+    candyOnHand,
+    xlCandyOnHand: candyOnHand,
   }));
 }
 
@@ -140,6 +155,86 @@ describe("performance regression guard (coarse, ~10x locally-measured budgets)",
           raidTimerSeconds: 300,
           costTable,
           stardustOnHand: 999_999_999,
+          seed: 1,
+        }),
+      REPS,
+    );
+    expect(elapsed).toBeLessThan(BUDGET_MS);
+  });
+
+  it("planPowerUpBudget: a full greedy fixed-budget plan (6-slot roster, level 1 -> maxLevel 50, effectively unlimited budget so the search runs to natural exhaustion, 20 iterations) stays cheap", () => {
+    // Worst realistic case for this search: starting from level 1 with an
+    // effectively unlimited budget lets the greedy walk run as many rounds
+    // as real breakpoints allow, rather than stopping early on
+    // "budget-exhausted"/"max-level-reached" (both of which are much
+    // cheaper, single-round outcomes). Locally measured under vitest: this
+    // exact scenario (real 6-slot roster vs. a real boss with a charged
+    // move, dodge: perfect) commits 9 steps before "no-significant-
+    // candidate", ~8.5-9.1s per full run.
+    //
+    // RE-MEASURED 2026-09-08 after fixing a real correctness bug (see
+    // usefulPowerUpLevelsAbove candidate-enumeration doc comment on
+    // candidateLevelsPerSlotPerRound): each round now offers every
+    // affordable useful level per slot as its own whole-jump candidate,
+    // not just the nearest two, so a round costs meaningfully more to
+    // evaluate (~3.7x slower than the prior ~2.3-2.4s here) in exchange for
+    // actually finding multi-level gains a narrower candidate window
+    // structurally could not reach. Budget raised to match, not just
+    // loosened to make this pass.
+    const slots = powerUpSlots(1, PERF_IVS);
+    const REPS = 1;
+    const BUDGET_MS = 90_000; // ~10x measured (~8.5-9.1s for a single full run)
+    const elapsed = timeReps(
+      () =>
+        planPowerUpBudget({
+          slots,
+          boss,
+          dodge: { kind: "perfect" },
+          bossChargedMoveMeanIntervalSeconds: PERF_BOSS_CHARGED_MOVE_MEAN_INTERVAL_SECONDS,
+          raidTimerSeconds: 300,
+          costTable,
+          stardustOnHand: 999_999_999,
+          rareCandyOnHand: 99_999,
+          rareCandyXlOnHand: 99_999,
+          maxLevel: 50,
+          iterations: 20,
+          seed: 1,
+        }),
+      REPS,
+    );
+    expect(elapsed).toBeLessThan(BUDGET_MS);
+  });
+
+  it("planPowerUpBudget: the post-search 'best blocked candidate' pass stays cheap even when it actually has real unaffordable candidates to check", () => {
+    // The worst-case-shaped benchmark above deliberately has an unlimited
+    // budget, so its search always stops via genuine convergence/max-level —
+    // the blocked-candidate pass never finds anything to simulate there (see
+    // this file's top doc comment: only a NEW hot path needs its own
+    // measurement, not a variant of one already covered). This scenario
+    // deliberately starves every slot's own Candy (real Rare Candy pools left
+    // generous but not unlimited) so several rounds commit AND the
+    // blocked-candidate pass has real work to do afterward — added 2026-09-08
+    // alongside PowerUpBudgetPlan.bestBlockedCandidate. Locally measured
+    // under vitest itself (this exact test, not a bare tsx script — the two
+    // differ meaningfully elsewhere in this file, see the planPowerUpBudget
+    // block above): ~4.1-4.2s for a single full run.
+    const slots = powerUpSlotsWithCandy(20, PERF_IVS, 15);
+    const REPS = 1;
+    const BUDGET_MS = 42_000; // ~10x measured (~4.1-4.2s for a single full run under vitest)
+    const elapsed = timeReps(
+      () =>
+        planPowerUpBudget({
+          slots,
+          boss,
+          dodge: { kind: "perfect" },
+          bossChargedMoveMeanIntervalSeconds: PERF_BOSS_CHARGED_MOVE_MEAN_INTERVAL_SECONDS,
+          raidTimerSeconds: 300,
+          costTable,
+          stardustOnHand: 999_999_999,
+          rareCandyOnHand: 30,
+          rareCandyXlOnHand: 30,
+          maxLevel: 50,
+          iterations: 20,
           seed: 1,
         }),
       REPS,

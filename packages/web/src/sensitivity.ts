@@ -162,6 +162,14 @@ export function computeSensitivity(
       ivs: overrides.ivs ?? ivs,
       dodge: overrides.dodge ?? a.dodge,
       dodgeFastAttacks: a.dodgeFastAttacks,
+      // Held fixed at whatever the panel is currently configured with — see
+      // check 4 below for the one place this matters: it scans the SHARED
+      // dodge's missedFraction only, so it's inert for any candidate that has
+      // its own per-candidate override set here (a real, documented gap, not
+      // a bug — scanning "what if this ONE candidate's override changed" is a
+      // different, unbuilt check).
+      candidateDodge: a.candidateDodge,
+      candidateDodgeFastAttacks: a.candidateDodgeFastAttacks,
       holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
       bossChargedMoveMeanIntervalSeconds: overrides.bossChargedMoveMeanIntervalSeconds ?? a.bossChargedMoveFrequencySeconds,
       // AFFECTS: not yet on SustainedComparisonInputs as of 2026-09-08 — see
@@ -299,7 +307,9 @@ export function computeSensitivity(
   // genuinely simulates the boss's charged-move dodging (via
   // runSustainedComparison) instead of the opening burst, where dodge was
   // documented as inert — this check could previously never report a real
-  // flip; it now can.
+  // flip; it now can. Scans the SHARED dodge setting only — inert for any
+  // candidate with its own per-candidate dodge override active (see
+  // candidateDodge above).
   {
     const currentMissedFraction = a.dodge.kind === "none" ? 1 : a.dodge.kind === "perfect" ? 0 : a.dodge.missedFraction;
     const step = 0.05;

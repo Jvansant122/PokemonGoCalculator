@@ -14,6 +14,16 @@ interface Props {
   options: SpeciesPickerOption[];
   value: string;
   onChange: (id: string) => void;
+  /**
+   * Opt-in "this is the headline picker on this tab" styling (taller input,
+   * larger label/font) via the `.species-picker--primary` modifier class in
+   * styles.css — NOT a change to `.species-picker` itself, since that class
+   * is shared by every picker on every tab (the Team Raid roster's 6 slots,
+   * every other tab's single species picker), where 6+ oversized rows would
+   * hurt more than help. Only the Comparator's 3 top-level pickers
+   * (candidate A/B, raid target) set this. Defaults to false.
+   */
+  primary?: boolean;
 }
 
 const MAX_RESULTS = 200;
@@ -26,7 +36,7 @@ const MAX_RESULTS = 200;
  * here, since speculative (or mechanically-different) data must stay labeled
  * wherever it appears.
  */
-export function SpeciesPicker({ idPrefix, label, options, value, onChange }: Props) {
+export function SpeciesPicker({ idPrefix, label, options, value, onChange, primary = false }: Props) {
   const selected = useMemo(() => options.find((o) => o.id === value), [options, value]);
   const [query, setQuery] = useState(selected?.label ?? "");
   const [open, setOpen] = useState(false);
@@ -53,7 +63,7 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange }: Pro
   const listId = `${idPrefix}-listbox`;
 
   return (
-    <div className="field species-picker">
+    <div className={`field species-picker${primary ? " species-picker--primary" : ""}`}>
       <label htmlFor={inputId}>{label}</label>
       <div className="species-picker-input-row">
         {selected?.imageUrl && <img src={selected.imageUrl} alt="" className="species-icon" />}

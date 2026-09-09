@@ -6,8 +6,9 @@
  * breakpoint math, so a cadence setting there would be dead weight and would
  * wrongly imply those tabs model boss cadence. Pulled into one module rather than duplicated three
  * times, unlike this project's usual "small self-contained constant, not
- * worth a shared file" precedent (see AssumptionPanel.tsx/
- * TeamAssumptionPanel.tsx's own WEATHER_LABELS) — a hand-typed factual claim
+ * worth a shared file" precedent (see WeatherSelect.tsx, which similarly got
+ * promoted to its own shared module once it needed real behavior, not just a
+ * lookup table) — a hand-typed factual claim
  * about sourcing/magnitude is exactly the kind of text that drifts if copied
  * three times and only one copy gets corrected later, unlike a label lookup
  * table with nothing to get wrong.

@@ -50,6 +50,47 @@ defense 5/6 · dodge reduces damage to 0.25 · energy gained from damage taken =
 The mega/primal `1.3` is load-bearing — a real conclusion in this project flips
 at `1.1`. Never treat it as a tuning knob.
 
+### Type effectiveness
+
+GO uses its own multipliers, **not** the core series' 2× / 0.5× / 0×:
+
+| Matchup | GO | Core series |
+| :--- | :--- | :--- |
+| Super effective | `1.6` | 2 |
+| Not very effective | `0.625` | 0.5 |
+| "Immune" (see below) | `0.390625` | 0 |
+
+**There are no true immunities in GO.** A matchup the core series zeroes out
+(Normal vs Ghost, Ground vs Flying, Psychic vs Dark) instead deals `0.390625`,
+which is exactly `0.625²` — i.e. GO models an immunity as a double resistance.
+Every move always deals at least 1 damage to everything.
+
+**Dual typing stacks multiplicatively**, so the reachable values compound:
+Ice vs Dragon/Flying is `1.6 × 1.6 = 2.56`, and a resistance plus a weakness
+partially cancel. Because an "immunity" is itself already a double resistance,
+a triple resistance *is* reachable on a dual-typed defender — Normal vs
+Ghost/Steel is `0.390625 × 0.625 = 0.244140625`. Nothing special-cases this;
+it falls out of multiplying through.
+
+These values date to the **December 2018** type-effectiveness rework that
+shipped alongside PvP, which replaced the earlier `1.4` / `0.714` pair and
+widened the gap between type-advantaged and neutral damage. Sources: Pokémon GO
+Hub's writeup of the December 2018 change (old vs new multipliers), corroborated
+by Pokémon Database and pokemons.io type charts. `[community-consensus]` —
+multiple independent community references agreeing; retrieved 2026-09-08.
+
+**Engine: implemented** (`typeChart.ts`). Verified 2026-09-08: the chart's
+constants match the table above, `typeEffectiveness()` reduces over the
+defender's types multiplicatively, and all 19 `calculateDamage` call sites
+supply it — in both directions (attacker→boss and boss→attacker) and separately
+for fast and charged moves, since a Pokémon's two moves are often different
+types.
+
+One caveat, recorded because it is the kind of thing that rots: `DamageInputs`
+makes `typeEffectiveness` **optional, defaulting to 1** (`damage.ts`). Every
+current call site passes it, so nothing is wrong today — but a future call site
+that forgets it computes neutral damage silently rather than failing to compile.
+
 ---
 
 ## Raid boss behaviour
@@ -278,6 +319,68 @@ GAME_MASTER carries `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`
 
 **Engine: not modelled.** v1 of the Power-Up Optimizer uses the universal
 table for every species; Eternatus's candy costs are understated by 30×.
+
+### Fungible candy currencies (Rare Candy, Rare Candy XL, Candy → XL conversion)
+
+Three ways to move candy between species, all deterministic:
+
+- **Rare Candy → species Candy, strictly 1:1.** No batch ratio (the in-game
+  quantity selector just performs N individual 1:1 conversions under one
+  confirmation), no trainer-level gate, no species exclusion — regionals, Ditto
+  and Legendaries all accept it. It **cannot** produce XL Candy.
+  `[community-consensus]` — Pokémon GO Hub's "Rare Candy" guide
+  (https://pokemongohub.net/post/guide/rare-candy/, 2020-11-24), re-checked
+  2026-09-08 with no contrary source.
+- **Rare Candy XL → species XL Candy, 1:1.** A *separate item*, not a form of
+  Rare Candy: from in-person (never remote) 3-star+ raids, Trainer level-up
+  rewards at 41-50, and Special Research. It cannot be bought, and plain Rare
+  Candy cannot be converted into it. `[community-consensus]` — Bulbapedia
+  "Candy (GO)" and Gamerant's Rare Candy XL guide
+  (https://gamerant.com/pokemon-go-guide-rare-candy-xl/, 2022-09-04), both
+  fetched 2026-09-08.
+- **Candy → XL Candy via the in-game "Convert" button, exactly 100:1**,
+  deterministic, no documented cap, gated at Trainer Level 31+ (lowered from 40
+  in June 2022). `[community-consensus]` — Pokémon GO Hub's XL Candy guide
+  (https://pokemongohub.net/post/guide/xl-candy-guide-how-to-get-power-up-costs-and-mechanics/,
+  updated 2026-08-27), fetched 2026-09-08.
+
+A claim that **100 Rare Candy converts into 1 Rare Candy XL** surfaced during
+this research pass and is **false as far as we can tell** — the two articles
+cited for it say no such thing, and it looks like a conflation with the 100:1
+regular-Candy route above. Recorded here so it isn't "rediscovered" and built.
+
+**Engine: the first two are implemented** as two independent shared pools in
+the Power-Up Optimizer's budget planner (`rareCandyOnHand` → regular Candy,
+`rareCandyXlOnHand` → XL Candy), each 1:1, with no path between them — a slot
+spends its own per-species candy first, then draws on the shared pool.
+**The 100:1 Candy → XL conversion is not modelled**: it is a real arbitrage the
+planner could in principle exploit, but at realistic per-species candy counts
+(tens, not hundreds) it almost never unlocks a step, and modelling it would let
+the planner spend candy the user was saving for a different species entirely.
+
+### Trainer Level cap on power-ups — deliberately not modelled
+
+A Pokémon cannot be powered up past **`min(TrainerLevel + 10, 50)`**.
+`[community-consensus]` — Bulbapedia's "Power up" page, read as raw wikitext
+2026-09-08: "Each power-up increases the level by 0.5, up to the player's
+Trainer level + 10." Niantic's own post on the 2025-10-15 level-cap-to-80
+rebalance (https://pokemongo.com/post/pgo-leveling-update-details-2025/) is
+`[first-party]` corroboration in one direction: it states that update does not
+change Pokémon leveling, and that Trainer Level 40 is still required to reach
+Pokémon level 50 — exactly what `min(40+10, 50)` predicts. It also explains the
+Trainer Level 31 XL-Candy gate above as the *same* mechanic seen twice: level 31
+is the first Trainer Level whose +10 ceiling (41) reaches past 40 into the first
+XL-costing step.
+
+Note for anyone reading an older summary: the figure is **+10, not +2**. The
+"+2" number belongs to a different formula on the same Bulbapedia page — the
+level of a Pokémon received in a trade, `min(TrainerLevel + 2, floor(originalLevel))`.
+
+**Engine: not modelled, by explicit user decision (2026-09-08).** The Power-Up
+Optimizer and its budget planner will recommend targets up to level 50
+regardless of Trainer Level; judging reachability is left to the user. This is a
+deliberate scope choice, **not an oversight** — do not add a trainer-level input
+without asking.
 
 ---
 

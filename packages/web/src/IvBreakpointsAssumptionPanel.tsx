@@ -1,36 +1,9 @@
-import {
-  WEATHER_BOOSTED_TYPES,
-  type DodgeBehavior,
-  type SpeciesDefinition,
-  type WeatherCondition,
-} from "@pogo-analyzer/engine";
+import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
+import { WeatherSelect } from "./WeatherSelect.js";
 import type { IvBreakpointsAssumptions } from "./IvBreakpointsView.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
-
-// Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx/
-// SpeciesReportView.tsx — duplicated rather than imported, matching the
-// precedent those three already set (a small, cheap, self-contained constant).
-const WEATHER_LABELS: Record<WeatherCondition, string> = {
-  none: "None",
-  sunny: "Sunny/Clear",
-  rainy: "Rain",
-  windy: "Windy",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  snow: "Snow",
-  partly_cloudy: "Partly Cloudy",
-};
-const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
-  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
-).map((value) => {
-  const boosted = WEATHER_BOOSTED_TYPES[value];
-  return {
-    value,
-    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
-  };
-});
 
 interface Props {
   assumptions: IvBreakpointsAssumptions;
@@ -252,21 +225,11 @@ export function IvBreakpointsAssumptionPanel({
           </div>
         )}
 
-        <div className="field">
-          <label htmlFor="iv-breakpoints-weather">Weather</label>
-          <select
-            id="iv-breakpoints-weather"
-            value={assumptions.weather}
-            onChange={(e) => setAssumptions({ ...assumptions, weather: e.target.value as WeatherCondition })}
-            title="Boosts damage 1.2x for moves whose type matches the active weather — applies independently to this species' and the target's own moves, checked per move's own type."
-          >
-            {WEATHER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <WeatherSelect
+          idPrefix="iv-breakpoints"
+          value={assumptions.weather}
+          onChange={(w) => setAssumptions({ ...assumptions, weather: w })}
+        />
       </div>
 
       {unmatchedRaids.length > 0 && (

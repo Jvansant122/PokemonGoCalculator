@@ -76,6 +76,12 @@ describe("ComparatorScenario round-trip", () => {
     ivStamina: 12,
     dodge: { kind: "percentage-missed", missedFraction: 0.3 },
     dodgeFastAttacks: true,
+    // Non-default: A overridden to Perfect dodge (plus an explicit "yes"
+    // fast-attack-dodge override), B left null (uses the shared dodge/
+    // dodgeFastAttacks above) — proves the per-candidate override AND the
+    // "null means inherit" half both survive a round-trip, not just one.
+    candidateDodge: [{ kind: "perfect" }, null],
+    candidateDodgeFastAttacks: [true, null],
     holdChargedMoveUntilSafe: true,
     minFightLengthSeconds: 25,
     bossChargedMoveFrequencySeconds: 20,
@@ -352,6 +358,8 @@ describe("PowerUpOptimizerScenario round-trip", () => {
       { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
     ],
     stardustOnHand: 12345,
+    rareCandyOnHand: 25,
+    rareCandyXlOnHand: 7,
     targetId: "kyogre-primal",
     bossFastMoveId: "waterfall",
     bossChargedMoveId: "origin-pulse",

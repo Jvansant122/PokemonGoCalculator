@@ -1,13 +1,10 @@
 import { useMemo, useState } from "react";
-import {
-  WEATHER_BOOSTED_TYPES,
-  type SpeciesDefinition,
-  type WeatherCondition,
-} from "@pogo-analyzer/engine";
+import type { SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { BreakpointSheet } from "./BreakpointSheet.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
+import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { IVS_0_TO_15, LEVELS_25_TO_50 } from "./attackDefenseBreakpointsHelpers.js";
 import {
@@ -19,29 +16,6 @@ import {
 import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 import { runAttackDefenseBreakpointsScenario } from "./run/runAttackDefenseBreakpoints.js";
-
-// Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx/
-// SpeciesReportView.tsx/IvBreakpointsAssumptionPanel.tsx — duplicated rather
-// than imported, matching the precedent those four already set.
-const WEATHER_LABELS: Record<WeatherCondition, string> = {
-  none: "None",
-  sunny: "Sunny/Clear",
-  rainy: "Rain",
-  windy: "Windy",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  snow: "Snow",
-  partly_cloudy: "Partly Cloudy",
-};
-const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
-  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
-).map((value) => {
-  const boosted = WEATHER_BOOSTED_TYPES[value];
-  return {
-    value,
-    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
-  };
-});
 
 // Same real, currently-active matchup the IV Breakpoints tab defaults to
 // (Delphox vs Mega Steelix, confirmed still live in data/normalized/activeRaids.json
@@ -313,21 +287,7 @@ export function AttackDefenseBreakpointsView() {
             )}
           </div>
 
-          <div className="field">
-            <label htmlFor="adb-weather">Weather</label>
-            <select
-              id="adb-weather"
-              value={assumptions.weather}
-              onChange={(e) => setAssumptions({ ...assumptions, weather: e.target.value as WeatherCondition })}
-              title="Boosts damage 1.2x for moves whose type matches the active weather — applies independently to whichever side's move is being evaluated in the current mode, checked per move's own type."
-            >
-              {WEATHER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <WeatherSelect idPrefix="adb" value={assumptions.weather} onChange={(w) => setAssumptions({ ...assumptions, weather: w })} />
         </div>
 
         {unmatchedRaids.length > 0 && (

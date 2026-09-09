@@ -1,30 +1,11 @@
-import { MAX_TEAM_RAID_SLOTS, WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
+import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 import type { PowerUpRankBy } from "./powerUpOptimizerScenario.js";
-
-const WEATHER_LABELS: Record<WeatherCondition, string> = {
-  none: "None",
-  sunny: "Sunny/Clear",
-  rainy: "Rain",
-  windy: "Windy",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  snow: "Snow",
-  partly_cloudy: "Partly Cloudy",
-};
-const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
-  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
-).map((value) => {
-  const boosted = WEATHER_BOOSTED_TYPES[value];
-  return {
-    value,
-    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
-  };
-});
 
 /** One roster slot's own configuration — mirrors powerUpOptimizerScenario.ts's PowerUpScenarioSlot exactly, field for field. */
 export interface PowerUpSlotAssumption {
@@ -76,6 +57,10 @@ export interface PowerUpOptimizerAssumptions {
   slots: PowerUpSlotAssumption[];
   /** Stardust currently held — shared across the whole roster (real Pokémon GO stardust is one account-wide pool, unlike candy which is per-species). */
   stardustOnHand: number;
+  /** A shared, fungible Rare Candy pool — spendable as regular Candy on ANY fielded slot, only consumed by the fixed-budget plan below (not the per-candidate ranked table, which only ever draws on one slot's own candyOnHand). See powerUpOptimizerScenario.ts's own field doc comment for the confirmed 1:1 conversion. */
+  rareCandyOnHand: number;
+  /** Same shared-pool mechanic as rareCandyOnHand, for the wholly separate Rare Candy XL item (1:1 into XL Candy only). */
+  rareCandyXlOnHand: number;
   targetId: string;
   bossFastMoveId: string | null;
   bossChargedMoveId: string | null;
@@ -387,6 +372,30 @@ export function PowerUpOptimizerAssumptionPanel({
         </div>
 
         <div className="field">
+          <label htmlFor="pu-rareCandy">Rare Candy on hand</label>
+          <input
+            id="pu-rareCandy"
+            type="number"
+            min={0}
+            value={value.rareCandyOnHand}
+            onChange={(e) => set("rareCandyOnHand", Math.max(0, Number(e.target.value)))}
+            title="A shared, account-wide pool — converts 1:1 into any species' regular Candy (never XL Candy). Only used by the fixed-budget plan below, after each slot's own candy on hand runs out."
+          />
+        </div>
+
+        <div className="field">
+          <label htmlFor="pu-rareCandyXl">Rare Candy XL on hand</label>
+          <input
+            id="pu-rareCandyXl"
+            type="number"
+            min={0}
+            value={value.rareCandyXlOnHand}
+            onChange={(e) => set("rareCandyXlOnHand", Math.max(0, Number(e.target.value)))}
+            title="A separate shared, account-wide pool from plain Rare Candy — converts 1:1 into any species' XL Candy only. Only used by the fixed-budget plan below, after each slot's own XL candy on hand runs out."
+          />
+        </div>
+
+        <div className="field">
           <label htmlFor="pu-rankBy">Rank candidates by</label>
           <select id="pu-rankBy" value={value.rankBy} onChange={(e) => set("rankBy", e.target.value as PowerUpRankBy)}>
             <option value="stardust">Team-DPS gained per 1000 stardust</option>
@@ -516,16 +525,7 @@ export function PowerUpOptimizerAssumptionPanel({
           </div>
         )}
 
-        <div className="field">
-          <label htmlFor="pu-weather">Weather</label>
-          <select id="pu-weather" value={value.weather} onChange={(e) => set("weather", e.target.value as WeatherCondition)}>
-            {WEATHER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <WeatherSelect idPrefix="pu" value={value.weather} onChange={(w) => set("weather", w)} />
 
         <BossCadenceSelect idPrefix="pu" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 

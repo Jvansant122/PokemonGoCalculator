@@ -53,7 +53,7 @@ export const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
   ivB: DEFAULT_IV_B,
   targetId: DEFAULT_TARGET_ID,
   bossFastMoveId: null,
-  dodge: { kind: "none" },
+  dodge: { kind: "perfect" },
   weather: "none",
   isShadow: false,
 };

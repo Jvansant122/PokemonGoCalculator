@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 import {
   RAID_TIER_TABLE,
-  WEATHER_BOOSTED_TYPES,
   defaultRaidTierForSpecies,
   type DodgeBehavior,
   type SpeciesDefinition,
@@ -14,6 +13,7 @@ import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMo
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
+import { WeatherSelect } from "./WeatherSelect.js";
 import {
   buildSpeciesReportScenarioUrl,
   parseSpeciesReportScenarioFromUrl,
@@ -61,29 +61,6 @@ function tierIsIncluded(tiers: string[] | null, tier: string): boolean {
 // below, so the value a row is simulated with and the value the UI claims is
 // sourced can never drift apart.
 
-// Same weather-option construction as AssumptionPanel.tsx/TeamAssumptionPanel.tsx
-// — duplicated rather than imported, matching the precedent those two already
-// set (a small, cheap, self-contained constant, not worth a shared module).
-const WEATHER_LABELS: Record<WeatherCondition, string> = {
-  none: "None",
-  sunny: "Sunny/Clear",
-  rainy: "Rain",
-  windy: "Windy",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  snow: "Snow",
-  partly_cloudy: "Partly Cloudy",
-};
-const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
-  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
-).map((value) => {
-  const boosted = WEATHER_BOOSTED_TYPES[value];
-  return {
-    value,
-    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
-  };
-});
-
 // A ready-to-run default so a fresh page load demonstrates a real ranked
 // table immediately, not an empty form — same precedent as the other two
 // tabs' DEFAULT_CANDIDATE_A_ID/DEFAULT_TARGET_ID.
@@ -124,7 +101,7 @@ export const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
   ivAttack: 15,
   ivDefense: 15,
   ivStamina: 15,
-  dodge: { kind: "none" },
+  dodge: { kind: "perfect" },
   dodgeFastAttacks: false,
   weather: "none",
   bossChargedMoveFrequencySeconds: 15,
@@ -574,21 +551,11 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             </select>
           </div>
 
-          <div className="field">
-            <label htmlFor="species-report-weather">Weather</label>
-            <select
-              id="species-report-weather"
-              value={assumptions.weather}
-              onChange={(e) => setAssumptions({ ...assumptions, weather: e.target.value as WeatherCondition })}
-              title="Boosts damage 1.2x for moves whose type matches the active weather — applies independently to this species' and each boss's own moves, checked per move's own type."
-            >
-              {WEATHER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <WeatherSelect
+            idPrefix="species-report"
+            value={assumptions.weather}
+            onChange={(w) => setAssumptions({ ...assumptions, weather: w })}
+          />
 
           <BossCadenceSelect
             idPrefix="species-report"

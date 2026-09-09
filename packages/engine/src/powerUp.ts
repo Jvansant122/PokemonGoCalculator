@@ -451,6 +451,38 @@ export interface PowerUpOptimizerInputs extends Omit<TeamRaidInputs, "slots" | "
   slots: PowerUpSlotInput[];
   costTable: PowerUpCostTable;
   stardustOnHand: number;
+  /**
+   * A shared, fungible Rare Candy pool: spendable as regular Candy on ANY
+   * fielded slot, not just one species (unlike PowerUpSlotInput.candyOnHand,
+   * which is real per-species Candy) — see RARE_CANDY_TO_CANDY_RATIO for the
+   * (confirmed 1:1) conversion.
+   *
+   * Consumed by BOTH exports, but for different jobs. planPowerUpBudget
+   * genuinely allocates the pool across slots. optimizePowerUps only counts
+   * it toward each candidate's own PowerUpCandidate.affordable flag — it
+   * never allocates, because every candidate there is priced independently.
+   * Without that, the two exports contradict each other on the same tab: a
+   * 12-Candy step for a slot holding 10 Candy would read "unaffordable" in
+   * the ranked table while the budget plan actively recommends it. Defaults
+   * to 0, so a caller that passes neither pool keeps exactly its previous
+   * behaviour.
+   */
+  rareCandyOnHand?: number;
+  /**
+   * The same shared-pool mechanic as rareCandyOnHand, but for the wholly
+   * SEPARATE Rare Candy XL item — see RARE_CANDY_XL_TO_XL_CANDY_RATIO
+   * (confirmed 1:1, never derivable from plain Rare Candy). Defaults to 0.
+   *
+   * NOT modelled here (a real but deliberately out-of-scope lever, per
+   * MECHANICS.md's "Fungible candy currencies" entry, 2026-09-08): the
+   * in-game "Convert" button, which turns 100 regular Candy into 1 XL Candy
+   * for the SAME species — a real arbitrage a sufficiently aggressive
+   * planner could exploit, but modelling it would let this planner spend
+   * candy the user was deliberately saving for a different species, and at
+   * realistic per-species candy counts (tens, not hundreds) it almost never
+   * actually unlocks a step anyway.
+   */
+  rareCandyXlOnHand?: number;
   /** Defaults to costTable.maxLevel. */
   maxLevel?: number;
   /**
@@ -525,7 +557,26 @@ export interface PowerUpCandidate {
   fromLevel: number;
   toLevel: number;
   cost: PowerUpResourceCost;
+  /**
+   * Whether THIS candidate could be bought on its own, counting the slot's
+   * own Candy/XL Candy plus the shared Rare Candy pools
+   * (PowerUpOptimizerInputs.rareCandyOnHand/rareCandyXlOnHand, both 0 by
+   * default).
+   *
+   * Deliberately a SINGLE-candidate test: every candidate is priced as if it
+   * were the only power-up bought, so two candidates can each be affordable
+   * while being jointly unaffordable (they'd draw on the same stardust and
+   * the same shared pools). That is what this table means — "what could I do
+   * next?", one row at a time. Do NOT "fix" this into a joint budget
+   * constraint; the joint question is planPowerUpBudget's entire job, and
+   * making these rows interdependent would silently change what the tab's
+   * ranked table has always shown.
+   */
   affordable: boolean;
+  /** Rare Candy this candidate would have to draw from the shared pool, i.e. the part of cost.candy the slot's own candyOnHand can't cover. 0 when the slot funds it alone. Lets the UI say "affordable, but spends 2 Rare Candy". */
+  sharedCandyNeeded: number;
+  /** Same as sharedCandyNeeded, for the shared Rare Candy XL pool against cost.xlCandy. */
+  sharedXlCandyNeeded: number;
   summary: PowerUpEncounterSummary;
   deltaTeamDps: number;
   /** Null when cost.stardust is 0. */
@@ -591,6 +642,26 @@ const stdDev = (values: number[]): number => {
   return Math.sqrt(mean(values.map((v) => (v - m) ** 2)));
 };
 
+/**
+ * A conservative noise floor for `deltaTeamDps`, derived from ONE
+ * `PowerUpEncounterSummary`'s own measured `teamDpsStdDev`:
+ * `2 * summary.teamDpsStdDev * Math.sqrt(2 / iterations)` — roughly a 95%
+ * band on the difference between two independent means of `iterations` seeds
+ * each. Deliberately ignores the variance reduction the paired
+ * common-random-numbers seeding would normally buy (see
+ * PowerUpOptimizerResult.noiseFloorTeamDps for the full reasoning); treating
+ * runs as unpaired is the conservative (larger, safer) choice. The single
+ * shared derivation behind BOTH optimizePowerUps' noiseFloorTeamDps (computed
+ * once, from the unchanging baseline — correct there, since every candidate
+ * is priced against the same fixed roster) and planPowerUpBudget's
+ * PER-ROUND floor (recomputed from whichever roster is current — see
+ * planPowerUpBudget's top doc comment for why a single static floor goes
+ * stale as a roster is powered up).
+ */
+function noiseFloorFor(summary: PowerUpEncounterSummary, iterations: number): number {
+  return 2 * summary.teamDpsStdDev * Math.sqrt(2 / iterations);
+}
+
 function summarizeResults(results: TeamRaidResult[], bossHp: number, raidTimerSeconds: number): PowerUpEncounterSummary {
   const dpsValues = results.map((r) =>
     r.clearsWithinTimer && r.timeToClearSeconds !== null
@@ -641,7 +712,17 @@ function toTeamRaidSlots(slots: PowerUpSlotInput[], overrideIndex: number | null
  * rather than duplicating it.
  */
 export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimizerResult {
-  const { slots, costTable, stardustOnHand, maxLevel = costTable.maxLevel, iterations = 3, seed = 1, ...rest } = inputs;
+  const {
+    slots,
+    costTable,
+    stardustOnHand,
+    rareCandyOnHand = 0,
+    rareCandyXlOnHand = 0,
+    maxLevel = costTable.maxLevel,
+    iterations = 3,
+    seed = 1,
+    ...rest
+  } = inputs;
 
   const seeds = Array.from({ length: iterations }, (_, i) => seed + i * 7919);
 
@@ -658,7 +739,11 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
   const baseline = summarizeResults(baselineResults, bossHp, rest.raidTimerSeconds);
   // See PowerUpOptimizerResult.noiseFloorTeamDps for the derivation and why
   // it deliberately ignores the (weak) variance reduction from seed pairing.
-  const noiseFloorTeamDps = 2 * baseline.teamDpsStdDev * Math.sqrt(2 / iterations);
+  // Computed ONCE from the unchanging baseline — correct here, since every
+  // candidate in this function is priced against that same fixed roster
+  // (unlike planPowerUpBudget, which recomputes this per round — see its top
+  // doc comment).
+  const noiseFloorTeamDps = noiseFloorFor(baseline, iterations);
 
   const ladders: (PowerUpDamageLadder | null)[] = slots.map((slot) => {
     if (!slot.species) return null;
@@ -698,7 +783,15 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
 
     for (const toLevel of levels) {
       const cost = powerUpCost(costTable, slot.level, toLevel, slot.costModifiers);
-      const affordable = cost.stardust <= stardustOnHand && cost.candy <= slot.candyOnHand && cost.xlCandy <= slot.xlCandyOnHand;
+      // Each candidate is priced as if it were the ONLY thing bought — see
+      // PowerUpCandidate.affordable. The shared Rare Candy pools count toward
+      // a candidate's own affordability (a slot holding 10 Candy CAN reach a
+      // 12-Candy step given 2+ Rare Candy), spending the slot's own candy
+      // first, exactly as planPowerUpBudget does.
+      const sharedCandyNeeded = Math.max(0, cost.candy - slot.candyOnHand) / RARE_CANDY_TO_CANDY_RATIO;
+      const sharedXlCandyNeeded = Math.max(0, cost.xlCandy - slot.xlCandyOnHand) / RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+      const affordable =
+        cost.stardust <= stardustOnHand && sharedCandyNeeded <= rareCandyOnHand && sharedXlCandyNeeded <= rareCandyXlOnHand;
 
       const candidateSlots = toTeamRaidSlots(slots, slotIndex, toLevel);
       const candidateResults = seeds.map((s) => runTeamRaid({ ...rest, slots: candidateSlots, level: rosterLevel, ivs: rosterIvs, seed: s }));
@@ -715,6 +808,8 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
         toLevel,
         cost,
         affordable,
+        sharedCandyNeeded,
+        sharedXlCandyNeeded,
         summary,
         deltaTeamDps,
         deltaTeamDpsPer1000Stardust: cost.stardust > 0 ? (deltaTeamDps / cost.stardust) * 1000 : null,
@@ -745,4 +840,1044 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
       : null;
 
   return { baseline, bossHp, iterations, noiseFloorTeamDps, candidates, ladders, bestAffordableByDelta, bestAffordableByStardustEfficiency };
+}
+
+// --- Fixed-budget planner (Part F) -----------------------------------------
+
+/**
+ * `optimizePowerUps` answers "what is the single best next power-up?" —
+ * `planPowerUpBudget` answers the DIFFERENT question "I have this much
+ * stardust/candy, what SET of upgrades should I make?" This is a joint
+ * multi-slot allocation over a fixed budget, not a ranking of independent
+ * single steps — a genuinely different algorithm, added ALONGSIDE
+ * optimizePowerUps rather than replacing it. optimizePowerUps is completely
+ * unchanged by this addition; the web tab's existing ranked single-candidate
+ * table keeps using it as before.
+ *
+ * ALGORITHM: greedy with full re-simulation each round (reusing runTeamRaid
+ * unchanged — no new combat math). Exact search over a 6-slot roster is
+ * 50^6; greedy is the honest tractable choice, same tradeoff this project
+ * already made for optimizePowerUps' per-candidate re-simulation.
+ *
+ * Each round:
+ *   1. For every fielded slot, find its next few USEFUL levels above its
+ *      currently-planned level (see usefulPowerUpLevelsAbove — the
+ *      dominated-level reduction that keeps this fast) that are still
+ *      affordable against what's actually LEFT of the budget.
+ *   2. Simulate every such candidate as a full team raid over the SAME
+ *      paired seed set used for the baseline (common random numbers).
+ *   3. Score each by (marginal team-DPS gain) / (cost as a fraction of what
+ *      remains of each constrained resource, summed across resources) — a
+ *      standard multi-dimensional-knapsack greedy heuristic. THIS
+ *      SCALARIZATION IS A SEARCH HEURISTIC ONLY, never surfaced in the
+ *      output: CLAUDE.md's standing decision that stardust and candy are
+ *      never blended into one composite score applies to what this function
+ *      REPORTS, not to how it internally decides what to try next. Every
+ *      number in PowerUpBudgetPlan keeps stardust/candy/XL separate.
+ *   4. Only commit the winning candidate if its marginal deltaTeamDps
+ *      exceeds the CURRENT noise floor (same reasoning as optimizePowerUps'
+ *      deltaExceedsNoise: greedy on a noisy objective otherwise chases seed
+ *      noise instead of a real effect) — see "NOISE FLOOR IS PER-ROUND, NOT
+ *      FIXED" below for why "current" matters.
+ *   5. Deduct resources (a slot's OWN candy/XL is always spent before either
+ *      shared pool — see PowerUpBudgetStep.ownCandySpent/sharedCandySpent),
+ *      update the roster's currently-planned levels, and repeat.
+ *
+ * NOISE FLOOR IS PER-ROUND, NOT FIXED (2026-09-08 fix — was a real bug): a
+ * roster's seed-to-seed variance changes as it's powered up (a stronger,
+ * tankier roster typically clears more consistently OR less consistently
+ * depending on exactly which breakpoints it crosses — either direction is
+ * possible, this isn't a one-way ratchet), so a floor computed ONCE from the
+ * starting roster goes stale exactly as the search proceeds — the dangerous
+ * direction being a floor that's gone STALE-LOW, which would let real seed
+ * noise through as a committed recommendation. The floor is therefore
+ * recomputed after every COMMITTED step from THAT step's own measured
+ * `PowerUpEncounterSummary.teamDpsStdDev` (already computed as part of
+ * scoring the step — no extra simulation), and that new floor governs the
+ * NEXT round's commit decision. `PowerUpBudgetStep.noiseFloorTeamDps` records
+ * the exact floor each step was actually judged against, so a reader can
+ * audit any single step's acceptance without assuming one number governed
+ * the whole plan. `PowerUpBudgetPlan.noiseFloorTeamDps` is the FINAL floor —
+ * see that field's own doc comment. A rising floor can make the search stop
+ * EARLIER than a stale fixed floor would have — that's correct behaviour
+ * (a later round's real variance genuinely no longer supports the same small
+ * deltas as being significant), not a regression.
+ *
+ * Stops when: no fielded slot has any useful level left at all
+ * ("max-level-reached"), no remaining candidate is affordable against what's
+ * left of the budget ("budget-exhausted"), no affordable candidate's
+ * marginal gain exceeds the CURRENT noise floor ("no-significant-candidate"),
+ * or maxRounds is hit as a pure engineering safety cap ("round-cap-reached" —
+ * same role as teamRaid.ts's MAX_TEAM_RAID_CYCLES; a sane roster/budget
+ * reaches one of the other three stop reasons long before approaching it).
+ *
+ * Each committed step's `deltaTeamDps` is the difference between two REAL
+ * full-roster simulations (this step's candidate vs. the roster's state
+ * immediately before it), and `final` is a dedicated extra full-roster
+ * simulation of the FINISHED roster over the same seed set — never a sum of
+ * per-step deltas, which would compound noise across rounds. (In practice,
+ * because each round's "before" state IS the previous round's committed
+ * candidate, `final` is mathematically guaranteed to reproduce the last
+ * step's own `cumulativeTeamDps` exactly under this engine's deterministic
+ * seeding — the dedicated re-run exists so that guarantee is enforced by
+ * construction, not by an invariant a future edit could quietly break.)
+ *
+ * IMPORTANT: "no-significant-candidate"/"budget-exhausted" alone do NOT mean
+ * the roster is optimal — they mean no AFFORDABLE candidate helped. A real,
+ * bigger gain can sit just beyond what the budget currently covers (e.g. a
+ * species' next real breakpoint needs more Candy than is on hand) — reporting
+ * only the stop reason would read as "nothing more to do" when the truth is
+ * "something more to do, but you can't afford it yet." After the round loop
+ * above has already decided to stop, this function runs ONE dedicated extra
+ * pass (never per round) over the FINAL roster/budget state: for each slot,
+ * every useful level beyond where affordability broke is a "blocked"
+ * candidate (cost is monotone non-decreasing in level, so once one level is
+ * unaffordable every higher one is too); the best (highest deltaTeamDps) one
+ * that still clears the FINAL noise floor (the same one the round loop was
+ * judging against when it stopped — see "NOISE FLOOR IS PER-ROUND, NOT FIXED"
+ * above, and PowerUpBudgetPlan.noiseFloorTeamDps) becomes `PowerUpBudgetPlan
+ * .bestBlockedCandidate`, complete with which resource(s) it's short on and
+ * by how much (`PowerUpBudgetBlockedCandidate.shortfalls`, kept per-resource,
+ * never blended per CLAUDE.md's standing decision). This search is bounded
+ * (`blockedCandidateLevelsPerSlot`/`maxBlockedCandidatesToCheck`), not
+ * exhaustive — a real blocked gain sitting further out than the bound could
+ * still be missed and reported as `null`, which reads as "didn't find one
+ * within this bound," not a proof none exists. `bestBlockedCandidate: null`
+ * is the genuine "you're done, stop saving" signal; non-null is "you're
+ * blocked, not done."
+ */
+export interface PowerUpBudgetInputs extends PowerUpOptimizerInputs {
+  /**
+   * Pure engineering safety cap on greedy rounds (each round commits at most
+   * one step) — same role as teamRaid.ts's MAX_TEAM_RAID_CYCLES. A sane
+   * roster/budget reaches "max-level-reached"/"budget-exhausted"/
+   * "no-significant-candidate" long before approaching this. Defaults to
+   * 300 (comfortably above the worst case of 6 slots x up to ~98 half-levels
+   * each, even though the dominated-level reduction makes that worst case
+   * very unlikely in practice).
+   */
+  maxRounds?: number;
+  /**
+   * How many of a slot's next USEFUL levels above its currently-planned
+   * level are offered as jump candidates each round (each one a candidate
+   * for "jump straight from the current level to this one," priced and
+   * measured as that whole multi-level jump — never a chain of forced
+   * single-step candidates). Defaults to `Number.POSITIVE_INFINITY`, i.e.
+   * every affordable useful level in range is offered, not just the nearest
+   * couple.
+   *
+   * REGRESSION HISTORY: this used to default to 2, which was a real bug, not
+   * a perf knob — see this module's test file,
+   * "commits a multi-level jump whose own individual half-steps each sit
+   * below the noise floor." The noise-floor commit rule (below) only ever
+   * evaluates a candidate's OWN marginal delta, so when every individual
+   * useful half-level step is too small to clear the floor on its own, the
+   * only way a real multi-level gain is ever found is by offering the
+   * multi-level jump itself as a single candidate. Capping this at 2 meant
+   * only the nearest one or two useful levels per slot ever competed, so any
+   * gain that only became measurable several useful-levels out (a very
+   * common shape — most of a species' real gain over a wide level range
+   * comes from crossing several small breakpoints at once) was structurally
+   * unreachable no matter how much budget was left. `usefulPowerUpLevelsAbove`
+   * already keeps the offered set tractable (it excludes levels with no
+   * detectable stat/damage/survival change vs. the level below), so
+   * "unbounded" here is bounded in practice by real breakpoint density, not
+   * by the raw ~98 half-level count. Lower this only as a deliberate perf
+   * tradeoff, and re-verify against a roster/boss where a real gain only
+   * shows up as a multi-level jump before trusting the result.
+   */
+  candidateLevelsPerSlotPerRound?: number;
+  /**
+   * Hard cap on how many candidates are actually simulated in a single
+   * round, across every slot combined — keeps a round's cost bounded
+   * regardless of roster size or candidateLevelsPerSlotPerRound. Candidates
+   * are interleaved round-robin across slots BY DEPTH (every slot's nearest
+   * useful level first, then every slot's 2nd-nearest, etc. — not
+   * first-slot-exhausts-the-cap-first), so no single slot can starve the
+   * others of a look-in, and a far-out jump on one slot still gets a turn
+   * once the nearer levels on every slot have each had theirs. The
+   * interleaving depth itself is separately bounded by the longest actual
+   * per-slot candidate list (never infinite even when
+   * candidateLevelsPerSlotPerRound is left at its unbounded default).
+   * Defaults to 60 (== MAX_TEAM_RAID_SLOTS x 10 — comfortably past the
+   * handful of useful levels a real multi-level jump needs to reach, per the
+   * regression above, while still bounding a round's worst-case cost well
+   * below optimizePowerUps' own ~200-candidate full sweep).
+   */
+  maxCandidatesPerRound?: number;
+  /**
+   * Bounds the post-search "best blocked candidate" pass (see
+   * PowerUpBudgetPlan.bestBlockedCandidate) — how many of a single slot's
+   * useful-but-CURRENTLY-UNAFFORDABLE levels (closest-to-affordable first;
+   * cost is monotone non-decreasing in level, so these are exactly the
+   * levels starting right after the last one the main search found
+   * affordable) are simulated to check for a real blocked gain. Defaults to
+   * 8. This search is DELIBERATELY NOT EXHAUSTIVE: a real blocked gain
+   * sitting beyond this many useful levels out on a single slot could still
+   * be missed and reported as `bestBlockedCandidate: null` — an honest
+   * "didn't find one within this bound," not a guarantee none exists. Raise
+   * this if a specific roster/boss needs a wider look; the tradeoff is
+   * exactly one extra round's worth of simulation, capped in total by
+   * maxBlockedCandidatesToCheck below.
+   */
+  blockedCandidateLevelsPerSlot?: number;
+  /**
+   * Hard cap on how many candidates the "best blocked candidate" pass
+   * actually simulates in total, across every slot combined (round-robin
+   * interleaved the same way maxCandidatesPerRound bounds the main search —
+   * see interleaveCandidatesRoundRobin) — keeps this one-time pass's cost
+   * bounded regardless of roster size. Defaults to 60 (matching
+   * maxCandidatesPerRound's default and reasoning).
+   */
+  maxBlockedCandidatesToCheck?: number;
+}
+
+export type PowerUpBudgetStopReason =
+  /** No fielded slot has ANY useful level left below maxLevel — regardless of budget. */
+  | "max-level-reached"
+  /** At least one useful level remains somewhere, but none is affordable against what's left of every resource. */
+  | "budget-exhausted"
+  /**
+   * At least one candidate was affordable, but none of their marginal
+   * deltaTeamDps values exceeded the noise floor CURRENT at that round (see
+   * PowerUpBudgetStep.noiseFloorTeamDps / PowerUpBudgetPlan.noiseFloorTeamDps
+   * — the floor is recomputed every round, not fixed for the whole plan).
+   * This reason ALONE does not mean "you're done" — it means no AFFORDABLE
+   * candidate helped. Check
+   * PowerUpBudgetPlan.bestBlockedCandidate: a non-null value there means a
+   * real, significant gain exists but couldn't be simulated as a committable
+   * step because it wasn't affordable — "blocked," not "optimal." Only a
+   * null bestBlockedCandidate alongside this reason means the roster is
+   * genuinely done improving against this boss.
+   */
+  | "no-significant-candidate"
+  /** maxRounds was reached before any of the above — see PowerUpBudgetInputs.maxRounds. */
+  | "round-cap-reached";
+
+export interface PowerUpBudgetStep {
+  slotIndex: number;
+  speciesId: string;
+  speciesName: string;
+  fromLevel: number;
+  toLevel: number;
+  /** This step's total resource cost (fromLevel -> toLevel), same shape as powerUpCost's return. */
+  cost: PowerUpResourceCost;
+  /** How much of cost.candy was drawn from this slot's OWN candyOnHand (spent first) — ownCandySpent + sharedCandySpent === cost.candy. */
+  ownCandySpent: number;
+  /** How much of cost.candy was drawn from the shared rareCandyOnHand pool, only after this slot's own candy ran out. */
+  sharedCandySpent: number;
+  /** Same own-first breakdown as ownCandySpent, for cost.xlCandy against this slot's own xlCandyOnHand. */
+  ownXlCandySpent: number;
+  /** Same own-first breakdown as sharedCandySpent, for cost.xlCandy against the shared rareCandyXlOnHand pool. */
+  sharedXlCandySpent: number;
+  /**
+   * This step's marginal team-DPS gain: (full-roster teamDps with this step
+   * applied) - (full-roster teamDps immediately before it), both real
+   * simulations over the same shared seed set — never a difference-of-
+   * differences or an estimate.
+   */
+  deltaTeamDps: number;
+  /**
+   * The noise floor THIS step's deltaTeamDps was actually judged against —
+   * i.e. the value of PowerUpBudgetPlan.noiseFloorTeamDps at the moment this
+   * round ran, BEFORE it was recomputed from this step's own outcome for the
+   * next round. Recorded per-step because the floor is NOT fixed for the
+   * whole plan (see planPowerUpBudget's top doc comment, "NOISE FLOOR IS
+   * PER-ROUND, NOT FIXED") — a later step can be judged against a
+   * meaningfully larger (or smaller) floor than an earlier one, so
+   * `deltaTeamDps > noiseFloorTeamDps` holds for every step against ITS OWN
+   * recorded floor, but NOT necessarily against `PowerUpBudgetPlan
+   * .noiseFloorTeamDps` (the FINAL floor) for steps other than the last one.
+   * This field is what makes a specific step's acceptance auditable without
+   * that false assumption.
+   */
+  noiseFloorTeamDps: number;
+  /** The full roster's mean team DPS immediately after this step — a real simulation of the roster-so-far, not baseline + a running sum of deltas. */
+  cumulativeTeamDps: number;
+}
+
+export interface PowerUpBudgetFinalLevel {
+  slotIndex: number;
+  /** Null for an empty (unfielded) slot. */
+  speciesId: string | null;
+  speciesName: string | null;
+  /** This slot's starting level (== toLevel if the plan never touched this slot). Null for an empty slot. */
+  fromLevel: number | null;
+  /** This slot's level at the end of the plan. Null for an empty slot. */
+  toLevel: number | null;
+}
+
+export interface PowerUpBudgetResourceLedgerEntry {
+  spent: number;
+  remaining: number;
+}
+
+export interface PowerUpBudgetLedger {
+  stardust: PowerUpBudgetResourceLedgerEntry;
+  /** This slot's OWN regular Candy actually spent (never shared) and what's left of it — index matches inputs.slots; 0/candyOnHand for an empty or untouched slot. */
+  ownCandy: PowerUpBudgetResourceLedgerEntry[];
+  /** Same as ownCandy, for XL Candy. */
+  ownXlCandy: PowerUpBudgetResourceLedgerEntry[];
+  /** The shared rareCandyOnHand pool. */
+  sharedRareCandy: PowerUpBudgetResourceLedgerEntry;
+  /** The shared rareCandyXlOnHand pool. */
+  sharedRareCandyXl: PowerUpBudgetResourceLedgerEntry;
+}
+
+/**
+ * One resource this blocked candidate is short on, and by how much — never
+ * collapsed into a single blended "you need Nx more budget" number (per
+ * CLAUDE.md's standing decision against blending stardust/candy). A single
+ * candidate can appear here more than once across different resources (e.g.
+ * short on both candy AND stardust at once) — report every shortfall found,
+ * not just the first.
+ */
+export interface PowerUpBudgetResourceShortfall {
+  resource: "stardust" | "candy" | "xlCandy";
+  /**
+   * How much MORE of this resource is needed beyond what's actually
+   * available right now for this candidate — for candy/xlCandy, "available"
+   * already accounts for this slot's own candyOnHand/xlCandyOnHand PLUS
+   * whatever is left of the shared rareCandyOnHand/rareCandyXlOnHand pools
+   * at the point the search stopped, the same accounting `affordable` uses
+   * elsewhere in this module. Always > 0 (a resource only appears here
+   * because it fell short).
+   */
+  shortfall: number;
+}
+
+/**
+ * The best (highest deltaTeamDps) USEFUL level, for any fielded slot, that
+ * cleared the FINAL noise floor (PowerUpBudgetPlan.noiseFloorTeamDps) but
+ * could not be committed because it wasn't affordable against what was left
+ * of the budget when the search stopped —
+ * see PowerUpBudgetPlan.bestBlockedCandidate's doc comment for the
+ * "blocked, not done" distinction this exists to surface, and this module's
+ * top doc comment (search for "best blocked candidate") for the bounded,
+ * NOT-exhaustive search that finds it.
+ */
+export interface PowerUpBudgetBlockedCandidate {
+  slotIndex: number;
+  speciesId: string;
+  speciesName: string;
+  /** This slot's level at the point the search stopped (== its starting level if the plan never touched this slot). */
+  fromLevel: number;
+  toLevel: number;
+  /** This candidate's total resource cost (fromLevel -> toLevel), same shape as powerUpCost's return. */
+  cost: PowerUpResourceCost;
+  /**
+   * This candidate's own marginal team-DPS gain versus the roster's state at
+   * the point the search stopped — measured exactly like
+   * PowerUpBudgetStep.deltaTeamDps (a real simulation, over the same shared
+   * seed set), guaranteed > noiseFloorTeamDps (that's what qualifies it for
+   * this field at all).
+   */
+  deltaTeamDps: number;
+  /** Every resource this candidate is short on right now — see PowerUpBudgetResourceShortfall. Never empty (a candidate only reaches this field because affordability failed on at least one resource). */
+  shortfalls: PowerUpBudgetResourceShortfall[];
+}
+
+export interface PowerUpBudgetPlan {
+  /** The plan, in the order the greedy search chose each step. */
+  steps: PowerUpBudgetStep[];
+  /** One entry per input slot (same index), unchanged slots included. */
+  finalLevels: PowerUpBudgetFinalLevel[];
+  /** The do-nothing roster's measured encounter summary, over the same seed set as every step. */
+  baseline: PowerUpEncounterSummary;
+  /**
+   * The FINISHED roster's measured encounter summary — a dedicated real
+   * simulation, not baseline plus a running sum of steps[].deltaTeamDps. See
+   * this export's top doc comment for why those two are guaranteed to agree
+   * exactly under this engine's deterministic seeding, and why the dedicated
+   * re-run exists anyway.
+   */
+  final: PowerUpEncounterSummary;
+  bossHp: number;
+  /** The iteration count actually used (same value the caller passed as `iterations`, or the default). */
+  iterations: number;
+  /**
+   * The FINAL noise floor — the value in effect when the round loop actually
+   * stopped (same derivation as PowerUpOptimizerResult.noiseFloorTeamDps,
+   * but re-derived from whichever roster was current at that point, not
+   * fixed from the starting baseline). This is the SAME floor value used by
+   * the "best blocked candidate" pass below, and is what a
+   * "no-significant-candidate" stop reason is measured against.
+   *
+   * IMPORTANT — this is NOT one fixed floor that governed the whole plan:
+   * the floor is recomputed after every committed step from that step's own
+   * measured roster variance (see planPowerUpBudget's top doc comment,
+   * "NOISE FLOOR IS PER-ROUND, NOT FIXED"), because a roster's seed-to-seed
+   * variance changes as it's powered up. An EARLIER step in `steps` may have
+   * cleared a smaller (or larger) floor than this final value — check that
+   * step's own `PowerUpBudgetStep.noiseFloorTeamDps` to audit its specific
+   * acceptance, don't assume this top-level number applied to it.
+   */
+  noiseFloorTeamDps: number;
+  /** Total spend and what's left, broken out per resource — never blended into one number. */
+  ledger: PowerUpBudgetLedger;
+  /** Why the search stopped — see PowerUpBudgetStopReason. */
+  stopReason: PowerUpBudgetStopReason;
+  /**
+   * "You're done" vs. "you're blocked," disambiguated: null means the search
+   * genuinely found no further significant gain anywhere (the real "stop
+   * saving, you're optimal" signal) — NOT "we didn't look," since this is
+   * always computed once, after the round loop above has already decided to
+   * stop, regardless of stopReason. A non-null value names the best
+   * (highest-deltaTeamDps) USEFUL level that cleared noiseFloorTeamDps but
+   * was NOT affordable — the "next real gain, but you can't afford it yet"
+   * case a stopReason of "no-significant-candidate" or "budget-exhausted"
+   * alone can't distinguish from genuine convergence. See this module's
+   * `planPowerUpBudget` top doc comment for the bounded (not exhaustive)
+   * search that produces this, and PowerUpBudgetInputs.blockedCandidateLevelsPerSlot/
+   * .maxBlockedCandidatesToCheck for the bound itself.
+   */
+  bestBlockedCandidate: PowerUpBudgetBlockedCandidate | null;
+}
+
+/**
+ * How much of a slot's own regular-Candy cost one unit of the shared Rare
+ * Candy pool covers — CONFIRMED 1:1, deterministic, no species exclusion,
+ * no batch-size limit and no trainer-level gate (pogo-researcher,
+ * 2026-09-08: Pokémon GO Hub's "Rare Candy" guide, cross-checked with no
+ * contrary source; see MECHANICS.md's "Fungible candy currencies" entry and
+ * `.claude/agent-memory/pogo-researcher/fact_rare_candy_xl_candy_conversions.md`).
+ * Every use of the shared pools below multiplies/divides through this
+ * constant rather than assuming equality inline, so if this ever needs
+ * correcting it's a change to this ONE constant, not a rewrite of
+ * planPowerUpBudget. Plain Rare Candy can NEVER become XL Candy by any
+ * route this module models — see rareCandyXlOnHand's doc comment on
+ * PowerUpOptimizerInputs for the one real (but deliberately unmodelled)
+ * exception, the in-game 100:1 regular-Candy-to-XL-Candy "Convert" button.
+ */
+export const RARE_CANDY_TO_CANDY_RATIO = 1;
+/** See RARE_CANDY_TO_CANDY_RATIO — the same confirmed 1:1 ratio for the shared Rare Candy XL pool covering XL Candy cost (a wholly separate item from plain Rare Candy, never interchangeable with it). */
+export const RARE_CANDY_XL_TO_XL_CANDY_RATIO = 1;
+
+type OutgoingDamageModifiers = Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
+
+export interface PowerUpLevelMetrics {
+  level: number;
+  /** Floored outgoing fast-move damage against the boss at this level. */
+  outgoingFastDamage: number;
+  /** Floored outgoing charged-move damage against the boss at this level. */
+  outgoingChargedDamage: number;
+  /**
+   * Floored incoming boss fast-move damage against this level's defense
+   * stat. Compared for equality in its OWN right (not just via
+   * survivalFastHits below) — see levelMetricsEqual's doc comment for why:
+   * this engine credits energy from damage taken
+   * (ENERGY_PER_DAMAGE_TAKEN, energy.ts), so two levels with the SAME
+   * survival hit count can still differ in real simulated outcome if the
+   * raw per-hit damage magnitude differs.
+   */
+  incomingFastDamage: number;
+  /** Same as incomingFastDamage, for the boss's charged move. Null when the boss has no charged move at all. */
+  incomingChargedDamage: number | null;
+  /** ceil(effective HP at this level / incomingFastDamage) — how many boss fast attacks this level survives. */
+  survivalFastHits: number;
+  /** Same as survivalFastHits, for the boss's charged move. Null when the boss has no charged move at all (nothing to survive). */
+  survivalChargedHits: number | null;
+}
+
+export interface PowerUpLevelMetricsParams {
+  species: SpeciesDefinition;
+  ivs: IVSpread;
+  level: number;
+  fastMove: FastMove;
+  chargedMove: ChargedMove;
+  outgoingFastMoveDamageModifiers: OutgoingDamageModifiers;
+  outgoingChargedMoveDamageModifiers: OutgoingDamageModifiers;
+  bossFastMove: FastMove;
+  bossChargedMove: ChargedMove | undefined;
+  bossAttackStat: number;
+  bossDefenseStat: number;
+  incomingFastMoveDamageModifiers: OutgoingDamageModifiers;
+  /** Required whenever bossChargedMove is present; ignored otherwise. */
+  incomingChargedMoveDamageModifiers?: OutgoingDamageModifiers;
+}
+
+/**
+ * The values planPowerUpBudget's dominated-level candidate reduction
+ * compares level-to-level: outgoing fast/charged damage (already floored by
+ * calculateDamage, exactly as powerUpDamageLadder computes it), incoming
+ * fast/charged damage, AND the survival counts derived from them — because
+ * this project counts survivability as team DPS rather than raw damage, a
+ * level that crosses no outgoing breakpoint can still buy real DPS by
+ * surviving longer (see levelMetricsEqual's doc comment for why the raw
+ * incoming-damage values are compared too, not just the derived survival
+ * counts). No new damage math: reuses effectiveStatsAtLevel/calculateDamage
+ * exactly as powerUpDamageLadder does.
+ */
+export function powerUpLevelMetrics(params: PowerUpLevelMetricsParams): PowerUpLevelMetrics {
+  const {
+    species,
+    ivs,
+    level,
+    fastMove,
+    chargedMove,
+    outgoingFastMoveDamageModifiers,
+    outgoingChargedMoveDamageModifiers,
+    bossFastMove,
+    bossChargedMove,
+    bossAttackStat,
+    bossDefenseStat,
+    incomingFastMoveDamageModifiers,
+    incomingChargedMoveDamageModifiers,
+  } = params;
+
+  const stats = effectiveStatsAtLevel(species, ivs, level);
+  const outgoingFastDamage = calculateDamage({
+    power: fastMove.power,
+    attackerAttackStat: stats.attack,
+    defenderDefenseStat: bossDefenseStat,
+    ...outgoingFastMoveDamageModifiers,
+  });
+  const outgoingChargedDamage = calculateDamage({
+    power: chargedMove.power,
+    attackerAttackStat: stats.attack,
+    defenderDefenseStat: bossDefenseStat,
+    ...outgoingChargedMoveDamageModifiers,
+  });
+  const incomingFastDamage = calculateDamage({
+    power: bossFastMove.power,
+    attackerAttackStat: bossAttackStat,
+    defenderDefenseStat: stats.defense,
+    ...incomingFastMoveDamageModifiers,
+  });
+  const survivalFastHits = Math.ceil(stats.stamina / incomingFastDamage);
+
+  let incomingChargedDamage: number | null = null;
+  let survivalChargedHits: number | null = null;
+  if (bossChargedMove && incomingChargedMoveDamageModifiers) {
+    incomingChargedDamage = calculateDamage({
+      power: bossChargedMove.power,
+      attackerAttackStat: bossAttackStat,
+      defenderDefenseStat: stats.defense,
+      ...incomingChargedMoveDamageModifiers,
+    });
+    survivalChargedHits = Math.ceil(stats.stamina / incomingChargedDamage);
+  }
+
+  return {
+    level,
+    outgoingFastDamage,
+    outgoingChargedDamage,
+    incomingFastDamage,
+    incomingChargedDamage,
+    survivalFastHits,
+    survivalChargedHits,
+  };
+}
+
+/**
+ * EMPIRICALLY WIDENED once (see this module's test file, "dominated-level
+ * candidate reduction"): comparing only outgoing damage + the two survival
+ * HIT COUNTS (this project's originally-specified minimum four fields) let a
+ * real, if small, effect slip through undetected on a fragile single-
+ * attacker fixture. Root cause: energy.ts credits energy from raw damage
+ * TAKEN (ENERGY_PER_DAMAGE_TAKEN), not from hit COUNT — two levels with the
+ * identical ceil(hp/incomingDamage) survival count can still receive
+ * different per-hit energy credit if the underlying incomingFastDamage/
+ * incomingChargedDamage magnitude differs, which can shift exactly when a
+ * charged move becomes ready. Comparing the raw incoming-damage values too
+ * (already computed above; free to add) closes this gap. This does not
+ * contradict the original four-field spec — it's a strict superset of it
+ * (harder to satisfy, i.e. classifies MORE levels as useful, never fewer),
+ * so it can only ever fix a false "dominated" classification, never
+ * introduce one.
+ */
+function levelMetricsEqual(a: PowerUpLevelMetrics, b: PowerUpLevelMetrics): boolean {
+  return (
+    a.outgoingFastDamage === b.outgoingFastDamage &&
+    a.outgoingChargedDamage === b.outgoingChargedDamage &&
+    a.incomingFastDamage === b.incomingFastDamage &&
+    a.incomingChargedDamage === b.incomingChargedDamage &&
+    a.survivalFastHits === b.survivalFastHits &&
+    a.survivalChargedHits === b.survivalChargedHits
+  );
+}
+
+export interface UsefulPowerUpLevelsParams extends Omit<PowerUpLevelMetricsParams, "level"> {
+  table: PowerUpCostTable;
+  fromLevel: number;
+  /** Defaults to table.maxLevel. */
+  maxLevel?: number;
+}
+
+/**
+ * Every half-level strictly above fromLevel (through maxLevel) where at
+ * least one of powerUpLevelMetrics' values actually changes versus the level
+ * immediately below it — the dominated-level reduction planPowerUpBudget's
+ * greedy search relies on to stay fast. A level is skipped ("dominated")
+ * only when NOTHING in levelMetricsEqual's comparison changes: same outgoing
+ * damage, same incoming damage, same survival counts, strictly more cost
+ * (cost is monotone non-decreasing in level — see powerUpCost). See this
+ * module's test file for the empirical check that a skipped level's real
+ * simulated team DPS actually sits within the noise floor of the level
+ * below — a verified property on a real roster, not an assumption (and see
+ * levelMetricsEqual's doc comment for the one real gap that check found and
+ * closed during development).
+ */
+export function usefulPowerUpLevelsAbove(params: UsefulPowerUpLevelsParams): number[] {
+  const { table, fromLevel, maxLevel = table.maxLevel, ...metricsParams } = params;
+  let previous = powerUpLevelMetrics({ ...metricsParams, level: fromLevel });
+  const useful: number[] = [];
+  for (const level of powerUpLevelsAbove(table, fromLevel).filter((l) => l <= maxLevel)) {
+    const current = powerUpLevelMetrics({ ...metricsParams, level });
+    if (!levelMetricsEqual(current, previous)) useful.push(level);
+    previous = current;
+  }
+  return useful;
+}
+
+/** Maps PowerUpSlotInput[] to TeamRaidSlotInput[] at an explicit per-slot level array (index-matched) — every other field passes through unchanged. */
+function toTeamRaidSlotsAtLevels(slots: PowerUpSlotInput[], levels: number[]): TeamRaidSlotInput[] {
+  return slots.map((slot, i) => ({
+    species: slot.species,
+    fastMoveId: slot.fastMoveId,
+    chargedMoveId: slot.chargedMoveId,
+    isMega: slot.isMega,
+    level: levels[i] ?? slot.level,
+    ivs: slot.ivs,
+  }));
+}
+
+interface RawPowerUpBudgetCandidate {
+  slotIndex: number;
+  toLevel: number;
+  cost: PowerUpResourceCost;
+}
+
+/**
+ * Round-robin interleaves per-slot candidate lists by depth (every slot's
+ * nearest candidate first, then every slot's 2nd-nearest, etc.) so no single
+ * slot can starve the others of a look-in, up to `depthLimit` levels deep and
+ * `maxTotal` candidates combined. Shared by planPowerUpBudget's main round
+ * loop (interleaving each slot's AFFORDABLE candidates) and its post-search
+ * "best blocked candidate" pass (interleaving each slot's UNAFFORDABLE
+ * ones) — same shape, different input lists.
+ */
+function interleaveCandidatesRoundRobin<T>(perSlotLists: T[][], depthLimit: number, maxTotal: number): T[] {
+  const result: T[] = [];
+  outer: for (let depth = 0; depth < depthLimit; depth++) {
+    for (const list of perSlotLists) {
+      if (result.length >= maxTotal) break outer;
+      if (list[depth] !== undefined) result.push(list[depth]!);
+    }
+  }
+  return result;
+}
+
+/**
+ * Every resource `cost` falls short on, given what's actually available
+ * right now: `ownAmount` (this slot's own candyOnHand/xlCandyOnHand — always
+ * drawn down first) plus whatever's left of the relevant shared pool,
+ * converted through the confirmed 1:1 ratio constants — the SAME
+ * affordability accounting `affordable`/`sharedCandyNeeded` use elsewhere in
+ * this module, just surfaced per-resource instead of collapsed to a
+ * boolean. Never blends resources into one number (per CLAUDE.md's standing
+ * decision) — a candidate short on two resources at once gets two entries.
+ */
+function shortfallsForCandidate(
+  cost: PowerUpResourceCost,
+  remainingStardust: number,
+  ownCandy: number,
+  ownXlCandy: number,
+  sharedCandy: number,
+  sharedXlCandy: number,
+): PowerUpBudgetResourceShortfall[] {
+  const shortfalls: PowerUpBudgetResourceShortfall[] = [];
+  if (cost.stardust > remainingStardust) {
+    shortfalls.push({ resource: "stardust", shortfall: cost.stardust - remainingStardust });
+  }
+  const availableCandy = ownCandy + sharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+  if (cost.candy > availableCandy) {
+    shortfalls.push({ resource: "candy", shortfall: cost.candy - availableCandy });
+  }
+  const availableXlCandy = ownXlCandy + sharedXlCandy * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+  if (cost.xlCandy > availableXlCandy) {
+    shortfalls.push({ resource: "xlCandy", shortfall: cost.xlCandy - availableXlCandy });
+  }
+  return shortfalls;
+}
+
+/**
+ * A fixed-budget, multi-slot power-up planner — see this export's top doc
+ * comment for the algorithm, stop conditions, and why its internal
+ * cost/gain scalarization never leaks into the reported output. A NEW
+ * export alongside optimizePowerUps (completely unchanged by this addition).
+ */
+export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPlan {
+  const {
+    slots,
+    costTable,
+    stardustOnHand,
+    rareCandyOnHand = 0,
+    rareCandyXlOnHand = 0,
+    maxLevel = costTable.maxLevel,
+    iterations = 3,
+    seed = 1,
+    maxRounds = 300,
+    candidateLevelsPerSlotPerRound = Number.POSITIVE_INFINITY,
+    maxCandidatesPerRound = 60,
+    blockedCandidateLevelsPerSlot = 8,
+    maxBlockedCandidatesToCheck = 60,
+    ...rest
+  } = inputs;
+
+  const seeds = Array.from({ length: iterations }, (_, i) => seed + i * 7919);
+
+  const firstFielded = slots.find((s) => s.species != null);
+  const rosterLevel = firstFielded?.level ?? 1;
+  const rosterIvs: IVSpread = firstFielded?.ivs ?? { attack: 0, defense: 0, stamina: 0 };
+
+  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier);
+  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(rest.boss, rest.bossRaidTier);
+  const weather = rest.weather ?? "none";
+  const bossFastMove = resolveMove(rest.boss.fastMoves, rest.bossFastMoveId);
+  if (!bossFastMove) throw new Error(`Boss species ${rest.boss.id} has no fast move defined.`);
+  const bossChargedMove = resolveMove(rest.boss.chargedMoves, rest.bossChargedMoveId);
+
+  // Per-slot combat context (resolved moves + damage modifiers) — built once
+  // since only LEVEL changes round to round, never movesets.
+  const contexts = slots.map((slot) => {
+    if (!slot.species) return null;
+    const fastMove = resolveMove(slot.species.fastMoves, slot.fastMoveId);
+    const chargedMove = resolveMove(slot.species.chargedMoves, slot.chargedMoveId);
+    if (!fastMove || !chargedMove) {
+      throw new Error(`Power-up budget slot (${slot.species.id}) needs at least one fast move and one charged move.`);
+    }
+    return {
+      fastMove,
+      chargedMove,
+      outgoingFastMoveDamageModifiers: {
+        stab: slot.species.types.includes(fastMove.type),
+        typeEffectiveness: typeEffectiveness(fastMove.type, rest.boss.types),
+        megaBoostMultiplier: ownBoostMultiplier(slot.species.boost, fastMove.type),
+        weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+      } satisfies OutgoingDamageModifiers,
+      outgoingChargedMoveDamageModifiers: {
+        stab: slot.species.types.includes(chargedMove.type),
+        typeEffectiveness: typeEffectiveness(chargedMove.type, rest.boss.types),
+        megaBoostMultiplier: ownBoostMultiplier(slot.species.boost, chargedMove.type),
+        weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+      } satisfies OutgoingDamageModifiers,
+      incomingFastMoveDamageModifiers: {
+        stab: rest.boss.types.includes(bossFastMove.type),
+        typeEffectiveness: typeEffectiveness(bossFastMove.type, slot.species.types),
+        weatherBoosted: isWeatherBoosted(bossFastMove.type, weather),
+      } satisfies OutgoingDamageModifiers,
+      incomingChargedMoveDamageModifiers: bossChargedMove
+        ? ({
+            stab: rest.boss.types.includes(bossChargedMove.type),
+            typeEffectiveness: typeEffectiveness(bossChargedMove.type, slot.species.types),
+            weatherBoosted: isWeatherBoosted(bossChargedMove.type, weather),
+          } satisfies OutgoingDamageModifiers)
+        : undefined,
+    };
+  });
+
+  const runFullRoster = (levels: number[]): PowerUpEncounterSummary => {
+    const teamSlots = toTeamRaidSlotsAtLevels(slots, levels);
+    const results = seeds.map((s) => runTeamRaid({ ...rest, slots: teamSlots, level: rosterLevel, ivs: rosterIvs, seed: s }));
+    return summarizeResults(results, bossHp, rest.raidTimerSeconds);
+  };
+
+  // Every USEFUL level above `fromLevel` for one slot, ignoring
+  // affordability entirely — shared by the main round loop (recomputed each
+  // round, since only `fromLevel` changes) and the post-search "best blocked
+  // candidate" pass below (called once, on the final `fromLevel`s).
+  const usefulLevelsForSlot = (slotIndex: number, fromLevel: number): number[] => {
+    const slot = slots[slotIndex]!;
+    const ctx = contexts[slotIndex];
+    if (!slot.species || !ctx || fromLevel >= maxLevel) return [];
+    return usefulPowerUpLevelsAbove({
+      species: slot.species,
+      ivs: slot.ivs,
+      fastMove: ctx.fastMove,
+      chargedMove: ctx.chargedMove,
+      outgoingFastMoveDamageModifiers: ctx.outgoingFastMoveDamageModifiers,
+      outgoingChargedMoveDamageModifiers: ctx.outgoingChargedMoveDamageModifiers,
+      bossFastMove,
+      bossChargedMove,
+      bossAttackStat,
+      bossDefenseStat,
+      incomingFastMoveDamageModifiers: ctx.incomingFastMoveDamageModifiers,
+      incomingChargedMoveDamageModifiers: ctx.incomingChargedMoveDamageModifiers,
+      table: costTable,
+      fromLevel,
+      maxLevel,
+    });
+  };
+
+  const startingLevels = slots.map((s) => s.level);
+  const currentLevels = [...startingLevels];
+
+  const baseline = runFullRoster(currentLevels);
+  // See "NOISE FLOOR IS PER-ROUND, NOT FIXED" in this function's top doc
+  // comment: this starts from the baseline's measured variance, but is
+  // RECOMPUTED after every committed step from that step's own
+  // PowerUpEncounterSummary — never re-simulated just to measure variance,
+  // since summarizeResults already fills in teamDpsStdDev for every roster
+  // this function runs anyway.
+  let currentNoiseFloorTeamDps = noiseFloorFor(baseline, iterations);
+
+  let currentSummary = baseline;
+  const steps: PowerUpBudgetStep[] = [];
+
+  let remainingStardust = stardustOnHand;
+  const remainingOwnCandy = slots.map((s) => s.candyOnHand ?? 0);
+  const remainingOwnXl = slots.map((s) => s.xlCandyOnHand ?? 0);
+  let remainingSharedCandy = rareCandyOnHand;
+  let remainingSharedXl = rareCandyXlOnHand;
+
+  let stopReason: PowerUpBudgetStopReason = "round-cap-reached";
+
+  roundLoop: for (let round = 0; round < maxRounds; round++) {
+    // The floor THIS round's candidates are judged against — captured before
+    // any recompute below so PowerUpBudgetStep.noiseFloorTeamDps records
+    // exactly what governed this round's decision, not next round's updated
+    // value.
+    const floorForThisRound = currentNoiseFloorTeamDps;
+
+    // Every useful level left per slot, ignoring affordability — used only
+    // to distinguish "max-level-reached" (nothing left AT ALL) from
+    // "budget-exhausted" (something's left, but not affordable) below.
+    const perSlotUseful: number[][] = slots.map((_slot, slotIndex) => usefulLevelsForSlot(slotIndex, currentLevels[slotIndex]!));
+
+    if (perSlotUseful.every((levels) => levels.length === 0)) {
+      stopReason = "max-level-reached";
+      break roundLoop;
+    }
+
+    // Affordability-filter each slot's useful levels against what's actually
+    // LEFT of the budget right now — cost is monotone non-decreasing in
+    // level (see powerUpCost), so the first unaffordable level means every
+    // higher one is unaffordable too; stop at the first one and at
+    // candidateLevelsPerSlotPerRound, whichever comes first. Each entry here
+    // is a JUMP CANDIDATE from this slot's currently-planned level straight
+    // to `toLevel` — powerUpCost already prices the whole multi-level span,
+    // not a single half-step — so a far-out useful level costs and reads as
+    // one candidate, never a forced chain of intermediate ones.
+    const perSlotCandidates: RawPowerUpBudgetCandidate[][] = perSlotUseful.map((usefulLevels, slotIndex) => {
+      const slot = slots[slotIndex]!;
+      const fromLevel = currentLevels[slotIndex]!;
+      const maxSpendableCandy = remainingOwnCandy[slotIndex]! + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+      const maxSpendableXl = remainingOwnXl[slotIndex]! + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+
+      const affordable: RawPowerUpBudgetCandidate[] = [];
+      for (const toLevel of usefulLevels) {
+        const cost = powerUpCost(costTable, fromLevel, toLevel, slot.costModifiers);
+        if (cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl) break;
+        affordable.push({ slotIndex, toLevel, cost });
+        if (affordable.length >= candidateLevelsPerSlotPerRound) break;
+      }
+      return affordable;
+    });
+
+    // Round-robin interleave across slots (not first-slots-first) so no
+    // single slot can starve the others of a look-in when
+    // maxCandidatesPerRound is the binding constraint. The depth bound is
+    // the longest ACTUAL per-slot candidate list, not
+    // candidateLevelsPerSlotPerRound directly — that input defaults to
+    // Number.POSITIVE_INFINITY (see its doc comment), and looping on it
+    // directly would never terminate; every list is already finite (bounded
+    // by real affordability and usefulPowerUpLevelsAbove's dominated-level
+    // reduction), and `Math.min` still respects a caller-supplied finite
+    // override.
+    const maxPerSlotCandidateCount = perSlotCandidates.reduce((max, list) => Math.max(max, list.length), 0);
+    const interleaveDepthLimit = Math.min(candidateLevelsPerSlotPerRound, maxPerSlotCandidateCount);
+    const roundCandidates = interleaveCandidatesRoundRobin(perSlotCandidates, interleaveDepthLimit, maxCandidatesPerRound);
+
+    if (roundCandidates.length === 0) {
+      stopReason = "budget-exhausted";
+      break roundLoop;
+    }
+
+    let best: { candidate: RawPowerUpBudgetCandidate; summary: PowerUpEncounterSummary; deltaTeamDps: number; score: number } | null =
+      null;
+    for (const candidate of roundCandidates) {
+      const levels = [...currentLevels];
+      levels[candidate.slotIndex] = candidate.toLevel;
+      const summary = runFullRoster(levels);
+      const deltaTeamDps = summary.teamDps - currentSummary.teamDps;
+
+      // Multi-dimensional-knapsack-style scalarization: cost as a fraction
+      // of what's actually left of EACH constrained resource, summed. A
+      // SEARCH HEURISTIC ONLY — see this export's top doc comment for why
+      // this never leaks into the reported output.
+      const candyPool = remainingOwnCandy[candidate.slotIndex]! + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+      const xlPool = remainingOwnXl[candidate.slotIndex]! + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+      const stardustFraction = remainingStardust > 0 ? candidate.cost.stardust / remainingStardust : 0;
+      const candyFraction = candyPool > 0 ? candidate.cost.candy / candyPool : 0;
+      const xlFraction = xlPool > 0 ? candidate.cost.xlCandy / xlPool : 0;
+      const costFraction = Math.max(stardustFraction + candyFraction + xlFraction, 1e-9);
+      const score = deltaTeamDps / costFraction;
+
+      if (deltaTeamDps > floorForThisRound && (best === null || score > best.score)) {
+        best = { candidate, summary, deltaTeamDps, score };
+      }
+    }
+
+    if (!best) {
+      stopReason = "no-significant-candidate";
+      break roundLoop;
+    }
+
+    const { candidate, summary, deltaTeamDps } = best;
+    const slot = slots[candidate.slotIndex]!;
+    const fromLevel = currentLevels[candidate.slotIndex]!;
+
+    // Own resources are always spent before either shared pool.
+    const ownCandySpent = Math.min(candidate.cost.candy, remainingOwnCandy[candidate.slotIndex]!);
+    const sharedCandySpent = candidate.cost.candy - ownCandySpent;
+    const ownXlCandySpent = Math.min(candidate.cost.xlCandy, remainingOwnXl[candidate.slotIndex]!);
+    const sharedXlCandySpent = candidate.cost.xlCandy - ownXlCandySpent;
+
+    remainingStardust -= candidate.cost.stardust;
+    remainingOwnCandy[candidate.slotIndex] = remainingOwnCandy[candidate.slotIndex]! - ownCandySpent;
+    remainingOwnXl[candidate.slotIndex] = remainingOwnXl[candidate.slotIndex]! - ownXlCandySpent;
+    remainingSharedCandy -= sharedCandySpent / RARE_CANDY_TO_CANDY_RATIO;
+    remainingSharedXl -= sharedXlCandySpent / RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+
+    currentLevels[candidate.slotIndex] = candidate.toLevel;
+    currentSummary = summary;
+    // Recompute the floor from THIS newly-committed roster's own measured
+    // variance for the NEXT round — see "NOISE FLOOR IS PER-ROUND, NOT
+    // FIXED" above. `summary` already carries teamDpsStdDev from
+    // summarizeResults, so this costs nothing extra.
+    currentNoiseFloorTeamDps = noiseFloorFor(currentSummary, iterations);
+
+    steps.push({
+      slotIndex: candidate.slotIndex,
+      speciesId: slot.species!.id,
+      speciesName: slot.species!.name,
+      fromLevel,
+      toLevel: candidate.toLevel,
+      cost: candidate.cost,
+      ownCandySpent,
+      sharedCandySpent,
+      ownXlCandySpent,
+      sharedXlCandySpent,
+      deltaTeamDps,
+      noiseFloorTeamDps: floorForThisRound,
+      cumulativeTeamDps: summary.teamDps,
+    });
+  }
+
+  // A dedicated re-simulation of the FINISHED roster — see this export's top
+  // doc comment for why this is not just a re-read of the last step.
+  const final = runFullRoster(currentLevels);
+
+  // --- Best blocked candidate (one-time, post-search only) ------------------
+  // Runs ONCE, on the roster/budget state the search actually stopped at —
+  // never per round — so it costs at most one extra round's worth of
+  // simulation. For each fielded slot, find every useful level BEYOND the
+  // point affordability broke (cost is monotone non-decreasing in level, so
+  // once one level is unaffordable every higher one is too — see
+  // powerUpCost), bounded per slot by blockedCandidateLevelsPerSlot and in
+  // total by maxBlockedCandidatesToCheck (same round-robin interleaving as
+  // the main search, so no single slot can starve the others of a look-in).
+  // This deliberately does NOT re-derive "unaffordable" from perSlotCandidates
+  // captured mid-loop (which may have stopped short of the true affordability
+  // boundary due to candidateLevelsPerSlotPerRound/maxCandidatesPerRound) —
+  // it re-checks affordability directly against the FINAL remaining budget,
+  // so it can never under- or over-report what's actually left on the table.
+  const perSlotBlocked: RawPowerUpBudgetCandidate[][] = slots.map((_slot, slotIndex) => {
+    const slot = slots[slotIndex]!;
+    const fromLevel = currentLevels[slotIndex]!;
+    const usefulLevels = usefulLevelsForSlot(slotIndex, fromLevel);
+    if (usefulLevels.length === 0) return [];
+
+    const maxSpendableCandy = remainingOwnCandy[slotIndex]! + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
+    const maxSpendableXl = remainingOwnXl[slotIndex]! + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+
+    const firstUnaffordableIndex = usefulLevels.findIndex((toLevel) => {
+      const cost = powerUpCost(costTable, fromLevel, toLevel, slot.costModifiers);
+      return cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl;
+    });
+    if (firstUnaffordableIndex === -1) return []; // every useful level left here is actually affordable — nothing "blocked" about this slot.
+
+    return usefulLevels.slice(firstUnaffordableIndex, firstUnaffordableIndex + blockedCandidateLevelsPerSlot).map((toLevel) => ({
+      slotIndex,
+      toLevel,
+      cost: powerUpCost(costTable, fromLevel, toLevel, slot.costModifiers),
+    }));
+  });
+
+  const maxPerSlotBlockedCount = perSlotBlocked.reduce((max, list) => Math.max(max, list.length), 0);
+  const blockedCandidatesToCheck = interleaveCandidatesRoundRobin(
+    perSlotBlocked,
+    Math.min(blockedCandidateLevelsPerSlot, maxPerSlotBlockedCount),
+    maxBlockedCandidatesToCheck,
+  );
+
+  let bestBlockedCandidate: PowerUpBudgetBlockedCandidate | null = null;
+  let bestBlockedDeltaTeamDps = -Infinity;
+  for (const candidate of blockedCandidatesToCheck) {
+    const levels = [...currentLevels];
+    levels[candidate.slotIndex] = candidate.toLevel;
+    const summary = runFullRoster(levels);
+    const deltaTeamDps = summary.teamDps - currentSummary.teamDps;
+    // Judged against the FINAL floor (currentNoiseFloorTeamDps as left by the
+    // round loop above) — a blocked candidate must clear the SAME bar the
+    // search itself was applying when it stopped, not a stale earlier one.
+    if (deltaTeamDps > currentNoiseFloorTeamDps && deltaTeamDps > bestBlockedDeltaTeamDps) {
+      const slot = slots[candidate.slotIndex]!;
+      bestBlockedDeltaTeamDps = deltaTeamDps;
+      bestBlockedCandidate = {
+        slotIndex: candidate.slotIndex,
+        speciesId: slot.species!.id,
+        speciesName: slot.species!.name,
+        fromLevel: currentLevels[candidate.slotIndex]!,
+        toLevel: candidate.toLevel,
+        cost: candidate.cost,
+        deltaTeamDps,
+        shortfalls: shortfallsForCandidate(
+          candidate.cost,
+          remainingStardust,
+          remainingOwnCandy[candidate.slotIndex]!,
+          remainingOwnXl[candidate.slotIndex]!,
+          remainingSharedCandy,
+          remainingSharedXl,
+        ),
+      };
+    }
+  }
+
+  const finalLevels: PowerUpBudgetFinalLevel[] = slots.map((slot, i) => ({
+    slotIndex: i,
+    speciesId: slot.species?.id ?? null,
+    speciesName: slot.species?.name ?? null,
+    fromLevel: slot.species ? startingLevels[i]! : null,
+    toLevel: slot.species ? currentLevels[i]! : null,
+  }));
+
+  const ledger: PowerUpBudgetLedger = {
+    stardust: { spent: stardustOnHand - remainingStardust, remaining: remainingStardust },
+    ownCandy: slots.map((slot, i) => ({
+      spent: (slot.candyOnHand ?? 0) - remainingOwnCandy[i]!,
+      remaining: remainingOwnCandy[i]!,
+    })),
+    ownXlCandy: slots.map((slot, i) => ({
+      spent: (slot.xlCandyOnHand ?? 0) - remainingOwnXl[i]!,
+      remaining: remainingOwnXl[i]!,
+    })),
+    sharedRareCandy: { spent: rareCandyOnHand - remainingSharedCandy, remaining: remainingSharedCandy },
+    sharedRareCandyXl: { spent: rareCandyXlOnHand - remainingSharedXl, remaining: remainingSharedXl },
+  };
+
+  return {
+    steps,
+    finalLevels,
+    baseline,
+    final,
+    bossHp,
+    iterations,
+    // The FINAL floor — see PowerUpBudgetPlan.noiseFloorTeamDps's doc comment.
+    noiseFloorTeamDps: currentNoiseFloorTeamDps,
+    ledger,
+    stopReason,
+    bestBlockedCandidate,
+  };
 }

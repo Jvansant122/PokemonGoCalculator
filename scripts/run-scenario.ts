@@ -65,6 +65,7 @@ import { parseAttackDefenseBreakpointsScenarioFromUrl } from "../packages/web/sr
 import { runAttackDefenseBreakpointsScenario } from "../packages/web/src/run/runAttackDefenseBreakpoints.js";
 
 import {
+  blockedCandidateSentence,
   DEFAULT_ASSUMPTIONS as PU_DEFAULTS,
   normalizePowerUpAssumptions,
   scenarioToAssumptions as puScenarioToAssumptions,
@@ -268,6 +269,17 @@ function main(): void {
           ? `  Best stardust efficiency: Slot ${best.slotIndex + 1} (${best.speciesName}) Lv ${best.fromLevel} -> ${best.toLevel} (+${fmt(best.deltaTeamDps, 2)} team DPS, ${fmt(best.deltaTeamDpsPer1000Stardust ?? null, 3)} per 1000 stardust).`
           : `  Nothing affordable improves team DPS beyond the +/-${fmt(d.noiseFloorTeamDps, 2)} noise floor.`,
       ];
+      if (result.plan) {
+        const p = result.plan;
+        summary.push(
+          `  Fixed-budget plan (${p.steps.length} step(s), stopped: ${p.stopReason}): team DPS ${fmt(p.baseline.teamDps, 2)} -> ${fmt(p.final.teamDps, 2)}`,
+          `    Spend: ${p.ledger.stardust.spent.toLocaleString()} stardust, ${p.ledger.sharedRareCandy.spent} shared Rare Candy, ${p.ledger.sharedRareCandyXl.spent} shared Rare Candy XL ` +
+            `(${p.ledger.stardust.remaining.toLocaleString()} stardust / ${p.ledger.sharedRareCandy.remaining} Rare Candy / ${p.ledger.sharedRareCandyXl.remaining} Rare Candy XL left).`,
+          p.bestBlockedCandidate
+            ? `    BLOCKED, NOT DONE: ${blockedCandidateSentence(p.bestBlockedCandidate)}`
+            : `    Nothing further measurably helps beyond this plan's own steps.`,
+        );
+      }
       jsonResult = result;
       break;
     }

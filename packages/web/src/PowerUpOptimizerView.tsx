@@ -3,6 +3,9 @@ import {
   bossChargedMoveReadySeconds,
   bossEffectiveHp,
   MAX_TEAM_RAID_SLOTS,
+  type PowerUpBudgetBlockedCandidate,
+  type PowerUpBudgetPlan,
+  type PowerUpBudgetResourceShortfall,
   type PowerUpCandidate,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
@@ -68,10 +71,15 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
     defaultSlot("rayquaza", 25, false),
   ],
   stardustOnHand: 200000,
+  // Modest, non-zero two-digit defaults so the fixed-budget plan's shared
+  // pools are visible/exercised on a fresh page load rather than looking
+  // inert at 0 — a raid-active player realistically keeps a stash of each.
+  rareCandyOnHand: 20,
+  rareCandyXlOnHand: 10,
   targetId: DEFAULT_TARGET_ID,
   bossFastMoveId: null,
   bossChargedMoveId: null,
-  dodge: { kind: "none" },
+  dodge: { kind: "perfect" },
   dodgeFastAttacks: false,
   holdChargedMoveUntilSafe: false,
   weather: "none",
@@ -108,6 +116,8 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
       xlCandyOnHand: s.xlCandyOnHand,
     })),
     stardustOnHand: a.stardustOnHand,
+    rareCandyOnHand: a.rareCandyOnHand,
+    rareCandyXlOnHand: a.rareCandyXlOnHand,
     target: a.targetId,
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
@@ -152,6 +162,8 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
   return {
     slots: slots.slice(0, MAX_TEAM_RAID_SLOTS),
     stardustOnHand: s.stardustOnHand ?? DEFAULT_ASSUMPTIONS.stardustOnHand,
+    rareCandyOnHand: s.rareCandyOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyOnHand,
+    rareCandyXlOnHand: s.rareCandyXlOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyXlOnHand,
     targetId: s.target,
     bossFastMoveId: s.bossFastMoveId ?? null,
     bossChargedMoveId: s.bossChargedMoveId ?? null,
@@ -236,6 +248,61 @@ function rankByLabel(rankBy: PowerUpRankBy): string {
   return "team-DPS gained per XL candy";
 }
 
+/** "10 yours + 2 Rare" / "10 yours" / "2 Rare" / "—" — the own-vs-shared split the engine reports per step, made visible rather than collapsed into one total. */
+function formatResourceSplit(ownSpent: number, sharedSpent: number, sharedLabel: string): string {
+  if (ownSpent === 0 && sharedSpent === 0) return "—";
+  if (sharedSpent === 0) return `${ownSpent} yours`;
+  if (ownSpent === 0) return `${sharedSpent} ${sharedLabel}`;
+  return `${ownSpent} yours + ${sharedSpent} ${sharedLabel}`;
+}
+
+/**
+ * "Why it stopped" in plain language — mirrors the ranked table's own
+ * noise-floor caveat wording ("nothing else measurably beats the noise
+ * floor") so the two sections read as one consistent voice, not two
+ * differently-worded tools bolted together.
+ */
+function budgetStopReasonSentence(plan: PowerUpBudgetPlan): string {
+  switch (plan.stopReason) {
+    case "max-level-reached":
+      return "Stopped because every fielded slot has already reached level 50 — there's no further power-up headroom left to spend on, regardless of budget.";
+    case "budget-exhausted":
+      return "Stopped because useful power-up headroom remains on at least one slot, but nothing left is affordable within the stardust/candy/XL you have on hand.";
+    case "no-significant-candidate":
+      return `You still have budget left because nothing else measurably beats the ±${plan.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor — the remaining stardust/candy is left unspent on purpose, not overlooked.`;
+    case "round-cap-reached":
+      return "Stopped only because the search hit its internal round-safety cap, before resolving naturally via budget or a real breakpoint — unusual for a normal roster/budget; treat this plan as a lower bound, not a definitive optimum.";
+  }
+}
+
+/** "9,000 stardust" / "67 Candy" / "12 XL Candy" — one shortfall, plainly named, resource kept separate per CLAUDE.md's standing decision (never blended into one composite "% more budget" figure). */
+function formatShortfall(s: PowerUpBudgetResourceShortfall): string {
+  if (s.resource === "stardust") return `${s.shortfall.toLocaleString()} stardust`;
+  if (s.resource === "candy") return `${s.shortfall.toLocaleString()} Candy`;
+  return `${s.shortfall.toLocaleString()} XL Candy`;
+}
+
+/** "a" / "a and b" / "a, b, and c" — a plain English list, used so 2+ simultaneous shortfalls (the common real case: short on both stardust AND candy at once) read as a sentence, not a comma-splice. */
+function joinWithAnd(parts: string[]): string {
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0]!;
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * The "blocked, not done" sentence — see PowerUpBudgetPlan.bestBlockedCandidate's
+ * doc comment in packages/engine/src/powerUp.ts. Renders EVERY shortfall
+ * (never just shortfalls[0]) since a real candidate is commonly short on more
+ * than one resource at once. Exported (not local-only) so scripts/run-scenario.ts's
+ * CLI headline uses this SAME sentence, not a re-derived one — CLI == UI by
+ * construction, same reasoning as this file's other exported pure helpers.
+ */
+export function blockedCandidateSentence(blocked: PowerUpBudgetBlockedCandidate): string {
+  const shortfallText = joinWithAnd(blocked.shortfalls.map(formatShortfall));
+  return `Next real gain: ${blocked.speciesName} Lv${blocked.fromLevel} → Lv${blocked.toLevel}, +${blocked.deltaTeamDps.toFixed(2)} team DPS — you're short ${shortfallText}.`;
+}
+
 const CANDIDATE_TABLE_INITIAL_ROWS = 30;
 
 /**
@@ -302,6 +369,8 @@ export function PowerUpOptimizerView() {
     () => ({
       slots: assumptions.slots,
       stardustOnHand: assumptions.stardustOnHand,
+      rareCandyOnHand: assumptions.rareCandyOnHand,
+      rareCandyXlOnHand: assumptions.rareCandyXlOnHand,
       targetId: assumptions.targetId,
       bossFastMoveId: assumptions.bossFastMoveId,
       bossChargedMoveId: assumptions.bossChargedMoveId,
@@ -324,6 +393,8 @@ export function PowerUpOptimizerView() {
     [
       assumptions.slots,
       assumptions.stardustOnHand,
+      assumptions.rareCandyOnHand,
+      assumptions.rareCandyXlOnHand,
       assumptions.targetId,
       assumptions.bossFastMoveId,
       assumptions.bossChargedMoveId,
@@ -352,7 +423,7 @@ export function PowerUpOptimizerView() {
     () => runPowerUpOptimizerScenario(debouncedOptimizerAssumptions, speciesRegistry),
     [debouncedOptimizerAssumptions],
   );
-  const result = { data: runResult.data, error: runResult.error };
+  const result = { data: runResult.data, plan: runResult.plan, error: runResult.error };
 
   // Sorting is over the ALREADY-COMPUTED candidates and is cheap — kept bound
   // to the LIVE rankBy (not the debounced snapshot) so switching the sort
@@ -552,6 +623,149 @@ export function PowerUpOptimizerView() {
                   )}
             </p>
           </section>
+
+          {result.plan && (
+            <section className="panel">
+              <h2>Fixed-budget power-up plan</h2>
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                A DIFFERENT question than the ranked table below: given your WHOLE stardust/Rare
+                Candy/Rare Candy XL budget across every fielded slot at once (not one candidate at
+                a time), what SET of power-ups should you make? A greedy multi-slot search — a
+                step is only committed once its own marginal team-DPS gain measurably beats the
+                noise floor. That floor is re-measured from the roster's own seed-to-seed variance
+                after every committed step rather than fixed once at the start, because powering a
+                roster up changes how much it varies run to run — so steps within one plan can be
+                held to different bars, and each step below shows the one it actually had to clear.
+                The ±{result.plan.noiseFloorTeamDps.toFixed(2)} quoted elsewhere in this section is
+                the FINAL floor, in effect when the search stopped.
+              </p>
+
+              {result.plan.bestBlockedCandidate ? (
+                <div className="blocked-gain-callout">
+                  <strong>Blocked, not done</strong>
+                  {blockedCandidateSentence(result.plan.bestBlockedCandidate)} This plan stopped
+                  here because that upgrade isn't affordable yet — not because it wouldn't help.
+                </div>
+              ) : (
+                <div className="blocked-gain-callout">
+                  <strong>Nothing further measurably helps</strong>
+                  Beyond the steps below, no further useful power-up anywhere on this roster clears
+                  the ±{result.plan.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor against this
+                  boss and budget — this plan is genuinely done, not just out of money.
+                </div>
+              )}
+
+              <div className="result-card">
+                <dl>
+                  <dt>Baseline team DPS (roster as-is)</dt>
+                  <dd>{result.plan.baseline.teamDps.toFixed(2)}</dd>
+                  <dt>Final team DPS (after this plan)</dt>
+                  <dd>{result.plan.final.teamDps.toFixed(2)}</dd>
+                  <dt>Change</dt>
+                  <dd>
+                    {result.plan.final.teamDps >= result.plan.baseline.teamDps ? "+" : ""}
+                    {(result.plan.final.teamDps - result.plan.baseline.teamDps).toFixed(2)} team DPS
+                    {result.plan.baseline.teamDps > 0 &&
+                      ` (${(((result.plan.final.teamDps - result.plan.baseline.teamDps) / result.plan.baseline.teamDps) * 100).toFixed(1)}% over baseline)`}
+                  </dd>
+                  <dt>Stardust spent</dt>
+                  <dd>
+                    {result.plan.ledger.stardust.spent.toLocaleString()} ({result.plan.ledger.stardust.remaining.toLocaleString()}{" "}
+                    left)
+                  </dd>
+                  <dt>Shared Rare Candy spent</dt>
+                  <dd>
+                    {result.plan.ledger.sharedRareCandy.spent} ({result.plan.ledger.sharedRareCandy.remaining} left)
+                  </dd>
+                  <dt>Shared Rare Candy XL spent</dt>
+                  <dd>
+                    {result.plan.ledger.sharedRareCandyXl.spent} ({result.plan.ledger.sharedRareCandyXl.remaining} left)
+                  </dd>
+                </dl>
+              </div>
+
+              {result.plan.steps.length > 0 ? (
+                <div style={{ overflowX: "auto", marginTop: 12 }}>
+                  <table className="time-series-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Slot</th>
+                        <th>Species</th>
+                        <th>Level</th>
+                        <th>Stardust</th>
+                        <th>Candy</th>
+                        <th>XL candy</th>
+                        <th>Δ team DPS</th>
+                        <th>Noise floor cleared</th>
+                        <th>Team DPS after</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.plan.steps.map((step, i) => (
+                        <tr key={`${step.slotIndex}-${step.toLevel}-${i}`}>
+                          <td>{i + 1}</td>
+                          <td>{step.slotIndex + 1}</td>
+                          <td>{step.speciesName}</td>
+                          <td>
+                            {step.fromLevel} → {step.toLevel}
+                          </td>
+                          <td>{step.cost.stardust.toLocaleString()}</td>
+                          <td>{formatResourceSplit(step.ownCandySpent, step.sharedCandySpent, "Rare")}</td>
+                          <td>{formatResourceSplit(step.ownXlCandySpent, step.sharedXlCandySpent, "Rare XL")}</td>
+                          <td>
+                            +{step.deltaTeamDps.toFixed(2)}
+                          </td>
+                          {/* The floor in effect for THIS step's round, not the plan's final
+                              one — re-measured from the roster's variance after every commit,
+                              so it legitimately differs down the table. */}
+                          <td title="The noise floor this step had to beat, measured from the roster as it stood at that point in the plan">
+                            ±{step.noiseFloorTeamDps.toFixed(2)}
+                          </td>
+                          <td>{step.cumulativeTeamDps.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
+                  No power-up was added to this plan.
+                </p>
+              )}
+
+              <p className="caveats" style={{ marginTop: 12, color: "var(--text)" }}>
+                {budgetStopReasonSentence(result.plan)}
+              </p>
+
+              <h3 style={{ marginTop: 16 }}>What's left, per slot</h3>
+              <div className="result-row" style={{ flexWrap: "wrap" }}>
+                {slotSpecies.map((species, i) => {
+                  const finalLevel = result.plan!.finalLevels[i];
+                  const ownCandy = result.plan!.ledger.ownCandy[i];
+                  const ownXl = result.plan!.ledger.ownXlCandy[i];
+                  if (!species || !finalLevel || !ownCandy || !ownXl) return null;
+                  return (
+                    <div className="result-card" key={i} style={{ minWidth: 220 }}>
+                      <h3>
+                        Slot {i + 1}: {species.name}
+                      </h3>
+                      <dl>
+                        <dt>Level</dt>
+                        <dd>
+                          {finalLevel.fromLevel} → {finalLevel.toLevel}
+                        </dd>
+                        <dt>Own candy remaining</dt>
+                        <dd>{ownCandy.remaining}</dd>
+                        <dt>Own XL candy remaining</dt>
+                        <dd>{ownXl.remaining}</dd>
+                      </dl>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           <section className="panel">
             <h2>

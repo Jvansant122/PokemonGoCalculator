@@ -43,6 +43,24 @@ export interface Scenario {
   dodgeModel: DodgeBehavior;
   /** Whether the candidate also attempts to dodge the boss's fast attacks — a separate yes/no from dodgeModel, since dodging every fast attack costs DODGE_COST_SECONDS and usually isn't worth it. */
   dodgeFastAttacks: boolean;
+  /**
+   * Per-candidate override for dodgeModel above, matched by index to
+   * `candidates` — lets a user compare a bulky candidate played with no
+   * dodging against a glass cannon played with perfect dodging, a real
+   * A-vs-B question this product's ranking-flip thesis depends on (see
+   * comparison.ts's SustainedComparisonInputs.candidateDodge). `null` means
+   * "use the shared dodgeModel above" for that candidate. Defaults to
+   * [null, null] (today's implicit behavior: both candidates always use the
+   * shared dodgeModel) so a scenario URL encoded before this field existed
+   * still decodes to the same result it always gave.
+   */
+  candidateDodge: [DodgeBehavior | null, DodgeBehavior | null];
+  /**
+   * Per-candidate override for dodgeFastAttacks above — see candidateDodge.
+   * `null` means "use the shared dodgeFastAttacks above" for that candidate,
+   * NOT "false". Defaults to [null, null].
+   */
+  candidateDodgeFastAttacks: [boolean | null, boolean | null];
   /** Hold the charged move for a safer moment (right after dodging a boss charged hit, or when energy caps) instead of firing immediately. */
   holdChargedMoveUntilSafe: boolean;
   /** Extends the damage-over-time chart's window beyond the auto-computed natural minimum (never below it) — 0 means no override. */

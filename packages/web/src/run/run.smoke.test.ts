@@ -136,4 +136,74 @@ describe("runPowerUpOptimizerScenario (default scenario)", () => {
       expect(d.bestAffordableByStardustEfficiency.deltaExceedsNoise).toBe(true);
     }
   }, 30_000);
+
+  it("computes a fixed-budget plan alongside the ranked candidates, with a well-formed ledger", () => {
+    const result = runPowerUpOptimizerScenario(PU_DEFAULTS, speciesRegistry);
+    expect(result.plan).not.toBeNull();
+    const plan = result.plan!;
+    expectFiniteNumber(plan.baseline.teamDps, "plan.baseline.teamDps");
+    expectFiniteNumber(plan.final.teamDps, "plan.final.teamDps");
+    expectFiniteNumber(plan.noiseFloorTeamDps, "plan.noiseFloorTeamDps");
+    // Each committed step must clear the noise floor in effect for ITS OWN
+    // round — NOT plan.noiseFloorTeamDps, which is the FINAL floor. The floor
+    // is remeasured from the current roster's variance after every commit, so
+    // a plan's steps can legitimately be judged against different bars, and
+    // only the last step is guaranteed to clear the final one. Asserting
+    // against plan.noiseFloorTeamDps here passed on the default roster by
+    // luck, not by construction.
+    for (const step of plan.steps) {
+      expectFiniteNumber(step.deltaTeamDps, "step.deltaTeamDps");
+      expectFiniteNumber(step.noiseFloorTeamDps, "step.noiseFloorTeamDps");
+      expect(step.deltaTeamDps).toBeGreaterThan(step.noiseFloorTeamDps);
+      // Own-vs-shared split must sum back to the step's own reported cost.
+      expect(step.ownCandySpent + step.sharedCandySpent).toBe(step.cost.candy);
+      expect(step.ownXlCandySpent + step.sharedXlCandySpent).toBe(step.cost.xlCandy);
+    }
+    // Never spend more than what was on hand.
+    expect(plan.ledger.stardust.spent).toBeLessThanOrEqual(PU_DEFAULTS.stardustOnHand);
+    expect(plan.ledger.stardust.remaining).toBeGreaterThanOrEqual(0);
+    expect(plan.ledger.sharedRareCandy.remaining).toBeGreaterThanOrEqual(0);
+    expect(plan.ledger.sharedRareCandyXl.remaining).toBeGreaterThanOrEqual(0);
+    expect(plan.finalLevels.length).toBe(PU_DEFAULTS.slots.length);
+    // Shape-only check on the default (generous) budget — whether a real
+    // blocked gain exists at all depends on how much headroom is left, so
+    // this doesn't assert null/non-null, only that whichever it is is
+    // well-formed. The genuinely-tight-budget case below asserts non-null.
+    if (plan.bestBlockedCandidate) {
+      const blocked = plan.bestBlockedCandidate;
+      expectFiniteNumber(blocked.deltaTeamDps, "bestBlockedCandidate.deltaTeamDps");
+      expect(blocked.deltaTeamDps).toBeGreaterThan(plan.noiseFloorTeamDps);
+      expect(blocked.shortfalls.length).toBeGreaterThan(0);
+      for (const s of blocked.shortfalls) {
+        expect(["stardust", "candy", "xlCandy"]).toContain(s.resource);
+        expect(s.shortfall).toBeGreaterThan(0);
+      }
+    } else {
+      expect(plan.bestBlockedCandidate).toBeNull();
+    }
+  }, 30_000);
+
+  it("reports a non-null bestBlockedCandidate — with every shortfall named — when a real gain exists but the budget is too tight to afford it", () => {
+    // Same default roster/boss, but a deliberately tight budget (matches the
+    // real bug report this field exists to fix): a bigger gain exists just
+    // beyond what's affordable, and the plan must say so rather than reading
+    // as "nothing else helps."
+    const tightAssumptions = {
+      ...PU_DEFAULTS,
+      stardustOnHand: 100_000,
+      rareCandyOnHand: 25,
+      slots: PU_DEFAULTS.slots.map((s) => ({ ...s, candyOnHand: 10 })),
+    };
+    const result = runPowerUpOptimizerScenario(tightAssumptions, speciesRegistry);
+    expect(result.plan).not.toBeNull();
+    const blocked = result.plan!.bestBlockedCandidate;
+    expect(blocked).not.toBeNull();
+    expectFiniteNumber(blocked!.deltaTeamDps, "bestBlockedCandidate.deltaTeamDps");
+    expect(blocked!.deltaTeamDps).toBeGreaterThan(result.plan!.noiseFloorTeamDps);
+    expect(blocked!.shortfalls.length).toBeGreaterThan(0);
+    for (const s of blocked!.shortfalls) {
+      expect(["stardust", "candy", "xlCandy"]).toContain(s.resource);
+      expect(s.shortfall).toBeGreaterThan(0);
+    }
+  }, 30_000);
 });

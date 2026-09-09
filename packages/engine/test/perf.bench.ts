@@ -1,7 +1,7 @@
 import { bench, describe } from "vitest";
 import { bossEffectiveStats, resolveMove, runSustainedComparison } from "../src/comparison.js";
 import { attackDamageGrid, defenseDamageGrid } from "../src/breakpoints.js";
-import { optimizePowerUps, type PowerUpSlotInput } from "../src/powerUp.js";
+import { optimizePowerUps, planPowerUpBudget, type PowerUpSlotInput } from "../src/powerUp.js";
 import { runSpeciesReverseLookup, type SpeciesReportBossTarget } from "../src/speciesReport.js";
 import { simulateStepwiseBattle } from "../src/simulate.js";
 import { runTeamRaid, type TeamRaidSlotInput } from "../src/teamRaid.js";
@@ -63,6 +63,21 @@ function powerUpSlots(level: number, ivs: IVSpread): PowerUpSlotInput[] {
   }));
 }
 
+/** Same as powerUpSlots, but with a caller-chosen (tight) per-slot candyOnHand — see perf.test.ts's matching helper for why. */
+function powerUpSlotsWithCandy(level: number, ivs: IVSpread, candyOnHand: number): PowerUpSlotInput[] {
+  return rosterSpecies.map((species) => ({
+    species,
+    fastMoveId: null,
+    chargedMoveId: null,
+    isMega: species.id === PERF_ATTACKER_ID,
+    level,
+    ivs,
+    costModifiers: { isShadow: false, isPurified: false, isLucky: false },
+    candyOnHand,
+    xlCandyOnHand: candyOnHand,
+  }));
+}
+
 describe("simulate.ts: one stepwise simulation run", () => {
   const params = buildPerfStepwiseParams(attacker, boss);
   bench("simulateStepwiseBattle (single run, real species)", () => {
@@ -108,6 +123,44 @@ describe("powerUp.ts: full optimizer sweep (~180 candidates, default-like roster
       raidTimerSeconds: 300,
       costTable,
       stardustOnHand: 999_999_999,
+      seed: 1,
+    });
+  });
+});
+
+describe("powerUp.ts: fixed-budget greedy planner (worst-case: level 1 -> maxLevel 50, effectively unlimited budget)", () => {
+  bench("planPowerUpBudget (6-slot roster, 20 iterations)", () => {
+    planPowerUpBudget({
+      slots: powerUpSlots(1, PERF_IVS),
+      boss,
+      dodge: { kind: "perfect" },
+      bossChargedMoveMeanIntervalSeconds: PERF_BOSS_CHARGED_MOVE_MEAN_INTERVAL_SECONDS,
+      raidTimerSeconds: 300,
+      costTable,
+      stardustOnHand: 999_999_999,
+      rareCandyOnHand: 99_999,
+      rareCandyXlOnHand: 99_999,
+      maxLevel: 50,
+      iterations: 20,
+      seed: 1,
+    });
+  });
+});
+
+describe("powerUp.ts: fixed-budget greedy planner's post-search 'best blocked candidate' pass (candy-starved slots)", () => {
+  bench("planPowerUpBudget (6-slot roster, level 20, tight own-candy, generous shared pools, 20 iterations)", () => {
+    planPowerUpBudget({
+      slots: powerUpSlotsWithCandy(20, PERF_IVS, 15),
+      boss,
+      dodge: { kind: "perfect" },
+      bossChargedMoveMeanIntervalSeconds: PERF_BOSS_CHARGED_MOVE_MEAN_INTERVAL_SECONDS,
+      raidTimerSeconds: 300,
+      costTable,
+      stardustOnHand: 999_999_999,
+      rareCandyOnHand: 30,
+      rareCandyXlOnHand: 30,
+      maxLevel: 50,
+      iterations: 20,
       seed: 1,
     });
   });

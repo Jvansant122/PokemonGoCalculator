@@ -126,6 +126,14 @@ npm workspaces monorepo, two packages:
   power-up candidate is re-simulated as a full Team Raid with paired seeds and ranked by team-DPS
   gained per 1000 stardust and per candy SEPARATELY, never one blended score; the per-slot
   headline is the cost to the next floored per-hit damage breakpoint against the chosen boss.
+  The tab answers TWO different questions and the distinction is load-bearing: `optimizePowerUps`
+  ranks each candidate **priced as if it were the only thing you buy** (so two rows can both read
+  "affordable" while being jointly unaffordable — don't "fix" that into a joint constraint), while
+  `planPowerUpBudget` (2026-09-08) answers "here is 100k stardust, 10 candy each and 25 Rare
+  Candy — what should I actually do?" as one joint allocation. The two shared **Rare Candy** pools
+  (`rareCandyOnHand`/`rareCandyXlOnHand`) are account-wide and fungible across slots, 1:1, and a
+  slot always spends its OWN per-species candy first; plain Rare Candy can never become XL Candy
+  (MECHANICS.md, "Fungible candy currencies").
   v1 has no login — the roster lives in the URL like every other tab; real persistence is
   `PLAN_login_and_roster_persistence.md`'s job). Each has its own shareable `Scenario`-family
   type and URL query param (`s` / `ts` / `sr` / `ivc` / `adb` / `pu`) — don't conflate them.

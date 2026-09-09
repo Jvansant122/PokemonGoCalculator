@@ -10,7 +10,8 @@ import {
   bossChargedMoveReadySeconds,
   bossEffectiveHp,
   optimizePowerUps,
-  type PowerUpOptimizerInputs,
+  planPowerUpBudget,
+  type PowerUpBudgetInputs,
   type RaidTier,
   type SpeciesDefinition,
   type SpeciesRegistry,
@@ -62,6 +63,16 @@ export interface PowerUpOptimizerRunResult {
   bossReadySeconds: number | null;
   bossHp: number | null;
   data: ReturnType<typeof optimizePowerUps> | null;
+  /**
+   * The fixed-budget planner's output — a DIFFERENT question than `data`
+   * above ("what SET of upgrades fits this whole stardust/Rare Candy/Rare
+   * Candy XL budget?" vs. `data`'s "what is the single best next power-up?").
+   * Computed unconditionally alongside `data` (measured ~0.8s combined for
+   * both calls on the default roster — comfortably cheap, no debounce-gating
+   * toggle needed). Null only when `data` is also null (no boss/no fielded
+   * slot) or the same computation error applies — see `error`.
+   */
+  plan: ReturnType<typeof planPowerUpBudget> | null;
   error: string | null;
 }
 
@@ -90,11 +101,12 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
   const bossHp = bossSpecies ? bossEffectiveHp(bossSpecies, bossRaidTier) : null;
 
   let data: ReturnType<typeof optimizePowerUps> | null = null;
+  let plan: ReturnType<typeof planPowerUpBudget> | null = null;
   let error: string | null = null;
 
   if (bossSpecies && a.slots.some((s) => s.speciesId)) {
     try {
-      const optimizerInputs: PowerUpOptimizerInputs = {
+      const optimizerInputs: PowerUpBudgetInputs = {
         slots: a.slots.map((s) => {
           const species = resolveSpecies(s.speciesId);
           const effectiveShadowFlag = effectiveIsShadow(species, s.isShadow);
@@ -115,6 +127,8 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
         }),
         costTable: powerUpCostTable,
         stardustOnHand: Math.max(0, Math.floor(Number.isFinite(a.stardustOnHand) ? a.stardustOnHand : 0)),
+        rareCandyOnHand: Math.max(0, Math.floor(Number.isFinite(a.rareCandyOnHand) ? a.rareCandyOnHand : 0)),
+        rareCandyXlOnHand: Math.max(0, Math.floor(Number.isFinite(a.rareCandyXlOnHand) ? a.rareCandyXlOnHand : 0)),
         boss: bossSpecies,
         bossRaidTier,
         bossFastMoveId: a.bossFastMoveId,
@@ -132,10 +146,14 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
         iterations: OPTIMIZER_ITERATIONS,
       };
       data = optimizePowerUps(optimizerInputs);
+      // Same seed/iteration convention as optimizePowerUps above — a
+      // DIFFERENT algorithm (greedy multi-slot budget allocation) over the
+      // same inputs, not a re-derivation of `data`. See PowerUpOptimizerRunResult.plan.
+      plan = planPowerUpBudget(optimizerInputs);
     } catch (err) {
       error = (err as Error).message;
     }
   }
 
-  return { slotSpecies, bossSpecies, bossRaidTier, bossReadySeconds, bossHp, data, error };
+  return { slotSpecies, bossSpecies, bossRaidTier, bossReadySeconds, bossHp, data, plan, error };
 }

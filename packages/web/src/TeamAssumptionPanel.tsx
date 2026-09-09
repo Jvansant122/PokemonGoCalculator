@@ -1,29 +1,10 @@
-import { MAX_TEAM_RAID_SLOTS, WEATHER_BOOSTED_TYPES, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
+import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
-
-const WEATHER_LABELS: Record<WeatherCondition, string> = {
-  none: "None",
-  sunny: "Sunny/Clear",
-  rainy: "Rain",
-  windy: "Windy",
-  cloudy: "Cloudy",
-  fog: "Fog",
-  snow: "Snow",
-  partly_cloudy: "Partly Cloudy",
-};
-const WEATHER_OPTIONS: { value: WeatherCondition; label: string }[] = (
-  Object.keys(WEATHER_BOOSTED_TYPES) as WeatherCondition[]
-).map((value) => {
-  const boosted = WEATHER_BOOSTED_TYPES[value];
-  return {
-    value,
-    label: boosted.length === 0 ? WEATHER_LABELS[value] : `${WEATHER_LABELS[value]} (boosts ${boosted.join("/")})`,
-  };
-});
 
 /** One roster slot's own configuration — mirrors teamScenario.ts's TeamScenarioSlot exactly, field for field. */
 export interface TeamSlotAssumption {
@@ -465,16 +446,7 @@ export function TeamAssumptionPanel({
           </div>
         )}
 
-        <div className="field">
-          <label htmlFor="team-weather">Weather</label>
-          <select id="team-weather" value={value.weather} onChange={(e) => set("weather", e.target.value as WeatherCondition)}>
-            {WEATHER_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <WeatherSelect idPrefix="team" value={value.weather} onChange={(w) => set("weather", w)} />
 
         <BossCadenceSelect idPrefix="team" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 
