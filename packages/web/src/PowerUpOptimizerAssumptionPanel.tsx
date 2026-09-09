@@ -552,7 +552,6 @@ export function PowerUpOptimizerAssumptionPanel({
           />
         </div>
 
-        {value.mode === "single-raid" && (
         <div className="field">
           <label htmlFor="pu-rankBy">Rank candidates by</label>
           <select id="pu-rankBy" value={value.rankBy} onChange={(e) => set("rankBy", e.target.value as PowerUpRankBy)}>
@@ -562,11 +561,10 @@ export function PowerUpOptimizerAssumptionPanel({
           </select>
           <p className="species-picker-hint">
             Display-only — never changes which candidates exist or their own numbers, only the sort order of the
-            table below. Stardust and candy are deliberately kept as two separate efficiency numbers rather than one
-            blended score, since they aren't fungible resources for a real player.
+            ranked table below (both modes). Stardust and candy are deliberately kept as two separate efficiency
+            numbers rather than one blended score, since they aren't fungible resources for a real player.
           </p>
         </div>
-        )}
 
         <div className="field">
           <label htmlFor="pu-dodge">Dodge boss's charged attacks</label>

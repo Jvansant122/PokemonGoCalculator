@@ -591,7 +591,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               title="Also sweeps bosses this pipeline has recorded before but that aren't part of the currently-active raid roster right now — see the 'past'/'past (researched)'/'past (archive)' badges in the table below for each one's provenance."
             >
               <option value="no">No — active raids only</option>
-              <option value="yes">Yes — active + past raids ({pastRaidOptions.length} recorded)</option>
+              <option value="yes">Yes — active + past raids ({bossOptions.length + pastRaidOptions.length} recorded)</option>
             </select>
             {/*
               The coverage description belongs HERE, on the control itself,

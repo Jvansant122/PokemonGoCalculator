@@ -11,6 +11,7 @@ import {
   type RosterBudgetStep,
   type RosterNeverCompetitiveEntry,
   type RosterPerBossImpact,
+  type RosterPowerUpCandidate,
   type SpeciesDefinition,
   type WeightedRaidTarget,
 } from "@pogo-analyzer/engine";
@@ -28,6 +29,7 @@ import {
   type PowerUpRankBy,
 } from "./powerUpOptimizerScenario.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
+import { efficiencyForRankBy, sortCandidatesByEfficiency } from "./powerUpCandidateSort.js";
 import { RosterImportPanel } from "./RosterImportPanel.js";
 import { hydrateRosterPool, loadRosterPool, type RosterPool } from "./rosterPool.js";
 import { useDebouncedValue } from "./useDebouncedValue.js";
@@ -290,9 +292,12 @@ function speciesLabel(s: SpeciesDefinition): string {
 }
 
 function candidateEfficiency(c: PowerUpCandidate, rankBy: PowerUpRankBy): number | null {
-  if (rankBy === "stardust") return c.deltaTeamDpsPer1000Stardust;
-  if (rankBy === "candy") return c.deltaTeamDpsPerCandy;
-  return c.deltaTeamDpsPerXlCandy;
+  return efficiencyForRankBy(rankBy, c.deltaTeamDpsPer1000Stardust, c.deltaTeamDpsPerCandy, c.deltaTeamDpsPerXlCandy);
+}
+
+/** Same idea as candidateEfficiency above, for multi-raid's differently-named fields — see powerUpCandidateSort.ts's own doc comment on why the two shapes need separate call sites into the same shared resolver. */
+function rosterCandidateEfficiency(c: RosterPowerUpCandidate, rankBy: PowerUpRankBy): number | null {
+  return efficiencyForRankBy(rankBy, c.deltaPer1000Stardust, c.deltaPerCandy, c.deltaPerXlCandy);
 }
 
 function rankByLabel(rankBy: PowerUpRankBy): string {
@@ -444,7 +449,7 @@ function MultiRaidPerBossTable({ perBoss, columnCount }: { perBoss: RosterPerBos
   );
 }
 
-const MULTI_RAID_ROW_COLUMN_COUNT = 9;
+const MULTI_RAID_ROW_COLUMN_COUNT = 12;
 
 /**
  * One row of the multi-raid ranked/benched candidate tables — shared so the
@@ -468,6 +473,11 @@ const MULTI_RAID_ROW_COLUMN_COUNT = 9;
 function MultiRaidCandidateRow({ group, identity }: { group: DedupedRosterCandidateGroup; identity?: string }) {
   const [expanded, setExpanded] = useState(false);
   const c = group.representative;
+  // "—" when this candidate isn't significant (aggregate OR per-boss — see
+  // RosterPowerUpCandidate.exceedsNoise's own doc comment) or the resource
+  // cost behind that column is 0 (deltaPerX is null) — same convention as
+  // single-raid's deltaExceedsNoise-gated efficiency columns.
+  const showEfficiency = c.exceedsNoise;
   return (
     <>
       <tr style={{ opacity: c.exceedsNoise ? 1 : 0.6 }}>
@@ -514,6 +524,9 @@ function MultiRaidCandidateRow({ group, identity }: { group: DedupedRosterCandid
             "≈0 (no measurable change)"
           )}
         </td>
+        <td>{!showEfficiency || c.deltaPer1000Stardust === null ? "—" : c.deltaPer1000Stardust.toFixed(3)}</td>
+        <td>{!showEfficiency || c.deltaPerCandy === null ? "—" : c.deltaPerCandy.toFixed(3)}</td>
+        <td>{!showEfficiency || c.deltaPerXlCandy === null ? "—" : c.deltaPerXlCandy.toFixed(3)}</td>
         <td>
           {c.bestBossDeltaTeamDps === null
             ? "—"
@@ -614,6 +627,13 @@ function MultiRaidCandidateTableHead({ withTooltips }: { withTooltips: boolean }
         <th>Candy</th>
         <th>XL candy</th>
         <th title={withTooltips ? "Weighted mean across every swept boss" : undefined}>Mean Δ team DPS</th>
+        <th title={withTooltips ? "Mean Δ team DPS per 1000 stardust spent — '—' when this candidate isn't significant or has no stardust cost. Kept separate from candy, never blended into one score." : undefined}>
+          /1000 stardust
+        </th>
+        <th title={withTooltips ? "Regular candy only, never blended with stardust. '—' when this candidate isn't significant or has no regular-candy cost." : undefined}>
+          /candy
+        </th>
+        <th title={withTooltips ? "'—' when this candidate isn't significant or has no XL candy cost." : undefined}>/XL candy</th>
         <th
           title={
             withTooltips
@@ -653,6 +673,8 @@ interface MultiRaidResultsSectionProps {
   ranOn: "worker" | "main-thread-fallback" | null;
   elapsedMs: number;
   onRunSweep: () => void;
+  /** Same selector single-raid mode already exposes — sorts the ranked table client-side by the chosen resource's efficiency, same as single-raid's own sortedCandidates (CLAUDE.md standing decision: never blended into one score). */
+  rankBy: PowerUpRankBy;
 }
 
 /**
@@ -679,6 +701,7 @@ function MultiRaidResultsSection({
   ranOn,
   elapsedMs,
   onRunSweep,
+  rankBy,
 }: MultiRaidResultsSectionProps) {
   const [showAllMultiRaidCandidates, setShowAllMultiRaidCandidates] = useState(false);
 
@@ -688,7 +711,26 @@ function MultiRaidResultsSection({
   // (react-hooks/exhaustive-deps). Depending on `run` itself instead is
   // stable across renders where nothing actually changed.
   const dedupedCandidates = useMemo(() => dedupeInterchangeableCandidates(run?.data?.candidates ?? [], pool), [run, pool]);
-  const visibleCandidateGroups = showAllMultiRaidCandidates ? dedupedCandidates : dedupedCandidates.slice(0, MULTI_RAID_TABLE_INITIAL_ROWS);
+  // Re-sorted client-side by the chosen rankBy — same "cheap, bound to the
+  // LIVE selector" reasoning as single-raid's own sortedCandidates (kept in
+  // sync via powerUpCandidateSort.ts's shared comparator, per CLAUDE.md's
+  // standing decision that stardust/candy/XL efficiency are never blended
+  // into one score). Sorted AFTER dedup, not before — dedupeInterchangeableCandidates
+  // only needs a caller-preferred order to pick which member surfaces first
+  // within a group, not to determine the final displayed order.
+  const sortedCandidateGroups = useMemo(
+    () =>
+      sortCandidatesByEfficiency(dedupedCandidates, (group) => ({
+        delta: group.representative.meanDeltaTeamDps,
+        isSignificant: group.representative.exceedsNoise,
+        costStardust: group.representative.cost.stardust,
+        efficiency: rosterCandidateEfficiency(group.representative, rankBy),
+      })),
+    [dedupedCandidates, rankBy],
+  );
+  const visibleCandidateGroups = showAllMultiRaidCandidates
+    ? sortedCandidateGroups
+    : sortedCandidateGroups.slice(0, MULTI_RAID_TABLE_INITIAL_ROWS);
 
   const dedupedBenched = useMemo(() => dedupeInterchangeableCandidates(run?.data?.benchedButPromising ?? [], pool), [run, pool]);
 
@@ -790,7 +832,13 @@ function MultiRaidResultsSection({
             </dl>
           </div>
 
-          <h3>Ranked candidates</h3>
+          <h3>
+            Ranked candidates
+            <span className="species-picker-hint" style={{ marginLeft: 8 }}>
+              grouped: measurable gains first (sorted by {rankByLabel(rankBy)}, descending), then within-noise rows
+              (cheapest first), then measurable losses last (worst first)
+            </span>
+          </h3>
           <div className="table-scroll">
             <table className="time-series-table">
               <MultiRaidCandidateTableHead withTooltips />
@@ -1971,37 +2019,17 @@ export function PowerUpOptimizerView() {
   // Sorting is over the ALREADY-COMPUTED candidates and is cheap — kept bound
   // to the LIVE rankBy (not the debounced snapshot) so switching the sort
   // column is instant, same "cheap display-only work shouldn't wait on the
-  // debounce" reasoning as SpeciesReportView's sortedRows.
-  //
-  // Three-group order (noise-floor-aware, not a plain delta sort): (1) rows
-  // beyond the noise floor with a positive delta, by the chosen efficiency
-  // descending (null efficiency still sinks within this group — nothing to
-  // divide by, not a zero result); (2) rows inside the noise floor — "no
-  // measurable change" — by stardust cost ascending, cheapest first; (3)
-  // rows beyond the noise floor with a negative delta, most negative last
-  // (a genuinely-confirmed-bad power-up, sorted worst-to-least-bad).
+  // debounce" reasoning as SpeciesReportView's sortedRows. The actual
+  // three-group noise-floor-aware order lives in powerUpCandidateSort.ts,
+  // shared with multi-raid mode's own ranked-table sort below.
   const sortedCandidates = useMemo(() => {
     const list = result.data?.candidates ?? [];
-    const group = (c: PowerUpCandidate): 0 | 1 | 2 => {
-      if (!c.deltaExceedsNoise) return 1;
-      return c.deltaTeamDps > 0 ? 0 : 2;
-    };
-    return [...list].sort((a, b) => {
-      const ga = group(a);
-      const gb = group(b);
-      if (ga !== gb) return ga - gb;
-      if (ga === 0) {
-        const ea = candidateEfficiency(a, assumptions.rankBy);
-        const eb = candidateEfficiency(b, assumptions.rankBy);
-        if (ea === null && eb === null) return 0;
-        if (ea === null) return 1;
-        if (eb === null) return -1;
-        return eb - ea;
-      }
-      if (ga === 1) return a.cost.stardust - b.cost.stardust;
-      // ga === 2: most-negative delta last.
-      return b.deltaTeamDps - a.deltaTeamDps;
-    });
+    return sortCandidatesByEfficiency(list, (c) => ({
+      delta: c.deltaTeamDps,
+      isSignificant: c.deltaExceedsNoise,
+      costStardust: c.cost.stardust,
+      efficiency: candidateEfficiency(c, assumptions.rankBy),
+    }));
   }, [result.data, assumptions.rankBy]);
 
   const visibleCandidates = showAllCandidates ? sortedCandidates : sortedCandidates.slice(0, CANDIDATE_TABLE_INITIAL_ROWS);
@@ -2078,6 +2106,7 @@ export function PowerUpOptimizerView() {
             ranOn={multiRaidRun?.ranOn ?? null}
             elapsedMs={sweepElapsedMs}
             onRunSweep={handleRunMultiRaidSweep}
+            rankBy={assumptions.rankBy}
           />
           <MultiRaidBudgetPlanSection
             entryIdentities={entryIdentities}
