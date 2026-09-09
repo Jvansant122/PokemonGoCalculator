@@ -8,16 +8,22 @@ import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
 
 /**
  * Tests for wiring StepwiseBoss.chargedMoveCadence ("fixed-interval" |
- * "energy-driven") through the three simulating entry points
- * (runSustainedComparison, runSpeciesReverseLookup, runTeamRaid). Shipped from
- * PLAN_energy_driven_boss_cadence.md, which was deleted on completion per this
- * repo's convention — see HANDOFF.md for the outcome and MECHANICS.md for the
- * sourcing behind the model. The underlying model itself is already
- * covered by test/energyDrivenBossCadence.test.ts (low-level
+ * "energy-driven" | "energy-gated-interval") through the three simulating
+ * entry points (runSustainedComparison, runSpeciesReverseLookup,
+ * runTeamRaid). The "fixed-interval"/"energy-driven" coverage below shipped
+ * from PLAN_energy_driven_boss_cadence.md, which was deleted on completion
+ * per this repo's convention — see HANDOFF.md for the outcome and
+ * MECHANICS.md for the sourcing behind the model. The "energy-gated-interval"
+ * coverage at the bottom of this file was added alongside the model itself
+ * (2026-09-08). The underlying models themselves are already covered by
+ * test/energyDrivenBossCadence.test.ts and
+ * test/energyGatedIntervalBossCadence.test.ts (low-level
  * simulateStepwiseBattle) — this file is specifically about the plumbing: the
  * option reaching every entry point, staying a no-op by default, and (the one
- * genuine design problem) the boss's accumulated energy surviving a
- * TeamRaid slot handoff and a wipe-and-revive instead of silently resetting.
+ * genuine design problem) the boss's accumulated energy — AND, under
+ * "energy-gated-interval", its pending post-eligibility delay too — surviving
+ * a TeamRaid slot handoff and a wipe-and-revive instead of silently
+ * resetting.
  */
 
 const LEVEL = 30;
@@ -440,6 +446,204 @@ describe("StepwiseBoss.chargedMoveCadence wiring", () => {
       // survival across real species, and it reorders Species Report's rankings
       // outright (see HANDOFF.md's 2026-09-08 entry).
       expect(highMean).toBeGreaterThan(lowMean * 1.5);
+    });
+  });
+
+  describe("StepwiseBoss.chargedMoveCadence = 'energy-gated-interval' wiring", () => {
+    // Reuses the same TANKY_ATTACKER/LOW_COST_BOSS shape as the
+    // "energy-driven" describe blocks above (huge attacker HP so it survives
+    // the whole window; a weak boss fast move + low charged-move cost so
+    // eligibility is reached quickly and repeatedly) — only the cadence value
+    // and a REQUIRED chargedMoveMeanIntervalSeconds differ (this mode, unlike
+    // "energy-driven", actually consults that field — as the mean delay after
+    // becoming eligible, not the mean seconds between casts).
+    const TANKY_ATTACKER: SpeciesDefinition = {
+      id: "tanky-attacker-gated-wiring-test",
+      name: "Tanky Attacker Gated Wiring Test",
+      types: ["normal"],
+      baseAttack: 200,
+      baseDefense: 50,
+      baseStamina: 100_000,
+      fastMoves: [STRONG_FAST],
+      chargedMoves: [UNREACHABLE_CHARGED],
+    };
+    const LOW_COST_BOSS: SpeciesDefinition = {
+      ...ENERGY_BOSS,
+      id: "low-cost-energy-boss-gated",
+      fastMoves: [{ ...ENERGY_BOSS_FAST, power: 5 }],
+      chargedMoves: [{ ...ENERGY_BOSS_CHARGED, energyCost: 10 }],
+    };
+
+    it("reaches runSustainedComparison — observable difference from fixed-interval", () => {
+      function base(overrides: Partial<SustainedComparisonInputs>): SustainedComparisonInputs {
+        return {
+          candidates: [TANKY_ATTACKER],
+          boss: LOW_COST_BOSS,
+          level: LEVEL,
+          ivs: IVS,
+          dodge: { kind: "none" },
+          bossChargedMoveMeanIntervalSeconds: 2,
+          maxSeconds: 30,
+          iterations: 1,
+          ...overrides,
+        };
+      }
+      const gated = runSustainedComparison(base({ bossChargedMoveCadence: "energy-gated-interval" }));
+      const fixed = runSustainedComparison(base({ bossChargedMoveCadence: "fixed-interval", bossChargedMoveMeanIntervalSeconds: 100_000 }));
+      expect(fixed[0]!.representativeRun.bossChargedHitsTaken).toBe(0);
+      // Many independent eligibility-crossing opportunities over 30s at this
+      // DPS/cost ratio — zero fires would be astronomically unlikely.
+      expect(gated[0]!.representativeRun.bossChargedHitsTaken).toBeGreaterThan(0);
+      expect(gated[0]!.representativeRun.bossEndingEnergy).not.toBeNull();
+    });
+
+    it("reaches runSpeciesReverseLookup through the reverse-lookup pass-through", () => {
+      function base(overrides: Partial<SpeciesReportInputs>): SpeciesReportInputs {
+        return {
+          species: TANKY_ATTACKER,
+          level: LEVEL,
+          ivs: IVS,
+          dodge: { kind: "none" },
+          bossChargedMoveMeanIntervalSeconds: 2,
+          maxSeconds: 30,
+          iterations: 1,
+          targets: [{ species: LOW_COST_BOSS }],
+          ...overrides,
+        };
+      }
+      const gated = runSpeciesReverseLookup(base({ bossChargedMoveCadence: "energy-gated-interval" }));
+      expect(gated.rows[0]!.sustained.representativeRun.bossChargedHitsTaken).toBeGreaterThan(0);
+    });
+
+    // The two carryover tests below use a dedicated fixture (energyCost: 14
+    // — exactly what GLASS_CANNON's own single hit banks, so eligibility is
+    // reached the instant that hit lands, not merely "eventually") and
+    // hand-picked seeds, verified against the real engine via a throwaway
+    // tsx scratch script (deleted after use, per this project's verification
+    // discipline) rather than derived by hand — the exact seconds/energy
+    // values below are its output, not arithmetic.
+    const GATED_ENERGY_BOSS: SpeciesDefinition = {
+      ...ENERGY_BOSS,
+      id: "energy-boss-cadence-wiring-test-gated",
+      chargedMoves: [{ ...ENERGY_BOSS_CHARGED, energyCost: 14 }],
+    };
+
+    function standaloneBossGated(startingEnergy: number, mean: number, chargedMoveNextFireInSeconds?: number): StepwiseBoss {
+      return {
+        attackStat: 100,
+        defenseStat: 50,
+        fastMove: ENERGY_BOSS_FAST,
+        damageOut: { stab: true, typeEffectiveness: 1 },
+        chargedMove: { ...ENERGY_BOSS_CHARGED, energyCost: 14 },
+        chargedMoveDamageOut: { stab: true, typeEffectiveness: 1 },
+        chargedMoveCadence: "energy-gated-interval",
+        chargedMoveMeanIntervalSeconds: mean,
+        startingEnergy,
+        chargedMoveNextFireInSeconds,
+      };
+    }
+
+    it("carries BOTH the boss's accumulated energy AND its pending post-eligibility delay across a slot handoff", () => {
+      const mean = 2;
+      // Slot 1: a single GLASS_CANNON hit banks exactly 14 energy — precisely
+      // this boss's charged-move cost, so it becomes eligible and arms a
+      // delay the instant that hit lands, but (for this seed) the delay
+      // outlasts the ~1s of fight remaining, so it never actually fires —
+      // leaving a real, non-null pending delay to carry forward, not just
+      // energy.
+      const slot1Standalone = simulateStepwiseBattle({ attacker: standaloneAttacker(), boss: standaloneBossGated(0, mean), seed: 8, maxSeconds: 30 });
+      expect(slot1Standalone.bossChargedHitsTaken).toBe(0);
+      expect(slot1Standalone.bossEndingEnergy).toBe(14);
+      expect(slot1Standalone.bossChargedMoveResidualSeconds).not.toBeNull();
+      expect(slot1Standalone.bossChargedMoveResidualSeconds!).toBeCloseTo(0.45, 2);
+
+      const result = runTeamRaid({
+        slots: [{ species: GLASS_CANNON }, { species: GLASS_CANNON }],
+        boss: GATED_ENERGY_BOSS,
+        level: LEVEL,
+        ivs: IVS,
+        dodge: { kind: "none" },
+        bossChargedMoveMeanIntervalSeconds: mean,
+        bossChargedMoveCadence: "energy-gated-interval",
+        raidTimerSeconds: 10,
+        seed: 8,
+      });
+      expect(result.slots.length).toBeGreaterThanOrEqual(2);
+      expect(result.slots[0]!.bossChargedHitsTaken).toBe(0);
+
+      // Reproduce slot 2 standalone THREE ways for the same seed: CARRIED
+      // (both the real bossEndingEnergy AND the real bossChargedMoveResidualSeconds
+      // just asserted above), ENERGY-ONLY-RESET (energy carried, but the
+      // delay re-rolled from scratch — the specific bug this test guards
+      // against: silently re-arming instead of honouring the carried delay),
+      // and FULLY-RESET (neither carried, the "silently restarts from
+      // nothing" bug fixed-interval already guards against).
+      const seedForSlot2 = 8 + 7919; // fightIndex 1's seed, matching runTeamRaid's own convention
+      const slot2Carried = simulateStepwiseBattle({
+        attacker: standaloneAttacker(),
+        boss: standaloneBossGated(slot1Standalone.bossEndingEnergy!, mean, slot1Standalone.bossChargedMoveResidualSeconds!),
+        seed: seedForSlot2,
+        maxSeconds: 30,
+      });
+      const slot2EnergyOnlyReset = simulateStepwiseBattle({
+        attacker: standaloneAttacker(),
+        boss: standaloneBossGated(slot1Standalone.bossEndingEnergy!, mean), // no chargedMoveNextFireInSeconds -> fresh roll
+        seed: seedForSlot2,
+        maxSeconds: 30,
+      });
+      const slot2FullyReset = simulateStepwiseBattle({
+        attacker: standaloneAttacker(),
+        boss: standaloneBossGated(0, mean),
+        seed: seedForSlot2,
+        maxSeconds: 30,
+      });
+      // Pinned for seed=8 specifically (not a statistical claim): carrying
+      // the real delay fires; re-rolling a fresh delay from the same
+      // (already-eligible) energy does not, within this short a fight — the
+      // exact fork this test exists to catch. Fully resetting both fields
+      // never even reaches eligibility at all (same reasoning as slot 1).
+      expect(slot2Carried.bossChargedHitsTaken).toBe(1);
+      expect(slot2EnergyOnlyReset.bossChargedHitsTaken).toBe(0);
+      expect(slot2FullyReset.bossChargedHitsTaken).toBe(0);
+
+      // The real runTeamRaid output must match the CARRIED reproduction.
+      expect(result.slots[1]!.bossChargedHitsTaken).toBe(slot2Carried.bossChargedHitsTaken);
+      expect(result.slots[1]!.faintedAtSeconds).toBe(slot2Carried.faintedAtSeconds);
+    });
+
+    it("carries BOTH the boss's accumulated energy AND its pending delay across a wipe-and-revive, not just an ordinary same-cycle slot handoff", () => {
+      // A single-slot roster (the SAME slot re-fielded every cycle after
+      // each wipe) against the same never-clearable boss, mirroring the
+      // "energy-driven" wipe test above. Pinned for seed=1 (the default),
+      // found via the same throwaway scratch-script search as the handoff
+      // test above.
+      const result = runTeamRaid({
+        slots: [{ species: GLASS_CANNON }],
+        boss: GATED_ENERGY_BOSS,
+        level: LEVEL,
+        ivs: IVS,
+        dodge: { kind: "none" },
+        bossChargedMoveMeanIntervalSeconds: 2,
+        bossChargedMoveCadence: "energy-gated-interval",
+        raidTimerSeconds: 20,
+        reviveCostSeconds: 1,
+        seed: 1,
+      });
+
+      expect(result.wipeCount).toBeGreaterThan(0);
+      const cycle0 = result.slots.find((s) => s.cycleIndex === 0)!;
+      const cycle1 = result.slots.find((s) => s.cycleIndex === 1)!;
+      expect(cycle0).toBeDefined();
+      expect(cycle1).toBeDefined();
+      // One fight alone never reaches a within-fight fire (arms the delay
+      // but never lets it elapse before fainting) — same reasoning as slot 1
+      // above.
+      expect(cycle0.bossChargedHitsTaken).toBe(0);
+      // If wipe-and-revive silently reset either the boss's energy or its
+      // pending delay (the bug this test guards against), cycle 1 would
+      // repeat cycle 0's deterministic "arms but never fires" outcome — 0,
+      // not 1.
+      expect(cycle1.bossChargedHitsTaken).toBe(1);
     });
   });
 });

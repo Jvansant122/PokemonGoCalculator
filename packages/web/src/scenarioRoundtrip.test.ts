@@ -103,6 +103,16 @@ describe("ComparatorScenario round-trip", () => {
     expect(roundTripped).toEqual(nonDefault);
   });
 
+  it("round-trips the energy-gated-interval boss cadence value (a third cadence option, not just energy-driven)", () => {
+    const withGatedCadence: Assumptions = { ...nonDefault, bossChargedMoveCadence: "energy-gated-interval" };
+    const scenario = comparatorAssumptionsToScenario(withGatedCadence);
+    const url = buildScenarioUrl("http://example.test/", scenario);
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    const roundTripped = comparatorScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(withGatedCadence);
+  });
+
   it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
     const minimal = {
       candidates: ["kartana", "rayquaza"],
@@ -170,6 +180,16 @@ describe("TeamScenario round-trip", () => {
     expect(decoded).not.toBeNull();
     const roundTripped = teamScenarioToAssumptions(decoded!);
     expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("round-trips the energy-gated-interval boss cadence value (a third cadence option, not just energy-driven)", () => {
+    const withGatedCadence: TeamAssumptions = { ...nonDefault, bossChargedMoveCadence: "energy-gated-interval" };
+    const scenario = assumptionsToTeamScenario(withGatedCadence);
+    const url = buildTeamScenarioUrl("http://example.test/", scenario);
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    const roundTripped = teamScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(withGatedCadence);
   });
 
   it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {

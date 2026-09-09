@@ -1,6 +1,7 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import { resolveMove, runSustainedComparison, type SustainedCandidateResult } from "./comparison.js";
 import type { RaidTier } from "./raidBoss.js";
+import type { BossChargedMoveCadence } from "./simulate.js";
 import { typeEffectiveness } from "./typeChart.js";
 import type { IVSpread, PokemonType, SpeciesDefinition } from "./types.js";
 import type { WeatherCondition } from "./weather.js";
@@ -120,10 +121,10 @@ export interface SpeciesReportInputs {
   holdChargedMoveUntilSafe?: boolean;
   /** Active weather, applied per-move to both sides against every boss target — see weather.ts. Defaults to "none". */
   weather?: WeatherCondition;
-  /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption, the same user-adjustable value the two-candidate tab already exposes (Scenario's bossChargedMoveFrequencySeconds), not per-boss data this engine has no source for. Only consulted when bossChargedMoveCadence is "fixed-interval". */
+  /** Mean seconds between each boss's charged moves once it starts using them — one shared assumption, the same user-adjustable value the two-candidate tab already exposes (Scenario's bossChargedMoveFrequencySeconds), not per-boss data this engine has no source for. Consulted under "fixed-interval" as the mean interval between casts, and under "energy-gated-interval" as the mean delay after energy-eligibility (required there) — see comparison.ts's SustainedComparisonInputs.bossChargedMoveCadence. Ignored under "energy-driven". */
   bossChargedMoveMeanIntervalSeconds: number;
   /** See comparison.ts's SustainedComparisonInputs.bossChargedMoveCadence — one shared assumption swept identically across every boss target. Defaults to "fixed-interval". */
-  bossChargedMoveCadence?: "fixed-interval" | "energy-driven";
+  bossChargedMoveCadence?: BossChargedMoveCadence;
   /** See ComparisonInputs.bossStartingEnergy. Only affects each boss's own derived warmup default. Defaults to 0. */
   bossStartingEnergy?: number;
   maxSeconds?: number;

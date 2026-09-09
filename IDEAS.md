@@ -74,10 +74,14 @@ Ordered by how much they'd change results, not by effort.
    arrives quickly. Currently all move durations are treated uniformly. This shifts the fine
    structure of when damage lands, which matters most for dodge timing.
 
-3. **The 0.7s dodge window.** We model dodge damage (0.25) and its 0.5s cost, but not the window
-   itself. Related and harder: per-move windup-to-flash delay reportedly varies by move
-   (Flamethrower ~1.0s vs Fire Blast ~2.9s) rather than being flat — but that is `[unverified]`,
-   and pogoapi exposes no per-move windup field, so it is not derivable from current data sources.
+3. **The 0.7s dodge window** — and a per-move damage-window idea that was investigated and
+   **closed**. Dodge damage (0.25) and its 0.5s cost are both confirmed first-party now; the
+   ~0.7s window itself is still unmodelled and unsourced. The tempting adjacent idea — extracting
+   the per-move `damageWindowStartMs`/`damageWindowEndMs` fields that 399 of 403 GAME_MASTER move
+   templates carry — was chased down on 2026-09-09 and **rejected on the merits**: since the Sept
+   2024 rework, raid damage lands on regular 0.5s intervals and no longer observes those timers.
+   The engine setting `vulnerableWindowSeconds = durationSeconds` is therefore correct, not a
+   placeholder. See `MECHANICS.md`'s Dodging entry. Do not reopen without a contradicting source.
 
 4. **Dodge damage may scale with remaining HP.** Silph Road observed a player surviving 8 dodged
    Paybacks where 4-5 was expected. They flag it as needing confirmation and have no formula.
@@ -87,6 +91,28 @@ Ordered by how much they'd change results, not by effort.
 5. **The 0.5s combat cycle.** Since the Sept 2024 rework the real game runs on 0.5s cycles; our
    simulator uses a finer 0.1s tick. Nothing is mis-timed (0.5 is representable at 0.1), but the
    engine permits event boundaries the real game would snap. No known error from this today.
+
+6. **A real 1.0s Pokémon swap cost.** `BATTLE_SETTINGS.swapDurationMs = 1000`, first-party
+   (2026-09-09). `teamRaid.ts` defaults `swapCostSeconds` to `0` because no official value was
+   known to exist; one does now. Changing the default re-baselines every shared Team Raid link,
+   so it needs a deliberate call. Still open: whether it applies to faint-triggered auto-swaps,
+   manual swaps, or both.
+
+7. **The friendship attack bonus (3/5/7/10/12%).** A real raid multiplier, confirmed first-party,
+   currently inert in `damage.ts` behind a `bestBuddy` field that is never set and a code comment
+   that has the raid/PvP scope backwards. Wiring it up means a new `Scenario` assumption
+   (`add-scenario-assumption`), and it is single-trainer-scoped like weather — not a team-boost
+   mechanic. Fix the wrong comment regardless of whether the feature is built.
+
+8. **Super Mega Raids may not belong in a single-trainer tool at all.** A fixed 7-10 shields per
+   boss, one break per trainer, and a reported 8-10 trainer minimum make this tier structurally
+   group content: every other `RaidTier` can in principle be soloed given enough time, this one
+   cannot. (Note the client does *not* mark it in-person-only — `RAID_LEVEL_4/5_MEGA_ENHANCED` are
+   absent from `unsupportedRemoteRaidLevels`, so Super Mega Raids do support remote play. It is
+   the shield rule that forces a crowd, not the lobby rules.) The honest options are excluding or
+   caveating the tier, not modelling the shield phase — and the engine currently applies one flat
+   multiplier for the whole fight, so it simulates the tier as materially easier than it really
+   is. A product call, not a bug fix.
 
 Standing caveat for all of the above: the sourcing is ~2 years old and Niantic re-tunes raid
 internals without notice. Re-verify before building on any of it.

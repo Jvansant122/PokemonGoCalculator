@@ -1,41 +1,72 @@
 # Pogo-Researcher Memory Index
 
-- [Mega boost persists after faint (Primal/Rayquaza)](fact_mega_boost_persists_after_faint.md) — standard megas lose team boost on faint, Primals/Mega Rayquaza don't [community-consensus]
-- [Shadow Pokemon stats + mega-exclusivity](fact_shadow_pokemon_stats.md) — Atk x1.2/Def x0.83, and Shadow can't Mega Evolve [community-consensus]
-- [Proposal: boost-persists-through-faint species flag](proposal_boost_persists_through_faint.md) — proposed 2026-09-05, **BUILT** (SpeciesDefinition.boost.persistsThroughFaint, uptime.ts)
-- [Proposal: real Shadow stat multipliers](proposal_shadow_stat_multipliers.md) — proposed 2026-09-05, **BUILT** (isShadow + shadow.ts, wired through data-sync too)
-- [Proposal: teammateDps sensitivity check](proposal_teammate_dps_sensitivity.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #6 "Average teammate DPS")
-- [Proposal: continuous dodge-skill crossover](proposal_dodge_skill_crossover.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #4 "Dodge accuracy")
-- [Proposal: boss cadence sensitivity check](proposal_boss_cadence_sensitivity.md) — proposed 2026-09-05, **BUILT** (sensitivity.ts check #7 "Boss charged-move cadence")
-- [Finding: findCrossoverPartySize unwired in web UI](finding_crossover_party_size_unwired.md) — cheap wiring gap, not a proposal; still unwired as of 2026-09-05 (recheck before reusing)
-- [Fact: no post-charged-move lockout beyond stated duration](fact_no_post_charged_move_lockout.md) — [community-consensus] only, gamepress.gg/pvpoke.com hard to fetch directly here
-- [Proposal: sensitivity flip-bar visualization](proposal_sensitivity_flip_bar.md) — proposed 2026-09-05, **BUILT** (SensitivityView.tsx's FlipBar, confirmed later session)
-- [Proposal: crossover rate across randomized runs](proposal_crossover_rate_across_runs.md) — proposed 2026-09-05, still pending/not built as of 2026-09-05; needs engine-side per-run crossing computation, cross-cutting — do not repropose, it's a known backlog item
-- [Proposal: DPS/TDO community vocabulary labels](proposal_dps_tdo_vocabulary.md) — proposed 2026-09-05, **BUILT** (result-card dl labels, confirmed later session)
-- [Proposal: result-card own/team share bar](proposal_result_card_share_bar.md) — proposed 2026-09-05, **BUILT** (App.tsx's OwnTeamShareBar, confirmed later session)
-- [Fact: DPS/TDO/eDPS community vocabulary confirmed](fact_dps_tdo_vocabulary.md) — [community-consensus]
-- [Fact: weatherBoosted/bestBuddy are dead inputs](fact_weather_bestbuddy_dead_inputs.md) — STALE as of 2026-09-05: weatherBoosted is now live (see weather scenario proposal, built); bestBuddy still dead
-- [Fact: weather boost mechanic details](fact_weather_boost_mechanic.md) — 1.2x dmg + "+5 effective levels", type-per-weather map, applies both sides in raids [community-consensus]
-- [Fact: friendship/raid scope nuance](fact_friendship_raid_scope_nuance.md) — Best Buddy CP Boost vs PvP-only friendship attack multiplier are different mechanics, don't conflate
-- [Proposal: weather as Scenario assumption](proposal_weather_scenario_assumption.md) — proposed 2026-09-05, **BUILT** (Scenario.weather, 1.2x-only, no "+5 levels" nuance modeled, confirmed later session)
-- [Proposal: boss moveset-variant comparison](proposal_boss_moveset_variant_comparison.md) — proposed 2026-09-05, **BUILT** (compareAcrossBossChargedMoves + BossMovesetSweep, confirmed later session)
-- [Proposal: Field Survey ranked table across real species](proposal_field_survey_ranked_table.md) — proposed 2026-09-05, pending/not built as of 2026-09-05; biggest scope, touches Scenario tuple shape, flags Teambuilding-Analyzer adjacency — do not repropose, own large undertaking
-- [Proposal: per-stat IV sensitivity checks](proposal_iv_sensitivity_checks.md) — proposed 2026-09-05 (4th pass), routed for direct build; web-only, sensitivity.ts, no new Scenario field
-- [Proposal: raid clear timer + boss HP pass/fail](proposal_raid_clear_timer_hp.md) — proposed 2026-09-05, deep single pass; new Scenario field `raidTimerSeconds`, boss.baseStamina currently 100% inert — pending, not built
-- [Proposal: sequential 6-slot Team Raid Simulator tab](proposal_sequential_team_raid_tab.md) — design-only, 2026-09-05; Sec.9 addendum (same date) corrects full-team-wipe from a loss to a revive-and-continue (`reviveCostSeconds`) mechanic — pending, not built
-- [Fact: mega boost = other trainers, not own party (corroborated)](fact_mega_boost_other_trainers_not_own_party.md) — RESOLVED 2026-09-05: now 3 source families (official pokemon.com + Bulbapedia + Pokémon GO Hub x2), supersedes the Bulbapedia-only note
-- [Finding: shipped comparator's team-damage copy is mislabeled](finding_mega_boost_scope_mislabeling_in_shipped_tool.md) — RESOLVED 2026-09-05: "Teammates"/"your party" copy in AssumptionPanel/App.tsx/uptime.ts implies own bench, not "other trainers in raid" — real mislabeling, not a math bug; flags Teambuilding-Analyzer scope-creep risk in any fix
-- [Proposal: species reverse-lookup ("what is this good against")](proposal_species_reverse_lookup.md) — proposed 2026-09-05, design-only; surfaces load-bearing bug: RAID_BOSS_CPM=1.0 wrong for real synced bosses (only correct for hand-authored fixtures), blocks trustworthy numbers, must fix first; pending, not built
-- [Fact: real CPM values levels 40.5-50](fact_cpm_table_levels_41_50.md) — for IV Breakpoints feature; whole levels 3-source-confirmed, half levels formula-validated; do NOT add 50.5/51 (Pokemon cap stays 50 per official 2025 Niantic post)
-- [Fact: raid boss tier HP/CPM table RESOLVED](fact_raid_boss_tier_stats_resolved.md) — 2026-09-05 raw-wikitext fetch resolves the earlier "internally inconsistent" flag; real HP 600/3600/9000/15000/22500/25000 + mult 0.5974/0.73/0.79(plateau); HP is a fixed per-tier lookup, NOT baseStamina*CPM; confirms hand-tuned fixtures must stay untouched
-- [Proposal: fix DEFAULT_REAL_RAID_TIER fallback](proposal_default_raid_tier_fallback.md) — researched 2026-09-06; pogoapi.net has raid_bosses.json (current+previous per-tier) and pokemon_rarity.json, neither currently synced; recommends new data-sync work, not pure engine logic; pending, not built
-- [Fact: real power-up cost data source (pogoapi.net)](fact_powerup_cost_data_source.md) — pokemon_powerup_requirements.json endpoint exists, not yet synced; universal table + Lucky/Shadow/Purified % modifiers, cost-side only
-- [Proposal: Power-Up Optimizer fleshed out](proposal_powerup_optimizer_flesh_out.md) — researched 2026-09-07; reuses compareIvSpreads+runTeamRaid, no-login query-param roster v1, confirmed not a Teambuilding-Analyzer conflict; returned as response text, NOT written into IDEAS.md per Write-tool role boundary — pending, not built
-- [Proposal: historical raid boss sourcing](proposal_historical_raid_bosses.md) — researched 2026-09-07; Bulbapedia year-pages (structured, but frozen at 2022), Fandom wiki unverified (fetch blocked, HTTP 402), pogoapi/ScrapedDuck/Serebii all ruled weak; recommends honest UI-scope fix now + separate narrow hand-cited Bulbapedia 2017-2022 backfill sliced by tier; old Tier1-5→current RaidTier mapping citable via Aug 2020 Niantic tier-merge, EX raids have no mapping — pending, not built
-- [Proposal: third live raid-boss source](proposal_third_raid_source.md) — researched 2026-09-07; recommends `fight.pokebattler.com/raids` (documented JSON API, matched live roster exactly, permissive robots.txt) over GO Hub's page (exact match too but zero source disclosure = same-upstream risk); pokemon-go-api ruled out (LeekDuck-sourced), Serebii/pogoinfo/fandom-gist all empirically stale/blocked; independence is circumstantial not proven — pending, not built
-- [Fact: Struggle energy cost is format-dependent, pogoapi's 0 is correct for PvE](fact_struggle_energy_cost.md) — researched 2026-09-08; raid/gym=0, PvP/GBL=100 (user's 100 prior was the PvP number); NOT a bug, no override warranted; couldn't hit raw GAME_MASTER directly (10MB fetch cap + grep.app 429), resting on 3 corroborating community sources instead
-- [Fact: raid boss attack timing is energy-driven (fast-move + damage-taken), not fixed-interval](fact_raid_boss_attack_timing.md) — researched 2026-09-08; boss also gains energy from damage taken (0.02→0.5 briefly, Sept 2024, unclear current value) which this engine's boss side doesn't model; VALIDATES existing `durationSeconds`-only clamp floor in simulate.ts (padding it would be less correct, not more); dodge constants (0.25/0.5s/0.7s) directly corroborated via a real fetched source (pokemongohub.net)
-- [Fact: boss charged-move 50%-roll denominator is undocumented](fact_boss_charged_move_decision_cadence.md) — researched 2026-09-08; "50% chance" and "0.5s combat cycle" are separately-sourced facts, do NOT conflate into "50% per 0.5s tick"; recommends re-roll per boss move-completion event (any move, not just fast moves) as best-reasoned fix for "stuck at energy cap forever" bug — labelled inference, not a sourced number
-- [Fact: Rare Candy / Rare Candy XL / Convert-button conversions](fact_rare_candy_xl_candy_conversions.md) — researched 2026-09-08; 3 separate 1:1/100:1 mechanics, no direct Rare-Candy-to-XL shortcut; flags one WebSearch-synthesized claim as unconfirmed/likely-hallucinated
-- [Fact: Trainer Level power-up cap is min(trainerLevel+10, 50)](fact_trainer_level_powerup_cap.md) — researched 2026-09-08; raw-wikitext-verified, cross-checked vs official Oct-2025 Niantic blog; explicitly rejects stale "+2"/"+1.5" numbers found mid-research; currently unmodelled anywhere in engine
-- [Proposal: fixed-budget multi-currency Power-Up planner](proposal_fixed_budget_powerup_planner.md) — researched 2026-09-08, pending; flags new Trainer Level Scenario input + confirms knapsack-across-own-roster is NOT the ruled-out Teambuilding Analyzer
+- [Mega boost persists after faint](fact_mega_boost_persists_after_faint.md) — standard megas lose team boost on faint, Primals/Mega Rayquaza don't [community-consensus]
+- [Shadow Pokemon stats + mega-exclusivity](fact_shadow_pokemon_stats.md) — Atk x1.2/Def x0.83; Shadow can't Mega Evolve [community-consensus]
+- [Proposal: boost-persists-through-faint flag](proposal_boost_persists_through_faint.md) — **BUILT** (SpeciesDefinition.boost.persistsThroughFaint)
+- [Proposal: real Shadow stat multipliers](proposal_shadow_stat_multipliers.md) — **BUILT** (isShadow + shadow.ts)
+- [Proposal: teammateDps sensitivity check](proposal_teammate_dps_sensitivity.md) — **BUILT** (sensitivity.ts #6)
+- [Proposal: continuous dodge-skill crossover](proposal_dodge_skill_crossover.md) — **BUILT** (sensitivity.ts #4)
+- [Proposal: boss cadence sensitivity check](proposal_boss_cadence_sensitivity.md) — **BUILT** (sensitivity.ts #7)
+- [Finding: findCrossoverPartySize unwired](finding_crossover_party_size_unwired.md) — cheap wiring gap, still unwired as of 2026-09-05
+- [Fact: no post-charged-move lockout](fact_no_post_charged_move_lockout.md) — [community-consensus] only, sources hard to fetch directly
+- [Proposal: sensitivity flip-bar visualization](proposal_sensitivity_flip_bar.md) — **BUILT** (SensitivityView.tsx FlipBar)
+- [Proposal: crossover rate across randomized runs](proposal_crossover_rate_across_runs.md) — pending, cross-cutting backlog item — do not repropose
+- [Proposal: DPS/TDO vocabulary labels](proposal_dps_tdo_vocabulary.md) — **BUILT** (result-card dl labels)
+- [Proposal: result-card own/team share bar](proposal_result_card_share_bar.md) — **BUILT** (App.tsx OwnTeamShareBar)
+- [Fact: DPS/TDO/eDPS vocabulary confirmed](fact_dps_tdo_vocabulary.md) — [community-consensus]
+- [Fact: weatherBoosted/bestBuddy dead inputs](fact_weather_bestbuddy_dead_inputs.md) — STALE 2026-09-05: weatherBoosted now live, bestBuddy still dead
+- [Fact: weather boost mechanic details](fact_weather_boost_mechanic.md) — type-per-weather map + both-sides finding correct; "+5 levels" point superseded, see next
+- [Fact: weather "+5 levels" is catch-only](fact_weather_5_levels_is_catch_only.md) — not an in-battle stat effect; engine's 1.2x symmetric-both-sides already correct
+- [Proposal: weather as Scenario assumption](proposal_weather_scenario_assumption.md) — **BUILT** (Scenario.weather, 1.2x-only)
+- [Proposal: boss moveset-variant comparison](proposal_boss_moveset_variant_comparison.md) — **BUILT** (compareAcrossBossChargedMoves)
+- [Proposal: Field Survey ranked table](proposal_field_survey_ranked_table.md) — pending; touches Scenario tuple shape, Teambuilding-Analyzer adjacent — don't repropose, own undertaking
+- [Proposal: per-stat IV sensitivity checks](proposal_iv_sensitivity_checks.md) — routed for direct build; web-only, sensitivity.ts
+- [Proposal: raid clear timer + boss HP pass/fail](proposal_raid_clear_timer_hp.md) — pending; new `raidTimerSeconds` field, boss.baseStamina currently inert
+- [Proposal: sequential 6-slot Team Raid tab](proposal_sequential_team_raid_tab.md) — design-only; revive-and-continue (`reviveCostSeconds`), not full-wipe-loss — pending
+- [Fact: mega boost = other trainers, not own party](fact_mega_boost_other_trainers_not_own_party.md) — RESOLVED, 3 corroborating source families
+- [Finding: shipped team-damage copy mislabeled](finding_mega_boost_scope_mislabeling_in_shipped_tool.md) — "Teammates" copy implies own bench, not "other trainers"; real mislabel not math bug
+- [Proposal: species reverse-lookup](proposal_species_reverse_lookup.md) — design-only; surfaced RAID_BOSS_CPM=1.0 bug for real synced bosses — pending
+- [Fact: real CPM values levels 40.5-50](fact_cpm_table_levels_41_50.md) — 3-source-confirmed; do NOT add 50.5/51 as power-up target; round-2 (2026-09-09) resolves levels 51-55 as Best Buddy/Mega Level 4/event effective-level stacking headroom, cap stays 50
+- [Fact: raid boss tier HP/CPM table RESOLVED](fact_raid_boss_tier_stats_resolved.md) — HP 600/3600/9000/15000/22500/25000 + mult 0.5974/0.73/0.79; fixed per-tier lookup, not baseStamina*CPM; round-2 (2026-09-09): 0.73/0.79 confirmed as own constants (not player-CPM 0.7317/0.7903) via independent GoBattleSim-Engine evidence — engine's current values are correct, don't "fix"
+- [Proposal: fix DEFAULT_REAL_RAID_TIER fallback](proposal_default_raid_tier_fallback.md) — pogoapi has raid_bosses.json/pokemon_rarity.json, unsynced; data-sync work, not engine logic — pending
+- [Fact: real power-up cost data source](fact_powerup_cost_data_source.md) — pokemon_powerup_requirements.json exists, not yet synced (superseded by shipped POKEMON_UPGRADE_SETTINGS sync — verify before reuse)
+- [Proposal: Power-Up Optimizer fleshed out](proposal_powerup_optimizer_flesh_out.md) — **BUILT** as the Power-Up Optimizer tab (2026-09-08)
+- [Proposal: historical raid boss sourcing](proposal_historical_raid_bosses.md) — Bulbapedia year-pages frozen at 2022; recommends narrow hand-cited backfill — pending
+- [Proposal: third live raid-boss source](proposal_third_raid_source.md) — recommends `fight.pokebattler.com/raids` over GO Hub page; independence circumstantial — pending
+- [Fact: Struggle energy cost is format-dependent](fact_struggle_energy_cost.md) — raid/gym=0, PvP/GBL=100; NOT a bug, pogoapi's 0 correct for PvE
+- [Fact: raid boss attack timing is energy-driven](fact_raid_boss_attack_timing.md) — boss also gains energy from damage taken, unmodelled; validates `durationSeconds`-only floor — see round-3 tension note below
+- [Fact: boss charged-move 50%-roll denominator undocumented](fact_boss_charged_move_decision_cadence.md) — "50%" and "0.5s cycle" separately-sourced, don't conflate; recommends per-move-boundary re-roll
+- [Fact: Rare Candy / XL / Convert conversions](fact_rare_candy_xl_candy_conversions.md) — 3 separate mechanics, no direct shortcut; flags one likely-hallucinated WebSearch claim
+- [Fact: Trainer Level power-up cap](fact_trainer_level_powerup_cap.md) — min(trainerLevel+10, 50), wikitext-verified; unmodelled anywhere in engine
+- [Proposal: fixed-budget multi-currency Power-Up planner](proposal_fixed_budget_powerup_planner.md) — flags new Trainer Level Scenario input; NOT the ruled-out Teambuilding Analyzer — pending
+- [Fact: Elite Raid tier missing from RaidTier union](fact_elite_raid_tier_gap.md) — 20000 HP / 0.79 mult; excluded from sweeps by deliberate policy
+- [Fact: Shadow raid enrage — RESOLVED round 4](fact_shadow_raid_enrage_state.md) — 60% HP confirmed (not 67%), formula sourced 2x, boss already gets shadow mult correctly, casts doubt on MECHANICS.md's 15%-HP "bug" being real
+- [Fact: Mega Level system + Super Max (Feb 2026)](fact_mega_level_system_2026_update.md) — cost/cooldown only; 1.3 team boost confirmed UNCHANGED
+- [Fact: Max Battles are a separate battle system](fact_max_battles_separate_system.md) — Dynamax/Gigantamax, structurally incompatible, must exclude not approximate
+- [Fact: evolution + 2nd-charged-move costs](fact_evolution_and_second_charge_move_costs.md) — evolution preserves level/IVs; Elite TM is a different currency
+- [Proposal: multi-raid Power-Up Optimizer research index](proposal_multi_raid_powerup_optimizer_research.md) — index of 6-topic research pass, 2026-09-08
+- [Fact: third-party sim sourcing, boss cadence hybrid model](fact_boss_cadence_hybrid_model_sourcing.md) — GoBattleSim-Engine independently matches per-move-boundary inference [community-consensus]
+- [Fact: dodge GAME_MASTER fields confirmed](fact_dodge_gamemaster_field_confirmed.md) — via GoBattleSim-Engine, but that source is Jan-2020-stale, pre-2024
+- [Fact: damageWindowStartMs/EndMs real per-move fields](fact_damage_window_fields_and_2024_decoupling.md) — schema+values confirmed; damage/dodge status question now RESOLVED, see round-3 entry below
+- [Fact: Dec 2024 dodge-window fix + stacking exploit](fact_dodge_dec2024_window_fix.md) — 2 distinct events; stacking exploit patched, engine never had it
+- [Fact: dodge HP-scaling claim still unresolved](fact_dodge_hp_scaling_still_unresolved.md) — re-checked 2026-09-09, zero new evidence; close out
+- [Fact: Niantic sold Pokemon GO to Scopely, 2025-05-29](fact_niantic_scopely_acquisition_sourcing.md) — [confirmed]; post-date sourcing should read "Scopely post"
+- [Fact: boss energy multiplier still unsourced for 2026](fact_boss_energy_multiplier_still_unsourced_2026.md) — field name `energyDeltaPerHealthLost` confirmed, live value unfetchable; caught one WebSearch fabrication
+- [Fact: boss charged-move selection + moveset fixed-per-rotation](fact_boss_charged_move_selection_and_moveset_fixing.md) — Bulbapedia confirms once-per-rotation, validates existing sweep design
+- [Fact: no HP-threshold AI for normal bosses + Super Mega shields](fact_no_normal_raid_hp_threshold_ai.md) — normal bosses have no HP-triggered AI; Super Mega Raid shield/enrage is Teambuilding-Analyzer-adjacent — don't model here
+- [Fact: RAID_LEVEL_* identifiers mapped to RaidTier names](fact_raid_level_identifier_mapping.md) — EXTENDED_EGG=Elite (300s), COORDINATED=Unity, MEGA_ENHANCED=Super Mega Raid
+- [Fact: Super Mega Raid shield/enrage mechanic](fact_super_mega_raid_shield_enrage_mechanic.md) — trigger%/timer undocumented, shield mult unconfirmed; tier not solo/duoable (structural)
+- [Fact: Super Max extra charged move ("+" moves)](fact_super_max_extra_charged_move.md) — 13 species confirmed, re-verified round 3; SpeciesDefinition has no field for it
+- [Fact: Apex Lugia/Ho-Oh moves not modelled](fact_apex_lugia_hooh_not_modelled.md) — real `_PLUS`/`_PLUS_PLUS` templates exist, no species uses them
+- [Fact: 2026 content-sweep misc roundup](fact_2026_content_sweep_misc.md) — Mega Staraptor upcoming, Mega Garchomp Z is Legends Z-A only (do NOT allowlist), 1.3/1.1 boost split reverified unchanged
+- [Fact: friendship raid attack bonus, corrects prior note](fact_friendship_raid_attack_bonus_correction.md) — `attack_bonus_percentage` confirmed, multiplicative w/ weather/mega, Forever Friend 12%
+- [Fact: Best Buddy CP Boost magnitude](fact_best_buddy_cp_boost_magnitude.md) — +1 level equiv, distinct from friendship bonus, unmodelled
+- [Fact: Party Power raid multiplier](fact_party_power_raid_multiplier.md) — 2x next charged-move damage, other-trainers mechanic, entirely unmodelled; charge-rate closed out unsourced
+- [Fact: remote raid damage penalty removed 2023-06-01](fact_remote_raid_penalty_removed.md) — permanent, nothing to model
+- [Fact: raid timer + full-wipe revive flow](fact_raid_timer_and_revive_flow.md) — 180s/300s tiers, real wipe has NO forced wait; validates engine's 0-default costs
+- [Fact: Super Max "+" move deep-dive, corrects gating](fact_super_max_plus_move_mechanics_detail.md) — usable at ANY Mega Level once eligible, not gated behind Super Max; roster 15+ confirmed
+- [Fact: Unity Raids are a distinct battle system](fact_unity_raid_distinct_system.md) — auto-revive + crowd Unity Attack + no-flee lobby; EXCLUDE like Max Battles
+- [Fact: damage window post-2024 semantics RESOLVED](fact_damage_window_post2024_semantics_resolved.md) — round 3; "Damage dealt at regular 0.5s intervals... rather than observing damage window timers" — damage AND energy decoupled from the per-move window; reverses earlier sync-recommendation lean
+- [Fact: BATTLE_SETTINGS timing fields meaning](fact_battle_settings_timing_fields_meaning.md) — round 3; enemyAttackInterval=1.5 ≈ low end of Bulbapedia's "pauses 1.5-2.5s between attacks" (Gym+Raid); tension w/ "no padding" cadence rec; retargetSeconds unresolved; swapDurationMs=1000 plausibly the faint-auto-swap pause
+- [Fact: critical hits not live in PvE + staminaLossScalar unresolved](fact_critical_hits_and_stamina_loss_scalar.md) — round 3; criticalChance absent from 2 independent community formulas, engine correctly omits; staminaLossScalar meaning unresolved, one WebSearch claim flagged fabricated
+- [Fact: external OUTPUT-validation targets surveyed](fact_external_output_validation_targets.md) — round 6; Pokebattler numeric output login-gated, GamePress/GoBattleSim hosted tools confirmed DEAD 2026-09-09, doctorpokegogo.com is best live candidate (single-sourced); GoBattleSim==GamePress same engine, not independent

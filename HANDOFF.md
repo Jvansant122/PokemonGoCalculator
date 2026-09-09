@@ -1,9 +1,224 @@
 # Handoff
 
-Last updated: 2026-09-08 (scaffolding batch). Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-09 (overnight research session: GAME_MASTER settings sweep). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-08 (latest): scaffolding batch — one gate, CI, hooks, tests in every layer
+## 2026-09-09 (latest): overnight `pogo-researcher` session — 15 research passes, no code changed
+
+An overnight knowledge-expansion run: recursive rounds of `pogo-researcher`, each round's
+"questions I could not answer" seeding the next. **No product code was touched.** Changes are
+confined to `MECHANICS.md`, `IDEAS.md`, this file, and the agent's own memory. Several engine
+findings are queued for `engine-developer` but deliberately not acted on.
+
+### The thing that unlocked most of it
+
+Every pass kept dead-ending on the same wall: the raw GAME_MASTER is ~19.5MB and exceeds
+`WebFetch`'s 10MB cap, so agents could confirm *field names* from protobuf schemas but never
+*values*. Downloading it directly (19.5MB, 18812 templates) settled open questions from four
+separate threads at once. Worth remembering: `scripts/sync-data.ts` already downloads this file,
+and its filtered `data/raw/game_master.json` keeps only pokemon/moves/upgradeSettings — every
+`*_SETTINGS` template is dropped at that boundary.
+
+### Constants upgraded from [community-consensus] to [first-party]
+
+`BATTLE_SETTINGS` (raids/gyms) confirmed, exactly matching what the engine already used:
+`energyDeltaPerHealthLost 0.5`, `bossEnergyRegenerationPerHealthLost 0.5` (two separate fields —
+the engine's single constant for both sides is right only by coincidence of current data),
+`maximumEnergy 100`, `dodgeDamageReductionPercent 0.75`, `dodgeDurationMs 500`, STAB `1.2`,
+shadow `1.2`/`0.8333333`. Also the type chart (`1.6`/`0.625`, straight off each
+`POKEMON_TYPE_*.attackScalar`), the friendship ladder, and `WEATHER_BONUS_SETTINGS`.
+
+`COMBAT_SETTINGS` turns out to be the **PvP** block — several community write-ups cite its
+`turnDurationSeconds: 0.5` for raid claims, and this project's "0.5s combat cycle" entry may be
+one of them.
+
+### Findings that contradict something we believed
+
+- **The friendship bonus is a RAID/GYM mechanic** (3/5/7/10/12%), not PvP. `damage.ts`'s
+  `FRIENDSHIP_BEST_BUDDY_MULTIPLIER` comment says the exact reverse, and collapses a 5-tier
+  ladder into one value. **Nothing shipped is wrong** — `bestBuddy` is never set `true` anywhere
+  — but the comment should be fixed, and the field name collides with the unrelated Best Buddy
+  CP Boost (`defaultCpBoostAdditionalLevel: 1`).
+- **Weather's "+5 effective levels" does not exist in combat.** `WEATHER_BONUS_SETTINGS` carries
+  `attackBonusMultiplier: 1.2` and `cpBaseLevelBonus: 5` as unrelated fields; the level bonus
+  governs the *catch encounter* only. `weather.ts`'s "KNOWN SIMPLIFICATION" comment describes
+  deferred work for a mechanic that isn't real. Weather is already applied symmetrically to the
+  boss — checked, and correct.
+- **`swapDurationMs: 1000` is real and first-party.** `teamRaid.ts` defaults `swapCostSeconds` to
+  `0` on the documented grounds that no official value exists. That premise is now false.
+  Changing the default re-baselines every shared Team Raid link, so it is a product call.
+- **The 15%-HP shadow "bug" is probably not a bug** — four sources describe an intended
+  auto-subdue to *normal* (not below-normal) stats. Unsettled rather than overturned: the
+  original Silph Road post can't be re-fetched. Entry softened, not deleted.
+
+### A conclusion this session reached and then reversed — read before reopening
+
+Mid-session it looked like a real win: **399 of 403** move templates carry
+`damageWindowStartMs`/`damageWindowEndMs` (Flamethrower 1300-1500, Solar Beam 2800-4800, ...),
+matching the community chart exactly, in a file we already download and discard. `MECHANICS.md`
+had long said this data "is not derivable from our current data sources" — true of pogoapi,
+false of GAME_MASTER. It looked like one small `data-sync` change.
+
+**It was overturned in the same session.** The earlier evidence quoted a Sept 2024 sentence about
+*energy* only; re-fetching recovered its leading clause: "**Damage is dealt at regular 0.5 second
+intervals**, moves generate and consume full energy as soon as they are activated, rather than
+observing the 'damage window start' and 'damage window end' timers." Damage is decoupled too.
+Extracting the fields would model a mechanic the game stopped observing, and
+`vulnerableWindowSeconds = durationSeconds` is the **better-supported** choice, not a
+placeholder. Both docs corrected; `IDEAS.md` item 3 now records it as closed on the merits.
+
+### Newly recorded, previously unknown
+
+- **The boss AI is not in GAME_MASTER at all** — no `COMBAT_NPC`/`*_AI_*`/`DIFFICULTY` template
+  exists. The 50%-roll denominator (the stated blocker on defaulting energy-driven cadence) is
+  **server-side and cannot be datamined**. Any answer needs observational testing. Dated negative
+  result, so nobody searches the dump for it again.
+- **The boss pauses 1.5-2.5s between attacks** (Bulbapedia `Gym (GO)` wikitext), whose low bound
+  matches `enemyAttackInterval: 1.5` exactly. That same sentence is the closest thing to a source
+  the 50% roll has. It creates real tension with this project's earlier "don't pad the
+  `durationSeconds` floor" conclusion — not enough to overturn it, enough that it isn't settled.
+- **Raid-boss multipliers are authored constants, not CPMs — resolved.** Tier 1's `0.5974` equals
+  CPM(L20) exactly, which is misleading. GoBattleSim hard-codes `0.7300000190734863`, the float32
+  signature of literal `0.73` (not `0.7317`), and `0.5974` occurs exactly once in the whole dump
+  (the CPM array). There is no boss stat-scaling field in client data at all. `raidBoss.ts` is
+  correct as-is — "fixing" it toward CPM values would be a regression.
+- **Raid-tier internal names**, with two traps: `RAID_LEVEL_COORDINATED_1/_2` are **Unity Raids**,
+  not Super Mega; Super Mega is `RAID_LEVEL_4/5_MEGA_ENHANCED` and **does** support remote play.
+  Elite Raid is `RAID_LEVEL_EXTENDED_EGG`. `RAID_LEVEL_4` is dead legacy.
+- **Elite Raid battle timer closed at 300s.** Two earlier passes recorded it unsourced; both were
+  conflating it with the 30/45-minute gym availability window.
+- **Critical hits don't exist in the formula** despite `criticalChance: 0.05` on move templates —
+  the engine is right to ignore it. `staminaLossScalar` remains genuinely unexplained.
+- **`maxNormalUpgradeLevel: 50`** settles a trap: the CPM array runs to level 80 (tracking the
+  *Trainer* cap, raised Oct 2025), but the Pokémon power-up cap is still 50. The real 51-55 CPM
+  entries are consumed by Best Buddy / Mega Level bonuses, never as a manual power-up target.
+  `allowedLevelsAbovePlayer: 10` confirms the Trainer-Level cap first-party.
+
+### Investigated and closed: external validation of our OUTPUT numbers
+
+Every `MECHANICS.md` entry checks an *input* constant. Nothing checks what the engine actually
+produces end-to-end. Comparing our DPS/TDO for a pinned matchup against an independent
+simulator's published number would be the strongest available check, so it was scoped this
+session. **It is not currently buildable honestly.** Findings, all 2026-09-09:
+
+- **Pokébattler**: `fight.pokebattler.com/raids` is a roster listing only. The counter/estimator
+  computation is **login-gated** ("Login to see your custom results!"); two guesses at a public
+  computation-API URL 404'd. Its assumptions, when a logged-in user does pull a number, are at
+  least well documented (level + 15/15/15, three dodge strategies, selectable weather/friendship,
+  party fixed at 6 identical attackers).
+- **GamePress DPS/TDO spreadsheet**: **dead.** Every `pokemongo.gamepress.gg` path now
+  301s to a `pokebase.app` landing page, and the specific spreadsheet/GoBattleSim URLs 404.
+  Search-index snippets still show the old titles, which is misleading.
+- **GoBattleSim** is open-source and buildable locally, but nothing hosted publishes a number
+  today. **Critically: its own README states the GamePress spreadsheet IS GoBattleSim,
+  standalone-ified.** They are one engine behind two frontends — agreement between them would
+  prove nothing. This is the same same-upstream trap already documented for the raid-roster axis
+  in `proposal_third_raid_source.md`, now confirmed on the output axis too.
+- **doctorpokegogo.com** is the one live numeric per-boss table found, and is circumstantially a
+  separate lineage (no attribution to either engine above) — but that rests on absence of
+  attribution in a closed-source site, its per-boss pages carry no date marker, and its dodge and
+  friendship assumptions are only *inferable* from a methodology page's silence, never stated.
+
+So: at most two-and-a-half genuinely independent lineages exist, and the only fetchable one is
+single-sourced with inferred assumptions. If this is ever pursued, the honest claim is "matches
+one community calculator under mostly-stated assumptions" — **not** "independently verified."
+Anything stronger would be false precision.
+
+One free corroboration fell out of it: Pokébattler's un-authed Regice page server-renders boss
+HP **15000**, matching this project's own tier-5 `RAID_TIER_TABLE` row.
+
+### Two things needing a decision, not implementation
+
+1. **Super Mega Raids may not belong in a single-trainer tool.** Fixed 7-10 shields per boss, one
+   break per trainer, an 8-10 trainer minimum — the only `RaidTier` that cannot be soloed even in
+   principle. The engine applies one flat multiplier for the whole fight, so it currently
+   simulates the tier as materially easier than it is. The options are excluding or caveating the
+   tier; modelling the shield phase is Teambuilding-Analyzer-shaped. See `IDEAS.md` item 8.
+2. **Wiring up the friendship bonus** would be a new `Scenario` assumption across the simulating
+   tabs (`add-scenario-assumption`). It is single-trainer-scoped like weather, so it carries no
+   Teambuilding-Analyzer risk — but it is a real product call, not a cleanup.
+
+### Dated watch item
+
+**Mega Staraptor debuts 2026-09-19** (Super Mega Raid Day, 2-5pm local). Verified tonight:
+GAME_MASTER has 61 mega/primal forms with stat overrides and all 61 are synced — Staraptor's is
+not among them yet. A one-day debut is exactly the Skarmory failure mode: not a live raid
+afterward, and if pogoapi's roster misses it, it never appears. Use `add-mega-allowlist-entry` on
+or after the 19th. Mega Houndoom and Mega Beedrill (Mega Squads, 2026-09-08 to 09-14) are already
+covered.
+
+### Queued for `engine-developer` (none applied)
+
+Fix the `damage.ts` friendship comment; correct `weather.ts`'s "KNOWN SIMPLIFICATION"; decide on
+`swapCostSeconds`. All three are comment-or-default changes with a `MECHANICS.md` entry as their
+citation.
+
+---
+
+## 2026-09-08: third boss cadence model — "energy-gated interval"
+
+The user asked for a third boss charged-move cadence combining the two existing ones: energy decides
+eligibility, then ONE random delay is rolled. Decisions the user made when asked: the gate is the charged
+move's **energy cost** (not the 100 cap); the delay is one ±40% jittered draw whose mean is the tab's
+EXISTING "mean frequency" field (no new Scenario field); energy is **subtracted by the cost** on fire, not
+zeroed. UNCOMMITTED at time of writing — a parallel session owns in-flight Power-Up Optimizer / roster
+import files in the same working tree, so nothing here was committed or pushed.
+
+### What shipped
+
+- **Engine.** `StepwiseBoss.chargedMoveCadence = "energy-gated-interval"` in `simulate.ts`, with an
+  exported `BossChargedMoveCadence` type now used by `comparison.ts`, `speciesReport.ts`, `teamRaid.ts`.
+  The boss gains energy exactly as energy-driven does; the instant it can afford its charged move it
+  arms one jittered delay; fires when it elapses, never mid-cast; leftover energy ≥ cost re-arms at once.
+  Team Raid carries both the boss's energy and the pending delay across slot handoffs and wipes (the
+  existing `bossEndingEnergy` / `bossChargedMoveResidualSeconds` plumbing, now populated in this mode).
+  `energyGatedIntervalBossCadence.test.ts` (new) + 4 wiring tests; engine suite 274 → 288.
+- **Web.** The shared `bossCadence.tsx` select gets the third option and an extra hint paragraph, so all
+  four simulating tabs (including the Power-Up Optimizer, whose files were deliberately not touched) see
+  it. The mean-frequency field stays ACTIVE in this mode (it is the delay's mean) — only energy-driven
+  greys it out. Caveat prose on Comparator and Team Raid updated; round-trip tests cover the new value.
+- **MECHANICS.md.** `pogo-researcher` found GoBattleSim-Engine's open-source boss AI triggers on every
+  completed action, gates at energy ≥ cost and subtracts the cost on fire — recorded under the OPEN
+  QUESTION entry as corroboration (a simulator's choice, not an in-game observation). Two entries that
+  still read "NOT MODELLED" from before energy-driven shipped were corrected in place. New entry: "The
+  wait between 'can fire' and 'does fire' — engine model only". Its memory note:
+  `.claude/agent-memory/pogo-researcher/fact_boss_cadence_hybrid_model_sourcing.md`.
+
+### Measured (Regirock 5-star, Stone Edge 100 energy, mean interval 15s, L40 15/15/15, no dodge, 200 seeds)
+
+| Attacker | Model | Survival s | Boss charged hits/run | s per cast | First cast at s |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| Kartana | fixed-interval | 24.6 | 0.28 | 86.3 | 23.6 |
+| Kartana | energy-driven | 16.4 | 1.85 | 8.9 | 8.0 |
+| Kartana | energy-gated-interval | 21.6 | 0.79 | 27.5 | 20.6 |
+| Metagross | fixed-interval | 33.0 | 1.03 | 32.1 | 27.9 |
+| Metagross | energy-driven | 24.6 | 2.88 | 8.5 | 9.0 |
+| Metagross | energy-gated-interval | 33.0 | 1.00 | 33.0 | 21.9 |
+| Blissey | fixed-interval | 37.5 | 1.20 | 31.3 | 27.9 |
+| Blissey | energy-driven | 32.0 | 2.11 | 15.2 | 13.0 |
+| Blissey | energy-gated-interval | 38.0 | 1.00 | 38.0 | 26.9 |
+
+Reading: the new model's mean time between casts is roughly 3-4x energy-driven's and sits at or above
+fixed-interval's, because a 100-energy move needs a full refill (~8-13s of being hit) PLUS the 15s mean
+delay. The energy feedback loop survives but is muted: Kartana's first cast lands 6s earlier than
+Blissey's (20.6 vs 26.9) where fixed-interval shows no such spread (23.6 vs 27.9 comes from warmup only).
+Against a 50-energy move the boss keeps 50 after firing from 100 and re-arms immediately, so at high DPS
+it converges toward fixed-interval's mean — not measured here (Kyogre's first-listed move is also 100
+energy and every attacker fainted before it mattered). Reproduced by a throwaway tsx script mirroring
+`runSustainedComparison`'s set-up, deleted after use.
+
+### Follow-up the same session: energy-driven now subtracts the cost too
+
+`energy-driven` used to zero the boss's energy on fire; GoBattleSim and the new model subtract the
+cost. The user chose to align it ("change energy-driven"). One line in `attemptBossChargedMoveDecision`
+plus one new test (a boss at 100 energy with a 50-cost move fires a second time on leftover energy
+alone); no existing pinned value moved, because every earlier fixture's leftover landed below the cost
+under either rule. Engine suite 288 → 289. **This re-baselines any energy-driven shared link where the
+boss fired more than once per run** — more and faster charged hits than before. The Regirock table
+above is unaffected (Stone Edge costs 100, so leftover is always 0). MECHANICS.md's "Engine: matches"
+paragraph under the OPEN QUESTION entry records it.
+
+## 2026-09-08: scaffolding batch — one gate, CI, hooks, tests in every layer
 
 The user asked for the full list of scaffolding improvements (simple + complex) and then said
 "make these changes". Everything below is UNCOMMITTED at time of writing (~60 files).

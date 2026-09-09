@@ -98,6 +98,61 @@ distinguishes "already-final boss fixture" from "real species needing the real f
 data-model decision that doesn't fully exist yet — naming this as a real, unresolved fork point
 for `engine-developer`, not resolving it myself.
 
+## Round 2 (2026-09-09): is the tier multiplier literally "CPM of a fixed boss level," or its own
+## independent constant that merely resembles one?
+
+Prompted by the user noticing Tier 1's `0.5974` is an EXACT match to `PLAYER_LEVEL_SETTINGS`'
+`cpMultiplier[20]` (confirmed against the user's own raw-GAME_MASTER-sourced level table,
+2026-09-09), while Tier 3's `0.73` and the 0.79-plateau tiers' `0.79` are only close to, not
+exactly equal to, `cpMultiplier[30]` (`0.7317`) and `cpMultiplier[40]` (`0.7903`).
+
+**Verdict: [community-consensus] — the tier multiplier is its own authored constant (0.5974 /
+0.73 / 0.79), NOT the full-precision player-level CPM value, even though it clearly originated
+from those same reference levels at some point.** Two independent lines of evidence, neither a
+primary Niantic source:
+1. Bulbapedia's raw wikitext (re-checked this round) states the 0.5974/0.73/0.79 figures as bare
+   numbers in its Difficulty table with **no "as if level N" framing anywhere in the article** —
+   the "these look like level 20/30/40" observation is an outside inference from numeric
+   proximity, not something Bulbapedia itself claims.
+2. **Decisive-tier evidence**: `biowpn/GoBattleSim-Engine`'s committed `setting/GBS.json`
+   (independently-coded, open-source raid simulator; fetched raw 2026-09-09, verbatim per-field
+   quote requested and returned) hard-codes its `RaidTierSettings` array as
+   `{"name":"3","cpm":0.7300000190734863,...}` and `{"name":"4"/"5"/"6","cpm":0.7900000214576721,...}`
+   — the messy trailing digits are the classic signature of a **float32 upcast of the literal
+   decimal constants 0.73 and 0.79**, not of 0.7317/0.7903 (which would upcast to a visibly
+   different tail). A developer who reverse-engineered Niantic's real values and had access to
+   the full player-CPM table chose to hard-code 0.73/0.79 specifically, distinct from that table.
+   This file also stores an old/legacy tier "2" (0.67, defunct since Aug 2020) and a stale 18750 HP
+   for tier "6" (current value is 22500-25000 per the table above) — so it's dated, likely
+   pre-2020-restructure data, which lowers confidence slightly but doesn't undermine the
+   0.73/0.79-vs-0.7317/0.7903 distinction itself, since tier restructuring changed which tiers
+   exist and their HP, not the underlying multiplier-authoring convention.
+
+Tier 1's exact 0.5974 match is most likely because that value happens to be a "clean" 4-decimal
+anchor point in the underlying CPM table (levels 20/30/40/50 all print as suspiciously round
+4-decimal numbers — 0.5974/0.7317/0.7903/0.8403 — versus a non-anchor level like 25 at
+0.667934, 6 decimals) and an early Niantic multiplier constant was set equal to that anchor's
+value at the precision it was commonly known; tiers 3 and the 0.79-plateau were independently
+set to a coarser 2-decimal constant instead. **This is inference, not a confirmed design
+rationale** — no source explains why tier 1 got 4-decimal precision and tier 3/mega+ only 2.
+
+**Answering the user's numbered questions directly:**
+1. It is its own constant that resembles a level's CPM, not a literal "boss = level N" mechanic.
+   Best real-world corroboration found: an independent simulator's hard-coded 0.73/0.79 (float32
+   artifacts prove literal-constant authorship, not table lookup at full precision).
+2. "What level is each tier" is therefore the wrong frame — there's no sourced answer because the
+   premise (bosses are assigned a literal level) isn't well-evidenced. If a mnemonic is wanted:
+   "roughly level 20/30/40," never exactly.
+3. **This engine's current values (0.5974/0.73/0.79 in `RAID_TIER_TABLE`) are the
+   better-evidenced ones — do NOT change to 0.7317/0.7903.** The ~0.23%/~0.04% "error" the user
+   flagged as a risk doesn't exist under this evidence: 0.7317/0.7903 aren't secretly the correct
+   values being rounded away, they're a different, non-matching constant from a different part of
+   the data (the player-level table), and switching to them would be a regression, not a fix, per
+   this round's evidence. If a future primary Niantic source ever surfaces a `BATTLE_SETTINGS`- or
+   `RAID_LEVEL_SETTINGS`-style field spelling this out to full precision, re-open this — not found
+   this round despite trying (raw GAME_MASTER >10MB fetch cap and GitHub code search auth
+   requirement both blocked a direct field-name search, consistent with prior sessions' notes).
+
 ## Sources
 - Bulbapedia, "Raid Battle (GO)" raw wikitext —
   https://bulbapedia.bulbagarden.net/w/index.php?title=Raid_Battle_(GO)&action=raw (fetched
@@ -115,3 +170,8 @@ for `engine-developer`, not resolving it myself.
 - Direct reads (not web sources): `packages/engine/src/raidBoss.ts`, `stats.ts`,
   `fixtures/scenarioA.ts`, `data/normalized/activeRaids.json` — grounded the fixture cross-check
   and live tier-label feasibility claims in actual current code/data.
+- Round 2 (2026-09-09): user-supplied raw GAME_MASTER `PLAYER_LEVEL_SETTINGS.playerLevel.cpMultiplier`
+  values (levels 20/25/30/40/50/51-55); `github.com/biowpn/GoBattleSim-Engine`'s
+  `setting/GBS.json` raw fetch (`raw.githubusercontent.com/biowpn/GoBattleSim-Engine/master/setting/GBS.json`),
+  verbatim JSON quote of its `RaidTierSettings` array; a re-targeted Bulbapedia raw-wikitext fetch
+  checking specifically for "as if level N" framing (found none).

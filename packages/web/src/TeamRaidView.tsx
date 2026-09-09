@@ -372,10 +372,11 @@ export function TeamRaidView() {
           handoff and every wipe-and-revive — it's one continuous encounter from the boss's own side; it doesn't
           reset just because the trainer swapped Pokémon or briefly returned to the lobby to heal.
           "Boss charged-move cadence model" (in Assumptions) defaults to the fixed mean-interval model this tab has
-          always used; the experimental "Energy-driven" alternative instead derives the boss's timing from its own
-          energy across the WHOLE encounter (every slot, every cycle) — see that control's own explanation for what's
-          independently sourced, what's this project's own reasoned inference, and what's simply unvalidated. Left off
-          by default so a shared link's meaning never silently changes.
+          always used; two experimental alternatives instead derive the boss's timing from its own energy across the
+          WHOLE encounter (every slot, every cycle) — "Energy-driven" (a 50% roll per move-completion boundary) and
+          "Energy-gated interval" (one jittered delay once eligible) — see that control's own explanation for what's
+          independently sourced, what's this project's own reasoned inference, and what's simply unvalidated. Both stay
+          off by default so a shared link's meaning never silently changes.
           swapCostSeconds/reviveCostSeconds have no confirmed real value from any official or community source —
           both default to 0 (fastest-possible play) rather than a fabricated "realistic" number; a labeled ~13s
           community estimate is offered as an optional preset for reviveCostSeconds only. A boss badged

@@ -23,11 +23,16 @@ sources; this has been stable mechanic for years.
 - Applies to **both sides** — a raid boss with a weather-matching move also deals boosted
   damage to the player's party, not just the player's attacker to the boss.
 
-**Why this matters:** if implemented, the "+5 effective levels" nuance means a naive
-"just multiply damage by 1.2" implementation would under-model weather's real effect
-(real weather also nudges the attacker's own effective stats, which matters more at low
-levels where CPM curves are steep). Worth flagging to whoever implements
-[[proposal_weather_scenario_assumption]] rather than silently doing the simpler thing.
+**SUPERSEDED 2026-09-09 (round 4) on the "+5 effective levels" point specifically** — see
+[[fact_weather_5_levels_is_catch_only]]. That was a misreading: the "+5 effective levels" is a
+wild-spawn/raid-catch/GO-Rocket-catch encounter-level mechanic (affects the level, and therefore
+CP, of a Pokémon when it spawns or is caught), NOT an in-battle stat effect on either the boss or
+the attacker. In battle, real weather is fully and only the flat 1.2x move-power multiplier,
+applied to both sides — which is exactly what this engine already implements. There is no
+deferred/missing "level+5 stat bump" to build; `weather.ts`'s "KNOWN SIMPLIFICATION" comment
+describing one is itself wrong and should be corrected (handed back, not fixed by this role).
+The 1.2x-both-sides finding and the weather-to-type mapping table below remain correct.
 
-**How to apply:** Cite this before proposing/building any weather feature. If a future
-official Niantic source is found, replace this citation with it and upgrade the tier.
+**How to apply:** Cite [[fact_weather_5_levels_is_catch_only]] for the in-battle question; cite
+this entry only for the weather-to-type mapping table. If a future official Niantic source is
+found, replace this citation with it and upgrade the tier.

@@ -2,7 +2,13 @@ import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove } 
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
 import type { RaidTier } from "./raidBoss.js";
-import { DEFAULT_STEPWISE_MAX_SECONDS, simulateStepwiseBattle, type StepwiseAttacker, type StepwiseBoss } from "./simulate.js";
+import {
+  DEFAULT_STEPWISE_MAX_SECONDS,
+  simulateStepwiseBattle,
+  type BossChargedMoveCadence,
+  type StepwiseAttacker,
+  type StepwiseBoss,
+} from "./simulate.js";
 import { effectiveStatsAtLevel } from "./stats.js";
 import { typeEffectiveness } from "./typeChart.js";
 import type { IVSpread, SpeciesDefinition } from "./types.js";
@@ -136,17 +142,19 @@ export interface TeamRaidInputs {
   dodgeFastAttacks?: boolean;
   /** See simulate.ts's StepwiseAttacker.holdChargedMoveUntilSafe. Applies to every slot identically. Defaults to false. */
   holdChargedMoveUntilSafe?: boolean;
-  /** Mean seconds between the boss's charged moves once it starts using them — one continuous encounter from the boss's side, shared across every slot and every cycle. Only consulted when bossChargedMoveCadence is "fixed-interval" (the default); ignored under "energy-driven". */
+  /** Mean seconds between the boss's charged moves once it starts using them — one continuous encounter from the boss's side, shared across every slot and every cycle. Consulted under "fixed-interval" as the mean interval between casts, and under "energy-gated-interval" as the mean delay after energy-eligibility (required there — see StepwiseBoss.chargedMoveCadence); ignored entirely under "energy-driven". */
   bossChargedMoveMeanIntervalSeconds: number;
   /**
    * See comparison.ts's SustainedComparisonInputs.bossChargedMoveCadence for
    * the full model. Defaults to "fixed-interval", byte-identical to before
    * this field existed. Applies to the boss for the WHOLE encounter (every
    * slot, every cycle) — see this module's top doc comment and the
-   * carriedBossEnergy handling below for how boss state carries across a slot
-   * handoff and a wipe-and-revive under this mode.
+   * carriedBossEnergy/carriedNextFireInSeconds handling below for how boss
+   * state carries across a slot handoff and a wipe-and-revive under
+   * "energy-driven"/"energy-gated-interval" respectively (both carry
+   * unconditionally every fight, regardless of which mode is active).
    */
-  bossChargedMoveCadence?: "fixed-interval" | "energy-driven";
+  bossChargedMoveCadence?: BossChargedMoveCadence;
   /**
    * Warmup for the boss's very FIRST charged move of the whole encounter
    * (cycle 0, slot 1 only) — defaults to simulateStepwiseBattle's own
@@ -390,20 +398,26 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   //
   // carriedNextFireInSeconds/carriedStartingEnergy are the "fixed-interval"
   // cadence's carryover state; carriedBossEnergy (below) is the
-  // "energy-driven" cadence's equivalent — see StepwiseRunResult.
-  // bossEndingEnergy's doc comment for why a slot handoff must NOT silently
-  // reset the boss's accumulated energy (doing so would make energy-driven
-  // MORE forgiving than fixed-interval, backwards from the whole point of the
-  // model). DECISION: energy carries across a wipe-and-revive too, for the
-  // same "one continuous encounter from the boss's side" reasoning already
-  // applied to the fixed-interval cooldown above — neither
-  // carriedNextFireInSeconds nor carriedBossEnergy is ever reset at a cycle
-  // boundary, only read/written per-fight, so this falls out of the existing
-  // loop structure rather than needing special-cased wipe handling.
-  // Under "fixed-interval" (the default), carriedBossEnergy always stays
-  // undefined (StepwiseRunResult.bossEndingEnergy is null in that mode), so
-  // startingEnergy below resolves to 0 exactly as it always did — this
-  // addition is byte-identical for existing callers.
+  // energy-tracking cadences' equivalent — fed from StepwiseRunResult.
+  // bossEndingEnergy, which is non-null under BOTH "energy-driven" AND
+  // "energy-gated-interval" (see that field's doc comment) for why a slot
+  // handoff must NOT silently reset the boss's accumulated energy (doing so
+  // would make either energy-tracking mode MORE forgiving than
+  // "fixed-interval", backwards from the whole point of the model).
+  // carriedNextFireInSeconds itself is NOT fixed-interval-only either — it is
+  // also fed from StepwiseRunResult.bossChargedMoveResidualSeconds, which is
+  // non-null under "energy-gated-interval" too whenever that mode has a
+  // pending post-eligibility delay (see that field's own doc comment); only
+  // "energy-driven" has neither a residual cooldown nor a use for one.
+  // DECISION: both carried values cross a wipe-and-revive too, for the same
+  // "one continuous encounter from the boss's side" reasoning already applied
+  // to the fixed-interval cooldown above — neither carriedNextFireInSeconds
+  // nor carriedBossEnergy is ever reset at a cycle boundary, only read/written
+  // per-fight, so this falls out of the existing loop structure rather than
+  // needing special-cased wipe handling. Under "fixed-interval" (the
+  // default), carriedBossEnergy always stays undefined (bossEndingEnergy is
+  // null in that mode), so startingEnergy below resolves to 0 exactly as it
+  // always did — this addition is byte-identical for existing callers.
   let carriedStartingEnergy = bossStartingEnergy;
   let carriedNextFireInSeconds: number | undefined;
   let carriedBossEnergy: number | undefined;
@@ -488,14 +502,23 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
         chargedMoveWarmupSeconds: isVeryFirstFight ? bossChargedMoveWarmupSeconds : undefined,
         // Under "fixed-interval", carriedBossEnergy is always undefined (see
         // the doc comment above carriedStartingEnergy), so this resolves to
-        // carriedStartingEnergy/0 exactly as before. Under "energy-driven",
-        // this is the one line that actually carries the boss's accumulated
-        // energy across the handoff — chargedMoveWarmupSeconds/
-        // chargedMoveNextFireInSeconds below are both structurally inert in
-        // that mode (simulate.ts never consults them once chargedMoveCadence
-        // is "energy-driven" — see StepwiseSimulationParams' bossEnergyDriven
-        // gate), left populated only because they're harmless no-ops under
-        // "energy-driven" and still load-bearing under "fixed-interval".
+        // carriedStartingEnergy/0 exactly as before. Under "energy-driven"
+        // AND "energy-gated-interval", this is the one line that actually
+        // carries the boss's accumulated energy across the handoff.
+        // NOTE — this is NOT "every non-fixed mode ignores the countdown
+        // fields": chargedMoveWarmupSeconds is genuinely ignored under BOTH
+        // energy-tracking modes (structurally inert — simulate.ts never
+        // consults it once chargedMoveCadence isn't "fixed-interval"), but
+        // chargedMoveNextFireInSeconds below is inert ONLY under
+        // "energy-driven" (which has no fixed "next fire" schedule at all —
+        // see StepwiseSimulationParams' bossEnergyDriven gate). Under
+        // "energy-gated-interval" it is load-bearing, exactly like under
+        // "fixed-interval": it pre-arms that mode's pending post-eligibility
+        // delay (bossGatedFireAt) with no re-roll, carrying a slot's residual
+        // delay forward the same way the fixed-interval cooldown already
+        // does. Both fields are left populated unconditionally below because
+        // they're harmless no-ops whenever the active mode doesn't consult
+        // them.
         startingEnergy: isVeryFirstFight ? carriedStartingEnergy : (carriedBossEnergy ?? 0),
         chargedMoveNextFireInSeconds: isVeryFirstFight ? undefined : carriedNextFireInSeconds,
       };

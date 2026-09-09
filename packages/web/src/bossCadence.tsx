@@ -13,11 +13,12 @@
  * three times and only one copy gets corrected later, unlike a label lookup
  * table with nothing to get wrong.
  *
- * The engine's own StepwiseBoss.chargedMoveCadence (simulate.ts) declares
- * this same union inline rather than as a named export — mirrored here
- * rather than left as a bare string literal at every call site.
+ * The engine's own StepwiseBoss.chargedMoveCadence (simulate.ts) exports this
+ * same union as a named type (`BossChargedMoveCadence`) — re-exported here
+ * under the same local name so no other web import needs to change.
  */
-export type BossChargedMoveCadence = "fixed-interval" | "energy-driven";
+import type { BossChargedMoveCadence } from "@pogo-analyzer/engine";
+export type { BossChargedMoveCadence };
 
 /** Matches every tab's existing implicit behavior — see each Scenario-family type's own field doc comment for the `??` guard this backs. */
 export const DEFAULT_BOSS_CHARGED_MOVE_CADENCE: BossChargedMoveCadence = "fixed-interval";
@@ -50,7 +51,18 @@ export const BOSS_CADENCE_HINT =
   "is trusted; the exact magnitude is not — it hasn't been checked against a real raid log. The boss's underlying " +
   "50%-chance decision itself is single-sourced (Silph Road, ~2 years old), and exactly what triggers that roll is " +
   "this engine's own reasoned inference, not a confirmed mechanic — see MECHANICS.md. Flipping this re-baselines " +
-  "every number below; it stays off by default so a shared link's meaning never silently changes.";
+  "every number below; it stays off by default so a shared link's meaning never silently changes. " +
+  "Energy-gated interval (experimental) is a third, hybrid option: the boss gains energy exactly as energy-driven " +
+  "does (its own fast moves plus 0.5 energy per HP lost), but the instant it can afford its charged move — rather " +
+  "than rolling a 50% chance at every move-completion boundary — it rolls ONE delay from this same mean-frequency " +
+  "field below, with the same +/-40% jitter, and fires the moment that delay elapses (never mid-cast; leftover " +
+  "energy still enough to fire again re-arms a fresh delay immediately). The gate-at-cost and subtract-the-cost-" +
+  "on-fire rules it uses are corroborated by an open-source raid simulator (GoBattleSim), not an in-game " +
+  "observation — a simulator's own modelling choice, not a confirmed mechanic. The wait itself, once eligible, has " +
+  "no observed real-game source at all: it is this project's own labelled assumption. Under this mode the mean-" +
+  "frequency field means the mean delay AFTER the boss becomes energy-eligible, not the mean seconds between " +
+  "casts — the same field, reinterpreted, not a second setting. It stays off by default for the same shared-link " +
+  "reason as energy-driven.";
 
 /** Shown next to a now-inert "boss charged-move mean frequency" control once energy-driven is selected. */
 export const BOSS_FREQUENCY_INAPPLICABLE_HINT =
@@ -83,6 +95,7 @@ export function BossCadenceSelect({ idPrefix, value, onChange }: BossCadenceSele
       >
         <option value="fixed-interval">Fixed interval (default)</option>
         <option value="energy-driven">Energy-driven (experimental)</option>
+        <option value="energy-gated-interval">Energy-gated interval (experimental)</option>
       </select>
       {/*
         Explanatory prose only — collapsed by default because it is a

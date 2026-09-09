@@ -296,4 +296,38 @@ describe("energy-driven boss charged-move cadence", () => {
     }
     expect(sawBackToBack).toBe(true);
   });
+
+  it("a boss starting at 100 energy with a 50-cost move can fire a second time on leftover energy alone, with zero further damage-driven energy gain", () => {
+    // Regression coverage for the 2026-09-08 user decision: on firing,
+    // attemptBossChargedMoveDecision now SUBTRACTS the move's energy cost
+    // (bossEnergy -= energyCost) instead of resetting bossEnergy to 0, to
+    // match GoBattleSim's open-source boss AI and this project's own
+    // "energy-gated-interval" sibling model (which already subtracted) — see
+    // MECHANICS.md's "Raid boss behaviour" section and
+    // StepwiseBoss.chargedMoveCadence's doc comment. Under the OLD reset-to-0
+    // behavior this exact fixture could never re-fire without new
+    // damage-taken energy, because 100 - 50 = 0 would need the full 50 again;
+    // under the new subtract-cost rule, 100 - 50 = 50 is ALREADY back at the
+    // move's own cost, so the boss can fire a second time purely off leftover
+    // energy the moment another move-completion boundary rolls successfully.
+    //
+    // The attacker's own fast move deals power: 0 (attackerFastDamage(0) = the
+    // damage formula's floor(...)+1 = 1 per hit), and
+    // bossEnergyFromDamageTaken(1) = floor(0.5) = 0 — so across the whole run
+    // the boss's energy total is fully explained by startingEnergy (100) and
+    // the two subtractions (-50, -50), with ZERO contribution from damage
+    // taken. Seed 1 verified (via a throwaway tsx scratch script against the
+    // real engine, deleted after use) to fire exactly twice within 10s and
+    // end at exactly 0 energy — a fully deterministic, non-statistical pin.
+    const attacker = makeAttacker(0);
+    const boss: StepwiseBoss = { ...makeBoss(50, 2), startingEnergy: 100 };
+    expect(bossEnergyFromDamageTaken(attackerFastDamage(0))).toBe(0); // sanity: no energy leaks in from damage taken
+
+    const result = simulateStepwiseBattle({ attacker, boss, seed: 1, maxSeconds: 10 });
+
+    expect(result.bossChargedHitsTaken).toBe(2);
+    // 100 - 50 (first fire) - 50 (second fire) = 0, not reset-to-0-then-stuck
+    // and not left at some non-zero remainder from a botched subtraction.
+    expect(result.bossEndingEnergy).toBe(0);
+  });
 });

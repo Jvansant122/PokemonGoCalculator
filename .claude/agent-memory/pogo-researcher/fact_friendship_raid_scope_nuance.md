@@ -5,6 +5,14 @@ metadata:
   type: project
 ---
 
+**SUPERSEDED 2026-09-09 — see [[fact_friendship_raid_attack_bonus_correction]].**
+This entry's conclusion ("the friendship attack multiplier is PvP-only, raids
+excluded") turned out to be backwards. A 2026-09-09 pass found Bulbapedia,
+pokeranks.com, and Pokébattler's own raid-testing research all agreeing the
+bonus is **raid/gym-only**, not PvP. Left below unedited as the historical
+record of how the earlier (wrong) conclusion was reached; do not treat the
+body text below as current.
+
 [community-consensus], researched 2026-09-05. `damage.ts` has a comment: "Best-friend
 attack bonus (trainer battles only; raids/gyms do not apply this)" backing
 `FRIENDSHIP_BEST_BUDDY_MULTIPLIER = 1.1`. A WebSearch this pass surfaced results implying

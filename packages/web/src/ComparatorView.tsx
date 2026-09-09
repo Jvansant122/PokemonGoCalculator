@@ -619,7 +619,10 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           the whole fight's cadence off the boss's energy instead. That mode is experimental and off by default: see
           its own explanation text for what's independently sourced (the 0.5-energy-per-HP rate) versus what's a
           reasoned inference this project made itself (the roll's trigger) versus what's simply unvalidated (the
-          15-34% survival-time impact this project measured). "Mean charged damage"
+          15-34% survival-time impact this project measured). "Energy-driven" is not the only alternative: "Energy-
+          gated interval" also closes that gap by tracking the same energy but replaces the 50% roll with a single
+          jittered delay once the boss becomes eligible — see its own explanation text for what's corroborated by
+          another simulator versus this project's own unsourced assumption. "Mean charged damage"
           and "mean fast-move damage" above are tracked separately. "Died mid own-animation" describes only the
           final, fatal charged-move attempt of a run — that specific attempt lands 0 damage, since the candidate
           dies before its own cast resolves. It does not mean the run's charged damage total is zero: a candidate

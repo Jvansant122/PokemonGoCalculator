@@ -11,7 +11,12 @@ import {
   raidTierStats,
   type RaidTier,
 } from "./raidBoss.js";
-import { DEFAULT_STEPWISE_MAX_SECONDS, runStepwiseDistribution, type DistributionSummary } from "./simulate.js";
+import {
+  DEFAULT_STEPWISE_MAX_SECONDS,
+  runStepwiseDistribution,
+  type BossChargedMoveCadence,
+  type DistributionSummary,
+} from "./simulate.js";
 import type { ChargedMove, IVSpread, SpeciesDefinition } from "./types.js";
 import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
 
@@ -396,7 +401,7 @@ export interface SustainedComparisonInputs {
    * fire-immediately behavior).
    */
   holdChargedMoveUntilSafe?: boolean;
-  /** Mean seconds between the boss's charged moves once the sustained phase begins. Only consulted when bossChargedMoveCadence is "fixed-interval" (the default); ignored under "energy-driven" — see that field's doc comment. */
+  /** Mean seconds between the boss's charged moves once the sustained phase begins. Only consulted when bossChargedMoveCadence is "fixed-interval" (the default); under "energy-gated-interval" the SAME field means mean delay after the boss becomes energy-eligible instead (and is required there); ignored entirely under "energy-driven" — see that field's doc comment. */
   bossChargedMoveMeanIntervalSeconds: number;
   /**
    * Which model decides when the boss throws its charged move — see
@@ -406,8 +411,11 @@ export interface SustainedComparisonInputs {
    * gaining energy from damage taken (not just its own fast move), so a
    * higher-DPS candidate makes the boss throw its charged move sooner/more
    * often — the real feedback loop the fixed-interval model misses entirely.
+   * "energy-gated-interval" gates eligibility the same way, but then rolls
+   * one fixed-interval-style jittered delay before actually firing, rather
+   * than a per-move-boundary coin flip.
    */
-  bossChargedMoveCadence?: "fixed-interval" | "energy-driven";
+  bossChargedMoveCadence?: BossChargedMoveCadence;
   /**
    * Defaults to bossChargedMoveReadySeconds(boss's fast move, boss's charged
    * move, bossStartingEnergy) — see ComparisonInputs.openingBurstSeconds for
