@@ -118,6 +118,11 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
             fastMoveId: s.fastMoveId,
             chargedMoveId: s.chargedMoveId,
             isMega: s.isMega,
+            // PowerUpSlotInput.megaLevel (via TeamRaidSlotInput) is
+            // MegaLevel | undefined (no explicit null), unlike
+            // PowerUpSlotAssumption.megaLevel's MegaLevel | null — same pure
+            // type-shape conversion as runTeamRaid.ts's identical line.
+            megaLevel: s.megaLevel ?? undefined,
             level: clampHalfLevel(s.level),
             ivs: { attack: clampIv(s.ivAttack), defense: clampIv(s.ivDefense), stamina: clampIv(s.ivStamina) },
             costModifiers: { isShadow: effectiveShadowFlag, isPurified: s.isPurified, isLucky: s.isLucky },

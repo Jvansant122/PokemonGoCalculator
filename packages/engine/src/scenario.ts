@@ -1,4 +1,5 @@
 import type { DodgeBehavior } from "./breakpoints.js";
+import type { MegaLevel } from "./megaLevel.js";
 import type { IVSpread } from "./types.js";
 import type { WeatherCondition } from "./weather.js";
 
@@ -32,6 +33,18 @@ export interface Scenario {
    * boost, if any, is always active).
    */
   candidateMegaBoostDisabled: [boolean, boolean];
+  /**
+   * Per-candidate Mega Level (see megaLevel.ts), matched by index to
+   * `candidates` — `null` means no Mega Level effect assumed for that
+   * candidate (identical to `"base"`: no Super Max effective-level CP bonus,
+   * and any selected "+" charged move reads at its stored Base-tier power).
+   * Silently has no effect for a candidate whose species has no mega/primal
+   * `boost` mechanic at all (see comparison.ts's resolveCandidateMegaLevel).
+   * Defaults to `[null, null]` (today's implicit behavior) so a scenario URL
+   * encoded before this field existed still decodes to the same result it
+   * always gave.
+   */
+  candidateMegaLevel: [MegaLevel | null, MegaLevel | null];
   target: string;
   /** Boss fast-move selection. null means "use the boss's first fast move" (today's implicit default). */
   bossFastMoveId: string | null;

@@ -24,6 +24,16 @@ export interface TeamRaidRunResult {
   bossRaidTier: RaidTier | undefined;
   bossReadySeconds: number | null;
   bossHp: number | null;
+  /**
+   * The boss charged-move mean frequency actually fed into runTeamRaid for
+   * THIS run. Equal to the stored `a.bossChargedMoveFrequencySeconds` when
+   * `a.showDetailedAssumptions` is true; otherwise derived from the boss's
+   * own fast-move charge time (see the inline comment above where this is
+   * computed) — a placeholder pending improvement, not this boss's
+   * confirmed real cadence. Exposed so the assumption panel can show it and
+   * seed the stored field with it when the user opts into detailed mode.
+   */
+  effectiveBossChargedMoveFrequencySeconds: number;
   data: ReturnType<typeof runTeamRaid> | null;
   error: string | null;
 }
@@ -52,6 +62,30 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
 
   const bossHp = bossSpecies ? bossEffectiveHp(bossSpecies, bossRaidTier) : null;
 
+  /**
+   * "Boss charged-move mean frequency" while showDetailedAssumptions is
+   * false: derived from the boss's own fast-move charge time, standing in
+   * for "the time it takes to charge its first charged attack" — a
+   * placeholder pending improvement, not a modeled mechanic. Deliberately
+   * passes 0 starting energy (NOT bossStartingEnergy) — this models a
+   * steady-state cadence, not the fight's opening warmup, so "boss starts
+   * already partway charged" must not perturb it.
+   * bossChargedMoveReadySeconds returns Infinity when the fast move has no
+   * energy gain, and 0 when the cost is already covered — both degenerate
+   * results fall back to the stored bossChargedMoveFrequencySeconds rather
+   * than feeding a useless number into the simulator.
+   */
+  let effectiveBossChargedMoveFrequencySeconds = a.bossChargedMoveFrequencySeconds;
+  if (!a.showDetailedAssumptions && bossSpecies) {
+    const fastMove = bossSpecies.fastMoves.find((m) => m.id === a.bossFastMoveId) ?? bossSpecies.fastMoves[0];
+    if (fastMove && selectedBossChargedMove) {
+      const derived = bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, 0);
+      if (Number.isFinite(derived) && derived > 0) {
+        effectiveBossChargedMoveFrequencySeconds = derived;
+      }
+    }
+  }
+
   let data: ReturnType<typeof runTeamRaid> | null = null;
   let error: string | null = null;
   if (bossSpecies) {
@@ -65,6 +99,12 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
           fastMoveId: s.fastMoveId,
           chargedMoveId: s.chargedMoveId,
           isMega: s.isMega,
+          // TeamRaidSlotInput.megaLevel is MegaLevel | undefined (no explicit
+          // null in its type), unlike TeamScenarioSlot.megaLevel's
+          // MegaLevel | null — both mean the same "no investment assumed"
+          // thing everywhere this is consumed, so `?? undefined` is a pure
+          // type-shape conversion, not a behavior change.
+          megaLevel: s.megaLevel ?? undefined,
         })),
         boss: bossSpecies,
         bossRaidTier,
@@ -75,7 +115,7 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
         dodge: a.dodge,
         dodgeFastAttacks: a.dodgeFastAttacks,
         holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
-        bossChargedMoveMeanIntervalSeconds: a.bossChargedMoveFrequencySeconds,
+        bossChargedMoveMeanIntervalSeconds: effectiveBossChargedMoveFrequencySeconds,
         bossChargedMoveCadence: a.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: a.weather,
@@ -88,5 +128,14 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     }
   }
 
-  return { slotSpecies, bossSpecies, bossRaidTier, bossReadySeconds, bossHp, data, error };
+  return {
+    slotSpecies,
+    bossSpecies,
+    bossRaidTier,
+    bossReadySeconds,
+    bossHp,
+    effectiveBossChargedMoveFrequencySeconds,
+    data,
+    error,
+  };
 }

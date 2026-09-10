@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runSustainedComparison } from "../src/comparison.js";
+import type { MegaLevel } from "../src/megaLevel.js";
 import { noiseFloorFor, powerUpCostTableFromGameMaster, type PowerUpCostTable } from "../src/powerUp.js";
 import { runRosterPlanner, type RosterEntry, type RosterPlannerInputs } from "../src/rosterPlanner.js";
 import { runTeamRaid, type TeamRaidInputs } from "../src/teamRaid.js";
@@ -8,6 +9,7 @@ import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_
 import {
   BOSS_ONE,
   BOSS_TWO,
+  MEGA_BENCH_SPECIES,
   STRONG_SPECIES,
   TINY_SPECIES,
   UNEVOLVED_SPECIES,
@@ -519,5 +521,44 @@ describe("runRosterPlanner — per-entry candidate diversity cap (Defect 3b regr
     const uncappedByEntry = new Map<string, number>();
     for (const c of uncapped.candidates) uncappedByEntry.set(c.entryId, (uncappedByEntry.get(c.entryId) ?? 0) + 1);
     expect(Math.max(...uncappedByEntry.values())).toBeGreaterThan(2);
+  });
+});
+
+describe("RosterPlannerInputs.megaLevel — roster-wide (2026-09-09 follow-up: Gap 2)", () => {
+  // Exactly 6 entries (5 strong clones + 1 mega-capable) so every entry is
+  // fielded regardless of relative score — isolates megaLevel's effect on
+  // the mega entry's own simulated output from any team-selection interaction.
+  function poolWithMega(level = 20): RosterEntry[] {
+    return [
+      entry("mega-slot", MEGA_BENCH_SPECIES, level, { canMega: true }),
+      ...STRONG_SPECIES.slice(0, 5).map((sp, i) => entry(`strong-${i}`, sp, level)),
+    ];
+  }
+
+  it("changes an already-fielded mega-capable entry's simulated baseline team DPS", () => {
+    const pool = poolWithMega();
+    const withoutMegaLevel = runRosterPlanner({ ...baseInputs(), pool, targets: [{ species: BOSS_ONE }] });
+    const withSuperMax = runRosterPlanner({ ...baseInputs({ megaLevel: "super-max" }), pool, targets: [{ species: BOSS_ONE }] });
+
+    expect(withoutMegaLevel.baselinePerBoss[0]!.team).toContain("mega-slot");
+    expect(withSuperMax.baselinePerBoss[0]!.team).toContain("mega-slot");
+    expect(withSuperMax.baselinePerBoss[0]!.summary.teamDps).toBeGreaterThan(withoutMegaLevel.baselinePerBoss[0]!.summary.teamDps);
+  });
+
+  it("has no effect at all on a pool with no mega-capable entries — the roster-wide setting is gated per-entry, not applied blanket", () => {
+    const pool = strongTeam(20);
+    const withoutMegaLevel = runRosterPlanner({ ...baseInputs(), pool, targets: [{ species: BOSS_ONE }] });
+    const withSuperMax = runRosterPlanner({ ...baseInputs({ megaLevel: "super-max" }), pool, targets: [{ species: BOSS_ONE }] });
+    expect(withSuperMax.baselinePerBoss).toEqual(withoutMegaLevel.baselinePerBoss);
+    expect(withSuperMax.candidates).toEqual(withoutMegaLevel.candidates);
+  });
+
+  it("omitting megaLevel is byte-identical to explicit undefined/'base' (defaults constraint), even with a mega-capable entry in the pool", () => {
+    const pool = poolWithMega();
+    const omitted = runRosterPlanner({ ...baseInputs(), pool, targets: [{ species: BOSS_ONE }] });
+    const explicitUndefined = runRosterPlanner({ ...baseInputs({ megaLevel: undefined }), pool, targets: [{ species: BOSS_ONE }] });
+    const explicitBase = runRosterPlanner({ ...baseInputs({ megaLevel: "base" as MegaLevel }), pool, targets: [{ species: BOSS_ONE }] });
+    expect(explicitUndefined).toEqual(omitted);
+    expect(explicitBase).toEqual(omitted);
   });
 });

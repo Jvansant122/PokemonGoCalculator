@@ -1,6 +1,7 @@
-import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove } from "./comparison.js";
+import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveCandidateMegaLevel, resolveMove } from "./comparison.js";
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
+import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import type { RaidTier } from "./raidBoss.js";
 import {
   DEFAULT_STEPWISE_MAX_SECONDS,
@@ -114,6 +115,20 @@ export interface TeamRaidSlotInput {
   level?: number;
   /** Per-slot override for TeamRaidInputs.ivs — see `level` above for the same fallback convention and motivation. */
   ivs?: IVSpread;
+  /**
+   * This slot's own Mega Level (see megaLevel.ts) — orthogonal to `isMega`
+   * above (that flag is purely the account-wide "only one Pokémon Mega
+   * Evolved at a time" bookkeeping/validation; a slot's OWN boost already
+   * applies automatically whenever its species carries `.boost`, with or
+   * without `isMega` set, exactly as ownBoostMultiplier already works —
+   * megaLevel follows the same convention). Silently has no effect for a
+   * slot whose species has no `.boost` at all — see
+   * comparison.ts's resolveCandidateMegaLevel, which this module reuses
+   * rather than re-deriving the gate. `undefined`/omitted means no Mega
+   * Level effect (identical to `"base"`), so every existing caller needs
+   * zero changes.
+   */
+  megaLevel?: MegaLevel;
 }
 
 export interface TeamRaidInputs {
@@ -447,13 +462,21 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
       const startClock = globalClock;
       // Per-slot level/ivs override (see TeamRaidSlotInput.level's doc
       // comment) — omitted for a slot falls back to the roster-wide
-      // level/ivs exactly as before this field existed.
-      const stats = effectiveStatsAtLevel(species, slot.ivs ?? ivs, slot.level ?? level);
+      // level/ivs exactly as before this field existed. megaLevel shifts the
+      // effective-level lookup on top of that (Super Max's CP bonus — see
+      // megaLevel.ts), gated on this slot's OWN species carrying `.boost`.
+      const megaLevel = resolveCandidateMegaLevel(species, slot.megaLevel);
+      const stats = effectiveStatsAtLevel(species, slot.ivs ?? ivs, effectiveLevelForMegaLevel(slot.level ?? level, megaLevel));
       const fastMove = resolveMove(species.fastMoves, slot.fastMoveId);
-      const chargedMove = resolveMove(species.chargedMoves, slot.chargedMoveId);
-      if (!fastMove || !chargedMove) {
+      const rawChargedMove = resolveMove(species.chargedMoves, slot.chargedMoveId);
+      if (!fastMove || !rawChargedMove) {
         throw new Error(`Team raid slot ${slotIndex} (${species.id}) needs at least one fast move and one charged move.`);
       }
+      // A "+" move's power is scaled for this slot's current Mega Level here,
+      // once, before every downstream use of `chargedMove` — see
+      // megaLevel.ts's chargedMoveAtMegaLevel (a no-op for every ordinary
+      // move, including a mega's own normal two).
+      const chargedMove = chargedMoveAtMegaLevel(rawChargedMove, megaLevel);
       const fastVsBoss = typeEffectiveness(fastMove.type, boss.types);
       const chargedVsBoss = typeEffectiveness(chargedMove.type, boss.types);
       const bossVsSlot = typeEffectiveness(bossFastMove.type, species.types);

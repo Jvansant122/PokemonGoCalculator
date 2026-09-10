@@ -1,4 +1,5 @@
 import type { ChargedMove, FastMove } from "@pogo-analyzer/engine";
+import { PlusMoveBadge, plusMoveOptionTag } from "./PlusMoveBadge.js";
 import { TYPE_COLORS, typeLabel } from "./typeStyles.js";
 
 type Move = FastMove | ChargedMove;
@@ -37,7 +38,12 @@ function optionLabel(move: Move, kind: "fast" | "charged"): string {
   if (kind === "charged") {
     const chargedMove = move as ChargedMove;
     const efficiency = chargedEfficiency(chargedMove).toFixed(1);
-    return `${typeTag} ${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS), ${chargedMove.energyCost} energy cost, Efficiency: ${efficiency} (DPS×DPE)`;
+    // Plain-text tag (not a rendered badge — see PlusMoveBadge.tsx's own doc
+    // comment on why a native <select>'s option list needs a text fallback)
+    // so a "+" move's confidence tier is visible even inside the closed
+    // dropdown's option list, not just on the currently-selected move.
+    const plusTag = plusMoveOptionTag(chargedMove);
+    return `${typeTag} ${move.name} — ${move.power} dmg / ${move.durationSeconds}s (~${dps} DPS), ${chargedMove.energyCost} energy cost, Efficiency: ${efficiency} (DPS×DPE)${plusTag}`;
   }
   const fastMove = move as FastMove;
   // Energy Per Second: how quickly this fast move refills the energy meter —
@@ -89,7 +95,10 @@ export function MoveSelect({ idPrefix, label, moves, kind, value, onChange }: Pr
       style={swatchColor ? { borderLeft: `3px solid ${swatchColor}`, paddingLeft: 8 } : undefined}
       title={resolvedMove ? `${typeLabel(resolvedMove.type)}-type move` : undefined}
     >
-      <label htmlFor={idPrefix}>{label}</label>
+      <label htmlFor={idPrefix}>
+        {label}
+        {kind === "charged" && <PlusMoveBadge move={resolvedMove as ChargedMove | undefined} />}
+      </label>
       <select id={idPrefix} value={resolvedId} onChange={(e) => onChange(e.target.value)}>
         {moves.map((move) => (
           <option key={move.id} value={move.id}>

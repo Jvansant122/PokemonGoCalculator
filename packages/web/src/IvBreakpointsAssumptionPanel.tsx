@@ -1,6 +1,7 @@
 import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import type { IvBreakpointsAssumptions } from "./IvBreakpointsView.js";
@@ -81,6 +82,13 @@ export function IvBreakpointsAssumptionPanel({
                   </label>
                 );
               })()}
+              <MegaLevelSelect
+                idPrefix="iv-breakpoints"
+                label="Mega Level (applies to both spreads — same species)"
+                species={species}
+                value={assumptions.megaLevel}
+                onChange={(level) => setAssumptions({ ...assumptions, megaLevel: level })}
+              />
             </>
           )}
         </div>

@@ -3,6 +3,7 @@ import {
   type DodgeBehavior,
   type IVSpread,
   type IvComparisonRow,
+  type MegaLevel,
   type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
@@ -42,6 +43,8 @@ export interface IvBreakpointsAssumptions {
   bossFastMoveId: string | null;
   dodge: DodgeBehavior;
   weather: WeatherCondition;
+  /** See IvBreakpointsScenario.megaLevel — one shared Mega Level for both spreads (same species/moveset). */
+  megaLevel: MegaLevel | null;
   /** See IvBreakpointsScenario.isShadow — one shared toggle for both spreads (same species/moveset). */
   isShadow: boolean;
 }
@@ -56,6 +59,7 @@ export const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
   bossFastMoveId: null,
   dodge: { kind: "perfect" },
   weather: "none",
+  megaLevel: null,
   isShadow: false,
 };
 
@@ -70,6 +74,7 @@ export function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpoint
     bossFastMoveId: a.bossFastMoveId,
     dodgeModel: a.dodge,
     weather: a.weather,
+    megaLevel: a.megaLevel,
     isShadow: a.isShadow,
   };
 }
@@ -88,6 +93,9 @@ export function scenarioToAssumptions(s: IvBreakpointsScenario): IvBreakpointsAs
     // App.tsx's/SpeciesReportView's scenarioToAssumptions.
     dodge: s.dodgeModel ?? DEFAULT_ASSUMPTIONS.dodge,
     weather: s.weather ?? DEFAULT_ASSUMPTIONS.weather,
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the Mega Level <select>.
+    megaLevel: s.megaLevel ?? DEFAULT_ASSUMPTIONS.megaLevel,
     isShadow: s.isShadow ?? DEFAULT_ASSUMPTIONS.isShadow,
   };
 }

@@ -39,6 +39,7 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   bossFastMoveId: null,
   bossChargedMoveId: null,
   candidateMegaBoostDisabled: [false, false],
+  candidateMegaLevel: [null, null],
   candidateShadow: [false, false],
   level: 35,
   ivAttack: 15,
@@ -95,6 +96,7 @@ export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
     candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
+    candidateMegaLevel: a.candidateMegaLevel,
     candidateShadow: a.candidateShadow,
     level: a.level,
     ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
@@ -131,6 +133,9 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // `??` guards a scenario URL encoded before this field existed rather than
     // surfacing `undefined` into the checkboxes above.
     candidateMegaBoostDisabled: s.candidateMegaBoostDisabled ?? [false, false],
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the Mega Level <select>s below.
+    candidateMegaLevel: s.candidateMegaLevel ?? DEFAULT_ASSUMPTIONS.candidateMegaLevel,
     // `??` guards a scenario URL encoded before this field existed (it isn't
     // even declared on the engine's own Scenario type — see ComparatorScenario
     // above) rather than surfacing `undefined` into the checkboxes below.

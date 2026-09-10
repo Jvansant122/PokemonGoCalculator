@@ -129,6 +129,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
         bossStartingEnergy,
         weather: a.weather,
         candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
+        candidateMegaLevel: a.candidateMegaLevel,
       });
     } catch (err) {
       resultsError = (err as Error).message;
@@ -181,6 +182,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
         bossStartingEnergy,
         weather: a.weather,
         candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
+        candidateMegaLevel: a.candidateMegaLevel,
       });
     } catch {
       bossMovesetSweep = null;

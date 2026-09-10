@@ -3,6 +3,7 @@ import {
   buildTeamScenarioUrl,
   MAX_TEAM_RAID_SLOTS,
   parseTeamScenarioFromUrl,
+  type MegaLevel,
   type SpeciesDefinition,
   type TeamScenario,
 } from "@pogo-analyzer/engine";
@@ -27,12 +28,12 @@ const DEFAULT_TARGET_ID = "tyranitar-mega";
 
 export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   slots: [
-    { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, isShadow: false },
-    { speciesId: "garchomp", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
-    { speciesId: "dragonite", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
-    { speciesId: "kartana", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
-    { speciesId: "tyranitar", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
-    { speciesId: "rayquaza", fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+    { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: null, isShadow: false },
+    { speciesId: "garchomp", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "dragonite", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "kartana", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "tyranitar", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "rayquaza", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
   ],
   targetId: DEFAULT_TARGET_ID,
   bossFastMoveId: null,
@@ -50,8 +51,9 @@ export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   bossStartsPrimed: false,
   bossStartingEnergyFraction: 0.5,
   raidTimerSeconds: 300,
-  swapCostSeconds: 0,
-  reviveCostSeconds: 0,
+  swapCostSeconds: 0.5,
+  reviveCostSeconds: 15,
+  showDetailedAssumptions: false,
 };
 
 /**
@@ -71,6 +73,7 @@ interface TeamScenarioSlotWithShadow {
   fastMoveId: string | null;
   chargedMoveId: string | null;
   isMega: boolean;
+  megaLevel: MegaLevel | null;
   isShadow: boolean;
 }
 export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
@@ -83,6 +86,13 @@ export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
    * this type.
    */
   bossChargedMoveCadence?: BossChargedMoveCadence;
+  /**
+   * Same extension pattern again. UNLIKE every other optional field on this
+   * type, an ABSENT value here decodes to `true`, not
+   * DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions (`false`) — see
+   * teamScenarioToAssumptions below for why.
+   */
+  showDetailedAssumptions?: boolean;
 }
 
 export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
@@ -92,6 +102,7 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
       fastMoveId: s.fastMoveId,
       chargedMoveId: s.chargedMoveId,
       isMega: s.isMega,
+      megaLevel: s.megaLevel,
       isShadow: s.isShadow,
     })),
     target: a.targetId,
@@ -110,6 +121,7 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
     raidTimerSeconds: a.raidTimerSeconds,
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,
+    showDetailedAssumptions: a.showDetailedAssumptions,
   };
 }
 
@@ -119,6 +131,10 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     fastMoveId: slot.fastMoveId ?? null,
     chargedMoveId: slot.chargedMoveId ?? null,
     isMega: slot.isMega ?? false,
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the Mega Level <select> below — same
+    // discipline as ComparatorView's candidateMegaLevel.
+    megaLevel: slot.megaLevel ?? null,
     // `??` guards a scenario URL encoded before this field existed (it isn't
     // even declared on the engine's own TeamScenarioSlot — see
     // TeamScenarioWithShadow above) rather than surfacing `undefined` into
@@ -153,8 +169,25 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     bossStartsPrimed: s.bossStartsPrimed ?? DEFAULT_TEAM_ASSUMPTIONS.bossStartsPrimed,
     bossStartingEnergyFraction: s.bossStartingEnergyFraction ?? DEFAULT_TEAM_ASSUMPTIONS.bossStartingEnergyFraction,
     raidTimerSeconds: s.raidTimerSeconds ?? DEFAULT_TEAM_ASSUMPTIONS.raidTimerSeconds,
+    // Deliberately NOT `?? DEFAULT_TEAM_ASSUMPTIONS.swapCostSeconds` (0.5) —
+    // a link with these two fields truly absent predates the fields
+    // existing at all, back when this tab really did assume 0 (fastest-
+    // possible play). Falling back to today's new placeholder default
+    // instead would silently change what an old link meant, same principle
+    // as showDetailedAssumptions's inverted default below.
     swapCostSeconds: s.swapCostSeconds ?? 0,
     reviveCostSeconds: s.reviveCostSeconds ?? 0,
+    // INVERTED default versus every other `??` above: an ABSENT value here
+    // means the link was shared before this setting existed, when there was
+    // no "simple/derived" mode at all — the sender's stored
+    // bossChargedMoveFrequencySeconds WAS the real number in force for that
+    // run. Defaulting the absent case to `true` (not
+    // DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions, which is `false`)
+    // preserves that stored value instead of silently swapping it for a
+    // newly-derived one — "a shared link's meaning never silently changes"
+    // (see bossCadence.tsx's identical concern). Do not "fix" this to match
+    // the DEFAULT_TEAM_ASSUMPTIONS pattern every other field uses.
+    showDetailedAssumptions: s.showDetailedAssumptions ?? true,
   };
 }
 
@@ -272,6 +305,7 @@ export function TeamRaidView() {
         bossSpecies={bossSpecies}
         bossReadySeconds={bossReadySeconds}
         bossHp={bossHp}
+        effectiveBossChargedMoveFrequencySeconds={runResult.effectiveBossChargedMoveFrequencySeconds}
       />
 
       {result.error && (
@@ -375,12 +409,17 @@ export function TeamRaidView() {
           independently sourced, what's this project's own reasoned inference, and what's simply unvalidated. Both stay
           off by default so a shared link's meaning never silently changes.
           swapCostSeconds/reviveCostSeconds have no confirmed real value from any official or community source —
-          both default to 0 (fastest-possible play) rather than a fabricated "realistic" number; a labeled ~13s
-          community estimate is offered as an optional preset for reviveCostSeconds only. A boss badged
-          "approximate" in the target picker is one the live raid feed named but whose exact form this data layer
-          couldn't resolve, so a documented stand-in species' stats are used — treat those runs as directional.
-          The other four tabs already spelled this out; this one didn't, which is the only reason it's stated here
-          rather than being left to the badge alone.
+          they default to 0.5s and 15s respectively rather than 0 (fastest-possible play), both honest placeholders
+          rather than fabricated "realistic" numbers: 0.5s for a swap-in, and 15s for a full wipe chosen at the TOP
+          of the community-reported 12-15s heal window specifically to allow for user error, not because 15s is any
+          more confirmed than the rest of that window; a labeled ~13s community estimate is still offered as an
+          optional preset for reviveCostSeconds. With "More detailed assumptions" unchecked, the boss's charged-move
+          mean frequency is likewise a placeholder — derived from this boss's own fast-move charge time rather than
+          a fixed number, standing in for "the time it takes to charge its first charged attack" pending further
+          improvement, not a modeled mechanic. A boss badged "approximate" in the target picker is one the live raid
+          feed named but whose exact form this data layer couldn't resolve, so a documented stand-in species' stats
+          are used — treat those runs as directional. The other four tabs already spelled this out; this one
+          didn't, which is the only reason it's stated here rather than being left to the badge alone.
         </p>
       </CollapsibleSection>
     </>

@@ -10,8 +10,10 @@
 import {
   attackDamageGrid,
   bossEffectiveStats,
+  chargedMoveAtMegaLevel,
   defenseDamageGrid,
   isWeatherBoosted,
+  resolveCandidateMegaLevel,
   resolveMove,
   typeEffectiveness,
   type DamageGridCell,
@@ -48,6 +50,10 @@ export function runAttackDefenseBreakpointsScenario(
   // take a raw baseAttack/baseDefense NUMBER, so the Shadow toggle is applied
   // via shadowToggledBaseStats rather than cloning the species object.
   const adjustedBaseStats = species ? shadowToggledBaseStats(species, a.isShadow) : null;
+  // Gated on species.boost via resolveCandidateMegaLevel, same as every
+  // other tab — silently null (no effect) for a non-mega/non-primal species
+  // regardless of what a.megaLevel says.
+  const resolvedMegaLevel = species ? resolveCandidateMegaLevel(species, a.megaLevel) : null;
 
   let attack: Grids | null = null;
   let defense: Grids | null = null;
@@ -57,9 +63,14 @@ export function runAttackDefenseBreakpointsScenario(
     try {
       if (a.mode === "attack") {
         const fastMove = resolveMove(species.fastMoves, a.fastMoveId);
-        const chargedMove = resolveMove(species.chargedMoves, a.chargedMoveId);
+        const rawChargedMove = resolveMove(species.chargedMoves, a.chargedMoveId);
         if (!fastMove) throw new Error(`${species.name} has no fast move defined.`);
-        if (!chargedMove) throw new Error(`${species.name} has no charged move defined.`);
+        if (!rawChargedMove) throw new Error(`${species.name} has no charged move defined.`);
+        // A "+" move's power is scaled for this species' current Mega Level
+        // (no-op for every ordinary move) — see megaLevel.ts's
+        // chargedMoveAtMegaLevel. Fast moves are never "+" moves, so
+        // fastMove.power is used unscaled either way.
+        const chargedMove = chargedMoveAtMegaLevel(rawChargedMove, resolvedMegaLevel);
         const { defense: bossDefenseStat } = bossEffectiveStats(boss, bossRaidTier);
 
         const fast = attackDamageGrid({
@@ -73,6 +84,7 @@ export function runAttackDefenseBreakpointsScenario(
           },
           ivRange: IVS_0_TO_15,
           levels: LEVELS_25_TO_50,
+          megaLevel: resolvedMegaLevel,
         });
         const charged = attackDamageGrid({
           baseAttack: adjustedBaseStats.baseAttack,
@@ -85,6 +97,7 @@ export function runAttackDefenseBreakpointsScenario(
           },
           ivRange: IVS_0_TO_15,
           levels: LEVELS_25_TO_50,
+          megaLevel: resolvedMegaLevel,
         });
         attack = { fast, charged };
       } else {
@@ -105,6 +118,10 @@ export function runAttackDefenseBreakpointsScenario(
           },
           ivRange: IVS_0_TO_15,
           levels: LEVELS_25_TO_50,
+          // The DEFENDING species' (our own) Mega Level — the boss's own
+          // moves are never scaled by it (a raid boss has no Mega Level
+          // concept anywhere in this tool).
+          megaLevel: resolvedMegaLevel,
         });
         const charged = defenseDamageGrid({
           baseDefense: adjustedBaseStats.baseDefense,
@@ -117,6 +134,7 @@ export function runAttackDefenseBreakpointsScenario(
           },
           ivRange: IVS_0_TO_15,
           levels: LEVELS_25_TO_50,
+          megaLevel: resolvedMegaLevel,
         });
         defense = { fast, charged };
       }

@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { compareAcrossBossChargedMoves, runSustainedComparison } from "../src/comparison.js";
+import { calculateDamage } from "../src/damage.js";
+import { chargedMoveAtMegaLevel } from "../src/megaLevel.js";
+import { effectiveStatsAtLevel } from "../src/stats.js";
 import { BOSS_GALE, BOSS_TIDE, CANDIDATE_ALPHA, CANDIDATE_BETA, LEVEL, PERFECT_IVS } from "./fixtures/hypotheticalDuo.js";
-import type { SpeciesDefinition } from "../src/types.js";
+import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
 
 describe("runSustainedComparison", () => {
   it("returns a distribution (not a point estimate) per candidate once the boss starts using charged moves", () => {
@@ -235,6 +238,140 @@ describe("runSustainedComparison", () => {
     // changes nothing here — both runs use identical seeds/timing, so this
     // should match exactly, not just approximately.
     expect(boostDisabled[0]!.meanChargedDamage).toBe(withBoost[0]!.meanChargedDamage);
+  });
+});
+
+describe("runSustainedComparison: candidateMegaLevel (Super Max effective-level CP bonus and '+'-move power scaling)", () => {
+  // The boss deals exactly 1 damage per fast hit (a deliberately tiny attack
+  // stat against this candidate's much larger defense — see calculateDamage's
+  // own "+1" floor, which a raw value near 0 always rounds up to) — 1 damage
+  // floors to 0 energy via energy.ts's ENERGY_PER_DAMAGE_TAKEN, so damage
+  // taken contributes NOTHING to the candidate's own energy trajectory
+  // regardless of a small defense-stat shift between megaLevel tiers. The
+  // boss also has NO charged move at all, so `simulateStepwiseBattle` never
+  // calls its seeded RNG — the whole run is 100% deterministic, letting
+  // `iterations: 1` stand in for an exact, noise-free result. Net effect:
+  // every tick's timing is bit-for-bit identical across every megaLevel
+  // tier tested here (attack/defense/power changes affect DAMAGE MAGNITUDE
+  // only, never cadence) — so a fast/charged hit count derived from one run
+  // reliably predicts every other run's hit count too.
+  const megaFastMove: FastMove = { id: "smc-fast", name: "SMC Fast", type: "normal", power: 15, energyGain: 20, durationSeconds: 1 };
+  const megaPlusMove: ChargedMove = {
+    id: "smc-plus-move",
+    name: "SMC Plus Move",
+    type: "normal",
+    power: 100, // Base-tier, hypothetical for this test only
+    energyCost: 20,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+    isPlusMove: true,
+    plusMovePowerConfidence: "community-estimate",
+  };
+  const megaAttacker: SpeciesDefinition = {
+    id: "smc-mega-attacker",
+    name: "SMC Mega Attacker",
+    types: ["normal"],
+    baseAttack: 250,
+    baseDefense: 150,
+    baseStamina: 10000, // never faints inside maxSeconds
+    fastMoves: [megaFastMove],
+    chargedMoves: [megaPlusMove],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  const nonMegaAttacker: SpeciesDefinition = { ...megaAttacker, id: "smc-non-mega-attacker", name: "SMC Non-Mega Attacker", boost: undefined };
+  const boss: SpeciesDefinition = {
+    id: "smc-weak-boss",
+    name: "SMC Weak Boss",
+    types: ["normal"],
+    baseAttack: 1,
+    baseDefense: 200,
+    baseStamina: 30000,
+    fastMoves: [{ id: "smc-boss-fast", name: "SMC Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 2 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  const level = 50;
+  const ivs = { attack: 15, defense: 15, stamina: 15 };
+  const common = {
+    boss,
+    level,
+    ivs,
+    dodge: { kind: "none" } as const,
+    bossChargedMoveMeanIntervalSeconds: 1000, // no boss charged move exists at all — irrelevant, but required
+    maxSeconds: 30,
+    iterations: 1, // safe/exact — see this describe block's own doc comment (zero RNG calls)
+  };
+
+  function expectedPerFastHit(effectiveLevel: number): number {
+    const stats = effectiveStatsAtLevel(megaAttacker, ivs, effectiveLevel);
+    return calculateDamage({
+      power: megaFastMove.power,
+      attackerAttackStat: stats.attack,
+      defenderDefenseStat: 200,
+      stab: true,
+      typeEffectiveness: 1,
+      megaBoostMultiplier: 1.3,
+    });
+  }
+
+  function expectedPerChargedHit(effectiveLevel: number, megaLevel: Parameters<typeof chargedMoveAtMegaLevel>[1]): number {
+    const stats = effectiveStatsAtLevel(megaAttacker, ivs, effectiveLevel);
+    const scaledMove = chargedMoveAtMegaLevel(megaPlusMove, megaLevel);
+    return calculateDamage({
+      power: scaledMove.power,
+      attackerAttackStat: stats.attack,
+      defenderDefenseStat: 200,
+      stab: true,
+      typeEffectiveness: 1,
+      megaBoostMultiplier: 1.3,
+    });
+  }
+
+  it("base/high/max all give +0 effective levels — meanFastMoveDamage is byte-identical across all three", () => {
+    const [base] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: [null, null] });
+    const [high] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: ["high", null] });
+    const [max] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: ["max", null] });
+
+    expect(base!.meanFastMoveDamage).toBeGreaterThan(0);
+    expect(base!.meanFastMoveDamage % expectedPerFastHit(50)).toBe(0); // sanity: an exact multiple of one hit's damage
+    expect(high!.meanFastMoveDamage).toBe(base!.meanFastMoveDamage);
+    expect(max!.meanFastMoveDamage).toBe(base!.meanFastMoveDamage);
+  });
+
+  it("super-max raises meanFastMoveDamage via the +2 effective-level CP bonus, by exactly the hit-count-scaled predicted amount", () => {
+    const [base] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: [null, null] });
+    const [superMax] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: ["super-max", null] });
+
+    const fastHitCount = base!.meanFastMoveDamage / expectedPerFastHit(50);
+    expect(Number.isInteger(fastHitCount)).toBe(true);
+    expect(fastHitCount).toBeGreaterThan(0);
+    expect(superMax!.meanFastMoveDamage).toBe(expectedPerFastHit(52) * fastHitCount);
+    expect(superMax!.meanFastMoveDamage).toBeGreaterThan(base!.meanFastMoveDamage);
+  });
+
+  it("scales meanChargedDamage by tier via the '+' move's power (isolated from the level bonus at high/max)", () => {
+    const [base] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: [null, null] });
+    const [high] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: ["high", null] });
+    const [max] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: ["max", null] });
+    const [superMax] = runSustainedComparison({ ...common, candidates: [megaAttacker], candidateMegaLevel: ["super-max", null] });
+
+    const chargedHitCount = base!.meanChargedDamage / expectedPerChargedHit(50, "base");
+    expect(Number.isInteger(chargedHitCount)).toBe(true);
+    expect(chargedHitCount).toBeGreaterThan(0);
+    expect(high!.meanChargedDamage).toBe(expectedPerChargedHit(50, "high") * chargedHitCount);
+    expect(max!.meanChargedDamage).toBe(expectedPerChargedHit(50, "max") * chargedHitCount);
+    expect(superMax!.meanChargedDamage).toBe(expectedPerChargedHit(52, "super-max") * chargedHitCount);
+
+    expect(base!.meanChargedDamage).toBeLessThan(high!.meanChargedDamage);
+    expect(high!.meanChargedDamage).toBeLessThan(max!.meanChargedDamage);
+    expect(max!.meanChargedDamage).toBeLessThan(superMax!.meanChargedDamage);
+  });
+
+  it("has no effect at all on a candidate with no mega/primal boost mechanic, regardless of what's requested", () => {
+    const [withoutMegaLevel] = runSustainedComparison({ ...common, candidates: [nonMegaAttacker] });
+    const [withSuperMaxRequested] = runSustainedComparison({ ...common, candidates: [nonMegaAttacker], candidateMegaLevel: ["super-max", null] });
+    expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
   });
 });
 

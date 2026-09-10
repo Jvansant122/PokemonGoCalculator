@@ -267,6 +267,111 @@ describe("simulateStepwiseBattle", () => {
       const landedAt = result.ownDamageTrajectory.find((p) => p.cumulativeDamage > 3 * Math.floor(p.atSeconds));
       expect(landedAt?.atSeconds).toBe(5);
     });
+
+    it("dodging around a held charged move costs an EXTRA DODGE_COST_SECONDS per dodged boss charged hit, slipping the attacker's own fast-move cadence later", () => {
+      // The attacker's own charged move is deliberately unreachable
+      // (energyCost far above MAX_ENERGY) so holdChargedMoveUntilSafe's OTHER
+      // effect — holding the attacker's OWN cast for a safe window — never
+      // engages here at all. That isolates this test to exactly the one thing
+      // under test: the extra per-dodge time cost this setting adds around
+      // the boss's CHARGED hits.
+      const attacker = {
+        hp: 1_000_000,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 10, energyCost: 99999, durationSeconds: 1, vulnerableWindowSeconds: 1 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      // Boss fires its charged move on a "fixed-interval" schedule that is
+      // fully independent of the attacker's own timeline (no energy check in
+      // that mode — see simulate.ts), so this schedule is byte-identical
+      // between the two runs below regardless of the attacker's
+      // holdChargedMoveUntilSafe flag. The boss's own fast move is pushed
+      // far out of range so only its charged hits are in play.
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1000 },
+        damageOut: { stab: false },
+        chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 0.5, vulnerableWindowSeconds: 0.5 },
+        chargedMoveDamageOut: { stab: false },
+        chargedMoveMeanIntervalSeconds: 3,
+        chargedMoveWarmupSeconds: 1,
+      };
+
+      const notHeld = simulateStepwiseBattle({
+        attacker: { ...attacker, holdChargedMoveUntilSafe: false },
+        boss,
+        dodge: { kind: "perfect" },
+        maxSeconds: 30,
+      });
+      const held = simulateStepwiseBattle({
+        attacker: { ...attacker, holdChargedMoveUntilSafe: true },
+        boss,
+        dodge: { kind: "perfect" },
+        maxSeconds: 30,
+      });
+
+      // Sanity check: the boss's own schedule really is identical across
+      // both runs (as argued above) — several charged hits land in a 30s
+      // window at a mean-3s cadence.
+      expect(held.bossChargedHitsTaken).toBe(notHeld.bossChargedHitsTaken);
+      expect(held.bossChargedHitsTaken).toBeGreaterThan(0);
+
+      // Every one of those dodged charged hits costs an extra
+      // DODGE_COST_SECONDS under holdChargedMoveUntilSafe (2x instead of 1x
+      // per attempt — see HOLD_CHARGED_MOVE_DODGE_ATTEMPTS), which can only
+      // ever push the attacker's own fast-move cadence LATER, never earlier
+      // — so strictly fewer (or equal, never more) fast-move damage lands.
+      expect(held.totalFastMoveDamage).toBeLessThan(notHeld.totalFastMoveDamage);
+    });
+
+    it("does NOT add the extra dodge-cost time when dodge.kind is \"none\" — a charged hit that isn't actually dodged costs the ordinary single DODGE_COST_SECONDS (zero here, since no dodge is attempted at all)", () => {
+      // Same isolation trick as above: the attacker's own charged move is
+      // unreachable, so holdChargedMoveUntilSafe's "hold my own cast" effect
+      // never engages, and the ONLY thing that could possibly differ between
+      // holdChargedMoveUntilSafe true/false is the extra dodge-cost branch —
+      // which itself is gated on attemptingDodge, already false whenever
+      // dodge.kind === "none". So the two full run results must be
+      // byte-identical (a stronger claim than just "cadence matches").
+      const attacker = {
+        hp: 1_000_000,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 10, energyCost: 99999, durationSeconds: 1, vulnerableWindowSeconds: 1 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1000 },
+        damageOut: { stab: false },
+        chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 0.5, vulnerableWindowSeconds: 0.5 },
+        chargedMoveDamageOut: { stab: false },
+        chargedMoveMeanIntervalSeconds: 3,
+        chargedMoveWarmupSeconds: 1,
+      };
+
+      const notHeld = simulateStepwiseBattle({
+        attacker: { ...attacker, holdChargedMoveUntilSafe: false },
+        boss,
+        dodge: { kind: "none" },
+        maxSeconds: 30,
+      });
+      const held = simulateStepwiseBattle({
+        attacker: { ...attacker, holdChargedMoveUntilSafe: true },
+        boss,
+        dodge: { kind: "none" },
+        maxSeconds: 30,
+      });
+
+      expect(held.bossChargedHitsTaken).toBeGreaterThan(0);
+      expect(held).toEqual(notHeld);
+    });
   });
 
   describe("ChargedMove.perfectlyDodgeable", () => {

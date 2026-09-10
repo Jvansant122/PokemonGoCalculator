@@ -1,4 +1,4 @@
-import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type WeatherCondition } from "@pogo-analyzer/engine";
+import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
 
 /**
@@ -27,6 +27,13 @@ export interface PowerUpScenarioSlot {
   fastMoveId: string | null;
   chargedMoveId: string | null;
   isMega: boolean;
+  /**
+   * This slot's own Mega Level (see megaLevelSelect.tsx / packages/engine/src/megaLevel.ts)
+   * — mirrors PowerUpSlotAssumption.megaLevel exactly, single-raid mode
+   * only. `null` means no Mega Level investment assumed (identical to
+   * `"base"`).
+   */
+  megaLevel: MegaLevel | null;
   isShadow: boolean;
   isPurified: boolean;
   isLucky: boolean;
@@ -123,6 +130,15 @@ export interface PowerUpOptimizerScenario {
    * family unknown) so a pre-multi-raid link decodes cleanly.
    */
   candyByFamilyId?: Record<string, { candy: number; xlCandy: number } | undefined>;
+  /**
+   * Multi-raid mode only — see PowerUpOptimizerAssumptions.multiRaidMegaLevel
+   * for the full contract (a single roster-wide setting, unlike single-raid
+   * mode's per-slot `slots[].megaLevel` above) and it is applied for real:
+   * `rosterPlanner.ts` takes it as `RosterPlannerInputs.megaLevel`, and both
+   * planner entry points feed it into the simulated team DPS.
+   * Optional/defaults to `null` so a pre-existing link decodes cleanly.
+   */
+  multiRaidMegaLevel?: MegaLevel | null;
 }
 
 export function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {

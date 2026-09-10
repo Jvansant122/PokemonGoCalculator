@@ -1,4 +1,4 @@
-import { fromBase64Url, toBase64Url, type WeatherCondition } from "@pogo-analyzer/engine";
+import { fromBase64Url, toBase64Url, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
 
 /** Which half of the tab is currently rendering — see AttackDefenseBreakpointsView.tsx's own doc comment. */
 export type AttackDefenseBreakpointsMode = "attack" | "defense";
@@ -46,6 +46,18 @@ export interface AttackDefenseBreakpointsScenario {
   weather: WeatherCondition;
   /** Attack Breakpoints (this species' own output) vs Defense Breakpoints (damage this species takes) — must round-trip like any other user-facing setting. */
   mode: AttackDefenseBreakpointsMode;
+  /**
+   * The species' own Mega Level (see megaLevelSelect.tsx /
+   * packages/engine/src/megaLevel.ts) — applied in BOTH modes (shifts the
+   * swept Attack-stat lookup in Attack mode, the swept Defense-stat lookup
+   * in Defense mode; see breakpoints.ts's attackDamageGrid/defenseDamageGrid
+   * own megaLevel doc comments). Optional so a link shared before this field
+   * existed decodes via `??` rather than surfacing `undefined`. `null`/
+   * undefined mean no Mega Level investment assumed (identical to `"base"`);
+   * silently has no effect for a species with no mega/primal `boost`
+   * mechanic at all.
+   */
+  megaLevel?: MegaLevel | null;
   /**
    * "Treat this species as Shadow" — applies shadow.ts's
    * SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER to its raw base stats

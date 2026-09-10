@@ -1,5 +1,6 @@
-import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove } from "./comparison.js";
+import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveCandidateMegaLevel, resolveMove } from "./comparison.js";
 import { calculateDamage, type DamageInputs } from "./damage.js";
+import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStatsAtLevel } from "./stats.js";
 import {
   runTeamRaid,
@@ -378,6 +379,31 @@ export function powerUpDamageLadder(params: {
   table: PowerUpCostTable;
   modifiers: PowerUpCostModifiers;
   maxLevel?: number;
+  /**
+   * This slot's Mega Level (see megaLevel.ts) — applied to EVERY level this
+   * ladder computes, exactly as optimizePowerUps' actual simulated fight
+   * already applies it (teamRaid.ts's TeamRaidSlotInput.megaLevel, forwarded
+   * unchanged by toTeamRaidSlots/toTeamRaidSlotsAtLevels). Without this, a
+   * Super Max mega's displayed breakpoint headline disagreed with what the
+   * simulation actually did — see this module's CHANGELOG note below.
+   *
+   * `undefined`/`null` means no Mega Level effect (identical to `"base"`),
+   * and is silently a no-op whenever `species` has no `.boost` mechanic at
+   * all — see comparison.ts's resolveCandidateMegaLevel, which this function
+   * routes through rather than re-deriving the gate. Every existing caller
+   * that omits this field sees byte-identical numbers to before this field
+   * existed (chargedMoveAtMegaLevel(move, null) is an exact no-op for any
+   * move whose power is already a whole number, which every real move's is).
+   *
+   * CHANGELOG (2026-09-09): added to close a gap flagged when Mega
+   * Level/Super Max "+" moves first shipped — TeamRaidSlotInput.megaLevel
+   * was already honored by optimizePowerUps' actual runTeamRaid simulation,
+   * but this ladder (and planPowerUpBudget's own simulation, via
+   * toTeamRaidSlotsAtLevels below — see that function's own note) silently
+   * assumed Base Mega Level regardless, so the two could disagree for a
+   * Super Max mega holding a "+" move.
+   */
+  megaLevel?: MegaLevel | null;
 }): PowerUpDamageLadder {
   const {
     species,
@@ -391,10 +417,17 @@ export function powerUpDamageLadder(params: {
     table,
     modifiers,
     maxLevel = table.maxLevel,
+    megaLevel,
   } = params;
 
+  // Resolved ONCE (species.boost gate + "+" move power scaling) — the same
+  // pattern comparison.ts/teamRaid.ts already use, just applied to every
+  // level this ladder computes rather than one fixed level.
+  const resolvedMegaLevel = resolveCandidateMegaLevel(species, megaLevel);
+  const scaledChargedMove = chargedMoveAtMegaLevel(chargedMove, resolvedMegaLevel);
+
   const statsAt = (level: number) => {
-    const { attack } = effectiveStatsAtLevel(species, ivs, level);
+    const { attack } = effectiveStatsAtLevel(species, ivs, effectiveLevelForMegaLevel(level, resolvedMegaLevel));
     return {
       attackStat: attack,
       fastMoveDamage: calculateDamage({
@@ -404,7 +437,7 @@ export function powerUpDamageLadder(params: {
         ...fastMoveDamageModifiers,
       }),
       chargedMoveDamage: calculateDamage({
-        power: chargedMove.power,
+        power: scaledChargedMove.power,
         attackerAttackStat: attack,
         defenderDefenseStat: bossDefenseStat,
         ...chargedMoveDamageModifiers,
@@ -692,7 +725,16 @@ export function summarizeResults(results: TeamRaidResult[], bossHp: number, raid
   };
 }
 
-/** Maps PowerUpSlotInput[] to TeamRaidSlotInput[], optionally overriding ONE slot's level (part D's per-slot override) — every other slot keeps its own current level/ivs. */
+/**
+ * Maps PowerUpSlotInput[] to TeamRaidSlotInput[], optionally overriding ONE
+ * slot's level (part D's per-slot override) — every other slot keeps its own
+ * current level/ivs. Forwards `megaLevel` unchanged (PowerUpSlotInput
+ * inherits it from TeamRaidSlotInput — see that field's own doc comment):
+ * this optimizer does not yet offer megaLevel as a purchasable/candidate
+ * dimension itself (no power-up candidate here ever changes a slot's
+ * megaLevel), but a caller who sets one on an input slot must not have it
+ * silently dropped on the way into the simulation.
+ */
 function toTeamRaidSlots(slots: PowerUpSlotInput[], overrideIndex: number | null, overrideLevel: number | undefined): TeamRaidSlotInput[] {
   return slots.map((slot, i) => ({
     species: slot.species,
@@ -701,6 +743,7 @@ function toTeamRaidSlots(slots: PowerUpSlotInput[], overrideIndex: number | null
     isMega: slot.isMega,
     level: i === overrideIndex ? overrideLevel : slot.level,
     ivs: slot.ivs,
+    megaLevel: slot.megaLevel,
   }));
 }
 
@@ -767,6 +810,7 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
       fromLevel: slot.level,
       fastMove,
       chargedMove,
+      megaLevel: slot.megaLevel,
       bossDefenseStat,
       fastMoveDamageModifiers: {
         stab: slot.species.types.includes(fastMove.type),
@@ -1296,6 +1340,18 @@ export interface PowerUpLevelMetricsParams {
   level: number;
   fastMove: FastMove;
   chargedMove: ChargedMove;
+  /**
+   * See powerUpDamageLadder's own `megaLevel` field for the exact semantics
+   * (Super Max's effective-level CP bonus plus "+" move power scaling,
+   * gated on species.boost via resolveCandidateMegaLevel). Applied here too
+   * so the dominated-level search proxy (usefulPowerUpLevelsAbove, and
+   * rosterPlanner.ts's Stage-3 proxyDps, which is built from this same
+   * function's output) stays on the same effective stats/move power that
+   * planPowerUpBudget's/runRosterPlanner's actual runTeamRaid simulation
+   * uses — `undefined`/`null` (or a species with no `.boost`) is a
+   * byte-identical no-op.
+   */
+  megaLevel?: MegaLevel | null;
   outgoingFastMoveDamageModifiers: OutgoingDamageModifiers;
   outgoingChargedMoveDamageModifiers: OutgoingDamageModifiers;
   bossFastMove: FastMove;
@@ -1326,6 +1382,7 @@ export function powerUpLevelMetrics(params: PowerUpLevelMetricsParams): PowerUpL
     level,
     fastMove,
     chargedMove,
+    megaLevel,
     outgoingFastMoveDamageModifiers,
     outgoingChargedMoveDamageModifiers,
     bossFastMove,
@@ -1336,7 +1393,9 @@ export function powerUpLevelMetrics(params: PowerUpLevelMetricsParams): PowerUpL
     incomingChargedMoveDamageModifiers,
   } = params;
 
-  const stats = effectiveStatsAtLevel(species, ivs, level);
+  const resolvedMegaLevel = resolveCandidateMegaLevel(species, megaLevel);
+  const scaledChargedMove = chargedMoveAtMegaLevel(chargedMove, resolvedMegaLevel);
+  const stats = effectiveStatsAtLevel(species, ivs, effectiveLevelForMegaLevel(level, resolvedMegaLevel));
   const outgoingFastDamage = calculateDamage({
     power: fastMove.power,
     attackerAttackStat: stats.attack,
@@ -1344,7 +1403,7 @@ export function powerUpLevelMetrics(params: PowerUpLevelMetricsParams): PowerUpL
     ...outgoingFastMoveDamageModifiers,
   });
   const outgoingChargedDamage = calculateDamage({
-    power: chargedMove.power,
+    power: scaledChargedMove.power,
     attackerAttackStat: stats.attack,
     defenderDefenseStat: bossDefenseStat,
     ...outgoingChargedMoveDamageModifiers,
@@ -1441,7 +1500,18 @@ export function usefulPowerUpLevelsAbove(params: UsefulPowerUpLevelsParams): num
   return useful;
 }
 
-/** Maps PowerUpSlotInput[] to TeamRaidSlotInput[] at an explicit per-slot level array (index-matched) — every other field passes through unchanged. */
+/**
+ * Maps PowerUpSlotInput[] to TeamRaidSlotInput[] at an explicit per-slot
+ * level array (index-matched) — every other field passes through unchanged.
+ *
+ * BUG FIX (2026-09-09): this used to silently DROP `megaLevel` entirely,
+ * unlike toTeamRaidSlots (optimizePowerUps' own slot mapper), which already
+ * forwarded it — so every planPowerUpBudget simulation ran EVERY candidate
+ * at Base Mega Level regardless of a slot's own megaLevel, contradicting
+ * this comment's own "every other field passes through unchanged" claim.
+ * Forwarding it now brings this in line with toTeamRaidSlots and with
+ * powerUpDamageLadder's own megaLevel handling above.
+ */
 function toTeamRaidSlotsAtLevels(slots: PowerUpSlotInput[], levels: number[]): TeamRaidSlotInput[] {
   return slots.map((slot, i) => ({
     species: slot.species,
@@ -1450,6 +1520,7 @@ function toTeamRaidSlotsAtLevels(slots: PowerUpSlotInput[], levels: number[]): T
     isMega: slot.isMega,
     level: levels[i] ?? slot.level,
     ivs: slot.ivs,
+    megaLevel: slot.megaLevel,
   }));
 }
 
@@ -1624,6 +1695,7 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
       ivs: slot.ivs,
       fastMove: ctx.fastMove,
       chargedMove: ctx.chargedMove,
+      megaLevel: slot.megaLevel,
       outgoingFastMoveDamageModifiers: ctx.outgoingFastMoveDamageModifiers,
       outgoingChargedMoveDamageModifiers: ctx.outgoingChargedMoveDamageModifiers,
       bossFastMove,

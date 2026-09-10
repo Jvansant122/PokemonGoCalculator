@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { attackDamageGrid, defenseDamageGrid, findFastMoveBreakpoints, timeToFaint } from "../src/breakpoints.js";
+import { attackDamageGrid, defenseDamageGrid, findFastMoveBreakpoints, timeToFaint, timeToFaintTable } from "../src/breakpoints.js";
 import { calculateDamage } from "../src/damage.js";
 import { CPM_TABLE } from "../src/cpm.js";
+import { effectiveLevelForMegaLevel } from "../src/megaLevel.js";
 import { effectiveStat } from "../src/stats.js";
 
 describe("findFastMoveBreakpoints", () => {
@@ -180,5 +181,119 @@ describe("timeToFaint", () => {
     expect(noDodge).toBe(10);
     expect(perfectDodge).not.toBeNull();
     expect(perfectDodge! / noDodge!).toBeGreaterThan(3.5);
+  });
+});
+
+describe("default level sweeps stay capped at 50, never CPM_TABLE's effective-level-only entries past it", () => {
+  it("attackDamageGrid", () => {
+    const grid = attackDamageGrid({ baseAttack: 150, defenderDefenseStat: 120, power: 10, damageModifiers: { stab: true } });
+    expect(Math.max(...grid.map((c) => c.level))).toBe(50);
+  });
+
+  it("defenseDamageGrid", () => {
+    const grid = defenseDamageGrid({ baseDefense: 140, attackerAttackStat: 200, power: 12, damageModifiers: { stab: false } });
+    expect(Math.max(...grid.map((c) => c.level))).toBe(50);
+  });
+
+  it("findFastMoveBreakpoints", () => {
+    const rows = findFastMoveBreakpoints({ baseAttack: 150, power: 10, defenderDefenseStat: 120, damageModifiers: { stab: true } });
+    expect(Math.max(...rows.map((r) => r.level))).toBeLessThanOrEqual(50);
+  });
+
+  it("timeToFaintTable", () => {
+    const rows = timeToFaintTable({
+      baseStamina: 200,
+      baseDefense: 140,
+      ivStamina: 15,
+      bossAttackStat: 150,
+      bossFastMovePower: 10,
+      bossFastMoveDurationSeconds: 2,
+      damageModifiers: { stab: false },
+      dodge: { kind: "none" },
+    });
+    expect(Math.max(...rows.map((r) => r.level))).toBe(50);
+  });
+});
+
+describe("megaLevel threading (Super Max's effective-level CP bonus)", () => {
+  it("attackDamageGrid shifts the swept Attack-stat lookup, but the cell's own `level` stays the real power-up level", () => {
+    const base = attackDamageGrid({ baseAttack: 150, defenderDefenseStat: 120, power: 10, damageModifiers: { stab: true }, ivRange: [15], levels: [50] })[0]!;
+    const superMax = attackDamageGrid({
+      baseAttack: 150,
+      defenderDefenseStat: 120,
+      power: 10,
+      damageModifiers: { stab: true },
+      ivRange: [15],
+      levels: [50],
+      megaLevel: "super-max",
+    })[0]!;
+
+    expect(superMax.level).toBe(50); // unchanged — the real power-up level
+    expect(superMax.stat).toBe(effectiveStat(150, 15, CPM_TABLE[effectiveLevelForMegaLevel(50, "super-max")]!));
+    expect(superMax.stat).toBeGreaterThan(base.stat);
+    expect(superMax.damage).toBeGreaterThanOrEqual(base.damage);
+  });
+
+  it("base/high/max all give +0 — attackDamageGrid is byte-identical across all three", () => {
+    const cellFor = (megaLevel: "base" | "high" | "max" | undefined) =>
+      attackDamageGrid({ baseAttack: 150, defenderDefenseStat: 120, power: 10, damageModifiers: { stab: true }, ivRange: [15], levels: [50], megaLevel })[0]!;
+    const omitted = cellFor(undefined);
+    expect(cellFor("base")).toEqual(omitted);
+    expect(cellFor("high")).toEqual(omitted);
+    expect(cellFor("max")).toEqual(omitted);
+  });
+
+  it("defenseDamageGrid shifts the swept Defense-stat lookup the same way", () => {
+    const base = defenseDamageGrid({ baseDefense: 140, attackerAttackStat: 200, power: 12, damageModifiers: { stab: false }, ivRange: [7], levels: [50] })[0]!;
+    const superMax = defenseDamageGrid({
+      baseDefense: 140,
+      attackerAttackStat: 200,
+      power: 12,
+      damageModifiers: { stab: false },
+      ivRange: [7],
+      levels: [50],
+      megaLevel: "super-max",
+    })[0]!;
+    expect(superMax.stat).toBe(effectiveStat(140, 7, CPM_TABLE[effectiveLevelForMegaLevel(50, "super-max")]!));
+    expect(superMax.stat).toBeGreaterThan(base.stat);
+    // A higher Defense stat means LESS incoming damage, never more.
+    expect(superMax.damage).toBeLessThanOrEqual(base.damage);
+  });
+
+  it("findFastMoveBreakpoints shifts the Attack-stat lookup used to compute damage, per level", () => {
+    const baseRows = findFastMoveBreakpoints({ baseAttack: 150, power: 10, defenderDefenseStat: 120, damageModifiers: { stab: true }, ivRange: [15], levels: [50] });
+    const superMaxRows = findFastMoveBreakpoints({
+      baseAttack: 150,
+      power: 10,
+      defenderDefenseStat: 120,
+      damageModifiers: { stab: true },
+      ivRange: [15],
+      levels: [50],
+      megaLevel: "super-max",
+    });
+    expect(superMaxRows[0]!.level).toBe(50);
+    expect(superMaxRows[0]!.attackStat).toBe(effectiveStat(150, 15, CPM_TABLE[effectiveLevelForMegaLevel(50, "super-max")]!));
+    expect(superMaxRows[0]!.attackStat).toBeGreaterThan(baseRows[0]!.attackStat);
+  });
+
+  it("timeToFaintTable shifts BOTH hp and defenseStat's lookup together (same defending species/level)", () => {
+    const params = {
+      baseStamina: 200,
+      baseDefense: 140,
+      ivStamina: 15,
+      bossAttackStat: 150,
+      bossFastMovePower: 10,
+      bossFastMoveDurationSeconds: 2,
+      damageModifiers: { stab: false },
+      dodge: { kind: "none" as const },
+      ivDefenseRange: [15],
+      levels: [50],
+    };
+    const base = timeToFaintTable(params)[0]!;
+    const superMax = timeToFaintTable({ ...params, megaLevel: "super-max" as const })[0]!;
+    const expectedCpm = CPM_TABLE[effectiveLevelForMegaLevel(50, "super-max")]!;
+    expect(superMax.level).toBe(50);
+    expect(superMax.hp).toBe(effectiveStat(200, 15, expectedCpm));
+    expect(superMax.hp).toBeGreaterThan(base.hp);
   });
 });

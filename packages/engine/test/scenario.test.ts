@@ -6,6 +6,7 @@ const sampleScenario: Scenario = {
   candidateFastMoveIds: [null, null],
   candidateChargedMoveIds: [null, null],
   candidateMegaBoostDisabled: [false, false],
+  candidateMegaLevel: [null, null],
   target: "kyogre-primal",
   bossFastMoveId: null,
   bossChargedMoveId: null,
@@ -134,6 +135,33 @@ describe("scenario serialization", () => {
     expect(
       parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", perCandidateOverride))!.candidateDodge,
     ).toEqual([{ kind: "perfect" }, null]);
+  });
+
+  it("round-trips a non-default candidateMegaLevel rather than silently reverting to no Mega Level assumed", () => {
+    // Regression guard, same shape as the others above: a Mega Level
+    // assumption that reverts to "no Mega Level" on a shared link would
+    // silently understate a candidate's real investment (a scaled '+' move
+    // and/or the Super Max effective-level CP bonus both disappearing).
+    const withMegaLevel: Scenario = { ...sampleScenario, candidateMegaLevel: ["super-max", "high"] };
+    const decoded = decodeScenario(encodeScenario(withMegaLevel));
+    expect(decoded.candidateMegaLevel).toEqual(["super-max", "high"]);
+    expect(
+      parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", withMegaLevel))!.candidateMegaLevel,
+    ).toEqual(["super-max", "high"]);
+  });
+
+  it("decodes a scenario encoded before candidateMegaLevel existed without throwing", () => {
+    // Same "older build never had this key" simulation as the
+    // candidateDodge test below, for the same reason: decodeScenario does no
+    // schema validation/defaulting of its own.
+    const { candidateMegaLevel: _candidateMegaLevel, ...legacyShape } = sampleScenario;
+    const legacyJson = JSON.stringify(legacyShape);
+    const legacyEncoded = toBase64Url(new TextEncoder().encode(legacyJson));
+
+    expect(() => decodeScenario(legacyEncoded)).not.toThrow();
+    const decoded = decodeScenario(legacyEncoded);
+    expect(decoded.candidateMegaLevel).toBeUndefined();
+    expect(decoded.target).toBe(sampleScenario.target);
   });
 
   it("decodes a scenario encoded before candidateDodge/candidateDodgeFastAttacks existed without throwing", () => {

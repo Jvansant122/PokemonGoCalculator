@@ -1,7 +1,8 @@
-import type { DodgeBehavior, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
+import type { DodgeBehavior, MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
@@ -26,6 +27,16 @@ export interface Assumptions {
    * disable. No-op for a candidate that has no `boost` at all already.
    */
   candidateMegaBoostDisabled: [boolean, boolean];
+  /**
+   * Per-candidate Mega Level (see megaLevelSelect.tsx / packages/engine/src/megaLevel.ts),
+   * matched by index to [candidateAId, candidateBId] — mirrors
+   * Scenario.candidateMegaLevel exactly. `null` means no Mega Level
+   * investment assumed (identical to `"base"`). Silently has no effect on a
+   * candidate whose species has no mega/primal `boost` mechanic at all (see
+   * megaLevelSelect.tsx's canHaveMegaLevel, the same gate the control's own
+   * visibility uses). Defaults to `[null, null]`.
+   */
+  candidateMegaLevel: [MegaLevel | null, MegaLevel | null];
   /**
    * Per-candidate "treat this species as Shadow", matched by index to
    * [candidateAId, candidateBId] — applies shadow.ts's
@@ -318,6 +329,12 @@ export function AssumptionPanel({
                   Disable mega/primal boost (fair DPS comparison vs. non-mega)
                 </label>
               )}
+              <MegaLevelSelect
+                idPrefix="candidate-a"
+                species={candidateSpecies[0]}
+                value={value.candidateMegaLevel[0]}
+                onChange={(level) => onChange({ ...value, candidateMegaLevel: [level, value.candidateMegaLevel[1]] })}
+              />
               {(() => {
                 const shadowState = shadowToggleUiState(candidateSpecies[0]);
                 return (
@@ -384,6 +401,12 @@ export function AssumptionPanel({
                   Disable mega/primal boost (fair DPS comparison vs. non-mega)
                 </label>
               )}
+              <MegaLevelSelect
+                idPrefix="candidate-b"
+                species={candidateSpecies[1]}
+                value={value.candidateMegaLevel[1]}
+                onChange={(level) => onChange({ ...value, candidateMegaLevel: [value.candidateMegaLevel[0], level] })}
+              />
               {(() => {
                 const shadowState = shadowToggleUiState(candidateSpecies[1]);
                 return (

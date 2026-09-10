@@ -9,12 +9,12 @@ import {
 
 const sampleTeamScenario: TeamScenario = {
   slots: [
-    { speciesId: "raichu-mega-x", fastMoveId: null, chargedMoveId: null, isMega: true },
-    { speciesId: "fragile", fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false },
-    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false },
+    { speciesId: "raichu-mega-x", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: null },
+    { speciesId: "fragile", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null },
+    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null },
+    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null },
+    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null },
+    { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null },
   ],
   target: "kyogre-primal",
   bossFastMoveId: null,
@@ -80,5 +80,22 @@ describe("team scenario serialization", () => {
     expect(decoded.slots[1]!.isMega).toBe(false);
     expect(decoded.slots[2]!.speciesId).toBeNull();
     expect(decoded.slots).toHaveLength(6);
+  });
+
+  it("round-trips a non-default per-slot megaLevel rather than silently reverting to no Mega Level assumed", () => {
+    // Regression guard, same shape as the others above.
+    const withMegaLevel: TeamScenario = {
+      ...sampleTeamScenario,
+      slots: [
+        { ...sampleTeamScenario.slots[0]!, megaLevel: "super-max" },
+        ...sampleTeamScenario.slots.slice(1),
+      ],
+    };
+    const decoded = decodeTeamScenario(encodeTeamScenario(withMegaLevel));
+    expect(decoded.slots[0]!.megaLevel).toBe("super-max");
+    expect(decoded.slots[1]!.megaLevel).toBeNull();
+    expect(
+      parseTeamScenarioFromUrl(buildTeamScenarioUrl("https://pogo-analyzer.example/team", withMegaLevel))!.slots[0]!.megaLevel,
+    ).toBe("super-max");
   });
 });

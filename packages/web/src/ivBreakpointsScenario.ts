@@ -1,4 +1,4 @@
-import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type WeatherCondition } from "@pogo-analyzer/engine";
+import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
 
 /**
  * The complete, shareable description of one "IV Breakpoints" run — a sibling
@@ -33,6 +33,17 @@ export interface IvBreakpointsScenario {
   dodgeModel: DodgeBehavior;
   /** Active weather, applied per-move to both sides — see weather.ts. */
   weather: WeatherCondition;
+  /**
+   * The species' own Mega Level (see megaLevelSelect.tsx /
+   * packages/engine/src/megaLevel.ts) — applied identically to BOTH IV
+   * spreads (same species/moveset, differing only in IVs — see
+   * ivComparison.ts's compareIvSpreads own megaLevel doc comment). Optional
+   * so a link shared before this field existed decodes via `??` rather than
+   * surfacing `undefined`. `null`/undefined mean no Mega Level investment
+   * assumed (identical to `"base"`); silently has no effect for a species
+   * with no mega/primal `boost` mechanic at all.
+   */
+  megaLevel?: MegaLevel | null;
   /**
    * "Treat this species as Shadow" — applies shadow.ts's
    * SHADOW_ATTACK_MULTIPLIER/SHADOW_DEFENSE_MULTIPLIER to its raw base stats

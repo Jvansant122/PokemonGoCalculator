@@ -1,10 +1,17 @@
 import { calculateDamage, type DamageInputs } from "./damage.js";
-import { CPM_TABLE } from "./cpm.js";
+import { CPM_TABLE, MAX_POKEMON_POWER_UP_LEVEL } from "./cpm.js";
+import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStatsAtLevel } from "./stats.js";
 import { timeToFaint, type DodgeBehavior } from "./breakpoints.js";
 import type { ChargedMove, FastMove, IVSpread, SpeciesDefinition } from "./types.js";
 
-const ALL_LEVELS = Object.keys(CPM_TABLE).map(Number).sort((a, b) => a - b);
+/**
+ * Real power-up-reachable levels only — see breakpoints.ts's identical
+ * ALL_LEVELS doc comment for why this must filter against
+ * MAX_POKEMON_POWER_UP_LEVEL explicitly rather than trusting CPM_TABLE's own
+ * (deliberately wider, for an unrelated purpose) key range.
+ */
+const ALL_LEVELS = Object.keys(CPM_TABLE).map(Number).filter((level) => level <= MAX_POKEMON_POWER_UP_LEVEL).sort((a, b) => a - b);
 
 /**
  * The full set of numbers that matter for one IV spread at one level: what it
@@ -87,11 +94,25 @@ export function compareIvSpreads(params: {
   incomingDamageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   dodge: DodgeBehavior;
   maxSeconds?: number;
+  /**
+   * `species`' own Mega Level, if any — see megaLevel.ts. Applied to BOTH
+   * IV spreads identically (they're the same species/moveset, differing
+   * only in IVs), in two ways: (1) every `level` row's effective-stat lookup
+   * is shifted via effectiveLevelForMegaLevel (Super Max's +2-effective-level
+   * CP bonus) while the row's own displayed `level` stays the real power-up
+   * level; (2) `chargedMove` is passed through chargedMoveAtMegaLevel first,
+   * so a "+" move's power is scaled before `chargedMoveDamage` is computed —
+   * a non-"+" `chargedMove` (the common case) is unaffected either way.
+   * Ignored entirely (treated as if omitted) when `species` has no `.boost`
+   * at all, since Mega Level is not a concept that applies to a non-mega
+   * species — a caller does not need to check this itself. Omitted/undefined
+   * is byte-identical to before this parameter existed.
+   */
+  megaLevel?: MegaLevel | null;
 }): IvComparisonResult {
   const {
     species,
     fastMove,
-    chargedMove,
     ivA,
     ivB,
     bossDefenseStat,
@@ -105,10 +126,16 @@ export function compareIvSpreads(params: {
     maxSeconds,
   } = params;
 
+  // See megaLevel's own doc comment above for why this is gated on
+  // species.boost here rather than trusted blindly — effectiveLevelForMegaLevel/
+  // chargedMoveAtMegaLevel are themselves pure and ungated.
+  const resolvedMegaLevel = species.boost ? (params.megaLevel ?? null) : null;
+  const chargedMove = chargedMoveAtMegaLevel(params.chargedMove, resolvedMegaLevel);
+
   const levels = [...(params.levels ?? ALL_LEVELS)].sort((a, b) => a - b);
 
   const statsForSpread = (iv: IVSpread, level: number): IvSpreadStatsAtLevel => {
-    const { attack, defense, stamina } = effectiveStatsAtLevel(species, iv, level);
+    const { attack, defense, stamina } = effectiveStatsAtLevel(species, iv, effectiveLevelForMegaLevel(level, resolvedMegaLevel));
     const fastMoveDamage = calculateDamage({
       power: fastMove.power,
       attackerAttackStat: attack,

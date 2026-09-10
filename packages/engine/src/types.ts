@@ -62,6 +62,21 @@ export interface FastMove {
   durationSeconds: number;
 }
 
+/**
+ * Sourcing confidence tier for a Super Max "+" charged move's Base-tier
+ * `power` value — see ChargedMove.isPlusMove/plusMovePowerConfidence and
+ * .claude/agent-memory/pogo-researcher/fact_super_max_plus_move_mechanics_detail.md.
+ * "official" = stated directly in a pokemongo.com news post (e.g. Brave
+ * Bird+ 150, Dark Pulse+ 150, Fell Stinger+ 140). "cross-site" = two
+ * independent (non-official) sites agree on the number (e.g. Zap Cannon+
+ * 160). "community-estimate" = a single self-labelled-estimate community
+ * source, no corroboration (e.g. Seed Bomb+ 150, Volt Tackle+ 170, Drill
+ * Peck+ 170, Outrage+ 185, Dynamic Punch+ 130). Every value at every tier is
+ * a Base Mega Level reading, NOT a ceiling — see megaLevel.ts's
+ * chargedMoveAtMegaLevel for how the other three tiers are derived from it.
+ */
+export type PlusMovePowerConfidence = "official" | "cross-site" | "community-estimate";
+
 export interface ChargedMove {
   id: string;
   name: string;
@@ -88,6 +103,36 @@ export interface ChargedMove {
    * dodgeMultiplierForHit for where this is consumed.
    */
   perfectlyDodgeable?: boolean;
+  /**
+   * Marks this as a Super Max "+" charged move: a genuinely ADDITIONAL third
+   * charged move a mega/primal form knows only while Mega Evolved, never a
+   * replacement for its ordinary two (`SpeciesDefinition.fastMoves`/
+   * `chargedMoves` still list it as one more entry in `chargedMoves`, not a
+   * swap). [official, first-party: pokemongo.com/en/news/more-mega-updates-2026]
+   * confirms availability needs only (a) the species being Super-Max-eligible
+   * and (b) the individual currently being Mega Evolved — "regardless of
+   * their current Mega Level" — so unlike the move's OWN power (see
+   * plusMovePowerConfidence/megaLevel.ts's chargedMoveAtMegaLevel), no
+   * runtime gate is needed here: every species that carries a move with this
+   * flag set is, by construction, a mega form (`SpeciesDefinition.boost` is
+   * set), and this tool only ever evaluates a mega candidate/slot as
+   * currently Mega Evolved. `power` on a "+" move always stores its BASE Mega
+   * Level reading (multiplier 1.0) — see plusMovePowerConfidence and
+   * megaLevel.ts. Undefined/omitted (every non-"+" move, i.e. every move
+   * synced before this feature and every species' ordinary two moves) means
+   * false — chargedMoveAtMegaLevel passes those through completely unchanged
+   * regardless of megaLevel.
+   */
+  isPlusMove?: boolean;
+  /**
+   * Confidence tier of THIS move's Base-tier `power` value — see
+   * PlusMovePowerConfidence. Meaningless/undefined whenever `isPlusMove` is
+   * not true; REQUIRED (by convention, not a runtime check) on every move
+   * that does set `isPlusMove: true`, so a UI can badge the number honestly
+   * rather than presenting a community guess with official-looking
+   * confidence.
+   */
+  plusMovePowerConfidence?: PlusMovePowerConfidence;
 }
 
 export interface SpeciesDefinition {

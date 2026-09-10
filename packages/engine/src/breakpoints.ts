@@ -1,8 +1,19 @@
 import { calculateDamage, type DamageInputs } from "./damage.js";
-import { CPM_TABLE } from "./cpm.js";
+import { CPM_TABLE, MAX_POKEMON_POWER_UP_LEVEL } from "./cpm.js";
+import { effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStat } from "./stats.js";
 
-const ALL_LEVELS = Object.keys(CPM_TABLE).map(Number).sort((a, b) => a - b);
+/**
+ * Real power-up-reachable levels only (1-MAX_POKEMON_POWER_UP_LEVEL, i.e.
+ * 1-50 today) — filtered explicitly against MAX_POKEMON_POWER_UP_LEVEL
+ * rather than trusting CPM_TABLE's own key range, which deliberately extends
+ * past 50 for a narrower, unrelated purpose (see cpm.ts's doc comment). Every
+ * default `levels` sweep below (findFastMoveBreakpoints, damageGrid,
+ * timeToFaintTable) is byte-for-byte unchanged by that extension because of
+ * this filter — see test/megaLevelPowerUpCeiling.test.ts's grid-specific
+ * regression guard.
+ */
+const ALL_LEVELS = Object.keys(CPM_TABLE).map(Number).filter((level) => level <= MAX_POKEMON_POWER_UP_LEVEL).sort((a, b) => a - b);
 const ALL_IVS = Array.from({ length: 16 }, (_, i) => i);
 
 export interface FastMoveDamageBreakpoint {
@@ -24,8 +35,21 @@ export function findFastMoveBreakpoints(params: {
   damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   ivRange?: number[];
   levels?: number[];
+  /**
+   * Super Max Mega Level's effective-level CP bonus (see megaLevel.ts) — the
+   * attacker's OWN, e.g. a mega attacker at level 50/Super Max is graphed at
+   * `level` 50 (this table's row label stays the real power-up level a
+   * player actually invested), but its `attackStat` cell reflects the
+   * shifted level-52 lookup. Omitted/undefined/`"base"`/`"high"`/`"max"` are
+   * all byte-identical to today (no shift). Note this ONLY affects the
+   * attack-stat lookup, not `power` — a "+" move's own scaled power (see
+   * megaLevel.ts's chargedMoveAtMegaLevel) has no meaning for a FAST move
+   * (Super Max "+" moves are charged-move-only) and isn't this function's
+   * concern regardless; the caller is always responsible for `power` itself.
+   */
+  megaLevel?: MegaLevel | null;
 }): FastMoveDamageBreakpoint[] {
-  const { baseAttack, power, defenderDefenseStat, damageModifiers } = params;
+  const { baseAttack, power, defenderDefenseStat, damageModifiers, megaLevel } = params;
   const ivRange = params.ivRange ?? ALL_IVS;
   const levels = params.levels ?? ALL_LEVELS;
 
@@ -33,7 +57,8 @@ export function findFastMoveBreakpoints(params: {
   for (const ivAttack of ivRange) {
     let previousDamage: number | null = null;
     for (const level of levels) {
-      const attackStat = effectiveStat(baseAttack, ivAttack, CPM_TABLE[level]!);
+      const cpm = CPM_TABLE[effectiveLevelForMegaLevel(level, megaLevel)]!;
+      const attackStat = effectiveStat(baseAttack, ivAttack, cpm);
       const damage = calculateDamage({
         power,
         attackerAttackStat: attackStat,
@@ -77,15 +102,17 @@ function damageGrid(params: {
   damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   ivRange?: number[];
   levels?: number[];
+  /** See findFastMoveBreakpoints' megaLevel doc comment — same convention: shifts the SWEPT side's stat lookup only (the `role` side), row `level` stays the real power-up level, `fixedOpposingStat` is untouched (already resolved by the caller). */
+  megaLevel?: MegaLevel | null;
 }): DamageGridCell[] {
-  const { role, baseStat, fixedOpposingStat, power, damageModifiers } = params;
+  const { role, baseStat, fixedOpposingStat, power, damageModifiers, megaLevel } = params;
   const ivRange = params.ivRange ?? ALL_IVS;
   const levels = params.levels ?? ALL_LEVELS;
 
   const cells: DamageGridCell[] = [];
   for (const iv of ivRange) {
     for (const level of levels) {
-      const cpm = CPM_TABLE[level];
+      const cpm = CPM_TABLE[effectiveLevelForMegaLevel(level, megaLevel)];
       if (cpm === undefined) {
         throw new Error(`No CPM entry for level ${level}`);
       }
@@ -117,6 +144,8 @@ export function attackDamageGrid(params: {
   damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   ivRange?: number[];
   levels?: number[];
+  /** The attacking Pokémon's own Mega Level, if any — see findFastMoveBreakpoints' megaLevel doc comment (same convention: shifts the swept Attack-stat lookup only; `power` is always the caller's job, e.g. via megaLevel.ts's chargedMoveAtMegaLevel for a "+" move). */
+  megaLevel?: MegaLevel | null;
 }): DamageGridCell[] {
   return damageGrid({
     role: "attacker",
@@ -126,6 +155,7 @@ export function attackDamageGrid(params: {
     damageModifiers: params.damageModifiers,
     ivRange: params.ivRange,
     levels: params.levels,
+    megaLevel: params.megaLevel,
   });
 }
 
@@ -145,6 +175,8 @@ export function defenseDamageGrid(params: {
   damageModifiers: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   ivRange?: number[];
   levels?: number[];
+  /** The DEFENDING Pokémon's own Mega Level, if any (e.g. graphing a boss's incoming move against a mega attacker's own bulk) — see findFastMoveBreakpoints' megaLevel doc comment; shifts the swept Defense-stat lookup only. */
+  megaLevel?: MegaLevel | null;
 }): DamageGridCell[] {
   return damageGrid({
     role: "defender",
@@ -154,6 +186,7 @@ export function defenseDamageGrid(params: {
     damageModifiers: params.damageModifiers,
     ivRange: params.ivRange,
     levels: params.levels,
+    megaLevel: params.megaLevel,
   });
 }
 
@@ -298,13 +331,15 @@ export function timeToFaintTable(params: {
   dodge: DodgeBehavior;
   levels?: number[];
   ivDefenseRange?: number[];
+  /** The DEFENDING Pokémon's own Mega Level, if any — see findFastMoveBreakpoints' megaLevel doc comment. Shifts BOTH `hp` and `defenseStat`'s lookup (both belong to the same defending species/level), row `level` stays the real power-up level. */
+  megaLevel?: MegaLevel | null;
 }): TimeToFaintRow[] {
   const levels = params.levels ?? ALL_LEVELS;
   const ivDefenseRange = params.ivDefenseRange ?? ALL_IVS;
 
   const rows: TimeToFaintRow[] = [];
   for (const level of levels) {
-    const cpm = CPM_TABLE[level]!;
+    const cpm = CPM_TABLE[effectiveLevelForMegaLevel(level, params.megaLevel)]!;
     const hp = effectiveStat(params.baseStamina, params.ivStamina, cpm);
     for (const ivDefense of ivDefenseRange) {
       const defenseStat = effectiveStat(params.baseDefense, ivDefense, cpm);

@@ -67,3 +67,36 @@ test("comparator: a per-candidate dodge override survives a shared link round tr
   await expect(freshDodgeOverrideSelect).toHaveValue("perfect");
   await freshPage.close();
 });
+
+/**
+ * Mega Level (megaLevelSelect.tsx) is a NEW per-slot share-link surface added
+ * across all six tabs — same "recurring bug class" reasoning as the checks
+ * above. Team Raid's own default roster already fields a real mega/primal
+ * slot (latios-mega, slot 1), so its Mega Level <select> is visible with no
+ * setup needed, unlike the Comparator's default candidates (neither is a
+ * mega form).
+ */
+test("team-raid: a slot's Mega Level survives a shared link round trip", async ({ page }) => {
+  await page.goto("/?view=team-raid");
+
+  const megaLevelSelect = page.locator("#team-slot-0-megaLevel");
+  await expect(megaLevelSelect).toBeVisible();
+  await expect(megaLevelSelect).toHaveValue("base");
+
+  await megaLevelSelect.selectOption("super-max");
+  await expect(megaLevelSelect).toHaveValue("super-max");
+
+  await page.getByRole("button", { name: "Build link" }).click();
+
+  const shareUrlInput = page.locator(".share-row input[readonly]");
+  await expect(shareUrlInput).toBeVisible();
+  const shareUrl = await shareUrlInput.inputValue();
+  expect(shareUrl.length).toBeGreaterThan(0);
+
+  const freshPage = await page.context().newPage();
+  await freshPage.goto(shareUrl);
+  const freshMegaLevelSelect = freshPage.locator("#team-slot-0-megaLevel");
+  await expect(freshMegaLevelSelect).toBeVisible();
+  await expect(freshMegaLevelSelect).toHaveValue("super-max");
+  await freshPage.close();
+});

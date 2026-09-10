@@ -1,4 +1,5 @@
 import type { DodgeBehavior } from "./breakpoints.js";
+import type { MegaLevel } from "./megaLevel.js";
 import { fromBase64Url, toBase64Url } from "./scenario.js";
 import type { IVSpread } from "./types.js";
 import type { WeatherCondition } from "./weather.js";
@@ -62,10 +63,11 @@ export interface TeamScenario {
   raidTimerSeconds: number;
   /**
    * Seconds of raid clock a forced post-faint swap-in costs. No real fixed
-   * value is documented for this in-game — defaults to 0 (fastest-possible
-   * play) precisely because no source could confirm a real number; exposed
-   * as an explicit, honestly-uncertain user-adjustable knob rather than a
-   * silently fabricated "realistic" default.
+   * value is documented for this in-game, so this type declares no default of
+   * its own. packages/web's Team Raid Simulator seeds it at 0.5s, behind that
+   * tab's "More detailed assumptions" checkbox — an explicit,
+   * honestly-uncertain user-adjustable knob rather than a silently fabricated
+   * "realistic" default.
    */
   swapCostSeconds: number;
   /**
@@ -78,11 +80,12 @@ export interface TeamScenario {
    * (v1 assumes unlimited healing items) and rejoins the SAME raid attempt,
    * so this cost is real but distinct from swapCostSeconds (which is paid
    * per individual mid-roster faint, no lobby return involved). No official
-   * fixed value exists — defaults to 0 (fastest-possible play), the same
+   * fixed value exists, so this type declares no default of its own, the same
    * honesty precedent as swapCostSeconds. A community-sourced ~12-15s
-   * estimate exists (Pokémon GO Hub, "Tips for short-manning raids") for a
-   * UI-facing labeled preset — must not be hardcoded here as a confirmed
-   * constant.
+   * estimate exists (Pokémon GO Hub, "Tips for short-manning raids");
+   * packages/web seeds this at 15s — the top of that range, chosen to allow
+   * for user error — behind the same "More detailed assumptions" checkbox.
+   * That figure must not be hardcoded here as a confirmed constant.
    */
   reviveCostSeconds: number;
 }
@@ -101,6 +104,14 @@ export interface TeamScenarioSlot {
    * rather than silently ignoring it).
    */
   isMega: boolean;
+  /**
+   * This slot's own Mega Level (see megaLevel.ts) — `null` means no Mega
+   * Level effect (identical to `"base"`). Orthogonal to `isMega` above; see
+   * teamRaid.ts's TeamRaidSlotInput.megaLevel for the full contract this
+   * mirrors (same gate: silently inert for a slot whose species has no
+   * `.boost` at all).
+   */
+  megaLevel: MegaLevel | null;
 }
 
 /**

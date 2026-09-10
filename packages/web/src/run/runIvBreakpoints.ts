@@ -110,6 +110,7 @@ export function runIvBreakpointsScenario(a: IvBreakpointsAssumptions, registry: 
         },
         dodge: a.dodge,
         levels: LEVELS_35_TO_50,
+        megaLevel: a.megaLevel,
       });
     } catch (err) {
       error = (err as Error).message;
@@ -169,6 +170,7 @@ export function runIvBreakpointsScenario(a: IvBreakpointsAssumptions, registry: 
           },
           dodge: a.dodge,
           levels: LEVELS_35_TO_50,
+          megaLevel: a.megaLevel,
         });
 
         const { winsA, winsB } = tallyIvSpreadWins(cmp.rows);

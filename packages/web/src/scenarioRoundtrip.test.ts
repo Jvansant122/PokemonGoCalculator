@@ -69,6 +69,7 @@ describe("ComparatorScenario round-trip", () => {
     bossFastMoveId: "waterfall",
     bossChargedMoveId: "origin-pulse",
     candidateMegaBoostDisabled: [true, false],
+    candidateMegaLevel: ["super-max", "high"],
     candidateShadow: [false, true],
     level: 42.5,
     ivAttack: 10,
@@ -146,12 +147,12 @@ describe("ComparatorScenario round-trip", () => {
 describe("TeamScenario round-trip", () => {
   const nonDefault: TeamAssumptions = {
     slots: [
-      { speciesId: "rayquaza", fastMoveId: "dragon-tail", chargedMoveId: "outrage", isMega: false, isShadow: true },
-      { speciesId: "kartana", fastMoveId: "air-slash", chargedMoveId: "leaf-blade", isMega: false, isShadow: false },
-      { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, isShadow: false },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false },
+      { speciesId: "rayquaza", fastMoveId: "dragon-tail", chargedMoveId: "outrage", isMega: false, megaLevel: "max", isShadow: true },
+      { speciesId: "kartana", fastMoveId: "air-slash", chargedMoveId: "leaf-blade", isMega: false, megaLevel: null, isShadow: false },
+      { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: "super-max", isShadow: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
     ],
     targetId: "kyogre-primal",
     bossFastMoveId: "waterfall",
@@ -171,6 +172,7 @@ describe("TeamScenario round-trip", () => {
     raidTimerSeconds: 180,
     swapCostSeconds: 3,
     reviveCostSeconds: 13,
+    showDetailedAssumptions: true,
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -211,6 +213,7 @@ describe("TeamScenario round-trip", () => {
         fastMoveId: null,
         chargedMoveId: null,
         isMega: false,
+        megaLevel: null,
         isShadow: false,
       })),
       targetId: "tyranitar-mega",
@@ -219,7 +222,28 @@ describe("TeamScenario round-trip", () => {
       ivDefense: 15,
       ivStamina: 15,
       dodge: { kind: "none" },
+      // A link this old predates swapCostSeconds/reviveCostSeconds existing
+      // at all — back when this tab really did assume 0 (fastest-possible
+      // play), not today's 0.5s/15s placeholder defaults. See
+      // teamScenarioToAssumptions's own comment on these two `??` guards.
+      swapCostSeconds: 0,
+      reviveCostSeconds: 0,
+      // Same reasoning, inverted: an absent showDetailedAssumptions means
+      // this link predates the simple/derived-frequency mode, so the
+      // sender's stored bossChargedMoveFrequencySeconds was the real number
+      // in force — decodes to `true`, not DEFAULT_TEAM_ASSUMPTIONS's `false`.
+      showDetailedAssumptions: true,
     });
+  });
+
+  it("decodes an absent showDetailedAssumptions to true, not DEFAULT_TEAM_ASSUMPTIONS's false (an old link's stored bossChargedMoveFrequencySeconds must not silently swap for the derived value)", () => {
+    const withoutDetailFlag = { ...assumptionsToTeamScenario(nonDefault) } as Partial<TeamScenarioWithShadow>;
+    delete withoutDetailFlag.showDetailedAssumptions;
+    const url = buildTeamScenarioUrl("http://example.test/", withoutDetailFlag as TeamScenarioWithShadow);
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    const roundTripped = teamScenarioToAssumptions(decoded!);
+    expect(roundTripped.showDetailedAssumptions).toBe(true);
   });
 });
 
@@ -232,6 +256,7 @@ describe("SpeciesReportScenario round-trip", () => {
     ivAttack: 1,
     ivDefense: 2,
     ivStamina: 3,
+    megaLevel: "high",
     dodge: { kind: "perfect" },
     dodgeFastAttacks: true,
     weather: "snow",
@@ -285,6 +310,7 @@ describe("IvBreakpointsScenario round-trip", () => {
     bossFastMoveId: "waterfall",
     dodge: { kind: "perfect" },
     weather: "cloudy",
+    megaLevel: "max",
     isShadow: true,
   };
 
@@ -317,6 +343,7 @@ describe("AttackDefenseBreakpointsScenario round-trip", () => {
     bossChargedMoveId: "origin-pulse",
     weather: "fog",
     mode: "defense",
+    megaLevel: "super-max",
     isShadow: true,
   };
 
@@ -348,6 +375,7 @@ describe("PowerUpOptimizerScenario round-trip", () => {
         fastMoveId: "dragon-tail",
         chargedMoveId: "outrage",
         isMega: false,
+        megaLevel: "high",
         isShadow: true,
         isPurified: false,
         isLucky: true,
@@ -363,6 +391,7 @@ describe("PowerUpOptimizerScenario round-trip", () => {
         fastMoveId: null,
         chargedMoveId: null,
         isMega: true,
+        megaLevel: "super-max",
         isShadow: false,
         isPurified: false,
         isLucky: false,
@@ -373,10 +402,10 @@ describe("PowerUpOptimizerScenario round-trip", () => {
         candyOnHand: 0,
         xlCandyOnHand: 0,
       },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isPurified: false, isLucky: false, level: 20, ivAttack: 15, ivDefense: 15, ivStamina: 15, candyOnHand: 0, xlCandyOnHand: 0 },
     ],
     stardustOnHand: 12345,
     rareCandyOnHand: 25,
@@ -401,6 +430,7 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     multiRaidIncludedTiers: ["Tier 5", "Mega"],
     multiRaidMaxBossCount: 12,
     candyByFamilyId: { FAMILY_HOUNDOUR: { candy: 40, xlCandy: 3 } },
+    multiRaidMegaLevel: "high",
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -429,6 +459,7 @@ describe("PowerUpOptimizerScenario round-trip", () => {
         fastMoveId: null,
         chargedMoveId: null,
         isMega: false,
+        megaLevel: null,
         isShadow: false,
         isPurified: false,
         isLucky: false,

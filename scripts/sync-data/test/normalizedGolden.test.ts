@@ -42,6 +42,8 @@ interface NormalizedMove {
   durationSeconds: number;
   energyGain?: number;
   energyCost?: number;
+  isPlusMove?: boolean;
+  plusMovePowerConfidence?: string;
 }
 
 interface NormalizedSpecies {
@@ -224,6 +226,51 @@ describe("species.json sentinels", () => {
     expect(move!.power).toBe(135);
     expect(move!.energyCost).toBe(100);
     expect(move!.durationSeconds).toBe(3.5);
+  });
+
+  // Super Max "+" charged moves (2026-09-09, scripts/sync-data/superMaxPlusMoves.ts)
+  // — a genuinely ADDITIONAL third charged move, pinned here at value level
+  // per the task's own instruction, so a future sync silently dropping or
+  // altering either of the two OFFICIAL-tier entries fails loudly. Built
+  // from their base move's real GAME_MASTER template (duration/type carried
+  // through unchanged, [well-evidenced] per that module's doc comment) with
+  // power/energyCost/id/name/isPlusMove/plusMovePowerConfidence overridden.
+  // energyCost CORRECTED 2026-09-09: was inherited from the base move
+  // (Dark Pulse 50 / Fell Stinger 33), now db.pokemongohub.net-sourced 100
+  // for both, per that module's doc comment — every "+" move costs 100
+  // energy in raids regardless of its base move's own cost.
+  it('Mega Houndoom carries Dark Pulse+ as a genuinely additional 3rd charged move: dark, power 150, energyCost 100, duration 3s, "official"', () => {
+    const s = speciesById.get("houndoom-mega")!;
+    expect(s).toBeDefined();
+    expect(s.chargedMoves.length).toBeGreaterThanOrEqual(3);
+    const move = s.chargedMoves.find((m) => m.id === "DARK_PULSE_PLUS");
+    expect(move).toBeDefined();
+    expect(move!.name).toBe("Dark Pulse+");
+    expect(move!.type).toBe("dark");
+    expect(move!.power).toBe(150);
+    expect(move!.energyCost).toBe(100);
+    expect(move!.durationSeconds).toBe(3);
+    expect(move!.isPlusMove).toBe(true);
+    expect(move!.plusMovePowerConfidence).toBe("official");
+  });
+
+  it('Mega Beedrill carries Fell Stinger+ as a genuinely additional 3rd charged move: bug, power 140, energyCost 100, duration 2s, "official"', () => {
+    const s = speciesById.get("beedrill-mega")!;
+    expect(s).toBeDefined();
+    expect(s.chargedMoves.length).toBeGreaterThanOrEqual(3);
+    const move = s.chargedMoves.find((m) => m.id === "FELL_STINGER_PLUS");
+    expect(move).toBeDefined();
+    expect(move!.name).toBe("Fell Stinger+");
+    expect(move!.type).toBe("bug");
+    expect(move!.power).toBe(140);
+    expect(move!.energyCost).toBe(100);
+    expect(move!.durationSeconds).toBe(2);
+    expect(move!.isPlusMove).toBe(true);
+    expect(move!.plusMovePowerConfidence).toBe("official");
+  });
+
+  it("Mega Staraptor's Brave Bird+ entry stays inert until the species itself syncs in (not present in species.json today)", () => {
+    expect(speciesById.get("staraptor-mega")).toBeUndefined();
   });
 });
 

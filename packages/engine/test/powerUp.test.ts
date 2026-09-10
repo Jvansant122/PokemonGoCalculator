@@ -6,6 +6,7 @@ import {
   powerUpCost,
   powerUpCostTableFromGameMaster,
   powerUpDamageLadder,
+  powerUpLevelMetrics,
   powerUpLevelsAbove,
   powerUpStepCost,
   teamDamageAtRaidSeconds,
@@ -16,9 +17,14 @@ import {
   type PowerUpOptimizerInputs,
   type PowerUpSlotInput,
 } from "../src/powerUp.js";
-import { bossEffectiveStats } from "../src/comparison.js";
+import { bossEffectiveStats, ownBoostMultiplier } from "../src/comparison.js";
+import { calculateDamage } from "../src/damage.js";
+import { chargedMoveAtMegaLevel, type MegaLevel } from "../src/megaLevel.js";
+import { effectiveStatsAtLevel } from "../src/stats.js";
 import type { TeamRaidResult } from "../src/teamRaid.js";
 import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
+import { typeEffectiveness } from "../src/typeChart.js";
+import { isWeatherBoosted } from "../src/weather.js";
 import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_SETTINGS } from "./fixtures/powerUpCosts.js";
 
 const modifiers = (overrides: Partial<PowerUpCostModifiers> = {}): PowerUpCostModifiers => ({
@@ -1181,5 +1187,476 @@ describe("planPowerUpBudget", () => {
         expect(Math.abs(result.candidates[0]!.deltaTeamDps)).toBeLessThanOrEqual(result.noiseFloorTeamDps);
       }
     });
+  });
+});
+
+// =============================================================================
+// === megaLevel follow-up (2026-09-09) — closing the two gaps flagged when
+// === Super Max "+" moves / Mega Level first shipped: powerUpDamageLadder and
+// === planPowerUpBudget's actual simulation (via toTeamRaidSlotsAtLevels)
+// === both silently assumed Base Mega Level regardless of a slot's own
+// === TeamRaidSlotInput.megaLevel. See CHANGELOG notes on powerUpDamageLadder
+// === and toTeamRaidSlotsAtLevels in src/powerUp.ts for the two fixes.
+// =============================================================================
+
+describe("powerUpDamageLadder — megaLevel (2026-09-09 follow-up: Gap 1)", () => {
+  const table = powerUpCostTableFromGameMaster(RAW_POKEMON_UPGRADE_SETTINGS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT);
+  const ivs = { attack: 15, defense: 15, stamina: 15 };
+  const fastMove: FastMove = { id: "ladder-mega-fast", name: "Ladder Mega Fast", type: "normal", power: 9, energyGain: 3, durationSeconds: 1 };
+  // A "+" move at Base-tier power 100 — Math.round(100 * 1.3) === 130 exactly
+  // (verified via node, no floating-point rounding ambiguity), so the
+  // super-max expectation below is a clean, checkable number.
+  const plusMove: ChargedMove = {
+    id: "ladder-plus-move",
+    name: "Ladder Plus Move",
+    type: "normal",
+    power: 100,
+    energyCost: 50,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+    isPlusMove: true,
+    plusMovePowerConfidence: "community-estimate",
+  };
+  const megaSpecies: SpeciesDefinition = {
+    id: "ladder-mega-species",
+    name: "Ladder Mega Species",
+    types: ["normal"],
+    baseAttack: 220,
+    baseDefense: 150,
+    baseStamina: 180,
+    fastMoves: [fastMove],
+    chargedMoves: [plusMove],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  const nonMegaSpecies: SpeciesDefinition = { ...megaSpecies, id: "ladder-non-mega-species", boost: undefined };
+
+  function ladderFor(species: SpeciesDefinition, megaLevel: MegaLevel | null | undefined) {
+    return powerUpDamageLadder({
+      species,
+      ivs,
+      fromLevel: 40,
+      fastMove,
+      chargedMove: plusMove,
+      megaLevel,
+      bossDefenseStat: 150,
+      fastMoveDamageModifiers: { stab: true },
+      chargedMoveDamageModifiers: { stab: true },
+      table,
+      modifiers: NO_MODIFIERS,
+    });
+  }
+
+  it("omitting megaLevel is byte-identical to explicit undefined/null/'base' (defaults constraint)", () => {
+    const omitted = powerUpDamageLadder({
+      species: megaSpecies,
+      ivs,
+      fromLevel: 40,
+      fastMove,
+      chargedMove: plusMove,
+      bossDefenseStat: 150,
+      fastMoveDamageModifiers: { stab: true },
+      chargedMoveDamageModifiers: { stab: true },
+      table,
+      modifiers: NO_MODIFIERS,
+    });
+    expect(ladderFor(megaSpecies, undefined)).toEqual(omitted);
+    expect(ladderFor(megaSpecies, null)).toEqual(omitted);
+    expect(ladderFor(megaSpecies, "base")).toEqual(omitted);
+  });
+
+  it("has no effect at all on a species with no boost mechanic, regardless of what megaLevel is requested", () => {
+    expect(ladderFor(nonMegaSpecies, "super-max")).toEqual(ladderFor(nonMegaSpecies, undefined));
+  });
+
+  it("super-max's current step matches effectiveStatsAtLevel/calculateDamage computed independently at the +2 effective level with the '+' move's scaled power — proves the composition, not just 'it changed'", () => {
+    const ladder = ladderFor(megaSpecies, "super-max");
+    const { attack } = effectiveStatsAtLevel(megaSpecies, ivs, 42); // effectiveLevelForMegaLevel(40, "super-max") — pinned in megaLevel.test.ts
+    const scaledPower = chargedMoveAtMegaLevel(plusMove, "super-max").power;
+    expect(scaledPower).toBe(130);
+    expect(ladder.current.level).toBe(40); // the real power-up level is NEVER shifted — only stats/move-power are
+    expect(ladder.current.attackStat).toBe(attack);
+    expect(ladder.current.chargedMoveDamage).toBe(
+      calculateDamage({ power: scaledPower, attackerAttackStat: attack, defenderDefenseStat: 150, stab: true }),
+    );
+    // The fast move (not a "+" move) is untouched beyond the shared effective-level stat bump.
+    expect(ladder.current.fastMoveDamage).toBe(
+      calculateDamage({ power: fastMove.power, attackerAttackStat: attack, defenderDefenseStat: 150, stab: true }),
+    );
+  });
+
+  it("super-max never decreases fast damage and strictly increases charged damage (the '+' move's own 30% power jump plus the +2 effective level, vs. only a +2 effective level for the ordinary fast move) over no megaLevel at all, at the same real level", () => {
+    const base = ladderFor(megaSpecies, undefined);
+    const superMax = ladderFor(megaSpecies, "super-max");
+    // Fast move damage is floored (calculateDamage) and this move's power is
+    // small enough that +2 effective levels doesn't necessarily cross a
+    // breakpoint at THIS specific level/IV combination — see the previous
+    // test for the exact (non-monotonic-looking but fully explained) numbers
+    // via independent calculateDamage calls. Never DECREASES, though.
+    expect(superMax.current.fastMoveDamage).toBeGreaterThanOrEqual(base.current.fastMoveDamage);
+    expect(superMax.current.chargedMoveDamage).toBeGreaterThan(base.current.chargedMoveDamage);
+  });
+});
+
+describe("powerUpLevelMetrics — megaLevel (2026-09-09 follow-up: Gap 1)", () => {
+  // powerUpLevelMetrics backs BOTH planPowerUpBudget's dominated-level search
+  // (usefulPowerUpLevelsAbove) and rosterPlanner.ts's Stage-3 proxyDps — a
+  // single fix here covers both call sites.
+  const ivs = { attack: 15, defense: 15, stamina: 15 };
+  const fastMove: FastMove = { id: "metrics-mega-fast", name: "Metrics Mega Fast", type: "normal", power: 9, energyGain: 3, durationSeconds: 1 };
+  const plusMove: ChargedMove = {
+    id: "metrics-plus-move",
+    name: "Metrics Plus Move",
+    type: "normal",
+    power: 100,
+    energyCost: 50,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+    isPlusMove: true,
+    plusMovePowerConfidence: "community-estimate",
+  };
+  const megaSpecies: SpeciesDefinition = {
+    id: "metrics-mega-species",
+    name: "Metrics Mega Species",
+    types: ["normal"],
+    baseAttack: 220,
+    baseDefense: 150,
+    baseStamina: 180,
+    fastMoves: [fastMove],
+    chargedMoves: [plusMove],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  const nonMegaSpecies: SpeciesDefinition = { ...megaSpecies, id: "metrics-non-mega-species", boost: undefined };
+  const bossFastMove: FastMove = { id: "metrics-boss-fast", name: "Metrics Boss Fast", type: "normal", power: 10, energyGain: 0, durationSeconds: 1.5 };
+
+  function metricsFor(species: SpeciesDefinition, level: number, megaLevel: MegaLevel | null | undefined) {
+    return powerUpLevelMetrics({
+      species,
+      ivs,
+      level,
+      fastMove,
+      chargedMove: plusMove,
+      megaLevel,
+      outgoingFastMoveDamageModifiers: { stab: true },
+      outgoingChargedMoveDamageModifiers: { stab: true },
+      bossFastMove,
+      bossChargedMove: undefined,
+      bossAttackStat: 150,
+      bossDefenseStat: 150,
+      incomingFastMoveDamageModifiers: { stab: false },
+    });
+  }
+
+  it("reports the real (unshifted) level, but computes outgoing damage at the +2 effective level with the '+' move's scaled power", () => {
+    const metrics = metricsFor(megaSpecies, 40, "super-max");
+    expect(metrics.level).toBe(40);
+    const { attack } = effectiveStatsAtLevel(megaSpecies, ivs, 42);
+    expect(metrics.outgoingFastDamage).toBe(
+      calculateDamage({ power: fastMove.power, attackerAttackStat: attack, defenderDefenseStat: 150, stab: true }),
+    );
+    expect(metrics.outgoingChargedDamage).toBe(
+      calculateDamage({
+        power: chargedMoveAtMegaLevel(plusMove, "super-max").power,
+        attackerAttackStat: attack,
+        defenderDefenseStat: 150,
+        stab: true,
+      }),
+    );
+  });
+
+  it("has no effect on a species with no boost mechanic", () => {
+    expect(metricsFor(nonMegaSpecies, 40, "super-max")).toEqual(metricsFor(nonMegaSpecies, 40, undefined));
+  });
+
+  it("omitting megaLevel is byte-identical to explicit undefined/null/'base' (defaults constraint)", () => {
+    const omitted = powerUpLevelMetrics({
+      species: megaSpecies,
+      ivs,
+      level: 40,
+      fastMove,
+      chargedMove: plusMove,
+      outgoingFastMoveDamageModifiers: { stab: true },
+      outgoingChargedMoveDamageModifiers: { stab: true },
+      bossFastMove,
+      bossChargedMove: undefined,
+      bossAttackStat: 150,
+      bossDefenseStat: 150,
+      incomingFastMoveDamageModifiers: { stab: false },
+    });
+    expect(metricsFor(megaSpecies, 40, undefined)).toEqual(omitted);
+    expect(metricsFor(megaSpecies, 40, null)).toEqual(omitted);
+    expect(metricsFor(megaSpecies, 40, "base")).toEqual(omitted);
+  });
+});
+
+describe("optimizePowerUps — the displayed ladder reflects the slot's own megaLevel (2026-09-09 follow-up: Gap 1)", () => {
+  const table = powerUpCostTableFromGameMaster(RAW_POKEMON_UPGRADE_SETTINGS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT);
+  const ivs = { attack: 15, defense: 15, stamina: 15 };
+  const fastMove: FastMove = { id: "opt-mega-fast", name: "Opt Mega Fast", type: "normal", power: 9, energyGain: 3, durationSeconds: 1 };
+  const plusMove: ChargedMove = {
+    id: "opt-plus-move",
+    name: "Opt Plus Move",
+    type: "normal",
+    power: 100,
+    energyCost: 50,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+    isPlusMove: true,
+    plusMovePowerConfidence: "community-estimate",
+  };
+  const megaSpecies: SpeciesDefinition = {
+    id: "opt-mega-species",
+    name: "Opt Mega Species",
+    types: ["normal"],
+    baseAttack: 220,
+    baseDefense: 150,
+    baseStamina: 180,
+    fastMoves: [fastMove],
+    chargedMoves: [plusMove],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  const boss: SpeciesDefinition = {
+    id: "opt-mega-boss",
+    name: "Opt Mega Boss",
+    types: ["normal"],
+    baseAttack: 150,
+    baseDefense: 150,
+    baseStamina: 5000,
+    fastMoves: [{ id: "opt-mega-boss-fast", name: "Opt Mega Boss Fast", type: "normal", power: 10, energyGain: 0, durationSeconds: 1.5 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function slotAt(megaLevel: MegaLevel | undefined): PowerUpSlotInput {
+    return {
+      species: megaSpecies,
+      fastMoveId: null,
+      chargedMoveId: null,
+      isMega: true,
+      level: 40,
+      ivs,
+      megaLevel,
+      costModifiers: NO_MODIFIERS,
+      candyOnHand: 1_000_000,
+      xlCandyOnHand: 1_000_000,
+    };
+  }
+
+  function run(megaLevel: MegaLevel | undefined) {
+    return optimizePowerUps({
+      slots: [slotAt(megaLevel)],
+      boss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      iterations: 1,
+      seed: 1,
+    });
+  }
+
+  it("the ladder actually responds to the slot's own megaLevel, and agrees EXACTLY with a direct powerUpDamageLadder call using the real per-move modifiers this module itself computes", () => {
+    const withoutMegaLevel = run(undefined);
+    const withSuperMax = run("super-max");
+
+    // The core symptom this closes: the displayed ladder must respond to the
+    // slot's own megaLevel, not silently assume Base Mega Level. The "+"
+    // move's own power scaling makes the charged-move increase unconditional;
+    // the ordinary fast move's floored damage only strictly increases when
+    // the +2 effective level happens to cross a breakpoint (not guaranteed at
+    // every level/IV combination — see powerUpDamageLadder's own megaLevel
+    // describe block for the exact-equality version of this check).
+    expect(withSuperMax.ladders[0]!.current.chargedMoveDamage).toBeGreaterThan(withoutMegaLevel.ladders[0]!.current.chargedMoveDamage);
+    expect(withSuperMax.ladders[0]!.current.fastMoveDamage).toBeGreaterThanOrEqual(withoutMegaLevel.ladders[0]!.current.fastMoveDamage);
+
+    // Agrees EXACTLY with calling powerUpDamageLadder directly at the same
+    // megaLevel, using typeEffectiveness/ownBoostMultiplier/isWeatherBoosted
+    // the same way optimizePowerUps' own ladder-building code does — this is
+    // the "ladder matches what the simulation actually did" check, not just
+    // "it changed".
+    const { defense: bossDefenseStat } = bossEffectiveStats(boss);
+    const expected = powerUpDamageLadder({
+      species: megaSpecies,
+      ivs,
+      fromLevel: 40,
+      fastMove,
+      chargedMove: plusMove,
+      megaLevel: "super-max",
+      bossDefenseStat,
+      fastMoveDamageModifiers: {
+        stab: megaSpecies.types.includes(fastMove.type),
+        typeEffectiveness: typeEffectiveness(fastMove.type, boss.types),
+        megaBoostMultiplier: ownBoostMultiplier(megaSpecies.boost, fastMove.type),
+        weatherBoosted: isWeatherBoosted(fastMove.type, "none"),
+      },
+      chargedMoveDamageModifiers: {
+        stab: megaSpecies.types.includes(plusMove.type),
+        typeEffectiveness: typeEffectiveness(plusMove.type, boss.types),
+        megaBoostMultiplier: ownBoostMultiplier(megaSpecies.boost, plusMove.type),
+        weatherBoosted: isWeatherBoosted(plusMove.type, "none"),
+      },
+      table,
+      modifiers: NO_MODIFIERS,
+    });
+    expect(withSuperMax.ladders[0]).toEqual(expected);
+  });
+
+  it("optimizePowerUps' actual simulated fight for this slot also benefits from megaLevel — the ladder and the simulation now agree on direction", () => {
+    const withoutMegaLevel = run(undefined);
+    const withSuperMax = run("super-max");
+    expect(withSuperMax.baseline.teamDps).toBeGreaterThan(withoutMegaLevel.baseline.teamDps);
+  });
+
+  it("omitting megaLevel on the slot is byte-identical to megaLevel: undefined (defaults constraint)", () => {
+    const omitted = optimizePowerUps({
+      slots: [
+        {
+          species: megaSpecies,
+          fastMoveId: null,
+          chargedMoveId: null,
+          isMega: true,
+          level: 40,
+          ivs,
+          costModifiers: NO_MODIFIERS,
+          candyOnHand: 1_000_000,
+          xlCandyOnHand: 1_000_000,
+        },
+      ],
+      boss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      iterations: 1,
+      seed: 1,
+    });
+    expect(run(undefined)).toEqual(omitted);
+  });
+});
+
+describe("planPowerUpBudget — megaLevel now reaches the actual simulation (2026-09-09 bug fix: toTeamRaidSlotsAtLevels used to silently drop it)", () => {
+  const table = powerUpCostTableFromGameMaster(RAW_POKEMON_UPGRADE_SETTINGS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT);
+  const ivs = { attack: 15, defense: 15, stamina: 15 };
+  const megaSpecies: SpeciesDefinition = {
+    id: "budget-mega-species",
+    name: "Budget Mega Species",
+    types: ["normal"],
+    baseAttack: 220,
+    baseDefense: 150,
+    baseStamina: 180,
+    fastMoves: [{ id: "budget-mega-fast", name: "Budget Mega Fast", type: "normal", power: 9, energyGain: 3, durationSeconds: 1 }],
+    chargedMoves: [
+      {
+        id: "budget-plus-move",
+        name: "Budget Plus Move",
+        type: "normal",
+        power: 100,
+        energyCost: 50,
+        durationSeconds: 2,
+        vulnerableWindowSeconds: 2,
+        isPlusMove: true,
+        plusMovePowerConfidence: "community-estimate",
+      },
+    ],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  // Never clears and barely scratches the attacker — isolates own-damage
+  // output across the FULL raidTimerSeconds window, the same technique
+  // teamRaid.test.ts's own "TeamRaidSlotInput.megaLevel" describe block uses.
+  const tankyBoss: SpeciesDefinition = {
+    id: "budget-mega-boss",
+    name: "Budget Mega Boss",
+    types: ["normal"],
+    baseAttack: 1,
+    baseDefense: 200,
+    baseStamina: 1_000_000,
+    fastMoves: [{ id: "budget-boss-fast", name: "Budget Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 2 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function baselineFor(megaLevel: MegaLevel | undefined) {
+    return planPowerUpBudget({
+      slots: [
+        {
+          species: megaSpecies,
+          fastMoveId: null,
+          chargedMoveId: null,
+          isMega: true,
+          level: 40,
+          ivs,
+          megaLevel,
+          costModifiers: NO_MODIFIERS,
+          candyOnHand: 0,
+          xlCandyOnHand: 0,
+        },
+      ],
+      boss: tankyBoss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 180,
+      costTable: table,
+      stardustOnHand: 0, // nothing affordable — isolates the do-nothing BASELINE simulation itself
+      iterations: 5,
+      seed: 1,
+    }).baseline;
+  }
+
+  it("the baseline (do-nothing) simulated team DPS is measurably higher at super-max than with no megaLevel set, at the SAME fixed level — proves toTeamRaidSlotsAtLevels now forwards megaLevel into the real simulation, not just the ladder", () => {
+    const withoutMegaLevel = baselineFor(undefined);
+    const withSuperMax = baselineFor("super-max");
+    expect(withSuperMax.teamDps).toBeGreaterThan(withoutMegaLevel.teamDps);
+  });
+
+  it("omitting megaLevel is byte-identical to explicit undefined, across the whole plan (defaults constraint)", () => {
+    const inputsWithout = (megaLevel: MegaLevel | undefined): PowerUpBudgetInputs => ({
+      slots: [
+        {
+          species: megaSpecies,
+          fastMoveId: null,
+          chargedMoveId: null,
+          isMega: true,
+          level: 40,
+          ivs,
+          megaLevel,
+          costModifiers: NO_MODIFIERS,
+          candyOnHand: 1000,
+          xlCandyOnHand: 1000,
+        },
+      ],
+      boss: tankyBoss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 180,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      iterations: 3,
+      seed: 1,
+    });
+    const omitted = planPowerUpBudget({
+      slots: [
+        {
+          species: megaSpecies,
+          fastMoveId: null,
+          chargedMoveId: null,
+          isMega: true,
+          level: 40,
+          ivs,
+          costModifiers: NO_MODIFIERS,
+          candyOnHand: 1000,
+          xlCandyOnHand: 1000,
+        },
+      ],
+      boss: tankyBoss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 180,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      iterations: 3,
+      seed: 1,
+    });
+    expect(planPowerUpBudget(inputsWithout(undefined))).toEqual(omitted);
   });
 });

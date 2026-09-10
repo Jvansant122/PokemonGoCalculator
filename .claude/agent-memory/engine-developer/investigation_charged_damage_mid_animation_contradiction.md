@@ -51,3 +51,12 @@ description was wrong, and it lived in a different package.
 See also [[real_vs_hypothetical_fixture_tradeoff]] for why the regression test uses a fully
 hand-authored synthetic fixture (deterministic, no boss charged move) rather than trying to pin
 against the live `rayquaza`/`latios-mega` species data, which would drift with `data-sync` resyncs.
+
+**Related but distinct gotcha found 2026-09-09** (see
+[[feature_super_max_plus_moves_and_mega_level]]): `simulateOpeningBurst` (comparison.ts's
+`runComparison`) has NO cast-animation/vulnerability window for the attacker's own charged move at
+all — it lands instantly the moment energy allows — whereas `simulateStepwiseBattle` (this file's
+subject) DOES model one. A fixture's exact HP/timing tuned to work under the opening-burst model
+(e.g. CANDIDATE_ALPHA/BOSS_TIDE, tuned to die at exactly 7.5s) can silently produce a fully
+suppressed (zero) charged-move outcome if reused verbatim in a NEW stepwise-engine test — not a bug
+in either simulator, just two genuinely different models that don't share fixture tuning safely.

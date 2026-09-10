@@ -96584,6 +96584,18 @@
         "energyCost": 50,
         "durationSeconds": 3,
         "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "FELL_STINGER_PLUS",
+        "name": "Fell Stinger+",
+        "type": "bug",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "official"
       }
     ],
     "boost": {
@@ -97998,6 +98010,18 @@
         "energyCost": 50,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "DARK_PULSE_PLUS",
+        "name": "Dark Pulse+",
+        "type": "dark",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "official"
       }
     ],
     "boost": {
@@ -101077,6 +101101,18 @@
         "energyCost": 100,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "VOLT_TACKLE_PLUS",
+        "name": "Volt Tackle+",
+        "type": "electric",
+        "power": 170,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "cross-site"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -101208,6 +101244,18 @@
         "energyCost": 100,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "ZAP_CANNON_PLUS",
+        "name": "Zap Cannon+",
+        "type": "electric",
+        "power": 160,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "cross-site"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -101442,6 +101490,18 @@
         "energyCost": 50,
         "durationSeconds": 3.5,
         "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "OUTRAGE_PLUS",
+        "name": "Outrage+",
+        "type": "dragon",
+        "power": 185,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 4,
+        "vulnerableWindowSeconds": 4,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "cross-site"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -101736,6 +101796,18 @@
         "energyCost": 100,
         "durationSeconds": 4,
         "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "DYNAMIC_PUNCH_PLUS",
+        "name": "Dynamic Punch+",
+        "type": "fighting",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "cross-site"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -102121,6 +102193,18 @@
         "energyCost": 50,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "SEED_BOMB_PLUS",
+        "name": "Seed Bomb+",
+        "type": "grass",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "cross-site"
       }
     ],
     "boost": {
@@ -102414,6 +102498,18 @@
         "energyCost": 100,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "DRILL_PECK_PLUS",
+        "name": "Drill Peck+",
+        "type": "flying",
+        "power": 170,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "cross-site"
       }
     ],
     "lastKnownRaidTier": "Mega Raids",

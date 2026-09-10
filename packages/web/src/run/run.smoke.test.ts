@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { bossChargedMoveReadySeconds } from "@pogo-analyzer/engine";
 import { speciesRegistry } from "../registry.js";
 import { DEFAULT_ASSUMPTIONS as COMPARATOR_DEFAULTS } from "../ComparatorView.js";
 import { DEFAULT_TEAM_ASSUMPTIONS } from "../TeamRaidView.js";
@@ -64,6 +65,26 @@ describe("runTeamRaidScenario (default scenario)", () => {
     expectFiniteNumber(result.data!.wipeCount, "wipeCount");
     expectFiniteNumber(result.data!.slotsUsed, "slotsUsed");
   }, 20_000);
+});
+
+describe("runTeamRaidScenario (showDetailedAssumptions derived-frequency fallback)", () => {
+  it("derives effectiveBossChargedMoveFrequencySeconds from the boss's own fast-move charge time when showDetailedAssumptions is false", () => {
+    const assumptions = { ...DEFAULT_TEAM_ASSUMPTIONS, showDetailedAssumptions: false };
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.bossSpecies).not.toBeNull();
+    const boss = result.bossSpecies!;
+    const bossFastMove = boss.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? boss.fastMoves[0]!;
+    const bossChargedMove =
+      boss.chargedMoves.find((m) => m.id === assumptions.bossChargedMoveId) ?? boss.chargedMoves[0]!;
+    const expected = bossChargedMoveReadySeconds(bossFastMove, bossChargedMove, 0);
+    expect(result.effectiveBossChargedMoveFrequencySeconds).toBe(expected);
+  });
+
+  it("uses the stored bossChargedMoveFrequencySeconds verbatim when showDetailedAssumptions is true", () => {
+    const assumptions = { ...DEFAULT_TEAM_ASSUMPTIONS, showDetailedAssumptions: true, bossChargedMoveFrequencySeconds: 42 };
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.effectiveBossChargedMoveFrequencySeconds).toBe(42);
+  });
 });
 
 describe("runSpeciesReportScenario (default scenario)", () => {

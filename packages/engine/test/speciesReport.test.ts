@@ -316,3 +316,79 @@ describe("offensiveTypeMatchup / typeMatchupPercentile (the cheap, no-simulation
     expect(typeMatchupPercentile(0, [1, 2, 3])).toBe(0);
   });
 });
+
+describe("SpeciesReportInputs.megaLevel", () => {
+  // A dedicated, bulky, weak-boss-opponent fixture rather than reusing
+  // CANDIDATE_ALPHA/BOSS_TIDE — CANDIDATE_ALPHA's 150 effective HP is
+  // deliberately tuned to die at EXACTLY 7.5s against BOSS_TIDE under the
+  // OPENING-BURST simulator's simplified (no-cast-animation) charged-move
+  // model, but the STEPWISE simulator this module actually drives DOES model
+  // a real charged-move cast animation with its own vulnerability window
+  // (see simulate.ts) — reusing that exact pairing here made the candidate
+  // die MID-ANIMATION before its own charged move could ever land (a real,
+  // correctly-modeled mechanic, not a bug — see
+  // investigation_charged_damage_mid_animation_contradiction.md), which
+  // would make every assertion below vacuously about 0 damage. This module
+  // is thin orchestration over runSustainedComparison (already exhaustively
+  // tested for megaLevel wiring in sustainedComparison.test.ts), so this only
+  // needs to prove the field actually REACHES that call — a fixture that
+  // survives comfortably is all that's needed for that.
+  const megaAttacker: SpeciesDefinition = {
+    id: "sr-mega-attacker",
+    name: "SR Mega Attacker",
+    types: ["electric"],
+    baseAttack: 250,
+    baseDefense: 150,
+    baseStamina: 10000,
+    fastMoves: [{ id: "sr-fast", name: "SR Fast", type: "electric", power: 15, energyGain: 20, durationSeconds: 1 }],
+    chargedMoves: [
+      {
+        id: "sr-plus-move",
+        name: "SR Plus Move",
+        type: "electric",
+        power: 100,
+        energyCost: 20,
+        durationSeconds: 2,
+        vulnerableWindowSeconds: 2,
+        isPlusMove: true,
+        plusMovePowerConfidence: "community-estimate",
+      },
+    ],
+    boost: { multiplier: 1.3, boostedType: "electric" },
+  };
+  const nonMegaAttacker: SpeciesDefinition = { ...megaAttacker, id: "sr-non-mega-attacker", name: "SR Non-Mega Attacker", boost: undefined };
+  const weakBoss: SpeciesDefinition = {
+    id: "sr-weak-boss",
+    name: "SR Weak Boss",
+    types: ["electric"],
+    baseAttack: 1,
+    baseDefense: 200,
+    baseStamina: 30000,
+    fastMoves: [{ id: "sr-boss-fast", name: "SR Boss Fast", type: "electric", power: 1, energyGain: 0, durationSeconds: 2 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  const commonInputs = {
+    level: 50,
+    ivs: PERFECT_IVS,
+    dodge: { kind: "none" } as const,
+    bossChargedMoveMeanIntervalSeconds: 1000,
+    maxSeconds: 30,
+    iterations: 10,
+    targets: [{ species: weakBoss }] as SpeciesReportBossTarget[],
+  };
+
+  it("scales the species' own '+' move power through to the reported sustained result", () => {
+    const base = runSpeciesReverseLookup({ ...commonInputs, species: megaAttacker });
+    const superMax = runSpeciesReverseLookup({ ...commonInputs, species: megaAttacker, megaLevel: "super-max" });
+    expect(base.rows[0]!.sustained.meanChargedDamage).toBeGreaterThan(0);
+    expect(superMax.rows[0]!.sustained.meanChargedDamage).toBeGreaterThan(base.rows[0]!.sustained.meanChargedDamage);
+  });
+
+  it("has no effect at all when the species has no mega/primal boost mechanic, regardless of what's requested", () => {
+    const withoutMegaLevel = runSpeciesReverseLookup({ ...commonInputs, species: nonMegaAttacker });
+    const withSuperMaxRequested = runSpeciesReverseLookup({ ...commonInputs, species: nonMegaAttacker, megaLevel: "super-max" });
+    expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
+  });
+});

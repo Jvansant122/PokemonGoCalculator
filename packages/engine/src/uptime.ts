@@ -6,6 +6,13 @@ import type { PokemonType } from "./types.js";
  * uptime is worth more than a raw DPS edge" conclusion flips back the other way.
  * Any UI that lets this be edited must treat it as a first-class assumption
  * (see Phase 4's assumption panel), not a hidden constant.
+ *
+ * NUMERIC-COINCIDENCE WARNING: megaLevel.ts's
+ * `MEGA_LEVEL_PLUS_MOVE_POWER_MULTIPLIER["super-max"]` is ALSO 1.3 — a
+ * completely unrelated real-game fact (Super Max's "+"-move power multiplier,
+ * a community estimate) that happens to share this value. Do not derive
+ * either constant from the other or fold them into a shared constant — see
+ * that constant's own doc comment for the full reasoning.
  */
 export const DEFAULT_MEGA_BOOST_MULTIPLIER = 1.3;
 

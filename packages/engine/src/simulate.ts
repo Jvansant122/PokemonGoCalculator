@@ -162,9 +162,36 @@ export interface StepwiseAttacker {
    * intentional behavior. Only meaningful when the boss has a charged move
    * to dodge in the first place (sustained phase); defaults to false
    * (today's fire-immediately behavior).
+   *
+   * TIME COST (2026-09-09): this setting models the attacker as dodging
+   * TWICE around a held cast — once right before throwing the charged move,
+   * once right after — rather than the usual single dodge attempt, so each
+   * of the boss's CHARGED hits the attacker actually attempts to dodge while
+   * this is on costs `HOLD_CHARGED_MOVE_DODGE_ATTEMPTS * DODGE_COST_SECONDS`
+   * (2.0s today) instead of the ordinary `DODGE_COST_SECONDS` (1.0s today).
+   * This is THIS PROJECT'S OWN EXPLICIT PLACEHOLDER MODELLING ASSUMPTION,
+   * not an observed or sourced real-game mechanic — no source establishes
+   * how much of the attacker's own time is actually lost dodging around
+   * their own charged-move cast, and it is pending improvement. See
+   * MECHANICS.md's 2026-09-09 "Dodging" entry. Only applies when a charged
+   * dodge is actually attempted (`dodge.kind !== "none"`, and not mid the
+   * attacker's own animation) — it never fires with dodging turned off, and
+   * never affects boss FAST hits (`dodgeFastAttacks` keeps the ordinary
+   * single-attempt cost).
    */
   holdChargedMoveUntilSafe?: boolean;
 }
+
+/**
+ * How many dodge inputs' worth of time (`DODGE_COST_SECONDS` each) a dodged
+ * boss CHARGED hit costs the attacker while `holdChargedMoveUntilSafe` is on
+ * — see that field's doc comment above for the full rationale. This is a
+ * labelled placeholder assumption (dodge once before the held cast, once
+ * after), not a sourced constant; kept as a named multiplier rather than an
+ * inline `2` so a future change to the model is a one-line edit and the call
+ * site stays self-explanatory.
+ */
+export const HOLD_CHARGED_MOVE_DODGE_ATTEMPTS = 2;
 
 /**
  * Which model decides WHEN a raid boss's charged move fires — see
@@ -807,7 +834,19 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       // every attempt (hit or miss) costs DODGE_COST_SECONDS, pushing your
       // own next fast move later. No attempt (and so no cost) happens while
       // mid-own-animation, since attemptingDodge is already false there.
-      if (attemptingDodge) nextAttackerFastMoveAt += DODGE_COST_SECONDS;
+      //
+      // holdChargedMoveUntilSafe's "dodge before AND after the held cast"
+      // placeholder (see StepwiseAttacker.holdChargedMoveUntilSafe's doc
+      // comment, and MECHANICS.md's 2026-09-09 "Dodging" entry) charges
+      // HOLD_CHARGED_MOVE_DODGE_ATTEMPTS dodge inputs instead of one, but
+      // ONLY for a charged-hit dodge actually attempted here — never with
+      // dodging off (attemptingDodge already covers dodge.kind === "none")
+      // and never for a boss fast hit.
+      if (attemptingDodge) {
+        const dodgeAttempts =
+          attacker.holdChargedMoveUntilSafe && isBossChargedHit ? HOLD_CHARGED_MOVE_DODGE_ATTEMPTS : 1;
+        nextAttackerFastMoveAt += dodgeAttempts * DODGE_COST_SECONDS;
+      }
     }
 
     // Attacker's own fast move — locked out while mid-charged-move-animation.

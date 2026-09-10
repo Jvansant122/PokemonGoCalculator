@@ -70,6 +70,7 @@ function defaultSlot(speciesId: string, level: number, isMega: boolean): PowerUp
     fastMoveId: null,
     chargedMoveId: null,
     isMega,
+    megaLevel: null,
     isShadow: false,
     isPurified: false,
     isLucky: false,
@@ -133,6 +134,7 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   multiRaidIncludedTiers: null,
   multiRaidMaxBossCount: 30,
   candyByFamilyId: {},
+  multiRaidMegaLevel: null,
 };
 
 export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
@@ -143,6 +145,7 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
       fastMoveId: s.fastMoveId,
       chargedMoveId: s.chargedMoveId,
       isMega: s.isMega,
+      megaLevel: s.megaLevel,
       isShadow: s.isShadow,
       isPurified: s.isPurified,
       isLucky: s.isLucky,
@@ -174,6 +177,7 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     multiRaidIncludedTiers: a.multiRaidIncludedTiers,
     multiRaidMaxBossCount: a.multiRaidMaxBossCount,
     candyByFamilyId: a.candyByFamilyId,
+    multiRaidMegaLevel: a.multiRaidMegaLevel,
   };
 }
 
@@ -183,6 +187,9 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     fastMoveId: slot.fastMoveId ?? null,
     chargedMoveId: slot.chargedMoveId ?? null,
     isMega: slot.isMega ?? false,
+    // `??` guards a link encoded before this field existed rather than
+    // surfacing `undefined` into the Mega Level <select>.
+    megaLevel: slot.megaLevel ?? null,
     isShadow: slot.isShadow ?? false,
     isPurified: slot.isPurified ?? false,
     isLucky: slot.isLucky ?? false,
@@ -240,6 +247,9 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     multiRaidIncludedTiers: s.multiRaidIncludedTiers ?? DEFAULT_ASSUMPTIONS.multiRaidIncludedTiers,
     multiRaidMaxBossCount: s.multiRaidMaxBossCount ?? DEFAULT_ASSUMPTIONS.multiRaidMaxBossCount,
     candyByFamilyId: s.candyByFamilyId ?? DEFAULT_ASSUMPTIONS.candyByFamilyId,
+    // `??` guards a link built before this field existed rather than
+    // surfacing `undefined` into the multi-raid Mega Level <select>.
+    multiRaidMegaLevel: s.multiRaidMegaLevel ?? DEFAULT_ASSUMPTIONS.multiRaidMegaLevel,
   };
 }
 
@@ -743,6 +753,11 @@ function MultiRaidResultsSection({
         BENCHED Pokémon that would only earn a team spot if powered up first (see &ldquo;Benched but
         promising&rdquo; below). Runs off the main thread in a background Web Worker when one is available (falling
         back to computing right here, briefly freezing the tab, only if a worker genuinely can&rsquo;t be used).
+      </p>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        The &ldquo;Mega Level&rdquo; setting above applies ROSTER-WIDE, not per entry — the imported roster runs to
+        ~164 Pokémon, so a per-entry control would be unusable. It only ever affects an entry that can actually
+        Mega Evolve; everything else in the pool is untouched by it.
       </p>
 
       <div className="result-row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
@@ -1507,6 +1522,12 @@ function SingleRaidResultsSection({
               crosses a real breakpoint here. "No further breakpoint before level 50" means every remaining power-up
               for that move is cost with zero per-hit damage change against THIS boss's real Defense stat.
             </p>
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              This ladder honors each slot&rsquo;s own Mega Level — Super Max&rsquo;s effective-level bump feeds the
+              Attack stat shown, and a &ldquo;+&rdquo; charged move&rsquo;s power is scaled for the selected tier — so
+              its breakpoints agree with the Δ team DPS numbers in the ranked table below, which come from a full
+              re-simulation.
+            </p>
             <div className="result-row" style={{ flexWrap: "wrap" }}>
               {slotSpecies.map((species, i) => {
                 const ladder = data.ladders[i];
@@ -1663,6 +1684,13 @@ function SingleRaidResultsSection({
       )}
 
       <CollapsibleSection id="pu-known-caveats-single" heading="Known caveats" defaultOpen={false}>
+        <p className="caveats note-block">
+          Mega Level (per slot, above): every number on this tab honors each slot's own selected Mega Level —
+          baseline, ranked candidates' Δ team DPS, the fixed-budget plan, and the per-slot damage ladder's
+          breakpoint check alike. Super Max additionally applies a +2 effective-level bump, whose magnitude is a
+          community-consensus figure rather than a published one; a "+" charged move's power scaling by tier is a
+          weaker community estimate still. Both are flagged where they surface.
+        </p>
         <p className="caveats note-block">
           v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
           two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
@@ -1842,6 +1870,7 @@ export function PowerUpOptimizerView() {
       multiRaidIncludedTiers: null,
       multiRaidMaxBossCount: 30,
       candyByFamilyId: {},
+      multiRaidMegaLevel: null,
     }),
     [
       assumptions.slots,
@@ -1906,6 +1935,12 @@ export function PowerUpOptimizerView() {
       multiRaidMaxBossCount: assumptions.multiRaidMaxBossCount,
       multiRaidBossIds: assumptions.multiRaidBossIds,
       candyByFamilyId: assumptions.candyByFamilyId,
+      // NOT currently read by resolveRosterPlannerInputs/rosterPlanner.ts at
+      // all (see PowerUpOptimizerAssumptions.multiRaidMegaLevel's own KNOWN
+      // GAP doc comment) — carried through anyway so this memo's shape stays
+      // honest about what the assumptions object actually holds, and so the
+      // wiring is already correct the moment that engine gap closes.
+      multiRaidMegaLevel: assumptions.multiRaidMegaLevel,
       stardustOnHand: assumptions.stardustOnHand,
       rareCandyOnHand: assumptions.rareCandyOnHand,
       rareCandyXlOnHand: assumptions.rareCandyXlOnHand,
@@ -1925,6 +1960,7 @@ export function PowerUpOptimizerView() {
       assumptions.multiRaidMaxBossCount,
       assumptions.multiRaidBossIds,
       assumptions.candyByFamilyId,
+      assumptions.multiRaidMegaLevel,
       assumptions.stardustOnHand,
       assumptions.rareCandyOnHand,
       assumptions.rareCandyXlOnHand,

@@ -1,7 +1,8 @@
-import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type MegaLevel, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
@@ -20,6 +21,16 @@ export interface PowerUpSlotAssumption {
   chargedMoveId: string | null;
   /** At most one slot across the roster may set this true — enforced both here (radio-exclusivity) and by runTeamRaid, which optimizePowerUps calls under the hood. */
   isMega: boolean;
+  /**
+   * This slot's own Mega Level (see megaLevelSelect.tsx / packages/engine/src/megaLevel.ts)
+   * — mirrors PowerUpScenarioSlot.megaLevel exactly, same per-slot semantics
+   * as Team Raid's own TeamSlotAssumption.megaLevel. `null` means no Mega
+   * Level investment assumed (identical to `"base"`). Feeds the simulated
+   * team-DPS numbers (optimizePowerUps/planPowerUpBudget both forward it
+   * into the underlying team-raid re-simulation) AND the per-slot damage
+   * ladder below (powerUpDamageLadder), so the two agree.
+   */
+  megaLevel: MegaLevel | null;
   /** Cost- AND combat-affecting: treats this slot's species as Shadow (see shadowToggle.ts). Mutually exclusive with isPurified and with this slot's own species carrying a `boost` — see PowerUpOptimizerView's normalizePowerUpAssumptions. */
   isShadow: boolean;
   /** Cost-ONLY: a 0.9x stardust/candy power-up discount (see powerUp.ts's PowerUpCostModifiers). Does not change this slot's combat stats. Mutually exclusive with isShadow (the engine throws if both are set — see powerUp.ts's powerUpStepCost). */
@@ -43,6 +54,7 @@ export function emptyPowerUpSlot(): PowerUpSlotAssumption {
     fastMoveId: null,
     chargedMoveId: null,
     isMega: false,
+    megaLevel: null,
     isShadow: false,
     isPurified: false,
     isLucky: false,
@@ -93,6 +105,21 @@ export interface PowerUpOptimizerAssumptions {
   multiRaidMaxBossCount: number;
   /** Multi-raid mode only — account-wide candy on hand pooled per candyFamilyId. See RosterPlannerInputs.candyByFamilyId (rosterPlanner.ts) and PLAN §3.4. A family absent here is UNKNOWN candy, never 0. */
   candyByFamilyId: Record<string, { candy: number; xlCandy: number } | undefined>;
+  /**
+   * Multi-raid mode only — a SINGLE roster-wide Mega Level (see
+   * megaLevelSelect.tsx / packages/engine/src/megaLevel.ts), unlike
+   * single-raid mode's per-slot `megaLevel` above. A per-entry control isn't
+   * practical across a ~150-200-entry imported roster, so this applies to
+   * whichever ONE entry the roster planner fields as the mega/primal slot
+   * (RosterEntry.canMega) in any given team it evaluates.
+   *
+   * Applied for real as of 2026-09-09: `rosterPlanner.ts` takes this as
+   * `RosterPlannerInputs.megaLevel` (roster-wide), and BOTH `runRosterPlanner`
+   * and `planRosterBudget` feed it into the simulated team DPS. The per-entry
+   * gate still lives inside `runTeamRaid`, keyed on each entry own
+   * `species.boost`, so a non-mega entry is unaffected by this value.
+   */
+  multiRaidMegaLevel: MegaLevel | null;
 }
 
 interface Props {
@@ -215,6 +242,22 @@ export function PowerUpOptimizerAssumptionPanel({
               })
             }
           />
+
+          <div style={{ marginTop: 12 }}>
+            <MegaLevelSelect
+              idPrefix="pu-multiraid"
+              label="Mega Level (whichever roster entry is fielded as the mega/primal slot)"
+              species={null}
+              forceVisible
+              value={value.multiRaidMegaLevel}
+              onChange={(level) => set("multiRaidMegaLevel", level)}
+            />
+            <p className="species-picker-hint">
+              Applies ROSTER-WIDE (the imported roster is ~164 Pokémon, so a per-entry control would be unusable),
+              and only ever to an entry that can actually Mega Evolve. Feeds the real simulated team-DPS behind
+              both the ranked table and the fixed-budget plan.
+            </p>
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <p className="field-group-label">Candy on hand, per candy family (multi-raid mode)</p>
@@ -361,6 +404,15 @@ export function PowerUpOptimizerAssumptionPanel({
                       />{" "}
                       Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
                     </label>
+                  </div>
+                  <MegaLevelSelect
+                    idPrefix={`pu-slot-${i}`}
+                    label="Mega Level"
+                    species={species}
+                    value={slot.megaLevel}
+                    onChange={(level) => updateSlot(i, { megaLevel: level })}
+                  />
+                  <div className="team-slot-flags">
                     <label className="species-picker-hint">
                       <input
                         type="checkbox"

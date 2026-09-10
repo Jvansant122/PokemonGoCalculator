@@ -1,5 +1,6 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import { resolveMove, runSustainedComparison, type SustainedCandidateResult } from "./comparison.js";
+import type { MegaLevel } from "./megaLevel.js";
 import type { RaidTier } from "./raidBoss.js";
 import type { BossChargedMoveCadence } from "./simulate.js";
 import { typeEffectiveness } from "./typeChart.js";
@@ -111,6 +112,16 @@ export interface SpeciesReportInputs {
   fastMoveId?: string | null;
   /** Charged-move selection — see fastMoveId. */
   chargedMoveId?: string | null;
+  /**
+   * The selected species' own Mega Level (see megaLevel.ts) — a single value
+   * (not a 2-tuple like comparison.ts's candidateMegaLevel, since this module
+   * only ever ranks ONE species). `undefined`/`null` means no Mega Level
+   * effect assumed (identical to `"base"`). Silently has no effect when
+   * `species` has no mega/primal `boost` mechanic at all — this module
+   * passes it straight through to runSustainedComparison's own
+   * resolveCandidateMegaLevel gate rather than re-deriving it.
+   */
+  megaLevel?: MegaLevel | null;
   level: number;
   ivs: IVSpread;
   /** Governs dodging each boss's CHARGED attacks — one shared assumption swept across every boss target, same as comparison.ts's ComparisonInputs.dodge. */
@@ -194,6 +205,7 @@ export function runSpeciesReverseLookup(inputs: SpeciesReportInputs): SpeciesRep
       candidates: [species],
       candidateFastMoveIds: [inputs.fastMoveId ?? null],
       candidateChargedMoveIds: [inputs.chargedMoveId ?? null],
+      candidateMegaLevel: [inputs.megaLevel ?? null, null],
       boss: target.species,
       bossRaidTier: target.tier,
       bossMaxHpOverride: target.bossMaxHpOverride,

@@ -1,5 +1,6 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove, runSustainedComparison } from "./comparison.js";
+import type { MegaLevel } from "./megaLevel.js";
 import {
   RARE_CANDY_TO_CANDY_RATIO,
   RARE_CANDY_XL_TO_XL_CANDY_RATIO,
@@ -298,6 +299,22 @@ export interface RosterPlannerInputs {
   dodge: DodgeBehavior;
   /** Whether the roster also attempts to dodge fast attacks. Defaults to false. */
   dodgeFastAttacks?: boolean;
+  /**
+   * ROSTER-WIDE Mega Level (see megaLevel.ts) — deliberately NOT a per-entry
+   * `RosterEntry` field: a real import runs 100-200 entries, and a per-entry
+   * Mega Level picker would be unusable at that scale. Applied identically
+   * to EVERY entry in the sweep that's actually mega/primal-capable (i.e.
+   * `species.boost` is defined) — a non-mega entry is completely unaffected
+   * regardless of this setting, via the same comparison.ts
+   * resolveCandidateMegaLevel gate every other engine entry point already
+   * uses (screenScoreFor's runSustainedComparison call, toSlotInput's
+   * TeamRaidSlotInput.megaLevel, and entryBossMetricsInputs' Stage-3 proxy
+   * all route through it rather than re-deriving the gate). `undefined`
+   * means no Mega Level effect assumed (identical to `"base"`), so every
+   * existing caller/share-link that predates this field is byte-for-byte
+   * unchanged.
+   */
+  megaLevel?: MegaLevel;
   /** See simulate.ts's StepwiseAttacker.holdChargedMoveUntilSafe. Applies to every slot/entry identically. Defaults to false. */
   holdChargedMoveUntilSafe?: boolean;
   /** See comparison.ts's SustainedComparisonInputs.bossChargedMoveMeanIntervalSeconds / teamRaid.ts's TeamRaidInputs field of the same name — one shared assumption swept across every boss. */
@@ -494,7 +511,8 @@ function selectTeam(scored: { entry: RosterEntry; score: number }[]): RosterEntr
   return team;
 }
 
-function toSlotInput(entry: RosterEntry): TeamRaidSlotInput {
+/** `megaLevel` is the roster-wide RosterPlannerInputs.megaLevel setting, forwarded unchanged onto TeamRaidSlotInput.megaLevel for every entry — runTeamRaid's own resolveCandidateMegaLevel gate silently no-ops it for an entry whose species has no `.boost`, so this never needs a per-entry check here. */
+function toSlotInput(entry: RosterEntry, megaLevel: MegaLevel | undefined): TeamRaidSlotInput {
   return {
     species: entry.species,
     fastMoveId: entry.fastMoveId,
@@ -502,6 +520,7 @@ function toSlotInput(entry: RosterEntry): TeamRaidSlotInput {
     isMega: entry.canMega,
     level: entry.level,
     ivs: entry.ivs,
+    megaLevel,
   };
 }
 
@@ -514,6 +533,8 @@ function teamKeyFor(entries: RosterEntry[]): string {
 interface SharedAssumptions {
   dodge: DodgeBehavior;
   dodgeFastAttacks?: boolean;
+  /** See RosterPlannerInputs.megaLevel — the same roster-wide value, threaded through screenScoreFor/toSlotInput/entryBossMetricsInputs. */
+  megaLevel?: MegaLevel;
   holdChargedMoveUntilSafe?: boolean;
   bossChargedMoveMeanIntervalSeconds: number;
   bossChargedMoveCadence?: TeamRaidInputs["bossChargedMoveCadence"];
@@ -549,6 +570,7 @@ function screenScoreFor(
     candidates: [entry.species],
     candidateFastMoveIds: [entry.fastMoveId],
     candidateChargedMoveIds: [entry.chargedMoveId],
+    candidateMegaLevel: [shared.megaLevel ?? null, null],
     boss: target.species,
     bossRaidTier: target.tier,
     bossMaxHpOverride: target.bossMaxHpOverride,
@@ -642,8 +664,13 @@ function estimateOrMeasureScore(
   return scaled ?? measureFallback();
 }
 
-/** Everything powerUpLevelMetrics/usefulPowerUpLevelsAbove need for one (entry, boss) pair, built once and cached (see getMetricsInputs) since only `level` varies call to call. */
-function entryBossMetricsInputs(entry: RosterEntry, target: WeightedRaidTarget, weather: WeatherCondition): Omit<PowerUpLevelMetricsParams, "level"> {
+/** Everything powerUpLevelMetrics/usefulPowerUpLevelsAbove need for one (entry, boss) pair, built once and cached (see getMetricsInputs) since only `level` varies call to call. `megaLevel` is the roster-wide RosterPlannerInputs.megaLevel setting — forwarded onto PowerUpLevelMetricsParams.megaLevel unchanged, so the Stage-3 proxy (proxyDps, built from this function's output) stays on the same effective stats/move power as Stage 4's actual runTeamRaid simulation. */
+function entryBossMetricsInputs(
+  entry: RosterEntry,
+  target: WeightedRaidTarget,
+  weather: WeatherCondition,
+  megaLevel: MegaLevel | undefined,
+): Omit<PowerUpLevelMetricsParams, "level"> {
   const fastMove = resolveMove(entry.species.fastMoves, entry.fastMoveId);
   const chargedMove = resolveMove(entry.species.chargedMoves, entry.chargedMoveId);
   if (!fastMove || !chargedMove) {
@@ -659,6 +686,7 @@ function entryBossMetricsInputs(entry: RosterEntry, target: WeightedRaidTarget, 
     ivs: entry.ivs,
     fastMove,
     chargedMove,
+    megaLevel,
     outgoingFastMoveDamageModifiers: {
       stab: entry.species.types.includes(fastMove.type),
       typeEffectiveness: typeEffectiveness(fastMove.type, target.species.types),
@@ -740,7 +768,7 @@ function runFullRosterCached(
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const slots = teamEntries.map(toSlotInput);
+  const slots = teamEntries.map((entry) => toSlotInput(entry, shared.megaLevel));
   const first = teamEntries[0]!;
   const results = seeds.map((s) =>
     runTeamRaid({
@@ -813,6 +841,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
   const shared: SharedAssumptions = {
     dodge: rest.dodge,
     dodgeFastAttacks: rest.dodgeFastAttacks,
+    megaLevel: rest.megaLevel,
     holdChargedMoveUntilSafe: rest.holdChargedMoveUntilSafe,
     bossChargedMoveMeanIntervalSeconds: rest.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: rest.bossChargedMoveCadence,
@@ -833,7 +862,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     const key = `${entry.entryId}|${targetIndex}`;
     let v = metricsInputsCache.get(key);
     if (!v) {
-      v = entryBossMetricsInputs(entry, target, weather);
+      v = entryBossMetricsInputs(entry, target, weather, shared.megaLevel);
       metricsInputsCache.set(key, v);
     }
     return v;
@@ -1518,6 +1547,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
   const shared: SharedAssumptions = {
     dodge: rest.dodge,
     dodgeFastAttacks: rest.dodgeFastAttacks,
+    megaLevel: rest.megaLevel,
     holdChargedMoveUntilSafe: rest.holdChargedMoveUntilSafe,
     bossChargedMoveMeanIntervalSeconds: rest.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: rest.bossChargedMoveCadence,
@@ -1544,7 +1574,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     const key = `${entry.entryId}|${targetIndex}`;
     let v = metricsInputsCache.get(key);
     if (!v) {
-      v = entryBossMetricsInputs(entry, target, weather);
+      v = entryBossMetricsInputs(entry, target, weather, shared.megaLevel);
       metricsInputsCache.set(key, v);
     }
     return v;

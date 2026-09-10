@@ -1210,6 +1210,36 @@ label.species-picker-hint {
   margin-left: 4px;
 }
 
+/*
+ * Super Max "+" charged move confidence tiers (MoveSelect.tsx's
+ * PlusMoveBadge) — three visibly distinct tiers, reusing this file's
+ * existing hue vocabulary rather than inventing a new one, so the RELATIVE
+ * trust ordering reads at a glance from color alone:
+ *  - official (most trusted): --info blue, same hue as .badge-persists
+ *    (an existing "confirmed mechanic" informational badge).
+ *  - cross-site (middle): a dashed slate treatment, borrowed from
+ *    .badge-past-researched's own "weaker evidence reads dimmer" convention.
+ *  - community-estimate (least trusted): --warn red, same hue/logic as
+ *    .badge-approximate ("no better data exists yet").
+ */
+.badge-plus-official {
+  background: rgba(91, 190, 255, 0.12);
+  color: var(--info);
+  border: 1px solid var(--info);
+}
+
+.badge-plus-crosssite {
+  background: rgba(148, 163, 184, 0.1);
+  color: #cbd5e1;
+  border: 1px dashed #94a3b8;
+}
+
+.badge-plus-estimate {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
 /* ------------------------------------------------------ own/team share bar */
 
 .share-bar {
@@ -1435,4 +1465,49 @@ label.species-picker-hint {
   .result-row {
     gap: var(--space-3);
   }
+}
+
+/* ------------------------------------------- species report: wrapped headers */
+
+/*
+ * Species Report's rankings-sheet header row wraps its titles into
+ * narrower columns instead of forcing every header onto one line and
+ * pushing the whole table wider than its numeric content actually needs.
+ * Scoped to THAT table only via this modifier class rather than touching
+ * `.time-series-table`'s base rules above, which several other tabs' tables
+ * share unchanged. Body cells (`td`) are untouched and stay
+ * `white-space: nowrap` from the base rule — only the header row wraps;
+ * the numbers themselves must never break across lines.
+ */
+.time-series-table.table-wrap-headers thead th {
+  white-space: normal;
+  vertical-align: bottom;
+  line-height: 1.25;
+}
+
+/*
+ * Per-column max-widths force each header to wrap roughly to that column's
+ * OWN real content width — in an auto-layout table, `white-space: normal`
+ * alone only wraps a header once its column is squeezed that narrow, and
+ * nothing squeezes it on its own. Chosen from each column's real body
+ * content, not a fixed guess:
+ *   - "Type matchup" (col 2): content is e.g. "1.600x" (6 chars)
+ *   - "Type-matchup percentile" (col 3): content is e.g. "top 12%" (7 chars)
+ *   - "Sustained mean damage (TDO)" (col 5): content is a 4-digit number
+ * The first column (Boss), "Boss HP", "Mean survival", "Boost", and
+ * "Action" are deliberately left unconstrained — their content is
+ * genuinely wide or their titles are already short. Breaking stays limited
+ * to spaces and the browser's own natural hyphen break point (the default
+ * line-breaking behavior already breaks after a literal "-" without any
+ * extra CSS) — no `word-break`/`overflow-wrap` override here, which would
+ * split "matchup" or "percentile" mid-word instead.
+ */
+.time-series-table.table-wrap-headers thead th:nth-child(2) {
+  max-width: 7ch;
+}
+.time-series-table.table-wrap-headers thead th:nth-child(3) {
+  max-width: 9ch;
+}
+.time-series-table.table-wrap-headers thead th:nth-child(5) {
+  max-width: 12ch;
 }

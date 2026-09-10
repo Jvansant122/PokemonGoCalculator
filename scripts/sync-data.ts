@@ -204,6 +204,7 @@ import { getOrCreateShadowVariant } from "./sync-data/shadowVariant.ts";
 import { matchRaidName } from "./sync-data/raidNameMatching.ts";
 import { diffSpecies, diffRaids } from "./sync-data/diff.ts";
 import { RELEASED_MEGA_PRIMAL_ALLOWLIST } from "./sync-data/releasedMegaPrimalAllowlist.ts";
+import { SUPER_MAX_PLUS_MOVES, attachSuperMaxPlusMoves } from "./sync-data/superMaxPlusMoves.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
@@ -1647,6 +1648,17 @@ for (const m of megaSpecies) {
 
 species.push(...megaSpecies);
 
+// Super Max "+" charged moves (2026-09-09 task) — a genuinely additional
+// third charged move for a hand-curated set of mega species, sourced from
+// ./sync-data/superMaxPlusMoves.ts (see that module's own doc comment for
+// full per-entry citations and the two confidence-tier caveats on
+// duration/energy). Runs here, right after `megaSpecies` is fully built and
+// pushed into `species`, so every real mega/primal this run produced is a
+// match candidate — the Mega Staraptor entry there is expected to resolve
+// to nothing until that species actually syncs in (skippedUnknownSpecies),
+// which is by design, not a failure.
+const superMaxPlusMoveResult = attachSuperMaxPlusMoves(species, gameMasterMoveByMovementId);
+
 // ---------------------------------------------------------------------------
 // Build normalized active raids list
 //
@@ -2975,6 +2987,9 @@ console.log(`  - Mega/primal species id collisions resolved by appending "-attac
 console.log(`  - mega_pokemon.json/GAME_MASTER's tempEvoOverrides have no per-species boosted-type data, so each of the ${megaSpecies.length} mega/primal entries gets boost = { multiplier: DEFAULT_MEGA_BOOST_MULTIPLIER (1.3), boostedType: <its primary listed type> } — comparison.ts only applies a mega boost when \`species.boost\` is explicitly set (its fallback is 1, not 1.3), so this was required, not cosmetic.`);
 const megaSpeciesWithoutImage = megaSpecies.filter((m) => !m.imageUrl).map((m) => m.name);
 console.log(`  - Mega/primal species image lookups (PokeAPI, cached to data/raw/mega_sprite_urls.json): ${megaSpecies.length - megaSpeciesWithoutImage.length}/${megaSpecies.length} resolved${megaSpeciesWithoutImage.length > 0 ? `; no image found for: ${megaSpeciesWithoutImage.join(", ")}` : ""}. All Normal-form-or-fallback-form species get a dex-id sprite URL with no extra request.`);
+console.log(
+  `  - Super Max "+" charged moves (hand-curated, see SUPER_MAX_PLUS_MOVES's own per-entry citations in ./sync-data/superMaxPlusMoves.ts): ${SUPER_MAX_PLUS_MOVES.length} table entries. Attached this run: ${superMaxPlusMoveResult.attached.length > 0 ? superMaxPlusMoveResult.attached.join(", ") : "none"}. Skipped — species not yet synced (expected for Mega Staraptor until its 2026-09-19 debut, not a failure): ${superMaxPlusMoveResult.skippedUnknownSpecies.length > 0 ? superMaxPlusMoveResult.skippedUnknownSpecies.join(", ") : "none"}. Skipped — base move missing from this run's GAME_MASTER moveSettings table (unexpected, investigate if non-empty): ${superMaxPlusMoveResult.skippedMissingBaseMove.length > 0 ? superMaxPlusMoveResult.skippedMissingBaseMove.join(", ") : "none"}.`,
+);
 if (pokebattlerFetchResult.source === "live") {
   const disagreementCount = pokebattlerCrossCheckOnlyInScrapedDuck.length + pokebattlerCrossCheckOnlyInPokebattler.length;
   console.log(

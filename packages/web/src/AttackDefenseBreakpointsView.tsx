@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import type { SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
+import type { MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { BreakpointSheet } from "./BreakpointSheet.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -34,6 +35,8 @@ export interface AttackDefenseBreakpointsAssumptions {
   bossChargedMoveId: string | null;
   weather: WeatherCondition;
   mode: AttackDefenseBreakpointsMode;
+  /** See AttackDefenseBreakpointsScenario.megaLevel. */
+  megaLevel: MegaLevel | null;
   /** See AttackDefenseBreakpointsScenario.isShadow. */
   isShadow: boolean;
 }
@@ -47,6 +50,7 @@ export const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
   bossChargedMoveId: null,
   weather: "none",
   mode: "attack",
+  megaLevel: null,
   isShadow: false,
 };
 
@@ -60,6 +64,7 @@ export function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): A
     bossChargedMoveId: a.bossChargedMoveId,
     weather: a.weather,
     mode: a.mode,
+    megaLevel: a.megaLevel,
     isShadow: a.isShadow,
   };
 }
@@ -77,6 +82,9 @@ export function scenarioToAssumptions(s: AttackDefenseBreakpointsScenario): Atta
     bossChargedMoveId: s.bossChargedMoveId ?? DEFAULT_ASSUMPTIONS.bossChargedMoveId,
     weather: s.weather ?? DEFAULT_ASSUMPTIONS.weather,
     mode: s.mode ?? DEFAULT_ASSUMPTIONS.mode,
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the Mega Level <select>.
+    megaLevel: s.megaLevel ?? DEFAULT_ASSUMPTIONS.megaLevel,
     isShadow: s.isShadow ?? DEFAULT_ASSUMPTIONS.isShadow,
   };
 }
@@ -232,6 +240,13 @@ export function AttackDefenseBreakpointsView() {
                   </label>
                 );
               })()}
+            <MegaLevelSelect
+              idPrefix="adb"
+              label="Mega Level (applies to both Attack and Defense modes)"
+              species={species}
+              value={assumptions.megaLevel}
+              onChange={(level) => setAssumptions({ ...assumptions, megaLevel: level })}
+            />
             {species && assumptions.mode === "attack" && (
               <>
                 <MoveSelect
@@ -382,7 +397,11 @@ export function AttackDefenseBreakpointsView() {
         <p className="caveats">
           This view does not model a mega/primal species' own-damage boost multiplier at all — pick a non-mega,
           non-primal species for an exact match, or use the Comparator/Species Report tabs for a mega-form species'
-          own boosted output. This is the same caveat the IV Breakpoints tab documents for the same reason.
+          own boosted output. This is the same caveat the IV Breakpoints tab documents for the same reason. Mega
+          Level (above, when the species carries a boost mechanic) is a SEPARATE, unrelated mechanic that IS
+          modelled here despite that gap: Super Max's CP bump shifts the swept Attack/Defense-stat lookup, and a
+          selected "+" charged move's scaled power feeds the Attack-mode charged grid directly — neither touches
+          the own-damage boost multiplier this paragraph is about.
         </p>
         <p className="caveats">
           Level columns run 50 down to 25 in the usual 0.5 steps (51 columns total) — the practically relevant

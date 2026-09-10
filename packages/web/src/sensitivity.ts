@@ -182,6 +182,13 @@ export function computeSensitivity(
       iterations: SENSITIVITY_ITERATIONS,
       weather: a.weather,
       candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
+      // Held fixed at the panel's current Mega Level selection for both
+      // candidates — every scan below holds this constant while sweeping ITS
+      // OWN axis, same discipline as candidateMegaBoostDisabled just above.
+      // Omitting this would silently re-baseline every check to Base Mega
+      // Level regardless of what's actually configured, which could disagree
+      // with the result cards' own currentWinner.
+      candidateMegaLevel: a.candidateMegaLevel,
       ...moveSelections,
     });
     return [

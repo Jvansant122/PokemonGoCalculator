@@ -1,7 +1,8 @@
-import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type MegaLevel, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
@@ -18,6 +19,15 @@ export interface TeamSlotAssumption {
   /** At most one slot across the roster may set this true — enforced both here (radio-exclusivity) and by the engine (runTeamRaid throws on a violation). */
   isMega: boolean;
   /**
+   * This slot's own Mega Level (see megaLevelSelect.tsx / packages/engine/src/megaLevel.ts)
+   * — mirrors TeamScenarioSlot.megaLevel exactly. Orthogonal to `isMega`
+   * above (this slot's own boost already applies with or without `isMega`
+   * set — see teamRaid.ts's TeamRaidSlotInput.megaLevel doc comment).
+   * `null` means no Mega Level investment assumed (identical to `"base"`).
+   * Silently has no effect for a slot whose species has no `boost` mechanic.
+   */
+  megaLevel: MegaLevel | null;
+  /**
    * "Treat this slot's species as Shadow" — independent per slot, unlike
    * isMega above (which is exclusive across the whole roster). Mutually
    * exclusive with THIS slot's own species carrying a `boost` (see
@@ -28,7 +38,7 @@ export interface TeamSlotAssumption {
 }
 
 export function emptyTeamSlot(): TeamSlotAssumption {
-  return { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, isShadow: false };
+  return { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false };
 }
 
 export interface TeamAssumptions {
@@ -49,6 +59,23 @@ export interface TeamAssumptions {
   weather: WeatherCondition;
   bossChargedMoveFrequencySeconds: number;
   /**
+   * Gates visibility of four advanced/placeholder knobs
+   * (holdChargedMoveUntilSafe, bossChargedMoveFrequencySeconds,
+   * swapCostSeconds, reviveCostSeconds) in the assumption panel — `false`
+   * (the default) hides them behind simple, documented defaults so a
+   * first-time user isn't confronted with four unconfirmed placeholder
+   * numbers; `true` reveals them for direct editing. This is purely a
+   * DISPLAY gate — every one of those fields still exists and still drives
+   * the simulation regardless of this flag. The one exception is
+   * bossChargedMoveFrequencySeconds itself: while this is `false`, the run
+   * module derives an effective value from the selected boss's own
+   * fast-move charge time instead of reading the stored field verbatim (see
+   * runTeamRaid.ts's effectiveBossChargedMoveFrequencySeconds) — pending
+   * further research, this is a placeholder approximation, not a modeled
+   * mechanic.
+   */
+  showDetailedAssumptions: boolean;
+  /**
    * Which model derives the boss's charged-move timing across the WHOLE
    * encounter (every slot, every cycle) — see bossCadence.tsx's
    * BOSS_CADENCE_HINT for the full sourcing/caveat story, and this feature's
@@ -67,9 +94,9 @@ export interface TeamAssumptions {
    * see raidBoss.ts's RAID_TIER_TABLE / the design doc's Sources).
    */
   raidTimerSeconds: number;
-  /** Seconds of raid clock a forced post-faint swap-in costs. No documented real value — defaults to 0. */
+  /** Seconds of raid clock a forced post-faint swap-in costs. No documented real value exists — defaults to 0.5s, an honest placeholder rather than a fabricated "realistic" number. */
   swapCostSeconds: number;
-  /** Seconds of raid clock a full-roster wipe-and-rejoin costs. No official fixed value — a community-sourced ~12-15s estimate exists as a labeled preset, but the default stays 0 for the same honesty precedent as swapCostSeconds. */
+  /** Seconds of raid clock a full-roster wipe-and-rejoin costs. No official fixed value exists — a community-sourced ~12-15s estimate exists as a labeled preset, and the default (15s) is chosen at the TOP of that window specifically to allow for user error, not because it's any more confirmed than the rest of the window. */
   reviveCostSeconds: number;
 }
 
@@ -85,6 +112,16 @@ interface Props {
   bossReadySeconds: number | null;
   /** Boss's real per-tier battle HP pool (bossEffectiveHp) — the fixed resource the roster's cumulative damage races against. Computed by TeamRaidView, where the resolved boss species/tier live. */
   bossHp: number | null;
+  /**
+   * The boss charged-move mean frequency actually driving THIS run —
+   * either the stored value (showDetailedAssumptions true) or the derived
+   * one (false), computed by runTeamRaidScenario. Used both for the
+   * "simple assumptions in force" summary line and to seed
+   * bossChargedMoveFrequencySeconds when the user checks "More detailed
+   * assumptions" on, so flipping that checkbox doesn't itself change any
+   * result.
+   */
+  effectiveBossChargedMoveFrequencySeconds: number;
 }
 
 /**
@@ -104,9 +141,22 @@ export function TeamAssumptionPanel({
   bossSpecies,
   bossReadySeconds,
   bossHp,
+  effectiveBossChargedMoveFrequencySeconds,
 }: Props) {
   function set<K extends keyof TeamAssumptions>(key: K, next: TeamAssumptions[K]) {
     onChange({ ...value, [key]: next });
+  }
+
+  function setShowDetailedAssumptions(checked: boolean) {
+    onChange(
+      checked
+        // Seed the stored field with whatever value is ACTUALLY in force
+        // right now (the derived one, since we're coming from the simple
+        // mode) so checking this box on doesn't itself change any result —
+        // only unlocks the field for further editing.
+        ? { ...value, showDetailedAssumptions: true, bossChargedMoveFrequencySeconds: effectiveBossChargedMoveFrequencySeconds }
+        : { ...value, showDetailedAssumptions: false },
+    );
   }
 
   function updateSlot(i: number, patch: Partial<TeamSlotAssumption>) {
@@ -222,6 +272,15 @@ export function TeamAssumptionPanel({
                       />{" "}
                       Mega/Primal for this raid{!species.boost ? " (no boost mechanic on this species)" : ""}
                     </label>
+                  </div>
+                  <MegaLevelSelect
+                    idPrefix={`team-slot-${i}`}
+                    label="Mega Level"
+                    species={species}
+                    value={slot.megaLevel}
+                    onChange={(level) => updateSlot(i, { megaLevel: level })}
+                  />
+                  <div className="team-slot-flags">
                     {(() => {
                       const shadowState = shadowToggleUiState(species);
                       return (
@@ -379,29 +438,59 @@ export function TeamAssumptionPanel({
         </div>
 
         <div className="field">
-          <label htmlFor="team-holdChargedMove">Hold charged move for a safer moment?</label>
-          <select
-            id="team-holdChargedMove"
-            value={value.holdChargedMoveUntilSafe ? "yes" : "no"}
-            onChange={(e) => set("holdChargedMoveUntilSafe", e.target.value === "yes")}
-            title="Applies to every slot identically. Meant to be paired with Perfect dodging — otherwise the safe-window trigger rarely fires and this degrades to just waiting for the energy cap."
-          >
-            <option value="no">No — fire as soon as ready</option>
-            <option value="yes">Yes — wait for a safe window</option>
-          </select>
-          {value.holdChargedMoveUntilSafe && value.dodge.kind !== "perfect" && (
-            <p className="species-picker-hint">
-              This is meant to be used with dodging set to "Perfect" — with dodging set to "{value.dodge.kind}", the
-              safe-window trigger will rarely or never fire.
-            </p>
-          )}
-          {value.holdChargedMoveUntilSafe && bossChargedMoveIsUndodgeable && (
-            <p className="species-picker-hint">
-              The boss's selected charged move is flagged as not reliably perfectly-dodgeable, so the safe-window
-              trigger won't fire against it.
-            </p>
-          )}
+          <label htmlFor="team-detailed-assumptions" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              id="team-detailed-assumptions"
+              type="checkbox"
+              checked={value.showDetailedAssumptions}
+              onChange={(e) => setShowDetailedAssumptions(e.target.checked)}
+            />
+            More detailed assumptions
+          </label>
+          <p className="species-picker-hint">
+            Reveals four advanced knobs below (hold-for-safe-window, boss charged-move mean frequency, swap-in cost,
+            wipe-and-rejoin cost) whose current values are deliberate placeholders pending further research, not
+            confirmed game constants. Leave this unchecked to use the simple, documented defaults instead.
+          </p>
         </div>
+
+        {!value.showDetailedAssumptions && (
+          <div className="field">
+            <label>Simple assumptions in force</label>
+            <p className="computed-value">
+              Swap-in cost 0.5s, wipe-and-rejoin cost 15s, hold-for-safe-window off, boss charged-move mean frequency
+              ~{effectiveBossChargedMoveFrequencySeconds.toFixed(1)}s (derived from this boss's own fast-move charge
+              time — a placeholder pending improvement, not this boss's confirmed real cadence).
+            </p>
+          </div>
+        )}
+
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="team-holdChargedMove">Hold charged move for a safer moment?</label>
+            <select
+              id="team-holdChargedMove"
+              value={value.holdChargedMoveUntilSafe ? "yes" : "no"}
+              onChange={(e) => set("holdChargedMoveUntilSafe", e.target.value === "yes")}
+              title="Applies to every slot identically. Meant to be paired with Perfect dodging — otherwise the safe-window trigger rarely fires and this degrades to just waiting for the energy cap."
+            >
+              <option value="no">No — fire as soon as ready</option>
+              <option value="yes">Yes — wait for a safe window</option>
+            </select>
+            {value.holdChargedMoveUntilSafe && value.dodge.kind !== "perfect" && (
+              <p className="species-picker-hint">
+                This is meant to be used with dodging set to "Perfect" — with dodging set to "{value.dodge.kind}",
+                the safe-window trigger will rarely or never fire.
+              </p>
+            )}
+            {value.holdChargedMoveUntilSafe && bossChargedMoveIsUndodgeable && (
+              <p className="species-picker-hint">
+                The boss's selected charged move is flagged as not reliably perfectly-dodgeable, so the safe-window
+                trigger won't fire against it.
+              </p>
+            )}
+          </div>
+        )}
 
         <div className="field">
           <label>Boss ready for its first charged move</label>
@@ -452,23 +541,25 @@ export function TeamAssumptionPanel({
 
         <BossCadenceSelect idPrefix="team" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 
-        <div className="field">
-          <label htmlFor="team-bossFreq">
-            Boss charged-move mean frequency (s)
-            {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
-          </label>
-          <input
-            id="team-bossFreq"
-            type="number"
-            min={1}
-            value={value.bossChargedMoveFrequencySeconds}
-            onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
-            disabled={value.bossChargedMoveCadence === "energy-driven"}
-          />
-          {value.bossChargedMoveCadence === "energy-driven" && (
-            <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
-          )}
-        </div>
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="team-bossFreq">
+              Boss charged-move mean frequency (s)
+              {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
+            </label>
+            <input
+              id="team-bossFreq"
+              type="number"
+              min={1}
+              value={value.bossChargedMoveFrequencySeconds}
+              onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
+              disabled={value.bossChargedMoveCadence === "energy-driven"}
+            />
+            {value.bossChargedMoveCadence === "energy-driven" && (
+              <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
+            )}
+          </div>
+        )}
 
         <div className="field">
           <label htmlFor="team-raidTimer">Raid timer</label>
@@ -479,39 +570,44 @@ export function TeamAssumptionPanel({
           <p className="species-picker-hint">Real, documented per-tier raid countdown — see raidBoss.ts's RAID_TIER_TABLE.</p>
         </div>
 
-        <div className="field">
-          <label htmlFor="team-swapCost">Swap-in cost per mid-roster faint (s)</label>
-          <input
-            id="team-swapCost"
-            type="number"
-            min={0}
-            step={0.5}
-            value={value.swapCostSeconds}
-            onChange={(e) => set("swapCostSeconds", Math.max(0, Number(e.target.value)))}
-            title="No documented real value exists for this in-game (a 'brief revival screen pause' of unconfirmed duration) — defaults to 0 (fastest-possible play), an honest placeholder rather than a fabricated number."
-          />
-        </div>
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="team-swapCost">Swap-in cost per mid-roster faint (s)</label>
+            <input
+              id="team-swapCost"
+              type="number"
+              min={0}
+              step={0.5}
+              value={value.swapCostSeconds}
+              onChange={(e) => set("swapCostSeconds", Math.max(0, Number(e.target.value)))}
+              title="No documented real value exists for this in-game (a 'brief revival screen pause' of unconfirmed duration) — defaults to 0.5s, an honest placeholder rather than a fabricated number."
+            />
+          </div>
+        )}
 
-        <div className="field">
-          <label htmlFor="team-reviveCost">Full-wipe revive-and-rejoin cost (s)</label>
-          <input
-            id="team-reviveCost"
-            type="number"
-            min={0}
-            step={0.5}
-            value={value.reviveCostSeconds}
-            onChange={(e) => set("reviveCostSeconds", Math.max(0, Number(e.target.value)))}
-            title="Paid once every time the whole fielded roster faints out, before restarting from the first fielded slot. No official fixed value exists."
-          />
-          <button type="button" onClick={() => set("reviveCostSeconds", 13)} style={{ marginTop: 4, alignSelf: "flex-start" }}>
-            Use ~13s (community estimate, unverified)
-          </button>
-          <p className="species-picker-hint">
-            Pokémon GO Hub's "Tips for short-manning raids" reports 12-15s to heal a full team in the lobby — a
-            player/hardware-dependent community estimate, not a confirmed game constant. Default stays 0 rather than
-            baking that in as though it were fact.
-          </p>
-        </div>
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="team-reviveCost">Full-wipe revive-and-rejoin cost (s)</label>
+            <input
+              id="team-reviveCost"
+              type="number"
+              min={0}
+              step={0.5}
+              value={value.reviveCostSeconds}
+              onChange={(e) => set("reviveCostSeconds", Math.max(0, Number(e.target.value)))}
+              title="Paid once every time the whole fielded roster faints out, before restarting from the first fielded slot. No official fixed value exists."
+            />
+            <button type="button" onClick={() => set("reviveCostSeconds", 13)} style={{ marginTop: 4, alignSelf: "flex-start" }}>
+              Use ~13s (community estimate, unverified)
+            </button>
+            <p className="species-picker-hint">
+              Pokémon GO Hub's "Tips for short-manning raids" reports 12-15s to heal a full team in the lobby — a
+              player/hardware-dependent community estimate, not a confirmed game constant. Default is 15s, chosen at
+              the top of that 12-15s window to allow for user error, rather than baking in the community estimate as
+              though it were fact.
+            </p>
+          </div>
+        )}
       </div>
 
       <p className="caveats note-block" style={{ marginTop: 12 }}>

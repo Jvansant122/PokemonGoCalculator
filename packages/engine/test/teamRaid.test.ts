@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { MegaLevel } from "../src/megaLevel.js";
 import { simulateStepwiseBattle } from "../src/simulate.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
 import { MAX_TEAM_RAID_CYCLES, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "../src/teamRaid.js";
@@ -513,5 +514,78 @@ describe("runTeamRaid", () => {
     // baseStamina (137) directly.
     expect(result.outcome).toBe("timerExpired");
     expect(result.timeToClearSeconds).toBeNull();
+  });
+});
+
+describe("TeamRaidSlotInput.megaLevel", () => {
+  const megaFastMove: FastMove = { id: "tr-mega-fast", name: "TR Mega Fast", type: "normal", power: 15, energyGain: 20, durationSeconds: 1 };
+  const megaPlusMove: ChargedMove = {
+    id: "tr-plus-move",
+    name: "TR Plus Move",
+    type: "normal",
+    power: 100,
+    energyCost: 20,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+    isPlusMove: true,
+    plusMovePowerConfidence: "community-estimate",
+  };
+  const megaAttacker: SpeciesDefinition = {
+    id: "tr-mega-attacker",
+    name: "TR Mega Attacker",
+    types: ["normal"],
+    baseAttack: 250,
+    baseDefense: 150,
+    baseStamina: 10000,
+    fastMoves: [megaFastMove],
+    chargedMoves: [megaPlusMove],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  const nonMegaAttacker: SpeciesDefinition = { ...megaAttacker, id: "tr-non-mega-attacker", name: "TR Non-Mega Attacker", boost: undefined };
+  const weakBoss: SpeciesDefinition = {
+    id: "tr-weak-boss",
+    name: "TR Weak Boss",
+    types: ["normal"],
+    baseAttack: 1,
+    baseDefense: 200,
+    baseStamina: 1_000_000, // never clears within maxSecondsPerSlot at this pace — isolates ownDamageDealt across the whole window
+    fastMoves: [{ id: "tr-boss-fast", name: "TR Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 2 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function runOneSlot(species: SpeciesDefinition, megaLevel: MegaLevel | undefined) {
+    return runTeamRaid({
+      slots: [makeSlot(species, { megaLevel })],
+      boss: weakBoss,
+      level: 50,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      maxSecondsPerSlot: 60,
+    });
+  }
+
+  it("a slot at Super Max Mega Level deals more total damage than an otherwise-identical slot with no Mega Level set", () => {
+    const base = runOneSlot(megaAttacker, undefined);
+    const superMax = runOneSlot(megaAttacker, "super-max");
+    expect(base.slots[0]!.ownDamageDealt).toBeGreaterThan(0);
+    expect(superMax.slots[0]!.ownDamageDealt).toBeGreaterThan(base.slots[0]!.ownDamageDealt);
+  });
+
+  it("base/high/max megaLevel all give +0 effective levels — a non-'+'-move-driven stat (secondsActive/faintedAtSeconds) is unaffected", () => {
+    const base = runOneSlot(megaAttacker, undefined);
+    const high = runOneSlot(megaAttacker, "high");
+    const max = runOneSlot(megaAttacker, "max");
+    expect(high.slots[0]!.secondsActive).toBe(base.slots[0]!.secondsActive);
+    expect(max.slots[0]!.secondsActive).toBe(base.slots[0]!.secondsActive);
+    expect(high.slots[0]!.faintedAtSeconds).toBe(base.slots[0]!.faintedAtSeconds);
+  });
+
+  it("has no effect at all on a slot whose species has no mega/primal boost mechanic, regardless of what's requested", () => {
+    const withoutMegaLevel = runOneSlot(nonMegaAttacker, undefined);
+    const withSuperMaxRequested = runOneSlot(nonMegaAttacker, "super-max");
+    expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
   });
 });

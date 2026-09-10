@@ -87,6 +87,7 @@ export function runSpeciesReportScenario(a: SpeciesReportAssumptions, registry: 
         chargedMoveId: a.chargedMoveId,
         level: a.level,
         ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
+        megaLevel: a.megaLevel,
         dodge: a.dodge,
         dodgeFastAttacks: a.dodgeFastAttacks,
         weather: a.weather,

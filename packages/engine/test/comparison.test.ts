@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { runComparison } from "../src/comparison.js";
+import { runComparison, resolveCandidateMegaLevel } from "../src/comparison.js";
 import { calculateDamage } from "../src/damage.js";
-import { effectiveStatsAtLevel } from "../src/stats.js";
+import { chargedMoveAtMegaLevel } from "../src/megaLevel.js";
+import { effectiveStat, effectiveStatsAtLevel } from "../src/stats.js";
 import { SHADOW_DEFENSE_MULTIPLIER } from "../src/shadow.js";
 import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "../src/raidBoss.js";
 import { convertUptimeToTeamDamage } from "../src/uptime.js";
-import type { SpeciesDefinition } from "../src/types.js";
+import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
 import { BOSS_TIDE, CANDIDATE_ALPHA, CANDIDATE_BETA, LEVEL, PERFECT_IVS } from "./fixtures/hypotheticalDuo.js";
 
 describe("runComparison", () => {
@@ -643,5 +644,166 @@ describe("runComparison", () => {
     // strictly shorter survival time under the higher-multiplier tier is
     // itself proof the boss's real attack stat responded to bossRaidTier.
     expect(vsMegaTier!.secondsSurvived).toBeLessThan(vsOneStarTier!.secondsSurvived);
+  });
+});
+
+describe("resolveCandidateMegaLevel", () => {
+  it("passes a supplied megaLevel through unchanged for a species with .boost", () => {
+    const mega: SpeciesDefinition = { ...CANDIDATE_ALPHA }; // has .boost
+    expect(resolveCandidateMegaLevel(mega, "super-max")).toBe("super-max");
+    expect(resolveCandidateMegaLevel(mega, "high")).toBe("high");
+  });
+
+  it("resolves undefined/null to null for a species with .boost (identical to base)", () => {
+    const mega: SpeciesDefinition = { ...CANDIDATE_ALPHA };
+    expect(resolveCandidateMegaLevel(mega, undefined)).toBeNull();
+    expect(resolveCandidateMegaLevel(mega, null)).toBeNull();
+  });
+
+  it("forces null regardless of what's supplied for a species with NO .boost at all", () => {
+    const nonMega: SpeciesDefinition = { ...CANDIDATE_ALPHA, boost: undefined };
+    expect(resolveCandidateMegaLevel(nonMega, "super-max")).toBeNull();
+    expect(resolveCandidateMegaLevel(nonMega, "high")).toBeNull();
+  });
+});
+
+describe("runComparison: candidateMegaLevel (Super Max effective-level CP bonus and '+'-move power scaling)", () => {
+  // Deliberately isolated so both effects are independently verifiable in
+  // ONE deterministic scenario: fastMove.energyGain === chargedMove.energyCost
+  // means every one of this candidate's fast-move casts is IMMEDIATELY
+  // followed by a charged-move cast (simulateOpeningBurst models no cast
+  // animation delay), and the boss's own fast move (100s duration) never
+  // fires within the 20s opening-burst window at all — so hit counts for
+  // BOTH of the candidate's own moves are fixed at exactly 20 regardless of
+  // megaLevel (attack stat/power never affect timing), and the candidate
+  // never takes any damage (so it can't faint and skew the count). This
+  // means any change in total damage is entirely attributable to the stat/
+  // power change megaLevel introduces, never a hit-count side effect.
+  const megaPlusMove: ChargedMove = {
+    id: "test-plus-move",
+    name: "Test Plus Move",
+    type: "normal",
+    power: 100, // Base-tier, hypothetical for this test only
+    energyCost: 20,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+    isPlusMove: true,
+    plusMovePowerConfidence: "community-estimate",
+  };
+  const megaFastMove: FastMove = { id: "test-mega-fast", name: "Test Mega Fast", type: "normal", power: 15, energyGain: 20, durationSeconds: 1 };
+  const megaAttacker: SpeciesDefinition = {
+    id: "mega-level-test-attacker",
+    name: "Mega Level Test Attacker",
+    types: ["normal"],
+    baseAttack: 250,
+    baseDefense: 150,
+    baseStamina: 200,
+    fastMoves: [megaFastMove],
+    chargedMoves: [megaPlusMove],
+    boost: { multiplier: 1.3, boostedType: "normal" },
+  };
+  // Same stat line/moveset, but NO boost — proves the gate gets applied per
+  // resolveCandidateMegaLevel, not just "megaLevel happened to be unset".
+  const nonMegaAttacker: SpeciesDefinition = { ...megaAttacker, id: "non-mega-test-attacker", name: "Non-Mega Test Attacker", boost: undefined };
+
+  const weakBoss: SpeciesDefinition = {
+    id: "weak-boss-mega-level-test",
+    name: "Weak Boss",
+    types: ["normal"],
+    baseAttack: 1,
+    baseDefense: 200,
+    baseStamina: 30000,
+    fastMoves: [{ id: "wbf", name: "Weak Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 100 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  const level = 50;
+  const ivs = { attack: 15, defense: 15, stamina: 15 };
+  const bossDefenseStat = effectiveStat(weakBoss.baseDefense, RAID_BOSS_IVS.defense, RAID_BOSS_CPM);
+  const FAST_AND_CHARGED_HITS = 20; // see this describe block's own doc comment above
+
+  function expectedFastDamage(effectiveLevel: number): number {
+    const stats = effectiveStatsAtLevel(megaAttacker, ivs, effectiveLevel);
+    const perHit = calculateDamage({
+      power: megaFastMove.power,
+      attackerAttackStat: stats.attack,
+      defenderDefenseStat: bossDefenseStat,
+      stab: true,
+      typeEffectiveness: 1,
+      megaBoostMultiplier: 1.3,
+    });
+    return perHit * FAST_AND_CHARGED_HITS;
+  }
+
+  function expectedChargedDamage(effectiveLevel: number, megaLevel: Parameters<typeof chargedMoveAtMegaLevel>[1]): number {
+    const stats = effectiveStatsAtLevel(megaAttacker, ivs, effectiveLevel);
+    const scaledMove = chargedMoveAtMegaLevel(megaPlusMove, megaLevel);
+    const perHit = calculateDamage({
+      power: scaledMove.power,
+      attackerAttackStat: stats.attack,
+      defenderDefenseStat: bossDefenseStat,
+      stab: true,
+      typeEffectiveness: 1,
+      megaBoostMultiplier: 1.3,
+    });
+    return perHit * FAST_AND_CHARGED_HITS;
+  }
+
+  it("omitting candidateMegaLevel is byte-identical to an explicit [null, null]", () => {
+    const omitted = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" } });
+    const explicitNull = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: [null, null] });
+    expect(omitted).toEqual(explicitNull);
+  });
+
+  it("base/high/max all give +0 effective levels — the candidate's ordinary fast move is byte-identical across all three (a step, not a gradient)", () => {
+    const [base] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: [null, null] });
+    const [high] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: ["high", null] });
+    const [max] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: ["max", null] });
+
+    expect(base!.chargedAttacksLanded).toBe(FAST_AND_CHARGED_HITS);
+    expect(base!.ownFastMoveDamage).toBe(expectedFastDamage(50));
+    expect(high!.ownFastMoveDamage).toBe(base!.ownFastMoveDamage);
+    expect(max!.ownFastMoveDamage).toBe(base!.ownFastMoveDamage);
+  });
+
+  it("super-max raises the candidate's own attack stat via the +2 effective-level CP bonus, visible on its ORDINARY fast move (never touched by '+'-move power scaling)", () => {
+    const [base] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: [null, null] });
+    const [superMax] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: ["super-max", null] });
+
+    expect(base!.ownFastMoveDamage).toBe(expectedFastDamage(50));
+    expect(superMax!.ownFastMoveDamage).toBe(expectedFastDamage(52));
+    // Not just formula-equal — a real, visible increase (confirmed non-degenerate).
+    expect(superMax!.ownFastMoveDamage).toBeGreaterThan(base!.ownFastMoveDamage);
+  });
+
+  it("scales the candidate's own '+' move power by tier (isolated from the level bonus at high/max, which give +0)", () => {
+    const [base] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: [null, null] });
+    const [high] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: ["high", null] });
+    const [max] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: ["max", null] });
+    const [superMax] = runComparison({ candidates: [megaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" }, candidateMegaLevel: ["super-max", null] });
+
+    expect(base!.ownChargedDamage).toBe(expectedChargedDamage(50, "base"));
+    expect(high!.ownChargedDamage).toBe(expectedChargedDamage(50, "high"));
+    expect(max!.ownChargedDamage).toBe(expectedChargedDamage(50, "max"));
+    // super-max compounds BOTH effects: scaled power AND the +2-level attack bump.
+    expect(superMax!.ownChargedDamage).toBe(expectedChargedDamage(52, "super-max"));
+
+    expect(base!.ownChargedDamage).toBeLessThan(high!.ownChargedDamage);
+    expect(high!.ownChargedDamage).toBeLessThan(max!.ownChargedDamage);
+    expect(max!.ownChargedDamage).toBeLessThan(superMax!.ownChargedDamage);
+  });
+
+  it("has NO effect at all on a candidate whose species carries no mega/primal boost mechanic, regardless of what's requested", () => {
+    const [withoutMegaLevel] = runComparison({ candidates: [nonMegaAttacker], boss: weakBoss, level, ivs, dodge: { kind: "none" } });
+    const [withSuperMaxRequested] = runComparison({
+      candidates: [nonMegaAttacker],
+      boss: weakBoss,
+      level,
+      ivs,
+      dodge: { kind: "none" },
+      candidateMegaLevel: ["super-max", null],
+    });
+    expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
   });
 });

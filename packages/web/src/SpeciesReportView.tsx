@@ -4,6 +4,7 @@ import {
   RAID_TIER_TABLE,
   defaultRaidTierForSpecies,
   type DodgeBehavior,
+  type MegaLevel,
   type SpeciesDefinition,
   type SpeciesReportRow,
   type WeatherCondition,
@@ -12,6 +13,7 @@ import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
+import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -29,7 +31,7 @@ import {
   speciesRegistry,
   unmatchedActiveRaids,
 } from "./registry.js";
-import { runSpeciesReportScenario, sortRows, validEraHp } from "./run/runSpeciesReport.js";
+import { runSpeciesReportScenario, sortRows } from "./run/runSpeciesReport.js";
 
 // The engine's own RAID_TIER_TABLE insertion order, reused (not re-derived)
 // so the tier checkbox group below sorts identically to every other place
@@ -56,11 +58,13 @@ function tierIsIncluded(tiers: string[] | null, tier: string): boolean {
   return tiers === null || tiers.includes(tier);
 }
 
-// validEraHp now lives in run/runSpeciesReport.ts, imported above — the SAME
-// function decides both what runSpeciesReportScenario hands the engine as a
-// bossMaxHpOverride AND the table's "sourced" vs "tier default" HP badge
-// below, so the value a row is simulated with and the value the UI claims is
-// sourced can never drift apart.
+// validEraHp lives in run/runSpeciesReport.ts and decides what
+// runSpeciesReportScenario hands the engine as a bossMaxHpOverride for each
+// target — a real, sourced historical HP where one exists, the tier default
+// otherwise. The table's "Boss HP" column below shows only the resulting
+// number (row.sustained.bossMaxHp), with no provenance label — see Task 2's
+// rationale: the value is implied by the row's raid tier either way, and any
+// discrepancy is something to report rather than surface inline.
 
 // A ready-to-run default so a fresh page load demonstrates a real ranked
 // table immediately, not an empty form — same precedent as the other two
@@ -77,6 +81,13 @@ export interface SpeciesReportAssumptions {
   ivAttack: number;
   ivDefense: number;
   ivStamina: number;
+  /**
+   * The selected species' own Mega Level — see megaLevelSelect.tsx /
+   * packages/engine/src/megaLevel.ts. `null` means no Mega Level investment
+   * assumed (identical to `"base"`). Silently has no effect for a species
+   * with no mega/primal `boost` mechanic at all.
+   */
+  megaLevel: MegaLevel | null;
   /** Governs dodging each swept boss's CHARGED attacks. */
   dodge: DodgeBehavior;
   /** Whether the species also attempts to dodge each boss's fast attacks. */
@@ -102,6 +113,7 @@ export const DEFAULT_ASSUMPTIONS: SpeciesReportAssumptions = {
   ivAttack: 15,
   ivDefense: 15,
   ivStamina: 15,
+  megaLevel: null,
   dodge: { kind: "perfect" },
   dodgeFastAttacks: false,
   weather: "none",
@@ -119,6 +131,7 @@ export function assumptionsToScenario(a: SpeciesReportAssumptions): SpeciesRepor
     chargedMoveId: a.chargedMoveId,
     level: a.level,
     ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
+    megaLevel: a.megaLevel,
     dodgeModel: a.dodge,
     dodgeFastAttacks: a.dodgeFastAttacks,
     weather: a.weather,
@@ -139,6 +152,9 @@ export function scenarioToAssumptions(s: SpeciesReportScenario): SpeciesReportAs
     ivAttack: s.ivs.attack,
     ivDefense: s.ivs.defense,
     ivStamina: s.ivs.stamina,
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the Mega Level <select>.
+    megaLevel: s.megaLevel ?? DEFAULT_ASSUMPTIONS.megaLevel,
     dodge: s.dodgeModel,
     // `??` guards a scenario URL encoded before a field existed rather than
     // surfacing `undefined` into a controlled input — same discipline as
@@ -280,6 +296,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       ivAttack: assumptions.ivAttack,
       ivDefense: assumptions.ivDefense,
       ivStamina: assumptions.ivStamina,
+      megaLevel: assumptions.megaLevel,
       dodge: assumptions.dodge,
       dodgeFastAttacks: assumptions.dodgeFastAttacks,
       weather: assumptions.weather,
@@ -296,6 +313,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       assumptions.ivAttack,
       assumptions.ivDefense,
       assumptions.ivStamina,
+      assumptions.megaLevel,
       assumptions.dodge,
       assumptions.dodgeFastAttacks,
       assumptions.weather,
@@ -445,6 +463,12 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
                     species' own bench).
                   </p>
                 )}
+                <MegaLevelSelect
+                  idPrefix="species-report"
+                  species={species}
+                  value={assumptions.megaLevel}
+                  onChange={(level) => setAssumptions({ ...assumptions, megaLevel: level })}
+                />
               </>
             )}
           </div>
@@ -726,7 +750,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               the condition, this dimming makes it visible at a glance too
               without the jarring flash of clearing the table to empty. */}
           <div className="table-scroll" style={{ opacity: isSweepPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
-          <table className="time-series-table">
+          <table className="time-series-table table-wrap-headers">
             <thead>
               <tr>
                 <th>Boss</th>
@@ -803,35 +827,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
                         ? "n/a"
                         : `top ${Math.max(0, (1 - row.typeMatchupPercentile) * 100).toFixed(0)}%`}
                     </td>
-                    <td>
-                      {row.sustained.bossMaxHp.toLocaleString()}
-                      {(() => {
-                        // The SAME validEraHp guard that decided whether this
-                        // row's target actually got a bossMaxHpOverride above
-                        // — never an independently-recomputed condition, so
-                        // this label can't ever claim "sourced" for a row
-                        // that was actually simulated against the tier
-                        // default, or vice versa.
-                        const sourcedHp = validEraHp(pastMeta?.eraHp);
-                        return sourcedHp === undefined ? (
-                          <span
-                            className="species-picker-hint"
-                            title="No sourced historical HP exists for this row — either a currently-active raid (whose current tier IS the real fact) or a past raid this pipeline has no real eraHp record for. This is today's tier's own HP value, which may not match what this specific historical encounter actually had. Does not affect this row's damage/survival numbers either way — this view never fights a boss to zero HP."
-                          >
-                            {" "}
-                            (tier default)
-                          </span>
-                        ) : (
-                          <span
-                            className="species-picker-hint"
-                            title="This specific past encounter's real recorded max HP, sourced from a historical raid archive (pogoapi's previous-raids archive or Bulbapedia's raid-boss-change pages) rather than derived from today's tier stats. Shown for context only — does not affect this row's damage/survival numbers, since this view never fights a boss to zero HP."
-                          >
-                            {" "}
-                            (sourced)
-                          </span>
-                        );
-                      })()}
-                    </td>
+                    <td>{row.sustained.bossMaxHp.toLocaleString()}</td>
                     <td>{row.sustained.meanTotalDamage.toFixed(0)}</td>
                     <td>
                       {row.sustained.meanSecondsSurvived.toFixed(1)}s (
@@ -894,9 +890,11 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           by when they were actually active, and EX Raids are excluded from them entirely since no modern raid tier
           equivalent exists to simulate them at — a gap in the combined list still means "none of these four sources
           ever recorded it," not "it was never a real raid boss." Most archive rows also carry a real recorded max HP
-          for that specific encounter (shown in the "Boss HP" column, marked "sourced" vs. "tier default") — this is
-          display context only and never changes a row's damage/survival numbers, since this view never fights a boss
-          down to zero HP in the first place; a row's HP provenance and its ranking are independent facts. Raid targets
+          for that specific encounter; where one exists it's used as the simulation's boss HP instead of today's tier
+          default, shown plainly in the "Boss HP" column with no provenance label — that number is implied by the
+          row's raid tier either way, and any discrepancy is worth reporting rather than displaying inline. Either
+          way it's display/simulation context only and never changes a row's damage/survival numbers, since this view
+          never fights a boss down to zero HP in the first place; a row's HP and its ranking are independent facts. Raid targets
           marked "approximate" use a
           documented stand-in species' stats because no better data exists yet — treat those rows as directional, not
           exact. A row's tier label marked "fallback" means the feed/history's own tier string wasn't one this engine

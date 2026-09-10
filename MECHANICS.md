@@ -135,12 +135,96 @@ L25 `0.667934`, L30 `0.7317`, L40 `0.7903`, L50 `0.8403`.
 0.8603 / 0.8653` for levels 51-55, then holds `0.8653` flat through level 80.
 This is *not* evidence that the Pokémon power-up cap moved — it remains 50.
 The 80-entry length tracks the **Trainer** level cap (raised to 80 in Oct
-2025), and the >50 CPM entries are unreachable headroom. Recorded because
-reading the raw array is an easy way to wrongly conclude the cap changed, and
-this project has a standing position against adding levels past 50.
+2025). Recorded because reading the raw array is an easy way to wrongly
+conclude the power-up cap changed.
 
-**Engine: correct and deliberately truncated.** `cpm.ts` stops at
-`50: 0.8403` and cites this same template. Keep it that way.
+**What levels 51-55 are actually for (updated 2026-09-09).** Not unreachable
+headroom, as this entry previously claimed — they are the lookup targets for
+**effective-level bonuses that stack on top of** the level-50 power-up
+ceiling, which is why the real (non-repeating) values stop climbing at exactly
+55: Best Buddy `+1`, Super Max Mega Level `+2` (see "Mega Level" below), and a
+one-off `+5` Kalos-event stack are the only mechanics that have ever needed
+them. `[community-consensus]` — two converging community sources (a GitHub
+gist comment, `gist.github.com/Mygod/71ac34368f66f0d3de469fbaeed386c4`, plus
+an SEO-tier cluster), not first-party. A Pokémon's OWN power-up level is
+still capped at 50 in every case; only its combat-effective CPM reads higher.
+
+**Engine: implemented, with the power-up cap held separately.** `cpm.ts`'s
+`CPM_TABLE` carries `50.5 / 51 / 51.5 / 52` (51 and 52 are the real
+first-party values; the two half-levels are computed with this file's own
+`CPM(n+0.5) = sqrt((CPM(n)^2 + CPM(n+1)^2)/2)` formula) — enough to resolve
+Super Max's `+2` from any level up to 50, including a mega at 49.5 landing on
+51.5. Levels 52.5-55 are still deliberately absent: no modelled mechanic
+reaches them.
+
+The cap is now enforced by `MAX_POKEMON_POWER_UP_LEVEL = 50` rather than by
+the table's length, because those two things are no longer the same. That
+distinction is load-bearing: `breakpoints.ts` and `ivComparison.ts` both
+derived their level sweeps from `Object.keys(CPM_TABLE)`, so extending the
+table silently swept levels 50.5-52 into the Attack/Defense Breakpoints grid
+and the IV Breakpoints tab until both were filtered against the new constant.
+`powerUp.ts` and `rosterPlanner.ts` were never affected — they derive their
+candidate ladder from `PowerUpCostTable.maxLevel` (real
+`maxNormalUpgradeLevel`, independently 50). **Never re-derive a power-up
+ladder from `CPM_TABLE`'s keys.**
+
+### Mega Level: Base / High / Max / Super Max
+
+A **per-species** ladder (not per-individual, not account-wide) raised by
+repeatedly Mega Evolving the same species, max once per day. Introduced
+2022-04-28; the fourth tier, **Super Max**, launched at GO Tour: Kalos
+(2026-02-28) and costs 5,000 of that species' own Mega Energy on top of Max.
+`[community-consensus]` Bulbapedia "Mega Evolution (GO)" as raw wikitext,
+fetched 2026-09-08; `[first-party]` pokemongo.com/news/mega-evolution-2026-update
+for Super Max's existence and benefits.
+
+**For most of its life this system touched nothing combat-relevant** — only
+Mega Energy cost on repeats (80% / 90% / 95% reduction) and the rest period
+(7 / 5 / 3 days, 24 hours at Super Max). Bulbapedia's own table leaves the
+"CP Level Bonus" column blank for Base, High and Max. Two things changed that:
+
+1. **Super Max grants "Greatly enhanced CP"** `[first-party]` for the claim,
+   but Niantic publishes no mechanism and no number. Magnitude is
+   `[community-consensus]` at **+2 effective levels** (+3 stacked with Best
+   Buddy) from two converging community sources. The *mechanism* — real CPM
+   lookup vs. display-only CP recompute — remains unconfirmed, with one mild
+   negative signal: community raid calculators model "+"-move scaling
+   carefully but show no CP change for a mega's ordinary moves across Mega
+   Levels. Base / High / Max grant **+0**; this is a step at the top tier,
+   not a gradient, so do not interpolate.
+2. **A "+" move's power scales with Mega Level** `[first-party]` for the fact
+   that it scales, but the only formula in existence is **+10% per tier**
+   (Base 1.0 / High 1.1 / Max 1.2 / Super Max 1.3) and it is `[unverified]`:
+   two community sites carry it with *verbatim-identical* disclaimer text, so
+   it is one shared guess rather than independent corroboration, and both
+   self-label it an estimate. No official, LeekDuck, PvPoke or Silph source
+   confirms it. Note that **having** the "+" move requires only Base tier —
+   official wording is that eligible Pokémon know the move while Mega Evolved
+   "regardless of their current Mega Level" — so the tier sets its power, not
+   its availability.
+
+**The 1.3x mega/primal team-wide damage boost is UNCHANGED at every tier,
+including Super Max.** Reconfirmed across three independent research rounds
+(2026-09-08, and twice on 2026-09-09); no source has ever described Mega
+Level, Super Max, or the "+" moves as touching it. This *corroborates*
+CLAUDE.md's standing decision rather than threatening it — cite this entry
+next time a mega content update raises the worry.
+
+⚠️ **Numeric coincidence worth guarding:** the Super Max "+"-move multiplier
+is `1.3`, and so is the mega/primal team boost. They are unrelated, and one
+is a load-bearing project constant while the other is an unverified community
+estimate. Never derive one from the other or share a constant between them.
+
+**Engine: implemented** (`megaLevel.ts`). `MegaLevel` is a scenario input, not
+a `SpeciesDefinition` field — a per-candidate 2-tuple on the Comparator and
+per-slot elsewhere, round-tripped through all six tabs' share links.
+`MEGA_LEVEL_PLUS_MOVE_POWER_MULTIPLIER` holds the estimated curve (and
+cross-references the team boost as the documented coincidence above);
+`SUPER_MAX_EFFECTIVE_LEVEL_BONUS = 2` applies the effective-level step via
+`effectiveLevelForMegaLevel`; `chargedMoveAtMegaLevel` scales a "+" move's
+power and is an exact no-op for every ordinary move. Mega Energy cost and
+cooldown are **not modelled at all** — a per-species currency this engine has
+no concept of, and irrelevant to a single fight's math.
 
 ### RESOLVED: raid-boss multipliers are authored constants, not CPMs
 
@@ -660,6 +744,32 @@ needing confirmation and have no formula for it.
 that anomalous survivability reports are recognised rather than investigated
 from scratch.
 
+### OPEN QUESTION: how much of the attacker's own time is lost dodging around their own charged-move cast (holdChargedMoveUntilSafe)
+
+`holdChargedMoveUntilSafe` (`simulate.ts`'s `StepwiseAttacker`) holds the
+attacker's charged move until either the attacker just dodged one of the
+boss's charged hits (the "safe window") or its energy hits `MAX_ENERGY`
+(forced). The real-game question this raises: when a player is doing this —
+timing their own charged-move throw around a dodge — how much of their own
+attack cycle does that dodging actually cost, compared to the ordinary single
+`DODGE_COST_SECONDS` (0.5s) already modelled per dodge attempt elsewhere?
+**No source establishes this** — every other dodge-cost figure in this file
+(the 0.25 multiplier, the 500ms `dodgeDurationMs`) is confirmed first-party,
+but nothing addresses the specific case of dodging both immediately before
+AND after a held charged-move cast.
+
+**Engine (2026-09-09): a labelled placeholder assumption, not a sourced
+mechanic.** While `holdChargedMoveUntilSafe` is on, each of the boss's
+CHARGED hits the attacker actually attempts to dodge costs
+`HOLD_CHARGED_MOVE_DODGE_ATTEMPTS * DODGE_COST_SECONDS` (2 x 0.5s = 1.0s)
+instead of the ordinary single `DODGE_COST_SECONDS` — modelling "dodge once
+right before throwing the held cast, once right after" as two separate dodge
+inputs. This only applies when a charged-attack dodge is actually attempted
+(`dodge.kind !== "none"`, not mid the attacker's own animation); it never
+touches boss FAST hits. This is explicitly **pending improvement** — if a
+better-sourced model (or a source establishing the real figure) turns up,
+replace it rather than treating the current constant as settled.
+
 ---
 
 ## Move data
@@ -687,22 +797,115 @@ server-side at the encounter. Two live instances as of 2026-09-09:
   (225) and `SACRED_FIRE_PLUS` (135) / `SACRED_FIRE_PLUS_PLUS` (155) all exist
   as real templates alongside base `AEROBLAST` (180) / `SACRED_FIRE` (120).
   No Apex *form* template exists anywhere in the dump. `[first-party]`
-- **Super Max "+" moves.** 15 mega species have an extra Charged Attack usable
-  only while Mega Evolved (Brave Bird+, Volt Tackle+, Outrage+, …), confirmed
-  verbatim on official pokemongo.com posts and re-verified adversarially
-  2026-09-09. Officially stated power for the only one published: Brave Bird+
-  is **70 in Trainer Battles, 150 in raids** (base Brave Bird is 130). The
-  other 14 have **no published power number** — do not invent one. None of
-  these movementIds exist in GAME_MASTER at all. `[confirmed]` (official) for
-  the mechanic; the per-species powers are simply unpublished.
+- **Super Max "+" moves.** **16** mega species have an extra Charged Attack
+  usable only while Mega Evolved (Brave Bird+, Volt Tackle+, Outrage+, …),
+  confirmed verbatim on official pokemongo.com posts and re-verified
+  adversarially 2026-09-09. None of these movementIds exist in GAME_MASTER at
+  all, so no sync can pick them up. `[first-party]` for the mechanic; the
+  per-species powers are published unevenly, at four distinct tiers (all
+  figures are **raid**-context and all are **Base**-tier readings, confirmed by
+  4 of 4 checkable anchors — not ceilings):
+  - `[first-party]` **3**: Brave Bird+ 150, Dark Pulse+ 150, Fell Stinger+ 140
+    (base moves 130 / 80 / 45). Brave Bird+ is also **70 in Trainer Battles**,
+    the one move with a published two-context split.
+  - `[community-consensus]` **1**: Zap Cannon+ 160 — two independently-run
+    community sites agreeing.
+  - `[unverified]` **6**: Seed Bomb+ 150, Volt Tackle+ 170, Drill Peck+ 170,
+    Outrage+ 185, Dynamic Punch+ 130, Future Sight+ 140 — each self-labelled a
+    community estimate by the site carrying it.
+  - **6 with no raid-power figure from any source**: Mystical Fire+, Surf+,
+    Brick Break+, Liquidation+, Acid Spray+, Psybeam+. PvP-context power and
+    energy DO exist for these (PvPoke's dataset), but PvP and raid values
+    demonstrably differ on the base moves underneath them — base Fell Stinger
+    is PvE 33 vs PvP 35, Seed Bomb PvE 33 vs PvP 40. **A PvP number is not a
+    raid number; do not substitute one.**
 
-**Engine: not modelled, and under-counts rather than over-counts.** An Apex
-Lugia here would use the 180-power Aeroblast, not 225. A Super-Max mega would
-miss its extra move entirely. Both err in the safe direction. Modelling the
-"+" moves properly needs a per-species Mega Level dimension (the move is
-available at *any* Mega Level, but its power scales with the level), which is
-a materially bigger change than a boolean — and any user-facing version needs
-`Scenario` round-trip treatment.
+  **Raid energy cost: every "+" move costs 100, regardless of its base move.**
+  `[community-consensus]` — `db.pokemongohub.net` per-move pages, fetched
+  2026-09-09 (user-supplied lead), each stating verbatim "In Gym and Raid
+  battles, it deals N damage and it costs 100 energy," with separate and
+  different PvP figures. Confirmed across all 8 modelled moves; the same pages
+  independently reproduce all 8 of our power values. Three earlier research
+  rounds recorded this as unpublished — that was a confident negative that
+  turned out to be wrong, so treat "nobody publishes X" as a statement about
+  search coverage, not about the world.
+
+  **Duration** is separately `[community-consensus]`: 11 of 11 community-
+  reported "+" durations match this project's own GAME_MASTER duration for the
+  corresponding base move exactly, and the same site's Animation Duration
+  agrees (Volt Tackle+ 3.5s = base `VOLT_TACKLE` 3500ms).
+
+### RESOLVED: a DPE sanity check caught a wrong "+" move energy assumption
+
+Recorded 2026-09-09, then resolved the same day. Kept because the *method*
+generalises: a plausibility check against the real move distribution caught a
+bad assumption before it shipped, and the prediction it made was confirmed.
+
+**The problem.** Inheriting each "+" move's energy from its base move made
+several of them better than **every real charged move in the game** on
+damage-per-energy. The real ceiling is Mind Blown at **DPE 3.94**
+(`FISSURE`/`HORN_DRILL` at 9000 power are OHKO placeholder templates, not raid
+moves — exclude them):
+
+| Move | Assumed | DPE | Corrected | DPE |
+| :--- | :--- | :--- | :--- | :--- |
+| Drill Peck+, Volt Tackle+ | 170 / 33 | 5.15 → would be #1 of 243 | 170 / 100 | 1.70 |
+| Seed Bomb+ | 150 / 33 | 4.55 → would be #1 | 150 / 100 | 1.50 |
+| Fell Stinger+ | 140 / 33 | 4.24 → would be #1 | 140 / 100 | 1.40 |
+| Outrage+ | 185 / 50 | 3.70 | 185 / 100 | 1.85 |
+| Dark Pulse+ | 150 / 50 | 3.00 | 150 / 100 | 1.50 |
+
+The tell was that the implausibility tracked the **base move's** cost, not the
+"+" move's power — the 33-energy bases were absurd while the 50- and
+100-energy ones looked fine. That pointed at the inherited field rather than
+at the (partly first-party) power figures.
+
+**The resolution.** The prediction — "expect the 33-energy bases to price
+higher" — was confirmed: every "+" move costs a flat **100** energy in raids
+(see the entry above for sourcing). All eight now land at DPE 1.30-1.85.
+
+**Two lessons worth keeping.**
+1. A uniform value across every row is not automatically a template default.
+   This project had been burned by exactly that (dittobase emitting `-100`
+   everywhere), and the reflex to distrust uniformity was right — but the
+   *test* is what settles it. Checking the same source's ORDINARY moves against
+   our own `game_master.json` gave 11 of 11 exact matches on power, energy and
+   duration, including base Volt Tackle at 33 and base Zap Cannon at 100. A
+   default cannot produce both. **Validate a suspicious source against data you
+   already trust rather than rejecting it on shape.**
+2. Inheriting a field from a related record is a guess wearing the costume of
+   data. It reads as sourced in code review because the value came from
+   GAME_MASTER — but which record it came from was the assumption.
+
+**Engine: implemented with the corrected values** (`scripts/sync-data/superMaxPlusMoves.ts`
+carries explicit per-entry raid energy; duration is still inherited, and that
+one IS corroborated).
+
+**Engine: Apex not modelled; "+" moves implemented for 8 species.** An Apex
+Lugia here still uses the 180-power Aeroblast, not 225 — errs in the safe
+direction. The "+" moves ship as real charged moves on the 8 mega species that
+have both a raid-power figure and a base-move template to inherit timing from
+(`scripts/sync-data/` owns the hand-curated, per-entry-cited table;
+`ChargedMove.isPlusMove` and `.plusMovePowerConfidence` carry the marker and
+the tier into the UI, which badges anything below first-party). Power comes
+from the table; **duration and energy are inherited from the base move's
+global GAME_MASTER template** — the first `[community-consensus]` per above,
+the second explicitly `[unverified]` and resting only on the Apex
+Lugia/Ho-Oh precedent, where `energyDelta` is identical across every `_PLUS`
+tier. Those are two different confidence levels on one move object; don't let
+the duration evidence launder the energy assumption.
+
+Deliberately still absent: the 6 species with no raid power, and Mega Mewtwo
+Y's Future Sight+ — excluded on **sourcing**, not on missing data. Its only
+power reading (140) is a single self-labelled community estimate whose own
+page 404s, weaker than any of the 5 accepted `[unverified]` entries.
+
+⚠️ Note the movementId trap here: it is **`FUTURESIGHT`**, with no underscore,
+and it *is* in the dump (115 / -100 / 2500ms) — a grep for `FUTURE_SIGHT`
+returns nothing and reads as "the move doesn't exist." That mistake was made
+once during this feature's research and briefly written into this file as the
+reason for the exclusion. GAME_MASTER movementIds are not uniformly
+underscore-separated; confirm a negative before recording one.
 
 ### Move durations are 500ms-aligned
 

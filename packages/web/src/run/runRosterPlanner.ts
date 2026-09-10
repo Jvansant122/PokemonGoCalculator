@@ -231,6 +231,12 @@ export function resolveRosterPlannerInputs(
     raidTimerSeconds: a.raidTimerSeconds,
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,
+    // Roster-wide, not per-entry: the imported roster is ~164 entries and a per-entry
+    // Mega Level would be unusable in that UI. The per-entry gate still applies inside
+    // runTeamRaid, which resolves this against each entry’s own species.boost, so a
+    // non-mega entry is unaffected. `?? undefined` matches RosterPlannerInputs.megaLevel’s
+    // `MegaLevel | undefined` shape (TeamRaidSlotInput’s convention), not the `| null` one.
+    megaLevel: a.multiRaidMegaLevel ?? undefined,
     iterations: ROSTER_PLANNER_ITERATIONS,
   };
   return { targets, blockedReason: null, inputs };

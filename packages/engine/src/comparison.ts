@@ -1,5 +1,6 @@
 import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajectoryPoint } from "./combat.js";
 import type { DodgeBehavior } from "./breakpoints.js";
+import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
 import { shadowAdjustedBaseStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
@@ -166,6 +167,30 @@ export function ownBoostMultiplier(boost: SpeciesDefinition["boost"] | undefined
   return boost && moveType === boost.boostedType ? boost.multiplier : 1;
 }
 
+/**
+ * Resolves a candidate's/slot's effective Mega Level for this comparison —
+ * `null` (no Mega Level effect at all: no Super Max effective-level CP bonus,
+ * no "+" move power scaling beyond its stored Base-tier reading) whenever the
+ * species has no `.boost` mechanic at all, regardless of what the caller
+ * supplied — Mega Level is not a concept that applies to a non-mega species,
+ * and megaLevel.ts's effectiveLevelForMegaLevel/chargedMoveAtMegaLevel are
+ * themselves pure/ungated, so this gate is what keeps a stray non-null
+ * megaLevel on a non-boosted species from silently granting a free +2
+ * effective levels. `undefined`/`null` on an actual mega candidate resolves
+ * to `null` too, which effectiveLevelForMegaLevel/chargedMoveAtMegaLevel both
+ * already treat identically to `"base"` (no bonus, Base-tier "+" move power)
+ * — so every existing caller that never passes this at all sees
+ * byte-identical behavior. Exported so teamRaid.ts's/speciesReport.ts's/
+ * ivComparison.ts's own per-candidate wiring shares exactly this gate rather
+ * than each re-deriving it slightly differently.
+ */
+export function resolveCandidateMegaLevel(
+  species: Pick<SpeciesDefinition, "boost">,
+  megaLevel: MegaLevel | null | undefined,
+): MegaLevel | null {
+  return species.boost ? (megaLevel ?? null) : null;
+}
+
 export interface ComparisonInputs {
   candidates: SpeciesDefinition[];
   /** Per-candidate fast-move selection, matched by index to `candidates`. Omit or use null for a given index to default to that species' first fast move (today's behavior). */
@@ -183,6 +208,21 @@ export interface ComparisonInputs {
    * when omitted, so every existing caller needs zero changes.
    */
   candidateMegaBoostDisabled?: [boolean, boolean];
+  /**
+   * Per-candidate Mega Level (see megaLevel.ts), matched by index to
+   * `candidates` — `null`/omitted-per-index means no Mega Level effect for
+   * that candidate (identical to `"base"`). UNLIKE candidateDodge (see
+   * SustainedComparisonInputs below), this is NOT inert during the opening
+   * burst: the candidate's own attack stat (Super Max's effective-level CP
+   * bonus) and its own charged move (a "+" move's scaled power, if selected)
+   * both feed simulateOpeningBurst's attacker profile directly, and the
+   * attacker CAN land its own first charged move inside the opening-burst
+   * window (only the BOSS is restricted to fast moves there — see combat.ts).
+   * Defaults to `[null, null]` when omitted, so every existing caller needs
+   * zero changes. Silently has no effect for a candidate whose species has no
+   * `.boost` at all — see resolveCandidateMegaLevel.
+   */
+  candidateMegaLevel?: [MegaLevel | null, MegaLevel | null];
   boss: SpeciesDefinition;
   /**
    * Which real raid tier the boss counts as, for real (non-precomputed)
@@ -266,6 +306,7 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
     bossStartingEnergy = 0,
     weather = "none",
     candidateMegaBoostDisabled = [false, false],
+    candidateMegaLevel = [null, null],
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
@@ -276,12 +317,18 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
     (bossChargedMove ? bossChargedMoveReadySeconds(bossFastMove, bossChargedMove, bossStartingEnergy) : 20);
 
   return candidates.map((species, i) => {
-    const stats = effectiveStatsAtLevel(species, ivs, level);
+    const megaLevel = resolveCandidateMegaLevel(species, candidateMegaLevel[i]);
+    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevelForMegaLevel(level, megaLevel));
     const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
-    const chargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
-    if (!fastMove || !chargedMove) {
+    const rawChargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
+    if (!fastMove || !rawChargedMove) {
       throw new Error(`Candidate ${species.id} needs at least one fast move and one charged move.`);
     }
+    // A "+" move's power is scaled for this candidate's current Mega Level
+    // (no-op for every ordinary move) — see megaLevel.ts's
+    // chargedMoveAtMegaLevel. Every downstream use of `chargedMove` (damage
+    // calc, energy cost, duration) reads from this already-resolved object.
+    const chargedMove = chargedMoveAtMegaLevel(rawChargedMove, megaLevel);
     // Fast and charged moves can differ in type (e.g. a Dragon fast move with
     // a Fire charged move), so STAB/type-effectiveness are computed per-move,
     // not shared — see combat.ts's AttackerProfile.fastDamageOut doc for the
@@ -351,6 +398,8 @@ export interface SustainedComparisonInputs {
   candidateChargedMoveIds?: (string | null)[];
   /** See ComparisonInputs.candidateMegaBoostDisabled. Defaults to [false, false]. */
   candidateMegaBoostDisabled?: [boolean, boolean];
+  /** See ComparisonInputs.candidateMegaLevel — same per-candidate semantics, same resolveCandidateMegaLevel gate on species.boost. Defaults to [null, null]. */
+  candidateMegaLevel?: [MegaLevel | null, MegaLevel | null];
   boss: SpeciesDefinition;
   /** See ComparisonInputs.bossRaidTier. */
   bossRaidTier?: RaidTier;
@@ -472,6 +521,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     iterations = 200,
     weather = "none",
     candidateMegaBoostDisabled = [false, false],
+    candidateMegaLevel = [null, null],
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossMaxHp = bossEffectiveHp(boss, inputs.bossRaidTier, inputs.bossMaxHpOverride);
@@ -480,12 +530,17 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
 
   return candidates.map((species, i) => {
-    const stats = effectiveStatsAtLevel(species, ivs, level);
+    const megaLevel = resolveCandidateMegaLevel(species, candidateMegaLevel[i]);
+    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevelForMegaLevel(level, megaLevel));
     const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
-    const chargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
-    if (!fastMove || !chargedMove) {
+    const rawChargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
+    if (!fastMove || !rawChargedMove) {
       throw new Error(`Candidate ${species.id} needs at least one fast move and one charged move.`);
     }
+    // See runComparison's identical comment — a "+" move's power is scaled
+    // for this candidate's current Mega Level here, once, before every
+    // downstream use of `chargedMove`.
+    const chargedMove = chargedMoveAtMegaLevel(rawChargedMove, megaLevel);
     const candidateFastVsBoss = typeEffectiveness(fastMove.type, boss.types);
     const candidateChargedVsBoss = typeEffectiveness(chargedMove.type, boss.types);
     const bossVsCandidate = typeEffectiveness(bossFastMove.type, species.types);

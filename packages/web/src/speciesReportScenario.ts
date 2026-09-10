@@ -1,4 +1,4 @@
-import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type WeatherCondition } from "@pogo-analyzer/engine";
+import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
 
 /**
@@ -53,6 +53,18 @@ export interface SpeciesReportScenario {
    * than surfacing `undefined`.
    */
   bossChargedMoveCadence?: BossChargedMoveCadence;
+  /**
+   * The selected species' own Mega Level (see megaLevelSelect.tsx /
+   * packages/engine/src/megaLevel.ts) — mirrors
+   * SpeciesReportInputs.megaLevel exactly. Like bossChargedMoveCadence above,
+   * this type already lives in packages/web, so the field is declared
+   * directly here rather than through an extension type. Optional so a link
+   * shared before this field existed decodes via `??` below rather than
+   * surfacing `undefined`. `null`/undefined mean no Mega Level investment
+   * assumed (identical to `"base"`); silently has no effect for a species
+   * with no mega/primal `boost` mechanic at all.
+   */
+  megaLevel?: MegaLevel | null;
   /** Which column the results table is sorted by — see SpeciesReportSortMode. */
   sortMode: SpeciesReportSortMode;
   /**
