@@ -20,7 +20,7 @@ this file, **this file wins**:
 | Phase 1 acceptance tests pin Mega Raichu X/Y vs Primal Kyogre at 190 / 221 / 10.0s / 130 HP | Those hand-authored fixtures were deleted 2026-09-06; equivalent pinned coverage lives in `packages/engine/test/fixtures/` instead. |
 | "Hypothetical species support... make the data layer accept user-defined entries" | Reversed. Fabricated stats reaching the live species picker was the exact problem that got the fixtures deleted. Real content that's missing goes through `RELEASED_MEGA_PRIMAL_ALLOWLIST`, not a hand-authored entry. |
 | "Mega Skarmory, both Mega Raichu forms" are "not live content" | All three are real, released content now, flowing through the normal data pipeline. |
-| "No backend in v1. Scenarios serialize into the URL." | Still true today, and `PLAN_login_and_roster_persistence.md` is the deliberate, scoped exception — read that plan's pinned constraints before adding anything server-side. |
+| "No backend in v1. Scenarios serialize into the URL." | Still true, and now **unconditionally** — the login/Firebase plan that was the one scoped exception was **deleted 2026-09-10** at the user's instruction ("remove login"). This app has no backend and is not getting one; cross-device roster transfer is a self-contained copyable code instead. See `PLAN_roster_tab.md`. |
 
 ## Your role
 
@@ -54,7 +54,22 @@ The handful of product-level calls that must survive no matter which agent touch
   structural and visible rather than a field quietly missing from the codec, and
   `check-scenario-roundtrip` still passes honestly. Every *setting* still round-trips. Any UI
   producing a share link must say the roster isn't in it, and a recipient without one gets an
-  explicit empty state. Real cross-device persistence stays `PLAN_login_and_roster_persistence.md`'s job.
+  explicit empty state. Cross-device transfer is a self-contained copyable code (no backend, no accounts) — see `PLAN_roster_tab.md`.
+- **Backward compatibility with OLD share links is NOT required** (user, 2026-09-10:
+  *"dont care about maintaining shared link compatibility"*). A link produced by an earlier
+  version may decode differently, lose a setting, or stop working. Do **not** spend design effort
+  preserving it — no inverted decode defaults, no "absent decodes to the old behaviour" gymnastics,
+  no byte-identical-decode proofs for pre-existing links.
+
+  ⚠️ **This does NOT relax round-tripping, which is a separate and still-load-bearing rule.** A
+  setting must still survive its OWN encode→decode cycle — that is the recurring bug class
+  `check-scenario-roundtrip` and the `add-scenario-assumption` skill exist for, and it stays
+  mandatory. The relaxation is only about links made by a *previous version of the code*.
+
+  Two existing fields were built under the old rule and now carry needless complexity:
+  `showDetailedAssumptions` (defaults `false`, absent decodes `true`) and
+  `multiRaidSignificanceMode` (defaults `aggregate-only`, absent decodes `aggregate-or-per-boss`).
+  Both may be simplified to a single plain default whenever someone is next in those files.
 - **A multi-boss sweep encodes RESOLVED boss ids, never a filter.** The active-raid roster
   rotates, so encoding "active raids" would silently sweep a different boss set than the sender
   ran. The Power-Up Optimizer's `multiRaidBossIds` is authoritative for the computation; the
@@ -114,12 +129,28 @@ The handful of product-level calls that must survive no matter which agent touch
   questions a casual player never asks. `pogo-player`'s `casual-optimizer` archetype rejecting them
   on premise is expected output, labelled `STRUCTURAL` — worth one line, never a fix cycle, never a
   de-scope proposal. Objections to how a tab *works* stay fully in scope from every archetype.
-- **A "Teambuilding Analyzer" (multi-trainer mega staggering across a raid, since the mega boost
-  doesn't stack) is out of scope for this tool** — a separate future project, not a feature to fold
-  in here. Explicitly ruled out once already; if reproposed (most likely by `pogo-researcher`
-  during ideation), flag it rather than building toward it. The Team Raid Simulator tab (a single
-  trainer's own sequential roster, added 2026-09-06) is a different, explicitly in-scope feature —
-  don't confuse the two.
+- **Two different features share a confusing name. One is ruled out; the other was approved
+  2026-09-10. Read both before building anything in this area.**
+  - ❌ **Multi-trainer mega staggering across a raid lobby** (who megas when, across several
+    trainers, since the mega boost doesn't stack) — **still out of scope**, a separate future
+    project. Ruled out once, and re-confirmed as still ruled out when the sibling below was
+    approved. If reproposed (most likely by `pogo-researcher` during ideation), flag it rather
+    than building toward it.
+  - ✅ **Single-trainer lineup builder** — "which 6 of my ~164 do I bring, and in what order?"
+    **Approved by the user 2026-09-10**, after `pogo-player` surfaced it (the `hardcore-spender`
+    archetype's top ask) and explicitly declined to build it unscoped. This is one trainer's own
+    sequential roster — the same thing the Team Raid Simulator already models **by hand** — so it
+    crosses no trainer boundary and does not touch the exclusion above. It must also **port its
+    result into the Power-Up Optimizer**, per the same instruction.
+
+  The distinction that matters is **whether it crosses trainers**, not whether the word "team"
+  appears. The Team Raid Simulator tab (a single trainer's own sequential roster, added
+  2026-09-06) has always been in scope for exactly this reason.
+
+  Note `rosterPlanner.ts` already has an internal `selectTeam` — greedy top-6 by score with an
+  at-most-one-mega constraint, used to build each boss's *baseline* team. It is **not** the
+  feature: it never optimizes fielding **order**, which matters a great deal in a sequential
+  roster. The builder is that heuristic promoted to an order-aware, user-facing search.
 
 ## Repo layout
 
@@ -260,8 +291,13 @@ the Mega Skarmory failure mode, which `check-mega-gates.ts` cannot see because i
 
 `check-scenario-roundtrip` is the mechanical half of the `add-scenario-assumption` skill: it
 asserts every field of all six tabs' `Assumptions` interfaces appears in both round-trip
-directions, and exits non-zero naming the field if not. The `PostToolUse` hook runs it after any
-edit to a scenario, assumption-panel, or view file.
+directions, and exits non-zero naming the field if not. Since 2026-09-10 it also recurses into
+any `Foo[]`-shaped member (e.g. `TeamAssumptions.slots`/`PowerUpOptimizerAssumptions.slots`) and
+checks each per-slot field individually — previously `slots: TeamSlotAssumption[]` counted as one
+opaque field and no per-slot field (`speciesId`, `fastMoveId`, `isMega`, `megaLevel`, `isShadow`,
+...) was ever independently checked in either direction. Don't re-narrow this back to
+top-level-only. The `PostToolUse` hook runs it after any edit to a scenario, assumption-panel, or
+view file.
 
 **Node on PATH**: the `SessionStart` hook puts `C:\Program Files\nodejs` on PATH for the session;
 if `npm -v` still fails in a shell, `export PATH="/c/Program Files/nodejs:$PATH"` once.

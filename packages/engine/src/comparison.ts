@@ -2,7 +2,7 @@ import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajector
 import type { DodgeBehavior } from "./breakpoints.js";
 import { canReachSuperMax, chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
-import { shadowAdjustedBaseStats } from "./shadow.js";
+import { shadowAdjustedBaseStats, shadowEnragedStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
 import {
   RAID_BOSS_CPM,
@@ -123,6 +123,23 @@ export function bossEffectiveHp(boss: SpeciesDefinition, tier?: RaidTier, maxHpO
   }
   if (boss.statsArePrecomputed) return boss.baseStamina;
   return raidTierStats(tier ?? defaultRaidTierForSpecies(boss)).hp;
+}
+
+/**
+ * A Shadow raid boss's ENRAGED Attack/Defense — see shadow.ts's
+ * shadowEnragedStats and MECHANICS.md's "Shadow raids" section. `null` for
+ * any boss NOT flagged `isShadow` (every non-shadow boss never enrages at
+ * all — this is the one gate that keeps enrage entirely out of a non-shadow
+ * fight's math). Applies unconditionally to a `statsArePrecomputed` boss too
+ * — there's nothing tier-specific about the enrage formula (it doesn't use
+ * `attackDefenseMultiplier` at all, unlike bossEffectiveStats' normal-stats
+ * branch), so a hand-authored precomputed test boss that sets `isShadow` gets
+ * exactly the same enrage treatment a real synced Shadow boss does. Exported
+ * (not just module-private) so teamRaid.ts's per-slot orchestrator can reuse
+ * this instead of forking a second isShadow check.
+ */
+export function bossEnrageStats(boss: SpeciesDefinition): { attack: number; defense: number } | null {
+  return boss.isShadow ? shadowEnragedStats(boss) : null;
 }
 
 /**
@@ -545,6 +562,7 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossMaxHp = bossEffectiveHp(boss, inputs.bossRaidTier, inputs.bossMaxHpOverride);
+  const bossEnrage = bossEnrageStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
@@ -614,6 +632,13 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
           chargedMoveMeanIntervalSeconds: bossChargedMoveMeanIntervalSeconds,
           chargedMoveWarmupSeconds: bossChargedMoveWarmupSeconds,
           startingEnergy: bossStartingEnergy,
+          // Shadow raid enrage — see simulate.ts's StepwiseBoss.enrage.
+          // Undefined (no-op) for every non-shadow boss. Each candidate here
+          // fights a FRESH boss (runSustainedComparison never carries damage
+          // across candidates), so damageDealtBeforeFight is left at its
+          // default 0 — unlike teamRaid.ts, which threads a running total
+          // across slots of the SAME continuous encounter.
+          enrage: bossEnrage ? { maxHp: bossMaxHp, attackStat: bossEnrage.attack, defenseStat: bossEnrage.defense } : undefined,
         },
         dodge: resolvedDodge,
         dodgeFastAttacks: resolvedDodgeFastAttacks,

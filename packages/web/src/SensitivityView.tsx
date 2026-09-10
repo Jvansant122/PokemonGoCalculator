@@ -17,16 +17,33 @@ function formatBound(v: number): string {
 }
 
 /**
+ * The subset of SensitivityCheck FlipBar actually reads — narrowed so a
+ * standalone flip result that isn't shaped like a full ranked-list row (see
+ * PartySizeFlipView.tsx) can still reuse this exact visual without having to
+ * fabricate the other SensitivityCheck fields (label/currentValue/flips/
+ * distance/distanceLabel) it has no use for. A SensitivityCheck already
+ * satisfies this structurally, so every existing call site is unaffected.
+ */
+export interface FlipBarData {
+  rangeMin: number;
+  rangeMax: number;
+  currentNumericValue: number;
+  flipNumericValue: number | null;
+}
+
+/**
  * Small hand-rolled inline-SVG number line (same convention as
- * DamageOverTimeChart.tsx — no charting library) turning one sensitivity
- * check's scanned range + current value + flip value into a one-glance
- * visual: a track spanning [rangeMin, rangeMax], a solid marker at the
+ * DamageOverTimeChart.tsx — no charting library) turning one flip check's
+ * scanned range + current value + flip value into a one-glance visual: a
+ * track spanning [rangeMin, rangeMax], a solid marker at the
  * currently-configured value, and (only when a flip was actually found
  * within the scanned range) a second marker at the flip point. When no flip
  * was found, only the current-value marker renders — the row's existing
  * distanceLabel text ("no flip found in 1-20" etc.) still carries that case.
+ * Exported so PartySizeFlipView.tsx reuses it for the party-size flip
+ * headline rather than reimplementing the same number-line SVG.
  */
-function FlipBar({ check }: { check: SensitivityCheck }) {
+export function FlipBar({ check }: { check: FlipBarData }) {
   const { rangeMin, rangeMax, currentNumericValue, flipNumericValue } = check;
   const span = rangeMax - rangeMin;
   const usableWidth = BAR_WIDTH - 2 * BAR_PAD;

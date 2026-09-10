@@ -61,6 +61,19 @@ describe("teamAssumptionsToPowerUpOptimizerAssumptions", () => {
     }
   });
 
+  it("prefers a slot's own level/IV override over the shared roster spread when present (e.g. a Lineup-Builder-filled slot)", () => {
+    const team = baseTeamAssumptions({ level: 40, ivAttack: 15, ivDefense: 15, ivStamina: 15 });
+    team.slots[0] = { ...team.slots[0]!, level: 22, ivs: { attack: 3, defense: 4, stamina: 5 } };
+    const result = teamAssumptionsToPowerUpOptimizerAssumptions(team);
+    expect(result.slots[0]!.level).toBe(22);
+    expect(result.slots[0]!.ivAttack).toBe(3);
+    expect(result.slots[0]!.ivDefense).toBe(4);
+    expect(result.slots[0]!.ivStamina).toBe(5);
+    // Every OTHER slot (no override) still falls back to the shared spread.
+    expect(result.slots[1]!.level).toBe(40);
+    expect(result.slots[1]!.ivAttack).toBe(15);
+  });
+
   it("leaves every resource Team Raid has no concept of at its own zero/false resting state, not an invented number", () => {
     const result = teamAssumptionsToPowerUpOptimizerAssumptions(baseTeamAssumptions());
     expect(result.stardustOnHand).toBe(0);

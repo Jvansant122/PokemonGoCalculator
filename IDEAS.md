@@ -175,3 +175,57 @@ as a bug. Nothing here is committed work.
     properly was left as `engine-developer`'s call. Neither is broken and both round-trip, so this
     is tidying, not a bug. Reconcile in one direction deliberately rather than letting a third tab
     pick a third pattern.
+
+17. **DONE (2026-09-10).** Shadow Raid enrage is now modelled — see MECHANICS.md's "Shadow raids"
+    section ("Enrage: implemented 2026-09-10") and `packages/engine/src/shadow.ts`'s
+    `shadowEnragePhaseForHpFraction`/`shadowEnragedStats`, threaded through `simulate.ts`'s
+    `StepwiseBoss.enrage`. No `Scenario` field added, as planned — it's a computed fact inside the
+    simulation. Any UI surfacing of the new `enragedAtSeconds`/`subduedAtSeconds`/
+    `enragedAtRaidSeconds`/`subduedAtRaidSeconds` fields is still open (`web-developer`'s call).
+
+18. **The boss-moveset sweep never reaches the Team Raid Simulator.**
+    `compareAcrossBossChargedMoves` exists but is wired only into the Comparator
+    (`BossMovesetSweep.tsx`); `runTeamRaid.ts` and `runPowerUpOptimizer.ts` each resolve exactly
+    one fixed `bossChargedMoveId`. So "does my roster clear this boss" is silently conditional on
+    which charged move the boss rolled — a hidden conditional conclusion, on the highest-stakes
+    tab. Engine primitive already exists; needs its own presentation rather than a copy of the
+    Comparator's, since Team Raid's result shape (clear/no-clear + revive count) differs from
+    paired cards. **Scope to Team Raid only** — on the multi-raid sweep the cost multiplies over
+    ~13 bosses × 200 sims for a smaller payoff.
+
+19. **Party-size ranking-flip breakpoint on the Comparator.** `rankingFlip.ts` sweeps *time* to
+    find a crossing at a fixed party size; nothing sweeps *party size itself*, though `partySize`
+    is a plain scenario field. The user did precisely this by hand before the tool existed
+    ("for FOUR teammates specifically… group size of 5"). Same crossing-detection shape, new
+    axis, no new modelling. `pogo-player`'s top pick, and `hardcore-spender`'s too.
+
+20. **Surface the own-charged-move-cast vulnerability cost as its own line.** The engine already
+    computes it (`HOLD_CHARGED_MOVE_DODGE_ATTEMPTS × DODGE_COST_SECONDS`) but folds it into the
+    aggregate survivability number. The user named this gap unprompted in 2026-09-04 and excluded
+    it from their own hand-calc. **Only worth building if labelled as the unsourced placeholder it
+    is** — MECHANICS.md still has it as an open question, and this user distrusts numbers whose
+    error-bias direction they can't judge.
+
+21. **Dodge-execution-error sensitivity** — a swept "what if I miss N% of my dodges". The dodge
+    setting chooses *which* attacks to attempt and models no miss chance at all. Precedent: the
+    same user chose a nonzero wipe-and-rejoin default explicitly "to allow user error".
+
+22. **APPROVED 2026-09-10 — use the first-party 1.0s swap cost.** The user chose the sourced
+    value over the previously-shipped 0.5s. Engine default is currently `0`, web defaults `0.5`;
+    both become **1.0**. Expect the Team Raid default's clear time to lengthen (~12-13 swaps on
+    the shipped default roster, so roughly +6s against a 19.6s margin) — that is the fix working,
+    not a regression. Re-measure and re-record the default's numbers in `TeamRaidView.tsx`.
+
+    Background — **both original blockers are gone.** `swapDurationMs: 1000` is now `[first-party]`
+    (`BATTLE_SETTINGS`, 2026-09-09), so the stated reason for defaulting `swapCostSeconds` to 0
+    ("no official value known") is simply false. The *second* objection — that turning it on
+    re-baselines every existing shared link — also no longer applies, since backward link
+    compatibility was dropped 2026-09-10. Both blockers are gone; this is now a decision, not
+    research. It matters beyond fidelity: real per-swap friction changes the tradeoff between a
+    few strong Pokémon (fewer faints, fewer swaps) and many mediocre ones.
+
+**Rejected, deliberately, so they don't get re-proposed:** an event-worth-attending calculator
+(needs calendar data this tool doesn't ingest — different product); anything multi-trainer;
+and **Mega Energy as an investment currency** for Super Max progression — it would rest on two
+stacked `[unverified]` numbers (the CP bump and the "+10%/tier" curve), which repeats in miniature
+the fabricated-stats failure this project was already burned by.

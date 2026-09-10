@@ -94,6 +94,7 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "chargedAttacksLanded",
         "cycleIndex",
         "dodgeFastAttacksLockout",
+        "enragedAtRaidSeconds",
         "endedAtRaidSeconds",
         "faintedAtSeconds",
         "ownDamageDealt",
@@ -102,6 +103,7 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "slotIndex",
         "speciesId",
         "speciesName",
+        "subduedAtRaidSeconds",
         "startedAtRaidSeconds",
       ].sort(),
     );

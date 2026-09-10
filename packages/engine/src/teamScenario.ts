@@ -35,7 +35,9 @@ export interface TeamScenario {
   bossFastMoveId: string | null;
   /** Boss charged-move selection. null means "use the boss's first charged move". */
   bossChargedMoveId: string | null;
+  /** Shared roster-wide default — see TeamScenarioSlot.level for the per-slot override that takes priority over this when present. */
   level: number;
+  /** Shared roster-wide default — see TeamScenarioSlot.ivs for the per-slot override that takes priority over this when present. */
   ivs: IVSpread;
   /** Governs dodging the boss's CHARGED attacks only — one shared assumption for the whole roster. */
   dodgeModel: DodgeBehavior;
@@ -112,6 +114,32 @@ export interface TeamScenarioSlot {
    * `.boost` at all).
    */
   megaLevel: MegaLevel | null;
+  /**
+   * Per-slot override for TeamScenario.level — this slot fights at ITS OWN
+   * level instead of the roster-wide shared one. `undefined`/omitted means
+   * "use the shared TeamScenario.level" (today's behavior, byte-identical) —
+   * NOT a default number of its own. Mirrors teamRaid.ts's
+   * TeamRaidSlotInput.level exactly; that field already exists and is
+   * already consumed by runTeamRaid (built for the Power-Up Optimizer's
+   * mixed-level rosters), so this only closes the gap in the ROUND-TRIPPABLE
+   * scenario shape, not in the simulator itself.
+   *
+   * Independent of `ivs` below by design: a slot can override its level
+   * while still inheriting the shared IV spread, or vice versa. This exactly
+   * matches TeamRaidSlotInput's own independence (`level`/`ivs` are two
+   * separate optional fields there too, each with its own fallback) — a
+   * paired-only override would be a strictly weaker restriction invented at
+   * this layer for no mechanical reason, and would force a caller who only
+   * wants to correct e.g. a hand-copied level to also restate perfect IVs it
+   * may not actually know.
+   */
+  level?: number;
+  /**
+   * Per-slot override for TeamScenario.ivs — see `level` above for the same
+   * fallback convention, motivation, and independence rationale. Mirrors
+   * teamRaid.ts's TeamRaidSlotInput.ivs exactly.
+   */
+  ivs?: IVSpread;
 }
 
 /**

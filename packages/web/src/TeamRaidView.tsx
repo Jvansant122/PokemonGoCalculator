@@ -1,20 +1,25 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   buildTeamScenarioUrl,
   MAX_TEAM_RAID_SLOTS,
   parseTeamScenarioFromUrl,
+  type IVSpread,
   type MegaLevel,
   type SpeciesDefinition,
   type TeamScenario,
 } from "@pogo-analyzer/engine";
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
+import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { BOSS_CADENCE_HINT, type BossChargedMoveCadence } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { LineupBuilderPanel, type LineupBuilderPanelState } from "./LineupBuilderPanel.js";
+import { applyLineupSlotsToTeamAssumptions, runLineupBuilderForTeamRaid } from "./lineupBuilderAction.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
 import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
+import { hydrateRosterPool, loadRosterPool } from "./rosterPool.js";
 import { runTeamRaidScenario } from "./run/runTeamRaid.js";
 import { teamAssumptionsToPowerUpOptimizerAssumptions, TEAM_RAID_EXPORT_MISSING_NOTE } from "./teamRaidExport.js";
 import { assumptionsToScenario as powerUpAssumptionsToScenario } from "./PowerUpOptimizerView.js";
@@ -123,6 +128,10 @@ interface TeamScenarioSlotWithShadow {
   isMega: boolean;
   megaLevel: MegaLevel | null;
   isShadow: boolean;
+  /** See TeamAssumptionPanel.tsx's TeamSlotAssumption.level — the engine's own TeamScenarioSlot already declares this (teamScenario.ts); mirrored here since this type extends Omit<TeamScenario, "slots"> rather than TeamScenario itself. `undefined`/absent means "use the shared roster-wide level" — same fallback convention as every field on this type. */
+  level?: number;
+  /** See TeamAssumptionPanel.tsx's TeamSlotAssumption.ivs. */
+  ivs?: IVSpread;
 }
 export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
   slots: TeamScenarioSlotWithShadow[];
@@ -152,6 +161,8 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
       isMega: s.isMega,
       megaLevel: s.megaLevel,
       isShadow: s.isShadow,
+      level: s.level,
+      ivs: s.ivs,
     })),
     target: a.targetId,
     bossFastMoveId: a.bossFastMoveId,
@@ -188,6 +199,14 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     // TeamScenarioWithShadow above) rather than surfacing `undefined` into
     // the checkbox below.
     isShadow: slot.isShadow ?? false,
+    // Straight passthrough, no `??` fallback needed — `undefined`/absent
+    // already IS the correct "use the shared roster-wide level/IVs" meaning
+    // on both sides (TeamScenarioSlot.level/ivs and TeamSlotAssumption.level/ivs
+    // share that exact optional-means-inherit convention), so there is no
+    // separate "old link predates this field" case to guard against the way
+    // e.g. swapCostSeconds below has to.
+    level: slot.level,
+    ivs: slot.ivs,
   }));
   // Defensive pad/truncate in case an older or hand-edited link has a
   // different slot count than MAX_TEAM_RAID_SLOTS.
@@ -275,7 +294,31 @@ export function normalizeTeamAssumptions(a: TeamAssumptions): TeamAssumptions {
   return { ...a, slots };
 }
 
-function initialTeamAssumptions(): TeamAssumptions {
+/**
+ * `prefill` (the "start from a Pokémon" hand-off from SpeciesReportView, see
+ * teamRaidPrefill.ts) takes priority over any URL scenario when present —
+ * same "a live click is a stronger, more recent signal" precedent as
+ * ComparatorView's own initialAssumptions. Only slot 1 (species + its
+ * currently-selected moveset) and the boss target are seeded; every other
+ * slot, the shared level/IV spread, dodge/weather/timer, etc. all stay at
+ * DEFAULT_TEAM_ASSUMPTIONS, left for the player to adjust — the boss's own
+ * fast/charged move selection resets to null (its first move) rather than
+ * carrying over DEFAULT_TEAM_ASSUMPTIONS' moves, which belong to a
+ * completely different boss.
+ */
+function initialTeamAssumptions(prefill: TeamRaidPrefill | null): TeamAssumptions {
+  if (prefill) {
+    return {
+      ...DEFAULT_TEAM_ASSUMPTIONS,
+      slots: [
+        { ...emptyTeamSlot(), speciesId: prefill.speciesId, fastMoveId: prefill.fastMoveId, chargedMoveId: prefill.chargedMoveId },
+        ...DEFAULT_TEAM_ASSUMPTIONS.slots.slice(1),
+      ],
+      targetId: prefill.targetId,
+      bossFastMoveId: null,
+      bossChargedMoveId: null,
+    };
+  }
   if (typeof window === "undefined") return DEFAULT_TEAM_ASSUMPTIONS;
   // Cast: parseTeamScenarioFromUrl's return type is the engine's own
   // (narrower) TeamScenario — the actual decoded object still carries each
@@ -298,9 +341,25 @@ function speciesLabel(s: SpeciesDefinition): string {
  * event, NOT a loss condition) and packages/engine/src/teamRaid.ts (the
  * actual engine surface this view calls).
  */
-export function TeamRaidView() {
-  const [assumptions, setAssumptionsRaw] = useState<TeamAssumptions>(initialTeamAssumptions);
+interface TeamRaidViewProps {
+  /** See teamRaidPrefill.ts — non-null only immediately after a "Send to Team Raid Simulator" click from the Species Report tab. */
+  prefill?: TeamRaidPrefill | null;
+  /** Called once, right after this component's initial mount, if it was seeded from a non-null `prefill` — lets App.tsx clear its own prefill state so a later, unrelated remount of this view doesn't silently reapply the same stale hand-off. Same precedent as ComparatorView's own onConsumedPrefill. */
+  onConsumedPrefill?: () => void;
+}
+
+export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidViewProps = {}) {
+  const [assumptions, setAssumptionsRaw] = useState<TeamAssumptions>(() => normalizeTeamAssumptions(initialTeamAssumptions(prefill)));
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [lineupBuilderState, setLineupBuilderState] = useState<LineupBuilderPanelState>({ kind: "idle" });
+
+  // Runs once, immediately after mount — this component fully unmounts
+  // whenever another tab is active, so "mount" and "just received a fresh
+  // hand-off" are the same event here (same precedent as ComparatorView).
+  useEffect(() => {
+    if (prefill) onConsumedPrefill?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function setAssumptions(next: TeamAssumptions) {
     setAssumptionsRaw(normalizeTeamAssumptions(next));
@@ -322,6 +381,7 @@ export function TeamRaidView() {
   const bossReadySeconds = runResult.bossReadySeconds;
   const bossHp = runResult.bossHp;
   const failureSummary = runResult.failureSummary;
+  const bossMovesetSweep = runResult.bossMovesetSweep;
   const result = { data: runResult.data, error: runResult.error };
 
   function handleShare() {
@@ -350,6 +410,38 @@ export function TeamRaidView() {
     window.location.href = url.toString();
   }
 
+  /**
+   * The Lineup Builder's own action — see lineupBuilderAction.ts. Reads the
+   * imported roster pool fresh from localStorage on click (rosterPool.ts is
+   * shared web state Team Raid has never owned or displayed before this
+   * feature) rather than subscribing to it, since nothing on this tab needs
+   * to react live to an import happening on a different tab. On a genuine
+   * result, immediately fills this tab's own six slots with the winning
+   * lineup (per-slot level/IVs included) — the "Export roster to Power-Up
+   * Optimizer" button above already carries whatever's in those slots
+   * onward, so this needs no second export path of its own.
+   */
+  function handleBuildLineup() {
+    const hydrated = hydrateRosterPool(loadRosterPool(), speciesRegistry);
+    const outcome = runLineupBuilderForTeamRaid(
+      assumptions,
+      hydrated.entries,
+      bossSpecies,
+      runResult.bossRaidTier,
+      runResult.effectiveBossChargedMoveFrequencySeconds,
+    );
+    if (outcome.blockedReason) {
+      setLineupBuilderState({ kind: "blocked", reason: outcome.blockedReason });
+      return;
+    }
+    if (outcome.error) {
+      setLineupBuilderState({ kind: "error", message: outcome.error });
+      return;
+    }
+    setLineupBuilderState({ kind: "result", result: outcome.result!, rosterSize: hydrated.entries.length });
+    setAssumptions(applyLineupSlotsToTeamAssumptions(assumptions, outcome.result!.winner.slots));
+  }
+
   const rosterNames = slotSpecies.filter((s): s is SpeciesDefinition => s !== null).map((s) => speciesLabel(s));
 
   return (
@@ -359,6 +451,8 @@ export function TeamRaidView() {
         {bossSpecies ? speciesLabel(bossSpecies) : "a raid boss"} — one trainer's own sequential lineup against the
         boss's real HP pool and countdown timer, with wipe-and-revive looping.
       </p>
+
+      <LineupBuilderPanel state={lineupBuilderState} onBuild={handleBuildLineup} />
 
       <TeamAssumptionPanel
         value={assumptions}
@@ -387,6 +481,24 @@ export function TeamRaidView() {
             >
               {result.data.outcome === "cleared" ? "Cleared" : "Timer expired — raid failed"}
             </p>
+            {bossMovesetSweep && (
+              <p className={`caveats ${bossMovesetSweep.verdictVaries ? "boss-moveset-risk" : ""}`} style={{ marginTop: -4, marginBottom: 12 }}>
+                {bossMovesetSweep.verdictVaries ? (
+                  <>
+                    Boss moveset risk: this roster{" "}
+                    <strong>clears against {bossMovesetSweep.results.filter((r) => r.clearsWithinTimer).map((r) => r.moveName).join(", ")}</strong>
+                    {" "}but{" "}
+                    <strong>fails against {bossMovesetSweep.results.filter((r) => !r.clearsWithinTimer).map((r) => r.moveName).join(", ")}</strong>
+                    {" "}— which charged move the boss actually rolls can flip this outcome. Same roster/assumptions throughout.
+                  </>
+                ) : (
+                  <>
+                    {result.data.outcome === "cleared" ? "Clears" : "Fails"} against all {bossMovesetSweep.results.length} of this boss's known
+                    charged moves, not just the one currently selected above.
+                  </>
+                )}
+              </p>
+            )}
             <div className="result-card">
               <div className="stat-tile-headline">
                 <span className="stat-tile-value">
@@ -551,6 +663,17 @@ export function TeamRaidView() {
         <details className="prose-details">
           <summary>Raid timer</summary>
           <p>Real, documented per-tier raid countdown — see raidBoss.ts's RAID_TIER_TABLE.</p>
+        </details>
+        <details className="prose-details">
+          <summary>Boss moveset risk callout</summary>
+          <p>
+          "Clears against X, fails against Y" (shown above the raid result whenever this boss has 2+ known charged
+          moves) re-runs this exact roster and every other assumption unchanged, once per charged move this boss is
+          actually known to use, and compares only the clear/no-clear verdict. This has no way to know which move a
+          real raid will actually roll (that information isn't in the data this project has), so it can't say HOW
+          LIKELY the failing moveset is — only that it exists. Treat a flagged risk as "worth a safety margin," not
+          as a probability.
+          </p>
         </details>
         </div>
       </CollapsibleSection>

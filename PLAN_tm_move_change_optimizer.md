@@ -114,6 +114,30 @@ What differs in roster mode, and matters:
   rule excludes a large, visible fraction of entries. That exclusion must be *shown* (the
   `rosterMovesetBadge.ts` badges already do this) rather than silently shrinking the candidate set.
 
+## The Roster tab changes this plan's central constraint (added 2026-09-10)
+
+`PLAN_roster_tab.md` adds **hand-entry** of Pokémon. That interacts with this plan's most
+important rule, and mostly in this plan's favour.
+
+**A hand-entered Pokémon has a KNOWN moveset by definition** — the user typed it. It must never
+carry the "default moveset" badge, and it is therefore **eligible for TM candidates** under the
+rule above, unlike a blank CSV row.
+
+More usefully: **hand-entry is the fix for the unknown-moveset problem, not a complication of
+it.** The blocking constraint here has been that roughly a third of a real Poke Genie export has
+a blank move column, and a TM must never be priced against a moveset the tool never observed.
+Once a user can correct an entry by hand, that exclusion stops being permanent — it becomes a
+prompt:
+
+> *"12 entries have unknown movesets and can't be considered for a TM. Fill them in on the Roster
+> tab to include them."*
+
+That turns a silent exclusion into an action, and it is worth building **before** the TM
+candidates themselves — otherwise the feature ships with a third of the roster invisibly
+ineligible and no way for the user to do anything about it.
+
+**Ordering consequence:** `PLAN_roster_tab.md` should land before this plan's step 1, not after.
+
 ## Hard constraints
 
 - **TM counts are a new user-facing setting → they MUST round-trip through `Scenario`.** Use the

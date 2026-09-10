@@ -9,6 +9,7 @@ import {
 } from "./breakpoints.js";
 import { calculateDamage, type DamageInputs } from "./damage.js";
 import { bossEnergyFromDamageTaken, energyFromDamageTaken, MAX_ENERGY } from "./energy.js";
+import { shadowEnragePhaseForHpFraction } from "./shadow.js";
 import type { ChargedMove, FastMove } from "./types.js";
 
 /**
@@ -373,6 +374,36 @@ export interface StepwiseBoss {
    * chargedMoveWarmupSeconds/startingEnergy when set.
    */
   chargedMoveNextFireInSeconds?: number;
+  /**
+   * Shadow raid enrage — see shadow.ts's shadowEnragedStats/
+   * shadowEnragePhaseForHpFraction and MECHANICS.md's "Shadow raids"
+   * section. Omitted/undefined (every non-shadow boss, and any caller that
+   * hasn't wired this yet) leaves this whole simulator byte-for-byte
+   * unchanged — `attackStat`/`defenseStat` above are used for the entire
+   * run exactly as before this field existed. When present, the boss's LIVE
+   * attack/defense used for every damage calculation this tick are
+   * recomputed each tick from the boss's OWN remaining-HP fraction (derived
+   * from `maxHp` and the cumulative fast+charged damage this run — plus
+   * `damageDealtBeforeFight`, for a boss whose HP is already partway down
+   * from an earlier fight in the same encounter, e.g. an earlier team-raid
+   * slot) rather than the static `attackStat`/`defenseStat` fields, which
+   * represent the boss's NORMAL (non-enraged) stats and are used whenever
+   * the computed phase is `"normal"`.
+   */
+  enrage?: {
+    /** The boss's real max HP pool for THIS raid (bossEffectiveHp) — turns cumulative damage into a remaining-HP fraction. */
+    maxHp: number;
+    /**
+     * Damage already dealt to the boss BEFORE this simulated fight begins —
+     * e.g. by earlier team-raid slots in the same continuous encounter.
+     * Defaults to 0 (a standalone fight, the common case: comparison.ts's
+     * runSustainedComparison always starts a fresh boss per candidate).
+     */
+    damageDealtBeforeFight?: number;
+    /** Enraged Attack/Defense — see shadow.ts's shadowEnragedStats. */
+    attackStat: number;
+    defenseStat: number;
+  };
 }
 
 export interface StepwiseRunResult {
@@ -531,6 +562,23 @@ export interface StepwiseRunResult {
    * a low/zero fast-damage number as a normal result.
    */
   dodgeFastAttacksLockout: boolean;
+  /**
+   * Shadow raid enrage transition timestamps for THIS run — see
+   * StepwiseBoss.enrage and shadow.ts's shadowEnragePhaseForHpFraction. Both
+   * null whenever `boss.enrage` isn't configured at all (every non-shadow
+   * boss, and any caller that hasn't wired this feature in yet — see
+   * comparison.ts/teamRaid.ts). When `boss.enrage` IS configured:
+   * `enragedAtSeconds` is the first tick this run's boss crossed into the
+   * enraged band (remaining HP <= 60%); `subduedAtSeconds` is the first tick
+   * it auto-subdued back out of it (remaining HP <= 15%). Either can still be
+   * null even with enrage configured, if the run ended (attacker fainted, or
+   * hit maxSeconds) before the boss's cumulative damage taken ever crossed
+   * that threshold. Surfaced so a caller can explain an otherwise-
+   * inexplicable mid-fight swing in incoming/outgoing damage — same
+   * surfacing precedent as dodgeFastAttacksLockout above.
+   */
+  enragedAtSeconds: number | null;
+  subduedAtSeconds: number | null;
 }
 
 /** Simple seeded PRNG (mulberry32) so a given seed always reproduces the same run. */
@@ -609,6 +657,19 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   let nextBossFastMoveAt = boss.fastMove.durationSeconds;
   let attackerAnimationEndsAt: number | null = null;
 
+  // Shadow raid enrage — see StepwiseBoss.enrage's doc comment. These two
+  // are the LIVE stats every damage calculation below actually uses;
+  // boss.attackStat/boss.defenseStat (the "normal" stats) are only read here,
+  // at initialization, and again inside the per-tick recompute block further
+  // down — never directly at a damage call site, so a caller that never sets
+  // boss.enrage gets byte-for-byte the old behavior (these two variables
+  // never change from their initial value in that case).
+  let liveBossAttackStat = boss.attackStat;
+  let liveBossDefenseStat = boss.defenseStat;
+  let enragePhase: "normal" | "enraged" = "normal";
+  let enragedAtSeconds: number | null = null;
+  let subduedAtSeconds: number | null = null;
+
   // Energy-tracking state, shared by "energy-driven" and
   // "energy-gated-interval" — see the "Boss charged move" block in the main
   // loop below. Unused (stays 0/null) under the default "fixed-interval"
@@ -642,7 +703,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     if (rng() >= BOSS_CHARGED_MOVE_USE_PROBABILITY) return null; // eligible, but the coin flip failed
     const damage = calculateDamage({
       power: boss.chargedMove!.power,
-      attackerAttackStat: boss.attackStat,
+      attackerAttackStat: liveBossAttackStat,
       defenderDefenseStat: attacker.defenseStat,
       ...(boss.chargedMoveDamageOut ?? boss.damageOut),
     });
@@ -708,6 +769,33 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   for (let t = tick; t <= maxSeconds + EPS; t += tick) {
     const roundedT = Math.round(t * 1000) / 1000;
 
+    // Shadow raid enrage: recompute which Attack/Defense band applies for
+    // THIS tick's actions, based on cumulative damage dealt to the boss as of
+    // the END of the PREVIOUS tick (totalFastMoveDamage/totalChargedDamage
+    // haven't been touched yet this iteration) — deliberately excluding this
+    // tick's own about-to-happen damage, since including it would make the
+    // transition depend circularly on damage computed using the very stat
+    // it's deciding. No-op (liveBossAttackStat/liveBossDefenseStat stay at
+    // their initial boss.attackStat/boss.defenseStat value) whenever
+    // boss.enrage is undefined — every non-shadow boss, byte-for-byte.
+    if (boss.enrage) {
+      const damageDealtToBossSoFar = (boss.enrage.damageDealtBeforeFight ?? 0) + totalFastMoveDamage + totalChargedDamage;
+      const remainingHpFraction = Math.max(0, 1 - damageDealtToBossSoFar / boss.enrage.maxHp);
+      const phase = shadowEnragePhaseForHpFraction(remainingHpFraction);
+      if (phase !== enragePhase) {
+        // Monotonic within one run (boss HP only ever decreases here), so
+        // this can only ever fire normal->enraged then enraged->normal, in
+        // that order — a plain "which direction did it change" check is
+        // enough, no need to separately guard against re-entering an
+        // earlier phase.
+        if (phase === "enraged") enragedAtSeconds = roundedT;
+        else subduedAtSeconds = roundedT;
+        enragePhase = phase;
+      }
+      liveBossAttackStat = phase === "enraged" ? boss.enrage.attackStat : boss.attackStat;
+      liveBossDefenseStat = phase === "enraged" ? boss.enrage.defenseStat : boss.defenseStat;
+    }
+
     // Attacker's own charged-move animation completing — resolved BEFORE the
     // boss's hit below, deliberately, for a same-tick-tie reason: the boss-hit
     // block's own isMidOwnAnimation check already uses a strict `<` against
@@ -725,7 +813,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       const damage = calculateDamage({
         power: attacker.chargedMove.power,
         attackerAttackStat: attacker.attackStat,
-        defenderDefenseStat: boss.defenseStat,
+        defenderDefenseStat: liveBossDefenseStat,
         ...attacker.chargedDamageOut,
       });
       totalChargedDamage += damage;
@@ -776,7 +864,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       if (bossChargedAnimationEndsAt === null && bossGatedFireAt !== null && roundedT >= bossGatedFireAt - EPS) {
         bossHitDamage = calculateDamage({
           power: boss.chargedMove!.power,
-          attackerAttackStat: boss.attackStat,
+          attackerAttackStat: liveBossAttackStat,
           defenderDefenseStat: attacker.defenseStat,
           ...(boss.chargedMoveDamageOut ?? boss.damageOut),
         });
@@ -794,7 +882,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     } else if (nextBossChargedMoveAt !== null && roundedT >= nextBossChargedMoveAt - EPS) {
       bossHitDamage = calculateDamage({
         power: boss.chargedMove!.power,
-        attackerAttackStat: boss.attackStat,
+        attackerAttackStat: liveBossAttackStat,
         defenderDefenseStat: attacker.defenseStat,
         ...(boss.chargedMoveDamageOut ?? boss.damageOut),
       });
@@ -811,7 +899,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     if (bossHitDamage === null && roundedT >= nextBossFastMoveAt - EPS) {
       const fastDamage = calculateDamage({
         power: boss.fastMove.power,
-        attackerAttackStat: boss.attackStat,
+        attackerAttackStat: liveBossAttackStat,
         defenderDefenseStat: attacker.defenseStat,
         ...boss.damageOut,
       });
@@ -919,7 +1007,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       const fastDamage = calculateDamage({
         power: attacker.fastMove.power,
         attackerAttackStat: attacker.attackStat,
-        defenderDefenseStat: boss.defenseStat,
+        defenderDefenseStat: liveBossDefenseStat,
         ...attacker.fastDamageOut,
       });
       totalFastMoveDamage += fastDamage;
@@ -983,6 +1071,8 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     bossEndingEnergy: bossTracksEnergy ? bossEnergy : null,
     bossChargedMoveCadenceClamped,
     dodgeFastAttacksLockout,
+    enragedAtSeconds,
+    subduedAtSeconds,
   };
 }
 

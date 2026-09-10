@@ -1,5 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { SHADOW_ATTACK_MULTIPLIER, SHADOW_DEFENSE_MULTIPLIER, shadowAdjustedBaseStats } from "../src/shadow.js";
+import {
+  SHADOW_ATTACK_MULTIPLIER,
+  SHADOW_DEFENSE_MULTIPLIER,
+  SHADOW_ENRAGE_ATTACK_MULTIPLIER,
+  SHADOW_ENRAGE_ATTACK_OFFSET,
+  SHADOW_ENRAGE_DEFENSE_MULTIPLIER,
+  SHADOW_ENRAGE_DEFENSE_OFFSET,
+  SHADOW_ENRAGE_HP_FRACTION,
+  SHADOW_SUBDUE_HP_FRACTION,
+  shadowAdjustedBaseStats,
+  shadowEnragedStats,
+  shadowEnragePhaseForHpFraction,
+} from "../src/shadow.js";
 import { effectiveStat, effectiveStatsAtLevel } from "../src/stats.js";
 import { cpmForLevel } from "../src/cpm.js";
 import type { SpeciesDefinition } from "../src/types.js";
@@ -100,5 +112,80 @@ describe("effectiveStatsAtLevel with isShadow", () => {
       boost: { multiplier: 1.3, boostedType: "normal" },
     };
     expect(() => effectiveStatsAtLevel(impossibleSpecies, { attack: 15, defense: 15, stamina: 15 }, 30)).toThrow();
+  });
+});
+
+describe("shadowEnragePhaseForHpFraction", () => {
+  it("is normal above the 60% enrage threshold", () => {
+    expect(shadowEnragePhaseForHpFraction(1)).toBe("normal");
+    expect(shadowEnragePhaseForHpFraction(0.61)).toBe("normal");
+  });
+
+  it("is enraged from 60% down to (exclusive) the 15% subdue threshold", () => {
+    expect(shadowEnragePhaseForHpFraction(SHADOW_ENRAGE_HP_FRACTION)).toBe("enraged");
+    expect(shadowEnragePhaseForHpFraction(0.3)).toBe("enraged");
+    expect(shadowEnragePhaseForHpFraction(SHADOW_SUBDUE_HP_FRACTION + 0.01)).toBe("enraged");
+  });
+
+  it("auto-subdues back to normal at/below 15%", () => {
+    expect(shadowEnragePhaseForHpFraction(SHADOW_SUBDUE_HP_FRACTION)).toBe("normal");
+    expect(shadowEnragePhaseForHpFraction(0.05)).toBe("normal");
+    expect(shadowEnragePhaseForHpFraction(0)).toBe("normal");
+  });
+});
+
+describe("shadowEnragedStats — the stacking decision", () => {
+  it("applies the enrage formula to the ALREADY shadow-adjusted base stat (one Shadow-multiplier application, not two)", () => {
+    // baseAttack=100/baseDefense=100 chosen so the shadow-adjustment step is
+    // easy to hand-verify: shadowAdjustedBaseStats gives {100*1.2, 100*5/6}
+    // = {120, 83.333...}. If this function instead read the RAW base stat
+    // (skipping shadowAdjustedBaseStats entirely) it would compute
+    // floor(1.81*100+15)=196 / floor(3*100+15)=315 instead — a materially
+    // different pair, so this test actually distinguishes the two readings
+    // rather than passing either way.
+    const species = { baseAttack: 100, baseDefense: 100, isShadow: true };
+    const result = shadowEnragedStats(species);
+    const adjusted = shadowAdjustedBaseStats(species);
+    expect(result.attack).toBe(Math.floor(SHADOW_ENRAGE_ATTACK_MULTIPLIER * adjusted.baseAttack + SHADOW_ENRAGE_ATTACK_OFFSET));
+    expect(result.defense).toBe(Math.floor(SHADOW_ENRAGE_DEFENSE_MULTIPLIER * adjusted.baseDefense + SHADOW_ENRAGE_DEFENSE_OFFSET));
+    // Pinned exact values (verified via a throwaway tsx script against this
+    // engine's own formula, not hand arithmetic) — see this feature's
+    // engine-developer report for the derivation trail.
+    expect(result).toEqual({ attack: 232, defense: 265 });
+  });
+
+  it("both enraged Attack and enraged Defense are strictly higher than the SAME species' normal (non-enraged) shadow-adjusted stats", () => {
+    // Not a tautology of the multiplier alone — the enrage formula's shape
+    // (multiplier + flat offset) differs enough from effectiveStat's
+    // (base+iv)*cpm that this is worth checking directly rather than assumed.
+    const species = { baseAttack: 200, baseDefense: 150, isShadow: true };
+    const adjusted = shadowAdjustedBaseStats(species);
+    const enraged = shadowEnragedStats(species);
+    expect(enraged.attack).toBeGreaterThan(adjusted.baseAttack);
+    expect(enraged.defense).toBeGreaterThan(adjusted.baseDefense);
+  });
+
+  it("throws for a species flagged both isShadow and boost, same as shadowAdjustedBaseStats (inherited, not reimplemented)", () => {
+    expect(() =>
+      shadowEnragedStats({
+        baseAttack: 200,
+        baseDefense: 150,
+        isShadow: true,
+        boost: { multiplier: 1.3, boostedType: "water" },
+      }),
+    ).toThrow();
+  });
+
+  it("a non-Shadow species still computes an enrage transform if asked directly (the isShadow GATE lives one level up, in comparison.ts's bossEnrageStats)", () => {
+    // shadowEnragedStats itself has no isShadow branch of its own — it just
+    // reuses shadowAdjustedBaseStats, which passes non-Shadow stats through
+    // unchanged. The real "only Shadow bosses enrage" rule is enforced by
+    // comparison.ts's bossEnrageStats (see comparison.test.ts), not here.
+    const species = { baseAttack: 100, baseDefense: 100, isShadow: false };
+    const result = shadowEnragedStats(species);
+    expect(result).toEqual({
+      attack: Math.floor(SHADOW_ENRAGE_ATTACK_MULTIPLIER * 100 + SHADOW_ENRAGE_ATTACK_OFFSET),
+      defense: Math.floor(SHADOW_ENRAGE_DEFENSE_MULTIPLIER * 100 + SHADOW_ENRAGE_DEFENSE_OFFSET),
+    });
   });
 });

@@ -168,7 +168,20 @@ describe("ComparatorScenario round-trip", () => {
 describe("TeamScenario round-trip", () => {
   const nonDefault: TeamAssumptions = {
     slots: [
-      { speciesId: "rayquaza", fastMoveId: "dragon-tail", chargedMoveId: "outrage", isMega: false, megaLevel: "max", isShadow: true },
+      {
+        speciesId: "rayquaza",
+        fastMoveId: "dragon-tail",
+        chargedMoveId: "outrage",
+        isMega: false,
+        megaLevel: "max",
+        isShadow: true,
+        // Per-slot level/IV override (added for the Lineup Builder — see
+        // TeamSlotAssumption.level's own doc comment) — exercised here as a
+        // genuinely non-default value, distinct from every other slot below
+        // (which leave it undefined, i.e. "use the shared spread").
+        level: 42,
+        ivs: { attack: 10, defense: 11, stamina: 12 },
+      },
       { speciesId: "kartana", fastMoveId: "air-slash", chargedMoveId: "leaf-blade", isMega: false, megaLevel: null, isShadow: false },
       { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: "super-max", isShadow: false },
       { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },

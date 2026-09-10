@@ -14,6 +14,7 @@ import { CollapsibleSection } from "./CollapsibleSection.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
+import { PartySizeFlipView } from "./PartySizeFlipView.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
@@ -333,6 +334,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   const chartMaxSeconds = runResult.chartMaxSeconds;
   const sensitivity = runResult.sensitivity;
   const bossMovesetSweep = runResult.bossMovesetSweep;
+  const partySizeFlip = runResult.partySizeFlip;
 
   function handleShare() {
     // Also pins `view=comparator` so reloading/sharing this link doesn't land
@@ -609,6 +611,13 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
               maxSeconds={chartMaxSeconds}
             />
           </CollapsibleSection>
+
+          <PartySizeFlipView
+            flip={partySizeFlip}
+            currentPartySize={assumptions.partySize}
+            candidateAName={results.candidates[0]!.name}
+            candidateBName={results.candidates[1]!.name}
+          />
 
           <SensitivityView checks={sensitivity} />
 

@@ -693,6 +693,22 @@ button:disabled {
 .raid-outcome-cleared { color: var(--good); }
 .raid-outcome-failed { color: var(--warn); }
 
+/*
+ * IDEAS #18: the boss-moveset-sweep headline on Team Raid — only applied
+ * when the clear/no-clear verdict actually VARIES across the boss's own
+ * known charged moves (the one case worth visually flagging; the "consistent
+ * across every moveset" case stays a plain .caveats line). Same rgba-fill +
+ * solid-border-in-the-same-hue convention as .badge-approximate, not a new
+ * color invented for this one callout.
+ */
+.boss-moveset-risk {
+  background: rgba(255, 107, 107, 0.12);
+  border: 1px solid var(--warn);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text);
+}
+
 .error-text {
   color: var(--warn);
   margin: 0;
@@ -1109,6 +1125,55 @@ label.species-picker-hint {
   margin: var(--space-1) 0 0;
   font-size: 0.78rem;
   color: var(--warn);
+}
+
+/* --------------------------------------------------- hand-picked boss list */
+
+.boss-set-handpick-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.button-accent {
+  border-color: var(--accent-x);
+  color: var(--accent-x);
+}
+
+.button-accent:hover:not(:disabled) {
+  background: rgba(91, 157, 255, 0.12);
+}
+
+.boss-set-list {
+  list-style: none;
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.boss-set-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+}
+
+.boss-set-list-label {
+  flex: 1;
+  font-size: 0.82rem;
+}
+
+.boss-set-list li button {
+  height: auto;
+  padding: 3px 9px;
+  font-size: 0.72rem;
 }
 
 /* ------------------------------------------------------------------ badges */

@@ -109,7 +109,11 @@ after any edit to a `*Scenario.ts`, `*AssumptionPanel.tsx`, or `*View.tsx`, extr
 field of each tab's `Assumptions` interface and asserting the name appears in both round-trip
 directions across all six tabs; a miss surfaces in the conversation naming the field. It proves a
 field is *mentioned* in both functions, not that it's mapped correctly — step 7's value-level test
-is what proves that.
+is what proves that. Since 2026-09-10 this also recurses into a `Foo[]`-shaped member (Team
+Raid's `slots: TeamSlotAssumption[]`, Power-Up Optimizer's `slots: PowerUpSlotAssumption[]`) and
+checks each per-slot field individually — if your new field lives on a per-slot type instead of
+the top-level `Assumptions` interface, it's still covered automatically; you don't need to do
+anything extra for it beyond the same steps above applied to the per-slot type.
 
 Then `npm run test:web` from the repo root (and `npm run test:engine` if you touched an engine
 codec). All existing tests plus your new one should pass. If the user wants this committed, use

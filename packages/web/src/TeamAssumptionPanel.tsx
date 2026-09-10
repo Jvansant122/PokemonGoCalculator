@@ -1,6 +1,7 @@
 import {
   MAX_POKEMON_POWER_UP_LEVEL,
   type DodgeBehavior,
+  type IVSpread,
   type MegaLevel,
   type SpeciesDefinition,
   type WeatherCondition,
@@ -42,6 +43,21 @@ export interface TeamSlotAssumption {
    * that's the case, see TeamRaidView's normalizeTeamAssumptions.
    */
   isShadow: boolean;
+  /**
+   * Per-slot override for TeamAssumptions.level — this slot fights at ITS
+   * OWN level instead of the roster-wide shared one below. `undefined` means
+   * "use the shared level" (every hand-built slot's resting state). Mirrors
+   * teamScenario.ts's `TeamScenarioSlot.level` exactly — added for the
+   * lineup builder (see lineupBuilderAction.ts), whose whole point is that a
+   * real roster has a different level per Pokémon; collapsing that onto one
+   * shared mean measurably changes the simulated clear time (~40% divergence
+   * measured in the sibling Power-Up-Optimizer-plan export — see
+   * .claude/agent-memory/web-developer/feature_reverse_cross_tab_links_powerup_to_teamraid_and_speciesreport.md).
+   * Independent of `ivs` below, same rationale as the engine field.
+   */
+  level?: number;
+  /** Per-slot override for the shared IV spread — see `level` above for the same fallback convention and motivation. */
+  ivs?: IVSpread;
 }
 
 export function emptyTeamSlot(): TeamSlotAssumption {
@@ -257,9 +273,22 @@ export function TeamAssumptionPanel({
                   // normalizes it back to false afterward if the new species
                   // turns out to have no boost mechanic (it can't know that
                   // without a registry lookup, which lives at that layer).
-                  updateSlot(i, { speciesId: id, fastMoveId: null, chargedMoveId: null })
+                  // level/ivs are also cleared — a per-slot override belongs
+                  // to whichever roster entry set it (the lineup builder), not
+                  // to a freshly hand-picked species.
+                  updateSlot(i, { speciesId: id, fastMoveId: null, chargedMoveId: null, level: undefined, ivs: undefined })
                 }
               />
+              {(slot.level !== undefined || slot.ivs !== undefined) && (
+                <p className="species-picker-hint">
+                  Own level/IVs: {slot.level ?? value.level} ({slot.ivs?.attack ?? value.ivAttack}/
+                  {slot.ivs?.defense ?? value.ivDefense}/{slot.ivs?.stamina ?? value.ivStamina}) — overrides the shared
+                  roster level/IVs below for this slot only.{" "}
+                  <button type="button" onClick={() => updateSlot(i, { level: undefined, ivs: undefined })}>
+                    use shared level/IVs instead
+                  </button>
+                </p>
+              )}
               {species && (
                 <>
                   <MoveSelect

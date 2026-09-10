@@ -11,6 +11,7 @@ import {
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
+import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { BOSS_CADENCE_HINT, BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
@@ -229,7 +230,13 @@ function actualTierUsed(row: SpeciesReportRow, bossSpecies: SpeciesDefinition | 
  * own mega/primal boost, if any, is shown only as a plain informational badge,
  * never folded into a fabricated team-damage number.
  */
-export function SpeciesReportView({ onCompare }: { onCompare: (prefill: ComparatorPrefill) => void }) {
+export function SpeciesReportView({
+  onCompare,
+  onSendToTeamRaid,
+}: {
+  onCompare: (prefill: ComparatorPrefill) => void;
+  onSendToTeamRaid: (prefill: TeamRaidPrefill) => void;
+}) {
   const [assumptions, setAssumptions] = useState<SpeciesReportAssumptions>(initialAssumptions);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
@@ -400,6 +407,24 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       candidateAId: assumptions.speciesId,
       candidateAFastMoveId: assumptions.fastMoveId,
       candidateAChargedMoveId: assumptions.chargedMoveId,
+    });
+  }
+
+  /**
+   * "Where should I bring this one Pokémon" (this table) vs. "will my whole
+   * team clear it" (Team Raid Simulator) are different questions — this
+   * hands the row's boss over as the raid target and this report's species
+   * (with its own currently-selected moveset) into Team Raid's first roster
+   * slot, same lifted-prop mechanism as handleCompare above (see
+   * teamRaidPrefill.ts's own doc comment for why it's a SEPARATE small type
+   * rather than reusing ComparatorPrefill for a second destination).
+   */
+  function handleSendToTeamRaid(row: SpeciesReportRow) {
+    onSendToTeamRaid({
+      targetId: row.bossId,
+      speciesId: assumptions.speciesId,
+      fastMoveId: assumptions.fastMoveId,
+      chargedMoveId: assumptions.chargedMoveId,
     });
   }
 
@@ -775,7 +800,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
                 <th>Sustained mean damage (TDO)</th>
                 <th>Mean survival</th>
                 <th>Boost</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -861,9 +886,14 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
                       )}
                     </td>
                     <td>
-                      <button type="button" onClick={() => handleCompare(row)}>
-                        Compare vs. another attacker
-                      </button>
+                      <div className="result-row" style={{ flexWrap: "wrap", gap: 4 }}>
+                        <button type="button" onClick={() => handleCompare(row)}>
+                          Compare vs. another attacker
+                        </button>
+                        <button type="button" onClick={() => handleSendToTeamRaid(row)}>
+                          Send to Team Raid Simulator →
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -955,6 +985,16 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           Click "Compare vs. another attacker" on any row to hand this
           species, its selected moveset, and that boss off to the two-candidate comparator, leaving the second
           candidate for you to pick there.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Send to Team Raid Simulator</summary>
+          <p>
+          Click "Send to Team Raid Simulator" on any row to answer a different question than the table above:
+          not just "how good is this Pokémon against this boss" but "will my whole team clear it." Hands this
+          species and its selected moveset into the first roster slot and that row&rsquo;s boss off as the raid
+          target — every other slot and every shared assumption (level/IVs/dodge/weather/timer/etc.) start at Team
+          Raid&rsquo;s own defaults, left for you to fill in the rest of your roster.
           </p>
         </details>
         </div>

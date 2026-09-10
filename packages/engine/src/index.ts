@@ -21,3 +21,4 @@ export * from "./teamScenario.js";
 export * from "./speciesReport.js";
 export * from "./powerUp.js";
 export * from "./rosterPlanner.js";
+export * from "./lineupBuilder.js";

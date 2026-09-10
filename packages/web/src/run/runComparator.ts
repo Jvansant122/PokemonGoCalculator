@@ -16,7 +16,9 @@
 import {
   bossChargedMoveReadySeconds,
   compareAcrossBossChargedMoves,
+  findCrossoverPartySize,
   runSustainedComparison,
+  type CrossoverPoint,
   type RaidTier,
   type SpeciesDefinition,
   type SpeciesRegistry,
@@ -28,6 +30,17 @@ import { raidTierForSpeciesId } from "../registry.js";
 import { deriveEffectiveBossChargedMoveFrequencySeconds } from "./effectiveBossChargedMoveFrequency.js";
 
 const MAX_ENERGY = 100;
+
+/**
+ * The scanned party-size range for the ranking-flip-by-party-size headline
+ * (IDEAS #19) — 0 to 20, matching sensitivity.ts's own "Other trainers in
+ * this raid" check (check 1) and AssumptionPanel.tsx's partySize
+ * NumberField bounds (min 0, max 20). Exported so PartySizeFlipView.tsx's
+ * FlipBar reuses the exact same bounds rather than re-declaring them.
+ */
+export const PARTY_SIZE_FLIP_MIN = 0;
+export const PARTY_SIZE_FLIP_MAX = 20;
+const PARTY_SIZE_RANGE = Array.from({ length: PARTY_SIZE_FLIP_MAX - PARTY_SIZE_FLIP_MIN + 1 }, (_, i) => PARTY_SIZE_FLIP_MIN + i);
 
 /**
  * Mirrors ComparatorView's own resolveBoost — `disabled` (the per-candidate
@@ -66,6 +79,24 @@ export interface ComparatorRunResult {
   chartMaxSeconds: number;
   sensitivity: SensitivityCheck[];
   bossMovesetSweep: ReturnType<typeof compareAcrossBossChargedMoves> | null;
+  /**
+   * IDEAS #19: sweeps party size itself (0-20, see PARTY_SIZE_RANGE above)
+   * at the CURRENTLY configured other-assumptions, for where the ranking
+   * flips — the same "crossing detection" shape rankingFlip.ts already
+   * applies to the time axis, just applied to party size instead. Reuses the
+   * engine's own findCrossoverPartySize (uptime.ts) rather than
+   * reimplementing a second scan loop in the web layer — that function
+   * already existed, already tested in packages/engine, and was previously
+   * only *considered* (see sensitivity.ts's own comment on check 1) and
+   * never actually wired up anywhere in packages/web.
+   * `null` whenever NEITHER candidate has an active mega/primal boost (a
+   * disabled boost or a genuinely non-mega species) — with no team-damage
+   * mechanic in play at all, party size cannot change the ranking, so this
+   * mirrors AssumptionPanel.tsx's own `anyBoostActive` gate that hides the
+   * party-size controls entirely in that case, rather than reporting a
+   * trivial "no flip found" that's really "this axis does nothing here."
+   */
+  partySizeFlip: CrossoverPoint | null;
 }
 
 export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry): ComparatorRunResult {
@@ -220,6 +251,55 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     }
   }
 
+  // IDEAS #19 — see ComparatorRunResult.partySizeFlip's own doc comment.
+  // Gated on "at least one candidate has an active boost" the same way
+  // AssumptionPanel.tsx hides the party-size controls (`anyBoostActive`) —
+  // computed locally rather than imported, same precedent as
+  // sensitivity.ts/DamageOverTimeChart.tsx inlining this exact two-line
+  // check instead of a shared helper (see feature_hide_inert_boost_ui_and_
+  // move_efficiency_metrics in agent memory).
+  let partySizeFlip: CrossoverPoint | null = null;
+  if (shadowAdjustedCandidates && results) {
+    const boostA = resolveBoost(shadowAdjustedCandidates[0], a.candidateMegaBoostDisabled[0]);
+    const boostB = resolveBoost(shadowAdjustedCandidates[1], a.candidateMegaBoostDisabled[1]);
+    if (boostA?.multiplier !== undefined || boostB?.multiplier !== undefined) {
+      // Shared fight length both candidates' team-boost windows are judged
+      // against — same convention as sensitivity.ts's winnerOf (the longer
+      // of the two mean survival times), not the padded/extendable chart
+      // window, since this is a "does the ranking change" computation, not a
+      // display window.
+      const fightDurationSeconds = Math.max(results[0]!.meanSecondsSurvived, results[1]!.meanSecondsSurvived);
+      // matchingTeammateCount is a single shared value (not per-candidate) —
+      // see AssumptionPanel.tsx's matchingTeammateCount field — so the same
+      // fraction-of-party-that-matches applies to both candidates as party
+      // size is swept, exactly like DamageOverTimeChart/rankingFlip.ts
+      // already treat it for the time axis.
+      const matchingFraction = a.partySize > 0 ? Math.min(1, Math.max(0, a.matchingTeammateCount / a.partySize)) : 0;
+      partySizeFlip = findCrossoverPartySize(
+        {
+          id: shadowAdjustedCandidates[0].name,
+          secondsSurvived: results[0]!.meanSecondsSurvived,
+          boostMultiplier: boostA?.multiplier,
+          boostedType: shadowAdjustedCandidates[0].types[0],
+          ownDamage: results[0]!.meanTotalDamage,
+          persistsThroughFaint: boostA?.persistsThroughFaint ?? false,
+        },
+        {
+          id: shadowAdjustedCandidates[1].name,
+          secondsSurvived: results[1]!.meanSecondsSurvived,
+          boostMultiplier: boostB?.multiplier,
+          boostedType: shadowAdjustedCandidates[1].types[0],
+          ownDamage: results[1]!.meanTotalDamage,
+          persistsThroughFaint: boostB?.persistsThroughFaint ?? false,
+        },
+        a.teammateDps,
+        { a: matchingFraction, b: matchingFraction },
+        PARTY_SIZE_RANGE,
+        fightDurationSeconds,
+      );
+    }
+  }
+
   return {
     candidates,
     boss,
@@ -234,5 +314,6 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     chartMaxSeconds,
     sensitivity,
     bossMovesetSweep,
+    partySizeFlip,
   };
 }

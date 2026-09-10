@@ -248,3 +248,80 @@ test("power-up-optimizer multi-raid: a share link opened in a fresh browser cont
 
   await freshContext.close();
 });
+
+/**
+ * Per-boss hand-picking in BossSetPanel.tsx (2026-09-10) — the single-boss
+ * case is the headline (a user hand-picking exactly the one raid they're
+ * attending tonight, bench included), so this drives THAT path end to end:
+ * search, "Use only this boss," a sweep whose own "Bosses swept" figure
+ * confirms it actually ran against exactly one boss, and a share link that
+ * restores the same RESOLVED boss id — never a re-derived filter result,
+ * per multiRaidBossSet.ts's own doc comment and the standing decision in
+ * CLAUDE.md that `multiRaidBossIds` is always resolved ids, never a filter.
+ */
+test("power-up-optimizer multi-raid: hand-picking a single boss runs the sweep against exactly that boss, and survives a share-link round trip", async ({
+  page,
+}) => {
+  const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+  await page.goto("/?view=power-up-optimizer");
+  await expandAssumptions(page);
+  await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
+  await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
+
+  await page.locator("summary", { hasText: "Import a whole roster" }).click();
+  const pasteArea = page.locator("#roster-import-paste");
+  await expect(pasteArea).toBeVisible();
+  await pasteArea.fill(sampleCsv);
+  await page.getByRole("button", { name: "Import pasted CSV" }).click();
+  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
+
+  // Search for a specific boss and commit to it as the ONLY boss in the set —
+  // the fast, two-action single-boss path this feature exists for.
+  const pickerInput = page.locator("#pu-multiraid-handpick-input");
+  await pickerInput.click();
+  await pickerInput.fill("tyranitar");
+  const firstOption = page.locator("#pu-multiraid-handpick-listbox li").first();
+  await expect(firstOption).toBeVisible();
+  await firstOption.locator("button").click();
+  await page.getByRole("button", { name: "Use only this boss" }).click();
+
+  // Exactly one row in the resolved-set list, with a Remove control.
+  const bossListItems = page.locator(".boss-set-list li");
+  await expect(bossListItems).toHaveCount(1);
+  await expect(bossListItems.first().getByRole("button", { name: /^Remove/ })).toBeVisible();
+
+  const runSweepButton = page.getByRole("button", { name: "Run sweep" });
+  await expect(runSweepButton).toBeEnabled({ timeout: 10_000 });
+  await runSweepButton.click();
+  await expect(page.getByRole("heading", { name: "Ranked candidates" })).toBeVisible({ timeout: 20_000 });
+
+  // "Bosses swept" is the real, computed proof the sweep actually ran
+  // against exactly the one hand-picked boss, not a stale/bulk-filtered set.
+  const resultCard = page
+    .getByRole("heading", { name: "Multi-raid sweep" })
+    .locator("xpath=ancestor::details[1]")
+    .locator(".result-card")
+    .first();
+  await expect(resultCard.getByText("Bosses swept").locator("xpath=following-sibling::*[1]")).toHaveText("1");
+
+  // Build a share link and confirm a FRESH context restores the exact same
+  // resolved boss — never re-deriving a filter result on load.
+  const bossLabelBefore = await page.locator(".boss-set-list-label").first().innerText();
+  await page.getByRole("button", { name: "Build link" }).click();
+  const shareUrlInput = page.locator(".share-row input[readonly]");
+  await expect(shareUrlInput).toBeVisible();
+  const shareUrl = await shareUrlInput.inputValue();
+
+  const freshPage = await page.context().newPage();
+  await freshPage.goto(shareUrl);
+  await expandAssumptions(freshPage);
+  await expect(freshPage.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
+  const freshBossListItems = freshPage.locator(".boss-set-list li");
+  await expect(freshBossListItems).toHaveCount(1);
+  await expect(freshBossListItems.first().locator(".boss-set-list-label")).toHaveText(bossLabelBefore);
+  await freshPage.close();
+
+  expect(consoleErrors, "console.error calls").toEqual([]);
+  expect(pageErrors, "uncaught page errors").toEqual([]);
+});

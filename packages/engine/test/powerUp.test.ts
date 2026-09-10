@@ -270,6 +270,8 @@ describe("teamDamageAtRaidSeconds", () => {
         bossChargedHitsTaken: 0,
         ownDamageTrajectory,
         dodgeFastAttacksLockout: false,
+        enragedAtRaidSeconds: null,
+        subduedAtRaidSeconds: null,
       })),
     };
   }

@@ -49,7 +49,53 @@ describe("runComparatorScenario (default scenario)", () => {
     expect(result.chartMaxSeconds).toBeGreaterThan(0);
     // Level/dodge/party/boost/cadence/dps + attack/defense/stamina IV = 10 checks.
     expect(result.sensitivity.length).toBe(10);
+    // Default candidates (kartana vs rayquaza, both non-mega) have no active
+    // mega/primal boost — party size cannot change the ranking, so this
+    // axis is reported as inapplicable (null), same gate AssumptionPanel.tsx
+    // uses to hide the party-size controls entirely in this case.
+    expect(result.partySizeFlip).toBeNull();
   }, 20_000);
+});
+
+describe("runComparatorScenario (party-size ranking flip, IDEAS #19)", () => {
+  // Real species pair found by sweeping the actual registry (see
+  // feature_partysize_flip_and_boss_moveset_sweep in agent memory): Mega
+  // Rayquaza's persistsThroughFaint boost plus higher own damage (406) wins
+  // with few other trainers present, but Mega Salamence survives longer
+  // (21.9s vs 18.5s mean) and so accrues more team-boost damage as the party
+  // grows — the ranking flips once there are enough other trainers for that
+  // extra uptime to outweigh Mega Rayquaza's raw damage lead.
+  it("finds a real flip point for a pair where survivability-vs-raw-damage trades off with party size", () => {
+    const assumptions = {
+      ...COMPARATOR_DEFAULTS,
+      candidateAId: "rayquaza-mega",
+      candidateBId: "salamence-mega",
+      targetId: "tyranitar",
+      matchingTeammateCount: 2,
+    };
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.partySizeFlip).not.toBeNull();
+    const flip = result.partySizeFlip!;
+    expect(flip.partySize).toBe(3);
+    expect(flip.leaderBelow).toBe("Mega Rayquaza");
+    expect(flip.leaderAtOrAbove).toBe("Mega Salamence");
+  }, 20_000);
+
+  it("reports no crossing (partySize: null) when one candidate leads at every party size in range", () => {
+    const assumptions = {
+      ...COMPARATOR_DEFAULTS,
+      candidateAId: "rayquaza-mega",
+      candidateBId: "kartana",
+      targetId: "latios-mega",
+      matchingTeammateCount: 2,
+    };
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.partySizeFlip).not.toBeNull();
+    const flip = result.partySizeFlip!;
+    expect(flip.partySize).toBeNull();
+    expect(flip.leaderBelow).toBe("Mega Rayquaza");
+    expect(flip.leaderAtOrAbove).toBe("Mega Rayquaza");
+  });
 });
 
 describe("runComparatorScenario (showDetailedAssumptions derived-frequency fallback)", () => {
@@ -84,7 +130,58 @@ describe("runTeamRaidScenario (default scenario)", () => {
     expect(result.data!.slots.length).toBeGreaterThan(0);
     expectFiniteNumber(result.data!.wipeCount, "wipeCount");
     expectFiniteNumber(result.data!.slotsUsed, "slotsUsed");
+    // Default boss (tyranitar-mega) has 4 known charged moves — the sweep
+    // must actually run against the default scenario, not require a
+    // special-cased matchup to exercise at all.
+    expect(result.bossMovesetSweep).not.toBeNull();
+    expect(result.bossMovesetSweep!.results.length).toBe(4);
   }, 20_000);
+});
+
+describe("runTeamRaidScenario (boss moveset sweep, IDEAS #18)", () => {
+  it("agrees with the main (single-moveset) run for the boss's currently-selected charged move", () => {
+    const result = runTeamRaidScenario(DEFAULT_TEAM_ASSUMPTIONS, speciesRegistry);
+    const sweepRowForSelectedMove = result.bossMovesetSweep!.results.find((r) => r.moveId === DEFAULT_TEAM_ASSUMPTIONS.bossChargedMoveId);
+    expect(sweepRowForSelectedMove).toBeDefined();
+    expect(sweepRowForSelectedMove!.outcome).toBe(result.data!.outcome);
+    expect(sweepRowForSelectedMove!.timeToClearSeconds).toBe(result.data!.timeToClearSeconds);
+  });
+
+  it("flags verdictVaries when a real boss/roster pairing clears against one charged move but not another", () => {
+    // A deliberately tightened timer (default is 300s for a Mega raid) so
+    // at least one of the boss's own charged moves flips clear into failure
+    // — found by sweeping raidTimerSeconds against the real default
+    // roster/boss (see agent memory): at 290s, Mega Tyranitar's Fire Blast
+    // fails to clear while its other 3 known charged moves (Crunch, Stone
+    // Edge, Brutal Swing) all still clear comfortably.
+    const tight = {
+      ...DEFAULT_TEAM_ASSUMPTIONS,
+      raidTimerSeconds: 290,
+    };
+    const result = runTeamRaidScenario(tight, speciesRegistry);
+    expect(result.bossMovesetSweep).not.toBeNull();
+    const sweep = result.bossMovesetSweep!;
+    const outcomes = new Set(sweep.results.map((r) => r.clearsWithinTimer));
+    // If this specific tightened timer happens not to reproduce a varying
+    // verdict on a future data/balance change, this assertion documents the
+    // intent (a verdict CAN vary) rather than silently degrading into a
+    // trivially-true "results.length >= 2" check.
+    expect(outcomes.size).toBeGreaterThan(1);
+    expect(sweep.verdictVaries).toBe(true);
+  });
+
+  it("returns null when the boss has fewer than 2 known charged moves", () => {
+    // magikarp is a real registry entry with exactly 1 known charged move —
+    // not a real raid boss, but runTeamRaidScenario resolves targetId
+    // straight off the registry with no raid-eligibility gate of its own, so
+    // it's a legitimate way to exercise the `chargedMoves.length >= 2` guard
+    // (same gate ComparatorView's own bossMovesetSweep uses) without a
+    // synthetic species fixture.
+    const oneMoveBoss = { ...DEFAULT_TEAM_ASSUMPTIONS, targetId: "magikarp" };
+    const result = runTeamRaidScenario(oneMoveBoss, speciesRegistry);
+    expect(result.error).toBeNull();
+    expect(result.bossMovesetSweep).toBeNull();
+  });
 });
 
 describe("runTeamRaidScenario (showDetailedAssumptions derived-frequency fallback)", () => {

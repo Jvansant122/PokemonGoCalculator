@@ -194,3 +194,46 @@ test("team-raid: 'Export roster to Power-Up Optimizer' carries the roster and bo
   await expect(destSubtitle).toContainText("Mega Mewtwo X");
   await expect(destSubtitle).toContainText("Mega Tyranitar");
 });
+
+/**
+ * The reverse of the export above: "Send post-plan roster to Team Raid
+ * Simulator" (PowerUpOptimizerView.tsx, single-raid mode only, see
+ * powerUpOptimizerExport.ts) — same real NAVIGATION mechanism, so the same
+ * `waitForURL` pairing applies. Uses the tab's own default roster/boss (no
+ * setup needed) and asserts the destination landed on `view=team-raid` with
+ * the SAME roster/boss names the source tab showed.
+ */
+test("power-up-optimizer: 'Send post-plan roster to Team Raid Simulator' carries the roster and boss across tabs", async ({ page }) => {
+  await page.goto("/?view=power-up-optimizer");
+  const rosterSubtitle = page.locator(".subtitle").first();
+  await expect(rosterSubtitle).toContainText("Mega Lucario");
+  await expect(rosterSubtitle).toContainText("Tyranitar");
+
+  await page.getByRole("button", { name: "Send post-plan roster to Team Raid Simulator →" }).click();
+  await page.waitForURL(/view=team-raid/);
+
+  const destSubtitle = page.locator(".subtitle").first();
+  await expect(destSubtitle).toContainText("Mega Lucario");
+  await expect(destSubtitle).toContainText("Tyranitar");
+});
+
+/**
+ * Species Report's "Send to Team Raid Simulator" row action — the OTHER
+ * cross-tab mechanism (a lifted-prop hand-off through App.tsx's own state,
+ * see teamRaidPrefill.ts, NOT a navigation), so this is a plain in-SPA click
+ * and assertion rather than a `waitForURL`. Uses the tab's own default
+ * species (Kartana) and whichever boss sorts first, and asserts Team Raid's
+ * first roster slot shows that exact species after the hand-off.
+ */
+test("species-report: 'Send to Team Raid Simulator' hands the species and boss into Team Raid's first slot", async ({ page }) => {
+  await page.goto("/?view=species-report");
+  await expect(page.locator(".subtitle").first()).toContainText("Kartana", { timeout: 20_000 });
+
+  const firstRowButton = page.getByRole("button", { name: "Send to Team Raid Simulator →" }).first();
+  await expect(firstRowButton).toBeVisible({ timeout: 20_000 });
+  await firstRowButton.click();
+
+  await expect(page.getByRole("tab", { name: "Team Raid Simulator" })).toHaveAttribute("aria-selected", "true");
+  const destSubtitle = page.locator(".subtitle").first();
+  await expect(destSubtitle).toContainText("Kartana");
+});

@@ -1,4 +1,4 @@
-import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveCandidateMegaLevel, resolveMove } from "./comparison.js";
+import { bossEffectiveHp, bossEffectiveStats, bossEnrageStats, ownBoostMultiplier, resolveCandidateMegaLevel, resolveMove } from "./comparison.js";
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
 import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
@@ -276,6 +276,21 @@ export interface TeamRaidSlotResult {
    * not an artifact of this specific run's RNG.
    */
   dodgeFastAttacksLockout: boolean;
+  /**
+   * Raid-global seconds (same clock as startedAtRaidSeconds/
+   * endedAtRaidSeconds) the boss enraged/auto-subdued during THIS fight —
+   * see simulate.ts's StepwiseRunResult.enragedAtSeconds/subduedAtSeconds.
+   * Both null whenever the boss isn't Shadow, OR the transition didn't occur
+   * during this specific fight (it may have already happened in an earlier
+   * slot/cycle of the same continuous encounter — see StepwiseBoss.enrage's
+   * damageDealtBeforeFight carryover above — or not yet reached by the time
+   * this fight ended). Clipped the same way faintedAtSeconds/ownDamageDealt
+   * are: a transition that would only have occurred in the raw run's
+   * post-clear tail (after the boss's HP actually hit 0) is nulled out, since
+   * the encounter was already over by then.
+   */
+  enragedAtRaidSeconds: number | null;
+  subduedAtRaidSeconds: number | null;
 }
 
 export type TeamRaidOutcome = "cleared" | "timerExpired";
@@ -397,6 +412,9 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   // — only a precomputed boss (this project's hypothetical fixtures/
   // hand-authored test bosses) reads baseStamina straight through.
   const bossHp = bossEffectiveHp(boss, bossRaidTier);
+  // Shadow raid enrage — see simulate.ts's StepwiseBoss.enrage and
+  // comparison.ts's bossEnrageStats. null for every non-shadow boss.
+  const bossEnrage = bossEnrageStats(boss);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
@@ -553,6 +571,17 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
         // them.
         startingEnergy: isVeryFirstFight ? carriedStartingEnergy : (carriedBossEnergy ?? 0),
         chargedMoveNextFireInSeconds: isVeryFirstFight ? undefined : carriedNextFireInSeconds,
+        // Shadow raid enrage — see simulate.ts's StepwiseBoss.enrage.
+        // damageDealtBeforeFight carries this SLOT's starting point in the
+        // boss's real, continuous HP pool (bossDamageAccum, already tracked
+        // below for the clear-detection post-processing) — the boss doesn't
+        // reset to "full HP, not enraged" just because the trainer swapped
+        // Pokémon or the roster wiped-and-revived; it's still the same fight
+        // from the boss's own side, exactly like its charged-move cadence
+        // carryover just above.
+        enrage: bossEnrage
+          ? { maxHp: bossHp, damageDealtBeforeFight: bossDamageAccum, attackStat: bossEnrage.attack, defenseStat: bossEnrage.defense }
+          : undefined,
       };
 
       const run = simulateStepwiseBattle({
@@ -600,6 +629,13 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
         ? run.ownDamageTrajectory[localClearIndex!]!.cumulativeDamage
         : run.totalFastMoveDamage + run.totalChargedDamage;
       const clippedTrajectory = clearedThisFight ? run.ownDamageTrajectory.slice(0, localClearIndex! + 1) : run.ownDamageTrajectory;
+      // Same clip-to-clear-point rule as clippedFaintedAtSeconds above — see
+      // TeamRaidSlotResult.enragedAtRaidSeconds/subduedAtRaidSeconds's doc
+      // comment.
+      const clippedEnragedAtSeconds =
+        clearedThisFight && (run.enragedAtSeconds === null || run.enragedAtSeconds > localClearSeconds!) ? null : run.enragedAtSeconds;
+      const clippedSubduedAtSeconds =
+        clearedThisFight && (run.subduedAtSeconds === null || run.subduedAtSeconds > localClearSeconds!) ? null : run.subduedAtSeconds;
 
       slotResults.push({
         cycleIndex,
@@ -625,6 +661,8 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
           cumulativeDamage: bossDamageAccum + p.cumulativeDamage,
         })),
         dodgeFastAttacksLockout: run.dodgeFastAttacksLockout,
+        enragedAtRaidSeconds: clippedEnragedAtSeconds !== null ? startClock + clippedEnragedAtSeconds : null,
+        subduedAtRaidSeconds: clippedSubduedAtSeconds !== null ? startClock + clippedSubduedAtSeconds : null,
       });
 
       if (clearedThisFight) {

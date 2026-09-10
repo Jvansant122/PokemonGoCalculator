@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   bossChargedMoveReadySeconds,
   bossEffectiveHp,
+  buildTeamScenarioUrl,
   MAX_TEAM_RAID_SLOTS,
   type PowerUpBudgetBlockedCandidate,
   type PowerUpBudgetResourceShortfall,
@@ -58,6 +59,8 @@ import { runRosterBudgetOffMainThread, runRosterPlannerOffMainThread } from "./r
 import { dedupeInterchangeableCandidates, type DedupedRosterCandidateGroup } from "./rosterCandidateDedupe.js";
 import { movesetDefaultBadge, type MovesetDefaultBadgeInfo } from "./rosterMovesetBadge.js";
 import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
+import { powerUpOptimizerAssumptionsToTeamAssumptions, POWER_UP_OPTIMIZER_EXPORT_MISSING_NOTE } from "./powerUpOptimizerExport.js";
+import { assumptionsToTeamScenario } from "./TeamRaidView.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates real
 // ranked results immediately, not an empty form — same precedent as every
@@ -2303,6 +2306,29 @@ export function PowerUpOptimizerView() {
     setShareUrl(url.toString());
   }
 
+  /**
+   * Sends this roster to Team Raid Simulator, USING the fixed-budget plan's
+   * own post-plan levels (result.plan?.finalLevels) rather than the current
+   * roster — the whole point of this button is letting the user watch the
+   * roster they'd have AFTER spending play out cycle-by-cycle before they
+   * commit real stardust, per the audit finding that drove this feature (a
+   * "clear rate after this plan: 100%" number they couldn't otherwise
+   * verify without hand-copying levels). Same "build the destination
+   * scenario, stamp its `view=`, navigate" mechanism as
+   * TeamRaidView.tsx's own handleExportToPowerUpOptimizer (the reverse of
+   * this button) — see powerUpOptimizerExport.ts's own doc comment for
+   * exactly what carries and the one real reduction it has to make (Team
+   * Raid's single shared level/IV spread vs. this tab's per-slot ones).
+   * Single-raid mode ONLY — see the button's own render-site doc comment
+   * for why multi-raid mode doesn't get this link at all.
+   */
+  function handleSendToTeamRaid() {
+    const teamAssumptions = powerUpOptimizerAssumptionsToTeamAssumptions(assumptions, result.plan?.finalLevels ?? null);
+    const url = new URL(buildTeamScenarioUrl(getBaseUrl(), assumptionsToTeamScenario(teamAssumptions)));
+    url.searchParams.set("view", "team-raid");
+    window.location.href = url.toString();
+  }
+
   const rosterNames = slotSpecies.filter((s): s is SpeciesDefinition => s !== null).map((s) => speciesLabel(s));
 
   return (
@@ -2437,13 +2463,32 @@ export function PowerUpOptimizerView() {
           <button onClick={handleShare}>Build link</button>
           {shareUrl && <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />}
         </div>
+        {assumptions.mode === "single-raid" && (
+          <>
+            <div className="share-row" style={{ marginTop: 8 }}>
+              <button type="button" onClick={handleSendToTeamRaid}>
+                Send post-plan roster to Team Raid Simulator →
+              </button>
+            </div>
+            <p className="caveats" style={{ marginTop: 8 }}>
+              {POWER_UP_OPTIMIZER_EXPORT_MISSING_NOTE}
+            </p>
+          </>
+        )}
         {assumptions.mode === "multi-raid" && (
-          <p className="caveats" style={{ marginTop: 8 }}>
-            This link carries every SETTING above (boss set, budgets, dodge/weather/timer, etc.) but NOT your
-            imported roster — the roster lives only in THIS browser&rsquo;s local storage (a deliberate exception,
-            see PLAN_multi_raid_roster_optimizer.md §3.2). A recipient opening this link needs to import their own
-            Poke Genie CSV (or yours, exported as JSON below) before they see a sweep.
-          </p>
+          <>
+            <p className="caveats" style={{ marginTop: 8 }}>
+              Sending a roster to Team Raid Simulator is only available in single-raid mode — Team Raid models
+              exactly six slots against ONE boss, while this mode&rsquo;s roster (up to ~200 imported Pokémon) and
+              boss set have no single unambiguous reduction onto that shape without inventing a silent filter.
+            </p>
+            <p className="caveats" style={{ marginTop: 8 }}>
+              This link carries every SETTING above (boss set, budgets, dodge/weather/timer, etc.) but NOT your
+              imported roster — the roster lives only in THIS browser&rsquo;s local storage (a deliberate exception,
+              see PLAN_multi_raid_roster_optimizer.md §3.2). A recipient opening this link needs to import their own
+              Poke Genie CSV (or yours, exported as JSON below) before they see a sweep.
+            </p>
+          </>
         )}
       </section>
 

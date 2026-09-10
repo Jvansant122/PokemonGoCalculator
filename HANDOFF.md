@@ -108,16 +108,76 @@ session, that is **never** a reason to change the product.
 > (Psychic) with no error. A "base vs plus move" comparison built that way measures the fallback,
 > not the move.
 
+### Later still: lineup builder, Shadow enrage, and six ideation items — SHIPPED
+
+`PLAN_lineup_builder.md` is **complete and deleted**. Driven by two `pogo-player` audit rounds,
+two ideation passes (player + researcher), and the user's own raid footage.
+
+**Accuracy**
+
+- **Shadow Raid enrage is now modelled.** A Shadow boss enrages at 60% HP
+  (`attack = 1.81×base+15`, `defense = 3×base+15`) and auto-subdues at 15%. Before this, all 108
+  recorded shadow species simulated at flat stats through a band where the real boss runs at ~3×
+  defence. A computed fact from boss HP, never a mode — it does not reintroduce combat-phase
+  selection.
+- **Swap cost: the open question is closed by video.** `swapDurationMs: 1000` was already
+  `[first-party]`; what was unknown was whether it applies to a *faint-triggered* swap. The user's
+  recording settles it — HP hits 0, and the 1.0s **runs from that moment and subsumes the death and
+  spawn animations**. One frame shows the field holding only a spawn sparkle while the HUD still
+  names the *fainted* Pokémon and the boss is already taking damage. Do not model animations as
+  extra time. Approved to move the default 0.5s → **1.0s**.
+
+**Features**
+
+- **Single-trainer lineup builder** — `runLineupBuilder`, an order-aware beam search (width 2, so a
+  genuine runner-up exists), validated against brute force on a fixture where order swings clear
+  time >2x. ~146ms on a 164-entry roster, so no worker. UI on Team Raid; the existing Team Raid →
+  Power-Up export carries it onward.
+- **Party-size ranking-flip** on the Comparator — `findCrossoverPartySize` already existed in
+  `uptime.ts`, fully written and **entirely unused**.
+- **Boss-moveset sweep** on Team Raid. It immediately found that the shipped default "clears
+  against Crunch, Stone Edge, Brutal Swing but **fails against Fire Blast**" — a conditional the
+  headline had been hiding.
+- **Multi-raid single-boss picker** (`multiRaidBossIds` already stored resolved ids, so UI-only).
+- Reverse **Power-Up plan → Team Raid** export, and **Species Report → Team Raid** link.
+
+**Tooling — a real hole in the gate**
+
+`check-scenario-roundtrip` only ever inspected *top-level* `Assumptions` fields. `slots: T[]`
+counted as one. **20 per-slot fields had never been checked** — 6 on Team Raid, **14** on the
+Power-Up Optimizer including `level`, all three IVs, `candyOnHand` and `xlCandyOnHand`. None
+actually failed, but nothing was verifying them. Now recurses; **137 fields**. It also found the
+same failure shape in itself: a CRLF file silently zeroed one tab's count.
+
+Separately, `runTeamRaid.ts` never passed per-slot `level`/`ivs` to the engine — those fields would
+have round-tripped perfectly and been **ignored at simulation time**. Fixed.
+
+**Two corrections worth keeping**
+
+- **"Mega Tyranitar can't be cleared" was wrong**, and I relayed it. Both rosters clear at 9,000 HP
+  at L35 *and* L50. The error was comparing a *mean team-DPS statistic* against a *9000/300 = 30
+  DPS* threshold — different quantities, since the ratio assumes zero downtime while the sim's
+  clear time already absorbs swaps, faints and revives. **Never conclude "can't clear" from a DPS
+  figure against an HP/timer ratio.** Two agents agreeing wasn't corroboration: the second
+  inherited the first's roster and varied only level.
+- **The "+" move multiplier cannot be closed from gameplay footage.** The combat HUD renders no
+  numeric damage for any move, and shows no Mega Level badge. The needed evidence is a still of the
+  **move-detail screen** for a Pokémon of known Mega Level.
+
 ## Next
 
-1. **`PLAN_tm_move_change_optimizer.md`** — researched and scoped, not built. Read it before
+1. **PLAN_roster_tab.md** — not yet built. Supersedes the old login/Firebase plan; this app has **no backend
+   and is not getting one**. A 7th tab: hand-entry, CSV import, and a self-contained copyable save
+   code. **Build this BEFORE the TM plan** — hand-entry is what lets a user fix an unknown moveset,
+   and TM candidates are blocked on unknown movesets for roughly a third of a real import.
+2. **`PLAN_tm_move_change_optimizer.md`** — researched and scoped, not built. Read it before
    starting: the user's "blank CSV move column ⇒ needs a TM" clause was deliberately overridden
    (a Pokémon always has moves, so blank means the export missed it), and regular TMs are *random*,
    which may make them unrankable against deterministic power-ups. Build the second-charged-move
    half first.
-2. **Dodge-lockout UI** — engine detection has landed, nothing surfaces it yet, so that config still
+3. **Dodge-lockout UI** — engine detection has landed, nothing surfaces it yet, so that config still
    shows unexplained zeros. Deliberately deferred by the user.
-3. `IDEAS.md` #9 (evolve-then-power-up) probably beats both: **6 of 8 "never competitive" entries in
+4. `IDEAS.md` #9 (evolve-then-power-up) probably beats both: **6 of 8 "never competitive" entries in
    the sample are blocked on "evolve first", none on moveset.**
 
 ## 2026-09-09: multi-raid, whole-roster Power-Up Optimizer — SHIPPED

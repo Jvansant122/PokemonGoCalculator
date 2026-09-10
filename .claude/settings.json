@@ -33,9 +33,14 @@
       "Bash(tail *)",
       "Bash(wc *)",
       "Bash(grep *)",
-      "Bash(find *)"
+      "Bash(find *)",
+      "Bash(git push origin main)"
     ],
-    "ask": ["Bash(git push:*)"]
+    "ask": [
+      "Bash(git push:*force*)",
+      "Bash(git push:*--delete*)",
+      "Bash(git push:*:*)"
+    ]
   },
   "hooks": {
     "SessionStart": [

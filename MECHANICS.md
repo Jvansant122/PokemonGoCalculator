@@ -218,15 +218,24 @@ Mega Energy cost on repeats (80% / 90% / 95% reduction) and the rest period
    "regardless of their current Mega Level" — so the tier sets its power, not
    its availability.
 
-3. **Super Max is only reachable by a mega that has a "+" move.** `[unverified]`
-   — stated by the user (a high-investment player relaying their own account
-   state) on 2026-09-09: *"not every mega can get to super mega level its only
-   the ones with plus moves unlocked."* No published source states this either
-   way, so it is recorded at user-report tier; it is nonetheless the only claim
-   anyone has made about Super Max eligibility, and it is self-consistent with
-   Niantic having shipped Super Max and the "+" moves as one feature. The
-   practical consequence is that item 1's +2 effective levels must **not** be
-   grantable to the ~46 megas with no "+" move — before 2026-09-10 the engine
+3. **Super Max is only reachable by a mega that has a "+" move.**
+   `[community-consensus, first-party-corroborated in one direction]` —
+   **upgraded 2026-09-10** from bare user-report. Originally stated by the user
+   on 2026-09-09: *"not every mega can get to super mega level its only the ones
+   with plus moves unlocked."* Now corroborated:
+   - `[first-party]` pokemongo.com's `more-mega-updates-2026`, fetched
+     2026-09-10, verbatim: *"Pokémon that can reach Super Max Level will have an
+     additional Charged Attack while Mega Evolved."* Note this states the
+     **reverse** implication (Super-Max-eligible → gets the move), not the
+     converse the engine actually gates on. Niantic has not stated the converse
+     in so many words, which is why this is not `[first-party]` outright.
+   - Two independently-run community sites (doctorpokegogo, theclick.gg, both
+     2026-08-31) list the **identical ~13-15 species** as simultaneously Super
+     Max eligible and holders of the extra Charged Attack, treating them as one
+     feature — and that roster matches this file's own 15-species "+"-move count.
+
+   The practical consequence is that item 1's +2 effective levels must **not**
+   be grantable to the ~46 megas with no "+" move — before 2026-09-10 the engine
    handed that CP bump to any mega whose scenario asked for Super Max.
 
 **The in-game client displays a "+" move's damage, and it moves with Mega
@@ -241,11 +250,30 @@ asserted it as fact and had to be corrected. Leave it open.
 
 The observation settles the weaker of the two questions in item 2: the scaling is real,
 per-tier, and surfaced by the game itself, so it is not a community invention.
-It does **not** settle the `+10%` magnitude. It does, however, describe a
-**directly checkable** experiment that would retire the estimate outright: one
-reading of (move name, Mega Level, displayed damage) for a known "+" move pins
-the real multiplier. Nobody has yet supplied one — ask for it before trusting
-the curve any further.
+It does **not** settle the `+10%` magnitude. One reading of (move name, Mega
+Level, displayed damage) for a known "+" move would pin the real multiplier.
+
+⚠️ **RETARGETED 2026-09-10 — gameplay footage cannot supply it.** A frame-by-frame
+review of the user's own raid recording (`pogo-researcher`, 12 frames) established
+two independent blockers, both structural rather than a limitation of that clip:
+
+1. **The combat HUD never renders a numeric damage or energy figure** for any
+   move — only "SUPER EFFECTIVE!" / "NOT VERY EFFECTIVE" text and HP-bar
+   depletion.
+2. **No Mega Level tier badge appears anywhere during combat**, so even a
+   back-calculated number could not be attributed to a known tier.
+
+Back-calculating from HP-bar pixel width was considered and **deliberately
+declined**: it would stack an uncertain per-tier boss HP total, an uncertain
+boss DEF/CPM, and pixel estimation off a camera shot of a monitor — three
+compounding unknowns producing exactly the kind of confident-but-wrong number
+this project has already been burned by.
+
+**So the evidence needed is a still of the Pokémon's own MOVE-DETAIL screen**
+(where the client does print a move's damage), for a Pokémon whose Mega Level
+is known — not gameplay video. That is almost certainly what the user's earlier
+*"it shows a number next to the move"* report referred to. Ask for that
+specific screen; do not re-review footage expecting a different answer.
 
 **The 1.3x mega/primal team-wide damage boost is UNCHANGED at every tier,
 including Super Max.** Reconfirmed across three independent research rounds
@@ -488,14 +516,48 @@ exception — see below.
 `[first-party]`. Earlier research this project ran searched community articles
 for this figure and found none that quantified it; the game's own settings do.
 
-Still open: whether it applies to a faint-triggered auto-swap, a manual
-mid-raid swap, or both. That decides whether it belongs in the Team Raid
-Simulator's per-faint accounting or only on a manual-swap path.
+**RESOLVED 2026-09-10 — it applies to a faint-triggered auto-swap.** This was
+the open question here, and it is the one that decided whether the value belongs
+in the Team Raid Simulator's per-faint accounting at all. Closed by the user's
+own screen recording of a real raid, timings read off the video:
 
-**Engine: diverges.** `teamRaid.ts` defaults `swapCostSeconds` to `0` on the
-documented grounds that no official value existed. That premise is now false.
-Changing the default re-baselines every shared Team Raid link, so it is a
-product call rather than a silent fix.
+- Mega Mewtwo faints at **~54.10s**.
+- The next Pokémon (Keldeo) lands its first damage at **~55.6s**, via a **0.5s**
+  charged attack.
+- **1.5s elapsed = 1.0s swap + 0.5s attack.** The first-party `swapDurationMs`
+  reproduces the gap exactly, on a swap nobody chose — the previous Pokémon
+  fainted.
+
+`[first-party]` for the constant; `[user-observation]` for its applicability to
+the faint path, from direct video evidence rather than inference.
+
+**The 1.0s is measured from HP-zero and SUBSUMES both animations** — frames
+extracted from the recording (2026-09-10) make the sequence explicit. At
+stopwatch ~54.5-54.9 the fainted Pokémon is still standing on the field. By
+~55.5 it is gone, the replacement is **not yet rendered** (only a spawn
+sparkle on the ground), the HUD nameplate **still reads the fainted
+Pokémon's name and CP**, and the boss's HP bar is already showing a damage
+flash. So: HP hits 0 at 54.10, the death animation plays, the replacement
+spawns, and the 0.5s charged attack lands at 55.6 — all inside 54.10 + 1.0 +
+0.5. The animations fill the 1.0s rather than adding to it.
+
+⚠️ **So do not model the death and spawn animations as time.**
+The user's own words: *"health goes to 0 before the death animation starts and
+keldeo does damage before its even on screen."* So the clock is driven by the
+underlying state transition, not by what is rendered. A model that added
+animation time on top of the 1.0s would double-count, and the video shows
+damage landing before the incoming Pokémon is even drawn.
+
+Still genuinely open, and narrower than before: whether a **manual** mid-raid
+swap costs the same 1.0s. Nothing here bears on it, and this engine does not
+model manual swaps.
+
+**Engine: implemented as of 2026-09-10** (pending the default change landing).
+`teamRaid.ts` previously defaulted `swapCostSeconds` to `0` on the documented
+grounds that no official value existed — a premise that stopped being true on
+2026-09-09. The user chose the sourced **1.0s** over the 0.5s the web UI had
+been shipping. Note the 0.5s was a deliberate choice, not an error: it predates
+both the first-party constant and this video.
 
 ### The 0.5 second cycle
 
@@ -842,6 +904,62 @@ now surfaced, following the existing `bossChargedMoveCadenceClamped` precedent
 - Deliberately not wired into `rosterPlanner.ts` — that never calls the stepwise
   simulator directly and its output is too many layers of aggregation removed from
   a per-tick diagnostic.
+
+### RESOLVED: 500ms and 700ms are two different quantities, not a conflict
+
+Closed 2026-09-10. Recorded because the apparent contradiction kept getting
+re-flagged, and because one of the two numbers came from the user, so it looked
+like our data disagreeing with a player's experience. It doesn't.
+
+- **`dodgeDurationMs: 500`** `[first-party]`, `BATTLE_SETTINGS` — the
+  **invulnerability window once a dodge is actually executed**. This is the
+  quantity `DODGE_COST_SECONDS = 0.5` models, and it is correct.
+- **~700ms** `[community-consensus]` — the **reaction window**: how long a human
+  has between the yellow-flash cue and the attack landing in which to *input*
+  the dodge. Source: pokemongohub.net's "Close Calls: Dodging Mechanics",
+  fetched 2026-09-10. Its own wording only parses if the two are distinct
+  ("it is very easy to overlap the dodging cool down and the 700ms you have"),
+  and fevgames.net frames it the same way independently.
+
+So the user's *"I think dodge only lasts 0.7 seconds from what I read"* was
+about the reaction window, not the invulnerability window — both readings are
+right about different things.
+
+⚠️ Caveat on the 700ms figure: it is **2019-dated** and conceptually tied to the
+per-move damage-window timers this file records as having stopped governing
+damage after the 2024 rework. It may no longer be current. Moot either way for
+this engine.
+
+**Engine: nothing to change.** This engine's dodge model is perfect-play — it
+has no concept of a human reaction window, so 700ms has nothing to attach to.
+`DODGE_COST_SECONDS` stays 0.5, correctly sourced.
+
+### Re-attempted and still unsourceable — stop re-chasing these
+
+A dated negative result, so future passes don't spend the budget again. All of
+the following were re-attempted on **2026-09-10** with fresh angles and stayed
+closed:
+
+- **What gates the boss firing once energy suffices** (below) — no source at any
+  tier. ⚠️ A WebSearch summary during this pass *fabricated* a supporting claim
+  ("the roll is gated on the boss having used a fast attack") and attributed it
+  to a real pokemongohub article; direct-fetching that article showed the claim
+  is **not in it**. Do not accept a search summary here without fetching.
+- **`holdChargedMoveUntilSafe`'s own-time cost** — no guide, wiki or datamine
+  quantifies this specific sequence.
+- **Dodge damage scaling with remaining HP** — no follow-up to the single Silph
+  Road Payback observation exists.
+- **Damage-formula completeness** — a *tooling ceiling*, not a research gap:
+  reddit.com and thesilphroad.com are both hard-blocked to this tooling and no
+  mirror of that analysis exists.
+- **The "+10% per tier" magnitude** — doctorpokegogo publishes an exact per-tier
+  table (170/187/204/221 for Volt Tackle+), but the same page states it is
+  *computed from* their own disclaimed estimate formula. Circular, not evidence.
+
+Re-running these without a genuinely new lead reproduces this result. The one
+thing that would actually close the last item is what the user already
+identified: **one reading of an in-game displayed "+" move damage number at a
+known Mega Level tier.**
 
 ### Unconfirmed: dodge damage may scale with remaining HP
 
@@ -1528,12 +1646,32 @@ first-party source states any of these numbers.
 applying the tier multiplier, so a boss flagged `isShadow` gets the 1.2 attack
 and 5/6 defense treatment today — this was checked, and it is a positive
 validation rather than a gap. The `RaidTier` union correctly has no shadow
-rows. **The enrage state itself is not modelled** — it is a mid-fight stat
-change, structurally different from a flag, and would need a simulator phase.
-**Purified Gems are not modelled and arguably should not be**: an 8-gem group
-threshold no single trainer can reach is multi-trainer coordination, closer in
-shape to the ruled-out Teambuilding Analyzer than to this tool's per-candidate
-combat math.
+rows. **Purified Gems are not modelled and arguably should not be**: an 8-gem
+group threshold no single trainer can reach is multi-trainer coordination,
+closer in shape to the ruled-out Teambuilding Analyzer than to this tool's
+per-candidate combat math.
+
+**Enrage: implemented 2026-09-10** (`shadow.ts`'s `shadowEnragePhaseForHpFraction`/
+`shadowEnragedStats`, threaded through `simulate.ts`'s `StepwiseBoss.enrage` as
+a per-tick, boss-remaining-HP-fraction-driven stat swap — a computed fact
+inside the simulation, never a `Scenario` field or a phase toggle, per this
+project's standing decision). `comparison.ts`'s `bossEnrageStats(boss)` is the
+single `isShadow` gate every caller (`runSustainedComparison`, `teamRaid.ts`)
+goes through; `null` for a non-shadow boss leaves that boss's fight
+byte-for-byte unchanged. **Stacking decision**: the `1.81 × baseAttack + 15` /
+`3 × baseDefense + 15` enrage formula is applied to the ALREADY
+shadow-adjusted base stat (`shadowAdjustedBaseStats`'s output), not the raw
+one — resolved from this engine's own architecture (there is exactly one
+Shadow-multiplier application point in the whole codebase, and the enrage
+formula is just a second transform reusing that same output) rather than
+guessed; see `shadow.ts`'s `shadowEnragedStats` doc comment for the full
+reasoning. `teamRaid.ts` carries the boss's cumulative damage taken
+(`damageDealtBeforeFight`) across a slot handoff or wipe-and-revive, so a
+later slot can inherit an already-enraged (or already-subdued) boss exactly
+as a real continuous encounter would. The transition timestamps are surfaced,
+not hidden — `StepwiseRunResult.enragedAtSeconds`/`subduedAtSeconds` and
+`TeamRaidSlotResult.enragedAtRaidSeconds`/`subduedAtRaidSeconds` — following
+the `dodgeFastAttacksLockout` precedent.
 
 ---
 

@@ -13,6 +13,8 @@ import {
   type RaidTier,
   type SpeciesDefinition,
   type SpeciesRegistry,
+  type TeamRaidInputs,
+  type TeamRaidOutcome,
 } from "@pogo-analyzer/engine";
 import type { TeamAssumptions } from "../TeamAssumptionPanel.js";
 import { applyShadowToggle } from "../shadowToggle.js";
@@ -53,6 +55,40 @@ export interface TeamRaidRunResult {
    * genuinely-never-cleared case that has nothing else to show).
    */
   failureSummary: TeamRaidFailureSummary | null;
+  /**
+   * IDEAS #18: re-runs the SAME roster/boss encounter once per the boss's
+   * own known charged move (all other assumptions held fixed), so "does my
+   * roster clear this boss" stops being silently conditional on which
+   * charged move the boss happened to be set to — the highest-stakes tab's
+   * headline was previously computed against exactly one fixed
+   * bossChargedMoveId with no visibility into whether a different real boss
+   * roll would flip clear into failure. `null` whenever the boss has fewer
+   * than 2 known charged moves (nothing to sweep) — see TeamRaidView's own
+   * gating on this field.
+   */
+  bossMovesetSweep: TeamRaidBossMovesetSweep | null;
+}
+
+export interface TeamRaidBossMovesetResult {
+  moveId: string;
+  moveName: string;
+  outcome: TeamRaidOutcome;
+  clearsWithinTimer: boolean;
+  timeToClearSeconds: number | null;
+  timerMarginSeconds: number | null;
+  wipeCount: number;
+  slotsUsed: number;
+}
+
+export interface TeamRaidBossMovesetSweep {
+  results: TeamRaidBossMovesetResult[];
+  /**
+   * True when `clearsWithinTimer` differs across at least two of the boss's
+   * own known charged moves — the headline case this whole sweep exists to
+   * surface (a moveset roll that turns a clear into a failure, or vice
+   * versa), as opposed to every moveset agreeing on the same verdict.
+   */
+  verdictVaries: boolean;
 }
 
 export interface TeamRaidFailureSummary {
@@ -124,45 +160,96 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     stored: a.bossChargedMoveFrequencySeconds,
   });
 
+  // Every field EXCEPT bossChargedMoveId/bossStartingEnergy — factored out so
+  // both the main (single-moveset) call below AND the boss-moveset sweep
+  // (IDEAS #18) build the identical roster/boss/timer configuration and can
+  // only ever differ in the one thing actually being swept, never drift into
+  // two subtly different simulations.
+  function buildTeamRaidInputs(bossChargedMoveId: string | null, bossStartingEnergyForMove: number): TeamRaidInputs {
+    return {
+      // Each slot's species stays RAW everywhere else — the Shadow toggle
+      // is applied ONLY here, at the boundary into runTeamRaid, same
+      // convention as ComparatorView's shadowAdjustedCandidates.
+      slots: a.slots.map((s) => ({
+        species: applyShadowToggle(resolveSpecies(s.speciesId), s.isShadow),
+        fastMoveId: s.fastMoveId,
+        chargedMoveId: s.chargedMoveId,
+        isMega: s.isMega,
+        // TeamRaidSlotInput.megaLevel is MegaLevel | undefined (no explicit
+        // null in its type), unlike TeamScenarioSlot.megaLevel's
+        // MegaLevel | null — both mean the same "no investment assumed"
+        // thing everywhere this is consumed, so `?? undefined` is a pure
+        // type-shape conversion, not a behavior change.
+        megaLevel: s.megaLevel ?? undefined,
+        // Per-slot override — `undefined` falls back to the roster-wide
+        // level/ivs below (TeamRaidSlotInput's own convention), so a
+        // hand-built slot (which never sets these) behaves byte-identically
+        // to before this field existed. See TeamSlotAssumption.level's own
+        // doc comment for why this exists (the lineup builder).
+        level: s.level,
+        ivs: s.ivs,
+      })),
+      boss: bossSpecies!,
+      bossRaidTier,
+      bossFastMoveId: a.bossFastMoveId,
+      bossChargedMoveId,
+      level: a.level,
+      ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
+      dodge: a.dodge,
+      dodgeFastAttacks: a.dodgeFastAttacks,
+      holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
+      bossChargedMoveMeanIntervalSeconds: effectiveBossChargedMoveFrequencySeconds,
+      bossChargedMoveCadence: a.bossChargedMoveCadence,
+      bossStartingEnergy: bossStartingEnergyForMove,
+      weather: a.weather,
+      raidTimerSeconds: a.raidTimerSeconds,
+      swapCostSeconds: a.swapCostSeconds,
+      reviveCostSeconds: a.reviveCostSeconds,
+    };
+  }
+
   let data: ReturnType<typeof runTeamRaid> | null = null;
   let error: string | null = null;
   if (bossSpecies) {
     try {
-      data = runTeamRaid({
-        // Each slot's species stays RAW everywhere else — the Shadow toggle
-        // is applied ONLY here, at the boundary into runTeamRaid, same
-        // convention as ComparatorView's shadowAdjustedCandidates.
-        slots: a.slots.map((s) => ({
-          species: applyShadowToggle(resolveSpecies(s.speciesId), s.isShadow),
-          fastMoveId: s.fastMoveId,
-          chargedMoveId: s.chargedMoveId,
-          isMega: s.isMega,
-          // TeamRaidSlotInput.megaLevel is MegaLevel | undefined (no explicit
-          // null in its type), unlike TeamScenarioSlot.megaLevel's
-          // MegaLevel | null — both mean the same "no investment assumed"
-          // thing everywhere this is consumed, so `?? undefined` is a pure
-          // type-shape conversion, not a behavior change.
-          megaLevel: s.megaLevel ?? undefined,
-        })),
-        boss: bossSpecies,
-        bossRaidTier,
-        bossFastMoveId: a.bossFastMoveId,
-        bossChargedMoveId: a.bossChargedMoveId,
-        level: a.level,
-        ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
-        dodge: a.dodge,
-        dodgeFastAttacks: a.dodgeFastAttacks,
-        holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
-        bossChargedMoveMeanIntervalSeconds: effectiveBossChargedMoveFrequencySeconds,
-        bossChargedMoveCadence: a.bossChargedMoveCadence,
-        bossStartingEnergy,
-        weather: a.weather,
-        raidTimerSeconds: a.raidTimerSeconds,
-        swapCostSeconds: a.swapCostSeconds,
-        reviveCostSeconds: a.reviveCostSeconds,
-      });
+      data = runTeamRaid(buildTeamRaidInputs(a.bossChargedMoveId, bossStartingEnergy));
     } catch (err) {
       error = (err as Error).message;
+    }
+  }
+
+  // IDEAS #18 — see TeamRaidRunResult.bossMovesetSweep's own doc comment.
+  // Only meaningful when the boss actually has 2+ known charged moves (same
+  // gate ComparatorView's bossMovesetSweep already uses). runTeamRaid is a
+  // single deterministic simulation (unlike runSustainedComparison's 200
+  // iterations), so re-running it once per boss charged move is cheap —
+  // see agent memory for the measured cost.
+  let bossMovesetSweep: TeamRaidBossMovesetSweep | null = null;
+  if (bossSpecies && bossSpecies.chargedMoves.length >= 2) {
+    const results: TeamRaidBossMovesetResult[] = [];
+    for (const move of bossSpecies.chargedMoves) {
+      const startingEnergyForMove = a.bossStartsPrimed ? a.bossStartingEnergyFraction * move.energyCost : 0;
+      try {
+        const r = runTeamRaid(buildTeamRaidInputs(move.id, startingEnergyForMove));
+        results.push({
+          moveId: move.id,
+          moveName: move.name,
+          outcome: r.outcome,
+          clearsWithinTimer: r.clearsWithinTimer,
+          timeToClearSeconds: r.timeToClearSeconds,
+          timerMarginSeconds: r.timerMarginSeconds,
+          wipeCount: r.wipeCount,
+          slotsUsed: r.slotsUsed,
+        });
+      } catch {
+        // Skip a moveset that fails to simulate for this roster (should be
+        // rare — the main call above already exercises the identical roster
+        // configuration successfully whenever `data` is non-null) rather
+        // than failing the whole sweep over one bad variant.
+      }
+    }
+    if (results.length >= 2) {
+      bossMovesetSweep = { results, verdictVaries: new Set(results.map((r) => r.clearsWithinTimer)).size > 1 };
     }
   }
 
@@ -205,5 +292,6 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     data,
     error,
     failureSummary,
+    bossMovesetSweep,
   };
 }

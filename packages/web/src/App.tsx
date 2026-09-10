@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
+import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { AttackDefenseBreakpointsView } from "./AttackDefenseBreakpointsView.js";
 import { ComparatorView } from "./ComparatorView.js";
 import { IvBreakpointsView } from "./IvBreakpointsView.js";
@@ -55,10 +56,21 @@ function initialTab(): AppTab {
 export function App() {
   const [tab, setTab] = useState<AppTab>(initialTab);
   const [comparatorPrefill, setComparatorPrefill] = useState<ComparatorPrefill | null>(null);
+  // A second, independent lifted-prop hand-off channel (see teamRaidPrefill.ts)
+  // for Species Report's "Send to Team Raid Simulator" row action — mirrors
+  // comparatorPrefill above exactly, just targeting a different destination
+  // tab, rather than overloading ComparatorPrefill's own species-A-shaped
+  // fields for a second, unrelated destination.
+  const [teamRaidPrefill, setTeamRaidPrefill] = useState<TeamRaidPrefill | null>(null);
 
   function handleCompareFromSpeciesReport(prefill: ComparatorPrefill) {
     setComparatorPrefill(prefill);
     setTab("comparator");
+  }
+
+  function handleSendToTeamRaidFromSpeciesReport(prefill: TeamRaidPrefill) {
+    setTeamRaidPrefill(prefill);
+    setTab("team-raid");
   }
 
   return (
@@ -141,9 +153,9 @@ export function App() {
       {tab === "comparator" ? (
         <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
       ) : tab === "team-raid" ? (
-        <TeamRaidView />
+        <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
       ) : tab === "species-report" ? (
-        <SpeciesReportView onCompare={handleCompareFromSpeciesReport} />
+        <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
       ) : tab === "iv-breakpoints" ? (
         <IvBreakpointsView />
       ) : tab === "attack-defense-breakpoints" ? (

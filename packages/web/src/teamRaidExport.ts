@@ -14,7 +14,25 @@ import type { PowerUpOptimizerAssumptions, PowerUpSlotAssumption } from "./Power
 export const TEAM_RAID_EXPORT_MISSING_NOTE =
   "Brings over your roster, boss, and combat assumptions. You'll still need to fill in: stardust on hand, each slot's own regular/XL candy, the shared Rare Candy pools, and any Shadow-adjacent Purified/Lucky flags — Team Raid has no equivalent for those.";
 
-/** Mirrors emptyPowerUpSlot()'s own convention (PowerUpOptimizerAssumptionPanel.tsx) exactly — 0 candy, not "unknown," IS this tab's own resting state for a slot no resource has been entered for yet; there is no separate "unknown" concept for single-raid mode's own per-slot candy the way multi-raid's candyByFamilyId map has one. */
+/**
+ * Mirrors emptyPowerUpSlot()'s own convention (PowerUpOptimizerAssumptionPanel.tsx)
+ * exactly — 0 candy, not "unknown," IS this tab's own resting state for a
+ * slot no resource has been entered for yet; there is no separate "unknown"
+ * concept for single-raid mode's own per-slot candy the way multi-raid's
+ * candyByFamilyId map has one.
+ *
+ * Level/IVs: prefers THIS slot's own `level`/`ivs` override (see
+ * TeamSlotAssumption.level's own doc comment — set by the Lineup Builder,
+ * lineupBuilderAction.ts) over the roster-wide shared spread, falling back
+ * to the shared spread only when the slot has no override. This matters:
+ * without it, a lineup built with each Pokémon at its own real roster level
+ * would silently collapse back onto one shared mean the moment it's
+ * exported, the exact ~40% clear-time divergence already measured for the
+ * Power-Up-Optimizer-plan -> Team Raid direction (see
+ * .claude/agent-memory/web-developer/feature_reverse_cross_tab_links_powerup_to_teamraid_and_speciesreport.md)
+ * — except here the fix is free, since the destination already has room for
+ * a per-slot value.
+ */
 function slotToPowerUpSlot(
   slot: TeamSlotAssumption,
   level: number,
@@ -34,13 +52,10 @@ function slotToPowerUpSlot(
     // TEAM_RAID_EXPORT_MISSING_NOTE above rather than silently assumed.
     isPurified: false,
     isLucky: false,
-    // Team Raid's roster shares ONE level/IV spread across every slot; the
-    // Power-Up Optimizer's slots each carry their OWN level/IVs, so the
-    // single shared spread fans out to all six slots here.
-    level,
-    ivAttack,
-    ivDefense,
-    ivStamina,
+    level: slot.level ?? level,
+    ivAttack: slot.ivs?.attack ?? ivAttack,
+    ivDefense: slot.ivs?.defense ?? ivDefense,
+    ivStamina: slot.ivs?.stamina ?? ivStamina,
     candyOnHand: 0,
     xlCandyOnHand: 0,
   };
@@ -58,8 +73,9 @@ function slotToPowerUpSlot(
  *
  * What carries: all six slots (species/fast move/charged move/mega
  * flag/Mega Level/Shadow flag, in order), the raid target and its two boss
- * moves, the shared level/IV spread (fanned out per-slot, see
- * slotToPowerUpSlot above), and every combat assumption both tabs share
+ * moves, each slot's own level/IVs (its own override when set — e.g. by the
+ * Lineup Builder — else the shared roster-wide spread fanned out per-slot,
+ * see slotToPowerUpSlot above), and every combat assumption both tabs share
  * verbatim (dodge model, dodgeFastAttacks, holdChargedMoveUntilSafe,
  * weather, boss charged-move frequency + cadence, bossStartsPrimed,
  * bossStartingEnergyFraction, raidTimerSeconds, swapCostSeconds,
