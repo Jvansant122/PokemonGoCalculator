@@ -449,6 +449,66 @@ describe("runRosterPlanner — bestBossDeltaTeamDps / significantBossCount / exc
   });
 });
 
+describe("RosterPlannerInputs.significanceMode", () => {
+  // Reuses the exact Defect 3a fixture/config above — that run already
+  // demonstrates at least one candidate that is individually significant on
+  // ONE boss while diluted below the aggregate floor overall (dilutedButReal).
+  function dilutedFixtureResult(significanceMode?: RosterPlannerInputs["significanceMode"]) {
+    return runRosterPlanner({
+      ...baseInputs({ screenIterations: 4, iterations: 6, maxCandidates: 500, significanceMode }),
+      pool: [...strongTeam(25), entry("weak-bench", WEAK_BENCH_SPECIES, 1)],
+      targets: [
+        { species: BOSS_ONE, weight: 1 },
+        { species: BOSS_TWO, weight: 3 },
+      ],
+    });
+  }
+
+  it("defaults to 'aggregate-or-per-boss' — omitting the field is byte-identical to the explicit value", () => {
+    const omitted = dilutedFixtureResult(undefined);
+    const explicit = dilutedFixtureResult("aggregate-or-per-boss");
+    expect(omitted).toEqual(explicit);
+  });
+
+  it("'aggregate-only' excludes a candidate that only qualifies via significantBossCount, while keeping significantBossCount/bestBossDeltaTeamDps populated exactly the same", () => {
+    const withPerBoss = dilutedFixtureResult("aggregate-or-per-boss");
+    const aggregateOnly = dilutedFixtureResult("aggregate-only");
+
+    const dilutedButReal = withPerBoss.candidates.filter(
+      (c) => c.significantBossCount > 0 && Math.abs(c.meanDeltaTeamDps) <= withPerBoss.noiseFloorTeamDps,
+    );
+    expect(dilutedButReal.length).toBeGreaterThan(0);
+    for (const c of dilutedButReal) expect(c.exceedsNoise).toBe(true);
+
+    for (const diluted of dilutedButReal) {
+      const underAggregateOnly = aggregateOnly.candidates.find(
+        (c) => c.entryId === diluted.entryId && c.toLevel === diluted.toLevel,
+      )!;
+      expect(underAggregateOnly).toBeDefined();
+      // The mode changes what QUALIFIES, never what's MEASURED or REPORTED.
+      expect(underAggregateOnly.significantBossCount).toBe(diluted.significantBossCount);
+      expect(underAggregateOnly.bestBossDeltaTeamDps).toBe(diluted.bestBossDeltaTeamDps);
+      expect(underAggregateOnly.bestBossId).toBe(diluted.bestBossId);
+      expect(underAggregateOnly.meanDeltaTeamDps).toBeCloseTo(diluted.meanDeltaTeamDps, 10);
+      // But it no longer qualifies as significant.
+      expect(underAggregateOnly.exceedsNoise).toBe(false);
+    }
+  });
+
+  it("a candidate that clears the AGGREGATE floor is admitted under both modes", () => {
+    const withPerBoss = dilutedFixtureResult("aggregate-or-per-boss");
+    const aggregateOnly = dilutedFixtureResult("aggregate-only");
+
+    const aggregateClearing = withPerBoss.candidates.filter((c) => Math.abs(c.meanDeltaTeamDps) > withPerBoss.noiseFloorTeamDps);
+    expect(aggregateClearing.length).toBeGreaterThan(0);
+    for (const c of aggregateClearing) {
+      expect(c.exceedsNoise).toBe(true);
+      const underAggregateOnly = aggregateOnly.candidates.find((x) => x.entryId === c.entryId && x.toLevel === c.toLevel)!;
+      expect(underAggregateOnly.exceedsNoise).toBe(true);
+    }
+  });
+});
+
 describe("runRosterPlanner — a level-1 entry cannot be admitted as rank 1 against a boss whose fielded six are 30+ levels higher (Defect 2 regression)", () => {
   it("never admits WEAK_BENCH_SPECIES at level 1 far below the fielded team's own level — only once it's genuinely competitive", () => {
     const result = runRosterPlanner({

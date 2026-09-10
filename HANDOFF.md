@@ -67,6 +67,47 @@ being a second `pogo-researcher`; it routes unverified mechanics out instead of 
 Its `casual-optimizer` archetype rejects four tabs on premise — per a standing decision added this
 session, that is **never** a reason to change the product.
 
+### Later the same day: export button, significance toggle, and a corrected measurement
+
+- **Team Raid → Power-Up Optimizer export.** One button carries the six slots, boss, both boss
+  moves and every shared assumption; the shared level/IV spread fans out per-slot. Resource fields
+  Team Raid has no concept of (stardust, per-slot candy/XL, Rare Candy pools, Purified/Lucky) land
+  on the destination's resting state, with a one-line note saying so. Needed **no** new Scenario
+  field — it just builds a URL for the Power-Up Optimizer's existing shape.
+- **Significance-mode toggle** on the multi-raid optimizer (`multiRaidSignificanceMode`, 115 fields
+  now round-trip). Ranking was *already* mean-based; the only thing "best boss" still decided was
+  the significance gate. Default is now `aggregate-only`; an absent field decodes to
+  `aggregate-or-per-boss` so existing links are unchanged — same inverted-default split as
+  `showDetailedAssumptions`. Live: 36 → 51 qualifying candidates when toggled, matching the
+  hidden-count line exactly. The "Best boss Δ" column stays — the mode changes what *qualifies*,
+  never what's *reported*.
+
+> ⚠️ **A measurement in this file's earlier section was wrong, and the way it was wrong is worth
+> keeping.** Two agents reported Mega Tyranitar "isn't clearable" (~25% short at L40, then
+> "27.15 vs 30.00 DPS, ~9.5% short" at L50), and the default boss was set to plain Tyranitar on
+> that basis. **It does not reproduce.** Both rosters clear it at 9,000 HP, at L35 *and* L50, under
+> `perfect` / `none` / `50% missed` dodging:
+>
+> | Team | L35 | L50 |
+> | :--- | :--- | :--- |
+> | Mega Mewtwo X / Machamp / Terrakion / Lucario ×2 / empty | cleared 280.4s | cleared 256.1s |
+> | Mega Lucario / Machamp / Terrakion / Excadrill / Conkeldurr / Heracross | cleared 287.5s | cleared 272.1s |
+>
+> **The trap:** a *mean team-DPS statistic* was compared against a *9000 HP ÷ 300 s = 30 DPS*
+> threshold. Those are different quantities — that ratio assumes zero downtime, while the
+> simulation's clear time already absorbs swap costs, faints and wipe-and-revive loops. Clearing at
+> 272 s is ~33 effective DPS while a mean-DPS readout of the same run says 27. **Never conclude
+> "can't clear" from a DPS figure against an HP/timer ratio — run it and read `outcome`.**
+>
+> The default is now `tyranitar-mega` with the user's own team, and `TeamRaidView.tsx`'s comment
+> records the error rather than hiding it. Second-order lesson: the two agents did not
+> independently corroborate — the second inherited the first's roster and varied only *level*.
+>
+> One more correction from the same chase: `DYNAMIC_PUNCH` is **not** in Mega Mewtwo X's movepool
+> (only `DYNAMIC_PUNCH_PLUS` is), so passing that id silently falls back to `chargedMoves[0]`
+> (Psychic) with no error. A "base vs plus move" comparison built that way measures the fallback,
+> not the move.
+
 ## Next
 
 1. **`PLAN_tm_move_change_optimizer.md`** — researched and scoped, not built. Read it before

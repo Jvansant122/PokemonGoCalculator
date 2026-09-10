@@ -237,6 +237,12 @@ export function resolveRosterPlannerInputs(
     // non-mega entry is unaffected. `?? undefined` matches RosterPlannerInputs.megaLevel’s
     // `MegaLevel | undefined` shape (TeamRaidSlotInput’s convention), not the `| null` one.
     megaLevel: a.multiRaidMegaLevel ?? undefined,
+    // Threaded from the SAME assumptions field into BOTH runRosterPlanner
+    // (this resolution feeds the ranked table) and planRosterBudget (the
+    // fixed-budget plan reuses this exact `inputs` object unchanged — see
+    // runRosterBudgetScenario's own doc comment) so the two can never
+    // disagree about what counts as significant.
+    significanceMode: a.multiRaidSignificanceMode,
     iterations: ROSTER_PLANNER_ITERATIONS,
   };
   return { targets, blockedReason: null, inputs };

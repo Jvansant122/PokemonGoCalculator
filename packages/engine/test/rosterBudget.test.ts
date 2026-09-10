@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { MegaLevel } from "../src/megaLevel.js";
-import { planRosterBudget, type RosterEntry, type RosterBudgetInputs } from "../src/rosterPlanner.js";
-import { powerUpCostTableFromGameMaster, type PowerUpCostTable } from "../src/powerUp.js";
+import {
+  candidateClearsBudgetFloor,
+  planRosterBudget,
+  runRosterPlanner,
+  type RosterBudgetCandidateEval,
+  type RosterEntry,
+  type RosterBudgetInputs,
+  type RosterPerBossImpact,
+} from "../src/rosterPlanner.js";
+import { noiseFloorFor, powerUpCostTableFromGameMaster, type PowerUpCostTable } from "../src/powerUp.js";
 import type { IVSpread } from "../src/types.js";
 import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_SETTINGS } from "./fixtures/powerUpCosts.js";
 import {
@@ -372,6 +380,161 @@ describe("planRosterBudget — never exceeds any budget dimension", () => {
     }
     expect(plan.ledger.sharedRareCandy.remaining).toBeGreaterThanOrEqual(0);
     expect(plan.ledger.sharedRareCandyXl.remaining).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("candidateClearsBudgetFloor — significanceMode (synthetic evalResult, deterministic — no simulation noise)", () => {
+  // A minimal, deterministic way to probe the gate's algebra directly,
+  // rather than fighting simulation noise to engineer a real scenario that
+  // happens to land in a specific significance shape (the technique
+  // rosterPlanner.test.ts's Defect 3a fixture already uses for the REAL
+  // simulated case — see the cross-check test below that ties the two
+  // together on real data).
+  function perBossImpact(deltaTeamDps: number): RosterPerBossImpact {
+    return { bossId: "b", bossName: "b", deltaTeamDps, rankBefore: null, rankAfter: null, simulated: true };
+  }
+  function evalResult(perBossDeltas: number[]): RosterBudgetCandidateEval {
+    const perBoss = perBossDeltas.map(perBossImpact);
+    const mean = perBoss.reduce((s, p) => s + p.deltaTeamDps, 0) / perBoss.length;
+    return { perBoss, meanDeltaTeamDps: mean, bestBossDeltaTeamDps: null, bestBossId: null, significantBossCount: 0, touchedTargetIndices: [] };
+  }
+  const floors = [1, 1];
+  const aggregateFloor = 1;
+
+  it("a candidate that clears the AGGREGATE floor is admitted under both modes", () => {
+    const e = evalResult([5, 5]); // mean 5 > 1
+    expect(candidateClearsBudgetFloor(e, floors, aggregateFloor, "aggregate-or-per-boss")).toBe(true);
+    expect(candidateClearsBudgetFloor(e, floors, aggregateFloor, "aggregate-only")).toBe(true);
+  });
+
+  it("a candidate that ONLY qualifies via a single positive per-boss clearance is admitted under 'aggregate-or-per-boss' but excluded under 'aggregate-only'", () => {
+    const e = evalResult([3, -2]); // mean 0.5, below the aggregate floor; boss 0 alone clears (3 > 1)
+    expect(e.meanDeltaTeamDps).toBeLessThanOrEqual(aggregateFloor);
+    expect(candidateClearsBudgetFloor(e, floors, aggregateFloor, "aggregate-or-per-boss")).toBe(true);
+    expect(candidateClearsBudgetFloor(e, floors, aggregateFloor, "aggregate-only")).toBe(false);
+  });
+
+  it("a candidate whose ONLY significant signal is a HARM (large-magnitude negative per-boss delta) is excluded under BOTH modes — the pre-existing positive-only invariant is orthogonal to significanceMode", () => {
+    // Boss 0 is harmed well beyond its floor (abs(-5) > 1, so this WOULD read
+    // as significantBossCount > 0 / exceedsNoise under the abs-based ranked
+    // table), boss 1 is a small positive that doesn't itself clear its floor,
+    // and the mean doesn't clear the aggregate floor either.
+    const e = evalResult([-5, 0.2]);
+    expect(e.meanDeltaTeamDps).toBeLessThanOrEqual(aggregateFloor);
+    expect(candidateClearsBudgetFloor(e, floors, aggregateFloor, "aggregate-or-per-boss")).toBe(false);
+    expect(candidateClearsBudgetFloor(e, floors, aggregateFloor, "aggregate-only")).toBe(false);
+  });
+});
+
+describe("candidateClearsBudgetFloor vs RosterPowerUpCandidate.exceedsNoise — cross-check on REAL simulated data (never disagree about a genuine positive gain, under either mode)", () => {
+  it("every candidate the budget gate would admit is also flagged exceedsNoise by the ranked table, under 'aggregate-or-per-boss' AND 'aggregate-only'", () => {
+    const pool = [...strongTeam(25), entry("weak-bench", WEAK_BENCH_SPECIES, 1)];
+    const targets = [
+      { species: BOSS_ONE, weight: 1 },
+      { species: BOSS_TWO, weight: 3 },
+    ];
+
+    for (const significanceMode of ["aggregate-or-per-boss", "aggregate-only"] as const) {
+      const ranked = runRosterPlanner({
+        ...baseInputs({ screenIterations: 4, iterations: 6, significanceMode }),
+        pool,
+        targets,
+        maxCandidates: 500,
+      });
+      expect(ranked.candidates.length).toBeGreaterThan(0);
+
+      const perBossFloors = ranked.baselinePerBoss.map((b) => noiseFloorFor(b.summary, ranked.iterations));
+      let sawPerBossOnlyAdmission = false;
+      for (const c of ranked.candidates) {
+        const synthetic: RosterBudgetCandidateEval = {
+          perBoss: c.perBoss,
+          meanDeltaTeamDps: c.meanDeltaTeamDps,
+          bestBossDeltaTeamDps: c.bestBossDeltaTeamDps,
+          bestBossId: c.bestBossId,
+          significantBossCount: c.significantBossCount,
+          touchedTargetIndices: [],
+        };
+        const admitted = candidateClearsBudgetFloor(synthetic, perBossFloors, ranked.noiseFloorTeamDps, significanceMode);
+        if (admitted) {
+          // The budget gate's own documented invariant: a positive clearance
+          // is automatically also counted by the ranked table's abs-based
+          // exceedsNoise, in either mode.
+          expect(c.exceedsNoise).toBe(true);
+          if (significanceMode === "aggregate-or-per-boss" && Math.abs(c.meanDeltaTeamDps) <= ranked.noiseFloorTeamDps) {
+            sawPerBossOnlyAdmission = true;
+          }
+        }
+      }
+      if (significanceMode === "aggregate-or-per-boss") {
+        // Confirm this cross-check actually exercised the interesting case
+        // (a per-boss-only admission), not just the trivially-agreeing
+        // aggregate-clearing one.
+        expect(sawPerBossOnlyAdmission).toBe(true);
+      }
+    }
+  });
+});
+
+describe("RosterBudgetInputs.significanceMode — end to end (planRosterBudget)", () => {
+  it("defaults to 'aggregate-or-per-boss' — omitting the field is byte-identical to the explicit value", () => {
+    const pool = strongTeam(50); // already maxed, deterministic zero-step run either way
+    const omitted = planRosterBudget({
+      ...baseInputs({ candyByFamilyId: generousCandyFor(pool), stardustOnHand: 2_000_000, screenIterations: 4, iterations: 5 }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+    const explicit = planRosterBudget({
+      ...baseInputs({
+        candyByFamilyId: generousCandyFor(pool),
+        stardustOnHand: 2_000_000,
+        screenIterations: 4,
+        iterations: 5,
+        significanceMode: "aggregate-or-per-boss",
+      }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+    expect(omitted).toEqual(explicit);
+  });
+
+  it("'aggregate-only' never commits or blocks-on more than 'aggregate-or-per-boss' would, on the same real multi-boss scenario", () => {
+    // Same fixture as the cross-check test above (a real, demonstrated
+    // per-boss-only-significant candidate exists here).
+    const pool = [...strongTeam(25), entry("weak-bench", WEAK_BENCH_SPECIES, 1)];
+    const targets = [
+      { species: BOSS_ONE, weight: 1 },
+      { species: BOSS_TWO, weight: 3 },
+    ];
+    const withPerBoss = planRosterBudget({
+      ...baseInputs({ candyByFamilyId: generousCandyFor(pool), stardustOnHand: 5_000_000, screenIterations: 5, iterations: 8 }),
+      pool,
+      targets,
+    });
+    const aggregateOnly = planRosterBudget({
+      ...baseInputs({
+        candyByFamilyId: generousCandyFor(pool),
+        stardustOnHand: 5_000_000,
+        screenIterations: 5,
+        iterations: 8,
+        significanceMode: "aggregate-only",
+      }),
+      pool,
+      targets,
+    });
+
+    // significanceMode only governs which candidates are ADMITTED as
+    // significant — it must never change what's MEASURED. The do-nothing
+    // baseline simulation (run once, unconditionally, before any gate is
+    // ever consulted) is byte-identical regardless of mode.
+    expect(aggregateOnly.baselinePerBoss).toEqual(withPerBoss.baselinePerBoss);
+
+    // Every step committed under the STRICTER mode must ALSO clear the
+    // aggregate floor on its own (never rely on a per-boss-only signal) —
+    // the direct behavioral consequence of significanceMode narrowing what
+    // qualifies, never what's measured.
+    for (const s of aggregateOnly.steps) {
+      expect(s.clearsAggregateFloor).toBe(true);
+    }
   });
 });
 

@@ -266,6 +266,43 @@ export interface RosterEntry {
   candyFamilyId?: string;
 }
 
+/**
+ * Governs what counts as a "real effect" at BOTH significance gates this
+ * module has — `RosterPowerUpCandidate.exceedsNoise` (the ranked table, via
+ * `runRosterPlanner`) and `candidateClearsBudgetFloor` (the committed
+ * fixed-budget plan, via `planRosterBudget`). The two gates already shared
+ * one documented relationship before this type existed (see
+ * `candidateClearsBudgetFloor`'s own doc comment — the budget gate requires a
+ * POSITIVE per-boss clearance, never a harm-only one, while the ranked
+ * table's abs-based `exceedsNoise` also flags "measurably hurts"); this mode
+ * is orthogonal to that distinction and applies identically on top of it in
+ * both places.
+ *
+ * - `"aggregate-or-per-boss"` (ENGINE DEFAULT — see below): a candidate
+ *   qualifies if it clears the aggregate (weighted-mean, quadrature-floor)
+ *   test OR is individually significant on at least one boss —
+ *   `significantBossCount > 0` alone is enough. This is the CURRENT,
+ *   pre-existing behavior (fixed 2026-09-09 after a real benched Kyurem
+ *   scored +1.29 against one boss out of thirteen and read as a diluted 0.11
+ *   averaged across all of them — see this module's top doc comment).
+ * - `"aggregate-only"`: a candidate qualifies ONLY by clearing the aggregate
+ *   test — a single-boss specialist gain is still computed and reported
+ *   (`bestBossDeltaTeamDps`/`bestBossId`/`significantBossCount` are ALWAYS
+ *   populated in both modes; this mode changes what QUALIFIES a candidate as
+ *   significant, never what's measured or returned) but no longer admits the
+ *   candidate into `exceedsNoise`/a committed budget step on that signal
+ *   alone.
+ *
+ * DEFAULTS TO `"aggregate-or-per-boss"` in this engine's own two entry
+ * points (`runRosterPlanner`/`planRosterBudget`) — deliberately the CURRENT
+ * behavior, not the web UI's chosen default. Every existing caller/test that
+ * predates this field gets byte-for-byte unchanged output. `packages/web`'s
+ * Power-Up Optimizer defaults its OWN control to `"aggregate-only"` (the
+ * user's explicit ask — rank strictly on the cross-boss average, with this as
+ * an opt-in) — that default lives entirely in the UI layer, not here.
+ */
+export type RosterSignificanceMode = "aggregate-only" | "aggregate-or-per-boss";
+
 /** One raid boss to sweep the whole pool against, plus its aggregation weight — extends speciesReport.ts's SpeciesReportBossTarget (the SAME "active + optionally past raids, per-tier filterable" boss-target shape the Species Report tab already uses — see PLAN_multi_raid_roster_optimizer.md §3.1). */
 export interface WeightedRaidTarget extends SpeciesReportBossTarget {
   /** This boss's weight in every candidate's weighted-mean aggregation (RosterPowerUpCandidate.meanDeltaTeamDps) — defaults to 1. Does NOT affect team selection or Stage 4 simulation, only how per-boss deltas are combined into one headline number. */
@@ -364,6 +401,8 @@ export interface RosterPlannerInputs {
    * candidate — only its redundant near-duplicate neighbors. Defaults to 3.
    */
   maxLevelsPerEntry?: number;
+  /** See RosterSignificanceMode. Defaults to "aggregate-or-per-boss" (the pre-existing behavior) — NOT the web UI's chosen default; see that type's own doc comment for why the two defaults deliberately differ. */
+  significanceMode?: RosterSignificanceMode;
 }
 
 /** One boss's real, computed effect of ONE candidate power-up — always present for every target in RosterPowerUpCandidate.perBoss, whether or not this boss was actually simulated for this candidate. */
@@ -441,11 +480,16 @@ export interface RosterPowerUpCandidate {
   /** Null when cost.xlCandy is 0. */
   deltaPerXlCandy: number | null;
   /**
-   * `Math.abs(meanDeltaTeamDps) > RosterPlanResult.noiseFloorTeamDps` OR
-   * `significantBossCount > 0` — a candidate that clears the aggregate floor
-   * OR is individually significant on at least one boss counts as a real
-   * effect. A genuine per-boss gain must never be reported as "no measurable
-   * change" purely because it got diluted by bosses it doesn't touch.
+   * `Math.abs(meanDeltaTeamDps) > RosterPlanResult.noiseFloorTeamDps` —
+   * always required. Under `RosterPlannerInputs.significanceMode ===
+   * "aggregate-or-per-boss"` (the engine default — see
+   * `RosterSignificanceMode`'s doc comment), `significantBossCount > 0`
+   * ALSO qualifies on its own, so a genuine per-boss gain is never reported
+   * as "no measurable change" purely because it got diluted by bosses it
+   * doesn't touch. Under `"aggregate-only"`, only the aggregate test above
+   * counts — `significantBossCount`/`bestBossDeltaTeamDps` are still
+   * computed and returned either way, this field just stops treating a
+   * single-boss-only signal as sufficient.
    */
   exceedsNoise: boolean;
 }
@@ -819,6 +863,9 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     maxLevelsPerEntry = 3,
     seed = 1,
     weather = "none",
+    // Engine default is the PRE-EXISTING behavior, deliberately not the web
+    // UI's chosen default — see RosterSignificanceMode's doc comment.
+    significanceMode = "aggregate-or-per-boss",
     ...rest
   } = inputs;
 
@@ -1146,7 +1193,8 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
       deltaPer1000Stardust: d.priced.cost.stardust > 0 ? (meanDeltaTeamDps / d.priced.cost.stardust) * 1000 : null,
       deltaPerCandy: d.priced.cost.candy > 0 ? meanDeltaTeamDps / d.priced.cost.candy : null,
       deltaPerXlCandy: d.priced.cost.xlCandy > 0 ? meanDeltaTeamDps / d.priced.cost.xlCandy : null,
-      exceedsNoise: Math.abs(meanDeltaTeamDps) > noiseFloorTeamDps || significantBossCount > 0,
+      exceedsNoise:
+        Math.abs(meanDeltaTeamDps) > noiseFloorTeamDps || (significanceMode === "aggregate-or-per-boss" && significantBossCount > 0),
     };
   };
 
@@ -1256,8 +1304,14 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
  * per-draft `perBoss` computation, but re-evaluated fresh every time it's
  * called (a round considers many candidates; only the WINNING one is ever
  * committed) rather than once per (entry, level) pair.
+ *
+ * Exported bare (no index.ts re-export, same convention as powerUp.ts's
+ * `summarizeResults`/`noiseFloorFor`) purely so test files can construct
+ * synthetic eval results directly against `candidateClearsBudgetFloor`
+ * below, without needing to engineer a real simulated scenario that happens
+ * to produce a specific significant-harm-only shape.
  */
-interface RosterBudgetCandidateEval {
+export interface RosterBudgetCandidateEval {
   perBoss: RosterPerBossImpact[];
   meanDeltaTeamDps: number;
   bestBossDeltaTeamDps: number | null;
@@ -1287,9 +1341,25 @@ interface RosterBudgetCandidateEval {
  * about a genuine positive gain — this refinement only ever excludes a
  * candidate whose ONLY qualifying signal was a significant HARM, never one
  * with a real, exploitable gain.
+ *
+ * `significanceMode` (see `RosterSignificanceMode`) governs whether the
+ * per-boss branch below is even consulted at all — under `"aggregate-only"`
+ * this function reduces to the aggregate test alone, mirroring exactly how
+ * `RosterPowerUpCandidate.exceedsNoise` narrows under the same mode (see that
+ * field's doc comment). The two gates must never disagree about what counts
+ * as significant, so any future change to one of these tests must be mirrored
+ * in the other.
+ *
+ * Exported bare — see `RosterBudgetCandidateEval`'s doc comment.
  */
-function candidateClearsBudgetFloor(evalResult: RosterBudgetCandidateEval, perBossFloors: number[], aggregateFloor: number): boolean {
+export function candidateClearsBudgetFloor(
+  evalResult: RosterBudgetCandidateEval,
+  perBossFloors: number[],
+  aggregateFloor: number,
+  significanceMode: RosterSignificanceMode,
+): boolean {
   if (evalResult.meanDeltaTeamDps > aggregateFloor) return true;
+  if (significanceMode === "aggregate-only") return false;
   return evalResult.perBoss.some((p, ti) => p.deltaTeamDps > perBossFloors[ti]!);
 }
 
@@ -1525,6 +1595,12 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     maxCandidatesPerRound = 60,
     blockedCandidateLevelsPerEntry = 8,
     maxBlockedCandidatesToCheck = 60,
+    // Engine default is the PRE-EXISTING behavior, deliberately not the web
+    // UI's chosen default — see RosterSignificanceMode's doc comment. Must
+    // stay in lockstep with runRosterPlanner's own default so the ranked
+    // table and the committed budget plan never disagree about what counts
+    // as significant.
+    significanceMode = "aggregate-or-per-boss",
     ...rest
   } = inputs;
 
@@ -1923,7 +1999,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     let best: { candidate: RawRosterBudgetCandidate; evalResult: RosterBudgetCandidateEval; score: number } | null = null;
     for (const candidate of roundCandidates) {
       const evalResult = evaluateCandidate(candidate.entry, candidate.fromLevel, candidate.toLevel, perBossFloorsForThisRound);
-      if (!candidateClearsBudgetFloor(evalResult, perBossFloorsForThisRound, floorForThisRound)) continue;
+      if (!candidateClearsBudgetFloor(evalResult, perBossFloorsForThisRound, floorForThisRound, significanceMode)) continue;
 
       // Multi-dimensional-knapsack-style scalarization — a SEARCH HEURISTIC
       // ONLY (same as planPowerUpBudget's own scoring), never surfaced in
@@ -2049,7 +2125,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
   let bestBlockedScore = -Infinity;
   for (const candidate of blockedCandidatesToCheck) {
     const evalResult = evaluateCandidate(candidate.entry, candidate.fromLevel, candidate.toLevel, perBossNoiseFloors);
-    if (!candidateClearsBudgetFloor(evalResult, perBossNoiseFloors, aggregateNoiseFloor)) continue;
+    if (!candidateClearsBudgetFloor(evalResult, perBossNoiseFloors, aggregateNoiseFloor, significanceMode)) continue;
     if (evalResult.meanDeltaTeamDps > bestBlockedScore) {
       bestBlockedScore = evalResult.meanDeltaTeamDps;
       const familyPool = remainingCandyByFamilyId.get(candidate.familyId)!;

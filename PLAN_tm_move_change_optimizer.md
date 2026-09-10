@@ -87,6 +87,33 @@ entries in the sample are blocked on "evolve first", none on moveset.**
 show a **[worst, expected, best] band**, never one blended number — the same
 "don't collapse a distribution" discipline the comparator already runs on.
 
+## Both modes, not just single-raid
+
+Requested explicitly by the user 2026-09-10: *"can the power up optimizer for the roster also use
+the same TM technique?"* — yes. Move-change candidates apply to the **multi-raid / roster mode**
+(`rosterPlanner.ts`: `runRosterPlanner` + `planRosterBudget`) on the same terms as single-raid
+(`powerUp.ts`: `optimizePowerUps` + `planPowerUpBudget`), so build the shared shape once rather
+than bolting it onto one mode.
+
+What differs in roster mode, and matters:
+
+- **Candidates are not limited to the six already fielded.** A benched entry whose *moveset* is the
+  only thing keeping it off the team is precisely the `benchedButPromising` question this mode
+  exists to answer — arguably a better fit for a move change than for a power-up, since a TM is
+  cheap in stardust terms and a power-up is not.
+- **Scale.** A ~164-entry roster against ~13 bosses is already the expensive sweep. Adding a
+  move-change candidate per entry multiplies that — and for a *regular* TM, honestly modelling the
+  outcome means simulating every reachable move in the pool, not one. Budget for this before
+  building: it may be the reason regular-TM candidates are infeasible in roster mode even if they
+  are affordable in single-raid mode.
+- **TM inventory is account-wide**, exactly like `rareCandyOnHand`/`rareCandyXlOnHand` — not
+  per-entry, and not per-`candyFamilyId`. A joint allocation (`planRosterBudget`) must draw all
+  entries' TM spend from the one pool, the same way the shared Rare Candy pools already work.
+- **The moveset-unknown rule above binds hardest here.** Roughly a third of a real import has a
+  blank move column, so in roster mode the "never price a TM against a moveset we never observed"
+  rule excludes a large, visible fraction of entries. That exclusion must be *shown* (the
+  `rosterMovesetBadge.ts` badges already do this) rather than silently shrinking the candidate set.
+
 ## Hard constraints
 
 - **TM counts are a new user-facing setting → they MUST round-trip through `Scenario`.** Use the

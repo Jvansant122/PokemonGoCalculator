@@ -1,4 +1,12 @@
-import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
+import {
+  fromBase64Url,
+  toBase64Url,
+  type DodgeBehavior,
+  type IVSpread,
+  type MegaLevel,
+  type RosterSignificanceMode,
+  type WeatherCondition,
+} from "@pogo-analyzer/engine";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
 
 /**
@@ -139,6 +147,23 @@ export interface PowerUpOptimizerScenario {
    * Optional/defaults to `null` so a pre-existing link decodes cleanly.
    */
   multiRaidMegaLevel?: MegaLevel | null;
+  /**
+   * Multi-raid mode only — which candidates QUALIFY as significant in the
+   * ranked sweep and the fixed-budget plan (see rosterPlanner.ts's own
+   * `RosterSignificanceMode` doc comment). Never changes what's REPORTED —
+   * `bestBossDeltaTeamDps`/`significantBossCount` stay on every row either
+   * way, per CLAUDE.md's ranking-flip thesis.
+   *
+   * Optional so a link built before this field existed decodes to
+   * `"aggregate-or-per-boss"` (PowerUpOptimizerView.tsx's
+   * scenarioToAssumptions), NOT this tab's own `DEFAULT_ASSUMPTIONS` value
+   * of `"aggregate-only"` — same inverted-default precedent as
+   * `showDetailedAssumptions` on the Comparator/Team Raid tabs: an old
+   * link's sender saw the pre-toggle behavior (today's
+   * "aggregate-or-per-boss"), so an absent field must keep meaning that,
+   * not silently adopt the new stricter default.
+   */
+  multiRaidSignificanceMode?: RosterSignificanceMode;
 }
 
 export function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {

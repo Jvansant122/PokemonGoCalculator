@@ -238,6 +238,15 @@ describe("TeamScenario round-trip", () => {
         isShadow: false,
       })),
       targetId: "tyranitar-mega",
+      // A link this minimal has no boss-move fields at all — decodes to
+      // `null` (teamScenarioToAssumptions's own `s.bossFastMoveId ?? null`),
+      // NOT DEFAULT_TEAM_ASSUMPTIONS's own resolved boss moves (which exist
+      // only because that default roster's own boss target happens to also
+      // be "tyranitar-mega" — the decode fallback is unconditional, not
+      // target-aware, so this must be asserted explicitly rather than
+      // inherited from the `...DEFAULT_TEAM_ASSUMPTIONS` spread above).
+      bossFastMoveId: null,
+      bossChargedMoveId: null,
       level: 40,
       ivAttack: 15,
       ivDefense: 15,
@@ -452,6 +461,8 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     multiRaidMaxBossCount: 12,
     candyByFamilyId: { FAMILY_HOUNDOUR: { candy: 40, xlCandy: 3 } },
     multiRaidMegaLevel: "high",
+    // Non-default: PU_DEFAULTS is "aggregate-only".
+    multiRaidSignificanceMode: "aggregate-or-per-boss",
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -493,6 +504,22 @@ describe("PowerUpOptimizerScenario round-trip", () => {
       })),
       targetId: "tyranitar-mega",
       dodge: { kind: "none" },
+      // A link this old predates the significance-mode toggle existing at
+      // all — every candidate that cleared a single boss's own noise floor
+      // simply counted, so decode to "aggregate-or-per-boss", not
+      // PU_DEFAULTS's own stricter "aggregate-only" — see
+      // puScenarioToAssumptions's own comment on this `??` guard.
+      multiRaidSignificanceMode: "aggregate-or-per-boss",
     });
+  });
+
+  it('decodes an absent multiRaidSignificanceMode to "aggregate-or-per-boss", not PU_DEFAULTS\'s "aggregate-only" (an old link\'s per-boss-significant candidates must not silently vanish from the table)', () => {
+    const withoutModeFlag = { ...puAssumptionsToScenario(nonDefault) } as Partial<PowerUpOptimizerScenario>;
+    delete withoutModeFlag.multiRaidSignificanceMode;
+    const url = buildPowerUpOptimizerScenarioUrl("http://example.test/", withoutModeFlag as PowerUpOptimizerScenario);
+    const decoded = parsePowerUpOptimizerScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    const roundTripped = puScenarioToAssumptions(decoded!);
+    expect(roundTripped.multiRaidSignificanceMode).toBe("aggregate-or-per-boss");
   });
 });

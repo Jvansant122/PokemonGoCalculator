@@ -1,4 +1,4 @@
-import { type DodgeBehavior, type MegaLevel, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { type DodgeBehavior, type MegaLevel, type RosterSignificanceMode, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { NumberField } from "./NumberField.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
@@ -132,6 +132,17 @@ export interface PowerUpOptimizerAssumptions {
    * `species.boost`, so a non-mega entry is unaffected by this value.
    */
   multiRaidMegaLevel: MegaLevel | null;
+  /**
+   * Multi-raid mode only — which candidates qualify as significant in the
+   * ranked sweep and the fixed-budget plan (see rosterPlanner.ts's
+   * `RosterSignificanceMode`). Threaded into BOTH `RosterPlannerInputs` and
+   * `RosterBudgetInputs` from the SAME value (run/runRosterPlanner.ts's
+   * `resolveRosterPlannerInputs`) — the ranked table and the committed
+   * budget plan must never disagree about what counts. See
+   * powerUpOptimizerScenario.ts's own field doc comment for why the decoded
+   * default deliberately differs from DEFAULT_ASSUMPTIONS.
+   */
+  multiRaidSignificanceMode: RosterSignificanceMode;
 }
 
 interface Props {
@@ -280,6 +291,17 @@ export function PowerUpOptimizerAssumptionPanel({
               Applies ROSTER-WIDE, to whichever entry can actually Mega Evolve — see "Known caveats" below for why
               (and for what Mega Level itself changes).
             </p>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label className="species-picker-hint">
+              <input
+                type="checkbox"
+                checked={value.multiRaidSignificanceMode === "aggregate-or-per-boss"}
+                onChange={(e) => set("multiRaidSignificanceMode", e.target.checked ? "aggregate-or-per-boss" : "aggregate-only")}
+              />{" "}
+              Also count a candidate that only helps against one boss, even if it doesn&rsquo;t move the average
+            </label>
           </div>
 
           <div style={{ marginTop: 12 }}>

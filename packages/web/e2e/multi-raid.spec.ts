@@ -123,6 +123,91 @@ test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep o
   expect(pageErrors, "uncaught page errors").toEqual([]);
 });
 
+/**
+ * The multiRaidSignificanceMode toggle (2026-09-10) — "aggregate-only"
+ * (default) vs. "aggregate-or-per-boss". A candidate significant against a
+ * SINGLE boss but not the boss-set average is filtered out of the ranked
+ * table entirely under the default mode, and the hidden-count line on the
+ * summary card names how many. Checking the toggle re-runs the sweep and
+ * must reveal exactly those candidates — never a different set, never a
+ * different count than what the summary card claimed.
+ *
+ * Reads the real PARSED count rather than trusting a single visibility/text
+ * check — the hidden-count line's own text changes for a purely cosmetic
+ * reason (a trailing hint disappears) the instant the checkbox is toggled,
+ * well before the second async worker round trip actually finishes, so a
+ * bare "text changed" assertion would pass without ever waiting for the new
+ * result. `expect.poll` keeps re-reading the parsed number until it settles.
+ */
+test("power-up-optimizer multi-raid: the significance-mode toggle changes which candidates qualify, consistently with the hidden-count line", async ({
+  page,
+}) => {
+  const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+  await page.goto("/?view=power-up-optimizer");
+  await expandAssumptions(page);
+  await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
+  await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
+
+  await page.locator("summary", { hasText: "Import a whole roster" }).click();
+  const pasteArea = page.locator("#roster-import-paste");
+  await expect(pasteArea).toBeVisible();
+  await pasteArea.fill(sampleCsv);
+  await page.getByRole("button", { name: "Import pasted CSV" }).click();
+  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
+
+  const checkbox = page.getByRole("checkbox", { name: /Also count a candidate that only helps against one boss/ });
+  await expect(checkbox).toBeVisible();
+  await expect(checkbox).not.toBeChecked(); // default: aggregate-only
+
+  const runSweepButton = page.getByRole("button", { name: "Run sweep" });
+  await expect(runSweepButton).toBeEnabled({ timeout: 10_000 });
+  await runSweepButton.click();
+  await expect(page.getByRole("heading", { name: "Ranked candidates" })).toBeVisible({ timeout: 20_000 });
+
+  const resultCard = page
+    .getByRole("heading", { name: "Multi-raid sweep" })
+    .locator("xpath=ancestor::details[1]")
+    .locator(".result-card")
+    .first();
+  const hiddenLine = resultCard.getByText(/candidates? hidden: significant against one boss but not on average/);
+  await expect(hiddenLine).toBeVisible();
+  const hiddenCountBefore = Number((await hiddenLine.innerText()).match(/^(\d+)/)?.[1]);
+
+  async function qualifyingRowCount(): Promise<number> {
+    const showAllButton = page.getByRole("button", { name: /^Show all \d+$/ });
+    if (await showAllButton.isVisible().catch(() => false)) {
+      return Number((await showAllButton.innerText()).match(/Show all (\d+)/)?.[1]);
+    }
+    const rankedTable = page.getByRole("heading", { name: "Ranked candidates" }).locator("xpath=following-sibling::div[1]//table");
+    return await rankedTable.locator("tbody tr").count();
+  }
+  const rowCountBefore = await qualifyingRowCount();
+
+  await checkbox.check();
+  await expect(checkbox).toBeChecked();
+  await runSweepButton.click();
+  await expect.poll(async () => Number((await hiddenLine.innerText()).match(/^(\d+)/)?.[1]), { timeout: 20_000 }).toBe(0);
+
+  const rowCountAfter = await qualifyingRowCount();
+  // The row count must have grown by exactly the number that was hidden before.
+  expect(rowCountAfter - rowCountBefore).toBe(hiddenCountBefore);
+
+  // The committed budget plan re-ran under the same toggle and never
+  // disagrees with the ranked table about what's real (it may or may not
+  // change its own committed steps, but it must still render a coherent
+  // ledger, not an error).
+  const budgetSection = page.getByRole("heading", { name: "Fixed-budget plan" }).locator("xpath=ancestor::details[1]");
+  await expect(budgetSection.getByText("Steps committed")).toBeVisible();
+
+  const bodyText = await page.locator("body").innerText();
+  expect(bodyText, "rendered page text").not.toMatch(/\bNaN\b/);
+  expect(bodyText, "rendered page text").not.toMatch(/\bInfinity\b/);
+
+  expect(consoleErrors, "console.error calls").toEqual([]);
+  expect(pageErrors, "uncaught page errors").toEqual([]);
+});
+
 test("power-up-optimizer multi-raid: a share link opened in a fresh browser context (no localStorage) shows the 'no roster imported' empty state", async ({
   page,
   browser,

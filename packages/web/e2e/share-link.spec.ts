@@ -126,22 +126,23 @@ test("comparator: a per-candidate dodge override survives a shared link round tr
 });
 
 /**
- * Mega Level (megaLevelSelect.tsx) is a NEW per-slot share-link surface added
- * across all six tabs — same "recurring bug class" reasoning as the checks
- * above. Team Raid's own default roster already fields a real mega/primal
- * slot (latios-mega, slot 1), so its Mega Level <select> is visible with no
- * setup needed, unlike the Comparator's default candidates (neither is a
- * mega form).
+ * Mega Level (megaLevelSelect.tsx) is a share-link surface added across all
+ * six tabs — same "recurring bug class" reasoning as the checks above. Team
+ * Raid's own default roster already fields a real mega/primal slot
+ * (mewtwo-mega-x as of the 2026-09-10 default-roster replacement — see
+ * TeamRaidView.tsx's own DEFAULT_TEAM_ASSUMPTIONS doc comment; this test has
+ * outlived two earlier default rosters, `latios-mega` then `lucario-mega`,
+ * without ever depending on which species it actually is), so its Mega Level
+ * <select> is visible with no setup needed, unlike the Comparator's default
+ * candidates (neither is a mega form).
  *
- * Selects "high", not "super-max": as of 2026-09-10 the option list itself is
- * gated on canReachSuperMax (megaLevelSelect.tsx's selectableMegaLevels), and
- * latios-mega carries no "+" charged move, so "Super Max" is not among the
- * options this <select> offers by default — see megaLevelSelect.test.ts for
- * that gate's own dedicated unit coverage, including the "kept selectable for
- * an already-encoded value" exception this test would otherwise be hitting
- * by accident rather than on purpose. "high" still proves the exact same
- * round-trip mechanism (any non-base MegaLevel survives a share link) without
- * relying on species eligibility.
+ * Selects "high", not "super-max": "base"/"high"/"max" are always offered
+ * regardless of a species' own Super Max eligibility (only "super-max" is
+ * conditionally gated on canReachSuperMax, megaLevelSelect.tsx's
+ * selectableMegaLevels) — see megaLevelSelect.test.ts for that gate's own
+ * dedicated unit coverage. "high" proves the exact same round-trip mechanism
+ * (any non-base MegaLevel survives a share link) without depending on
+ * whichever species happens to be in slot 0 today.
  */
 test("team-raid: a slot's Mega Level survives a shared link round trip", async ({ page }) => {
   await page.goto("/?view=team-raid");
@@ -168,4 +169,28 @@ test("team-raid: a slot's Mega Level survives a shared link round trip", async (
   await expect(freshMegaLevelSelect).toBeVisible();
   await expect(freshMegaLevelSelect).toHaveValue("high");
   await freshPage.close();
+});
+
+/**
+ * The "Export roster to Power-Up Optimizer" button (TeamRaidView.tsx, see
+ * teamRaidExport.ts) — a genuine NAVIGATION (`window.location.href`, not an
+ * in-SPA tab switch, see that function's own doc comment for why), so
+ * `page.click()` below must be paired with `waitForURL` rather than assuming
+ * the click resolves synchronously. Uses the tab's own default roster/boss
+ * (no setup needed) and asserts the destination tab actually landed on
+ * `view=power-up-optimizer` with the SAME roster and boss Team Raid showed,
+ * not just that some navigation happened.
+ */
+test("team-raid: 'Export roster to Power-Up Optimizer' carries the roster and boss across tabs", async ({ page }) => {
+  await page.goto("/?view=team-raid");
+  const rosterSubtitle = page.locator(".subtitle").first();
+  await expect(rosterSubtitle).toContainText("Mega Mewtwo X");
+  await expect(rosterSubtitle).toContainText("Mega Tyranitar");
+
+  await page.getByRole("button", { name: "Export roster to Power-Up Optimizer →" }).click();
+  await page.waitForURL(/view=power-up-optimizer/);
+
+  const destSubtitle = page.locator(".subtitle").first();
+  await expect(destSubtitle).toContainText("Mega Mewtwo X");
+  await expect(destSubtitle).toContainText("Mega Tyranitar");
 });

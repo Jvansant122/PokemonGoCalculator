@@ -16,71 +16,76 @@ import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
 import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 import { runTeamRaidScenario } from "./run/runTeamRaid.js";
+import { teamAssumptionsToPowerUpOptimizerAssumptions, TEAM_RAID_EXPORT_MISSING_NOTE } from "./teamRaidExport.js";
+import { assumptionsToScenario as powerUpAssumptionsToScenario } from "./PowerUpOptimizerView.js";
+import { buildPowerUpOptimizerScenarioUrl } from "./powerUpOptimizerScenario.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates a
 // real result immediately, not an empty form — mirrors the comparator's own
 // DEFAULT_CANDIDATE_A_ID/DEFAULT_CANDIDATE_B_ID/DEFAULT_TARGET_ID precedent.
-// Exactly one slot (lucario-mega) carries a boost mechanic and isMega: true;
+// Exactly one slot (mewtwo-mega-x) carries a boost mechanic and isMega: true;
 // every other default slot is deliberately a non-mega species so the roster
 // never accidentally exercises the "unflagged slot also happens to carry a
 // boost" edge case runTeamRaid's own validation doesn't police (see
 // TeamAssumptionPanel's normalization for how a bad decoded link is handled).
+// The 6th slot is deliberately left EMPTY (`speciesId: null`) — this is a
+// real, legal roster (a trainer can field fewer than MAX_TEAM_RAID_SLOTS),
+// and leaving it empty here doubles as a live demonstration of that. Lucario
+// legitimately appears TWICE (slots 4 and 5) — a trainer really can field the
+// same species more than once; this is not a copy-paste mistake.
 //
-// Roster/boss/level replaced 2026-09-10 (a live audit found the previous
+// Roster/boss/level replaced 2026-09-10 (a live audit found the-then-current
 // default — Mega Latios/Garchomp/Dragonite/Kartana/Tyranitar/Rayquaza vs.
 // tyranitar-mega — failed outright at every level: 0% clear rate, every
 // summary stat "n/a"). Root cause was a real type problem, not a level
 // problem: mostly Dragon/Flying/Psychic attacking into a Rock/Dark boss (Mega
-// Latios's Psychic charged move is FLAT IMMUNE to Dark), confirmed by
-// re-running the same roster at level 50 and still failing. This roster is a
-// Fighting/Steel raid-counter team (real, commonly-recommended raid picks)
-// with EXPLICIT fast/charged moves — not left to "first listed move" — so
-// every slot's charged move is Fighting-typed where the species has one:
-// Fighting is SUPER EFFECTIVE against BOTH Rock and Dark (2.56x combined
-// per this engine's own typeChart.ts), the best single-type answer to a
-// Rock/Dark boss that exists. The boss is plain "tyranitar" (3-Star Raids,
-// 3600 HP), not its Mega form (Mega Raids, 9000 HP) — verified empirically
-// that even this SAME near-ideal counter roster, at this tab's THEN-current
-// level-40 UI cap (since raised, see the 2026-09-10 addendum below) and with
-// dodgeFastAttacks off (the default — see that field below; flipping it on
-// trips a real pre-existing engine fast-attack-dodge lockout against this
-// boss's short Bite animation, not a viable fix), fell ~25% short of the ~30
-// team DPS a 9000 HP boss needs inside a 300s timer. A Mega/5-Star-tier raid
-// is realistically a multi-trainer format in the real game; a solo default
-// that can't clear one is a bad first impression (see this tab's own
-// failure-summary rendering below for the OTHER half of this fix — a roster
-// that genuinely can't clear must still report readable numbers, never six
-// "n/a"s). Level 35 (not a higher level such as 40, which already clears
-// with zero wipes) deliberately leaves the fight with a real wipe in it —
-// verified: clears at 118.5s of the 300s timer, one wipe, 6 faint events —
-// a believable win with visible stakes, not a curbstomp.
+// Latios's Psychic charged move is FLAT IMMUNE to Dark). The replacement
+// roster then used was plain "tyranitar" (3-Star Raids, 3600 HP) rather than
+// its Mega form, based on a measurement that a Fighting/Steel counter team
+// "fell ~25% short" at level 40 and "8146/9000 HP, 27.15 vs 30.00 DPS,
+// ~9.5% short" at level 50 against Mega Tyranitar (9000 HP).
 //
-// 2026-09-10 addendum: this tab's level input was capped at 40 (a leftover
-// UI limit, not a real game or engine one — MAX_POKEMON_POWER_UP_LEVEL is
-// 50) when the paragraph above was written; the cap has since been lifted to
-// the real ceiling. Re-verified against tyranitar-mega with this SAME
-// roster at level 50 (max IVs, dodge already at "perfect," dodgeFastAttacks
-// still off): still does not clear inside the 300s timer — 8146/9000 HP
-// dealt (90.5%), average 27.15 team DPS achieved vs. 30.00 needed (~9.5%
-// short), 2 wipes, deterministic across repeated runs with identical
-// inputs. Substantially closer than the ~25% shortfall recorded above under
-// the old 40-level cap, but still a loss, not a win — the boss stays plain
-// "tyranitar" rather than reverting to the Mega form; see this feature's own
-// web-developer memory entry for the full level-by-level sweep.
-const DEFAULT_TARGET_ID = "tyranitar";
+// CORRECTED 2026-09-10 (same day, follow-up audit): that measurement does
+// NOT reproduce. Re-running comparable Fighting-counter rosters against
+// tyranitar-mega at BOTH level 35 and level 50, under perfect/none/50%-missed
+// dodging, clears every time with a real margin (e.g. Mega Mewtwo X/
+// Machamp/Terrakion/Lucario/Lucario cleared in 280.4s at L35 and 256.1s at
+// L50 — see below). The likely cause of the original error: comparing a MEAN
+// team-DPS statistic (27.15) against a 9000 HP / 300s = 30 DPS THRESHOLD.
+// Those are not the same quantity — the 30 DPS figure assumes zero downtime,
+// while the simulation's actual clear time already absorbs swap costs,
+// faints, and wipe-and-revive loops, so a run that clears at 256-280s (out of
+// a 300s timer) is really running at ~30-35 EFFECTIVE DPS (9000 HP / clear
+// time), not the lower mean-DPS readout of the same run. The boss is
+// reverted to its Mega form (tyranitar-mega, Mega Raids, 9000 HP) now that
+// the reason for demoting it to plain "tyranitar" is known to be a units
+// error, not a real shortfall — a Mega raid is a meaningfully better first
+// impression than a 3-Star one, and this roster clears it with room to
+// spare, not a curbstomp: level 35 (15/15/15 IVs), dodge "perfect",
+// dodgeFastAttacks off, verified via `npm run run-scenario` on a built share
+// link — Cleared at 280.4s of the 300s timer (+19.6s to spare), 2 wipes, 5
+// slots used, 13 faint events. (Level 50, same roster/dodge: cleared at
+// 256.1s, +43.9s to spare, 2 wipes, 10 faint events — also re-verified.)
+// `mewtwo-mega-x`'s only Fighting-typed charged move is `DYNAMIC_PUNCH_PLUS`
+// — NOT `DYNAMIC_PUNCH`, which isn't in its movepool at all and would
+// silently fall back to `chargedMoves[0]` (Psychic, flat immune vs. Dark)
+// with no error; this is exactly the kind of silent fallback that made the
+// ORIGINAL wrong measurement plausible, so this slot's charged move id is set
+// explicitly and was confirmed present on the species before use.
+const DEFAULT_TARGET_ID = "tyranitar-mega";
 
 export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   slots: [
-    { speciesId: "lucario-mega", fastMoveId: "COUNTER_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: true, megaLevel: null, isShadow: false },
+    { speciesId: "mewtwo-mega-x", fastMoveId: "COUNTER_FAST", chargedMoveId: "DYNAMIC_PUNCH_PLUS", isMega: true, megaLevel: null, isShadow: false },
     { speciesId: "machamp", fastMoveId: "COUNTER_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "terrakion", fastMoveId: "DOUBLE_KICK_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "excadrill", fastMoveId: "MUD_SLAP_FAST", chargedMoveId: "EARTHQUAKE", isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "conkeldurr", fastMoveId: "COUNTER_FAST", chargedMoveId: "FOCUS_BLAST", isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "heracross", fastMoveId: "COUNTER_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "terrakion", fastMoveId: "DOUBLE_KICK_FAST", chargedMoveId: "SACRED_SWORD", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "lucario", fastMoveId: "COUNTER_FAST", chargedMoveId: "AURA_SPHERE", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "lucario", fastMoveId: "COUNTER_FAST", chargedMoveId: "AURA_SPHERE", isMega: false, megaLevel: null, isShadow: false },
+    emptyTeamSlot(),
   ],
   targetId: DEFAULT_TARGET_ID,
-  bossFastMoveId: null,
-  bossChargedMoveId: null,
+  bossFastMoveId: "SMACK_DOWN_FAST",
+  bossChargedMoveId: "STONE_EDGE",
   level: 35,
   ivAttack: 15,
   ivDefense: 15,
@@ -329,6 +334,22 @@ export function TeamRaidView() {
     setShareUrl(url.toString());
   }
 
+  /**
+   * Sends this roster to the Power-Up Optimizer, same "build the destination
+   * scenario, stamp its `view=`, navigate" mechanism as App.tsx's own
+   * `view=` tab-switch scaffold and every "Build link" button already use —
+   * no new lifted App.tsx state, no second cross-tab mechanism (see
+   * teamRaidExport.ts's own doc comment for exactly what does/doesn't
+   * carry). A real navigation (not an in-SPA tab switch) is required here
+   * because App.tsx only reads `view=` once, at its own initial mount.
+   */
+  function handleExportToPowerUpOptimizer() {
+    const puAssumptions = teamAssumptionsToPowerUpOptimizerAssumptions(assumptions);
+    const url = new URL(buildPowerUpOptimizerScenarioUrl(getBaseUrl(), powerUpAssumptionsToScenario(puAssumptions)));
+    url.searchParams.set("view", "power-up-optimizer");
+    window.location.href = url.toString();
+  }
+
   const rosterNames = slotSpecies.filter((s): s is SpeciesDefinition => s !== null).map((s) => speciesLabel(s));
 
   return (
@@ -456,6 +477,12 @@ export function TeamRaidView() {
           <button onClick={handleShare}>Build link</button>
           {shareUrl && <input readOnly value={shareUrl} onFocus={(e) => e.target.select()} />}
         </div>
+        <div className="share-row">
+          <button type="button" onClick={handleExportToPowerUpOptimizer}>
+            Export roster to Power-Up Optimizer →
+          </button>
+        </div>
+        <p className="species-picker-hint">{TEAM_RAID_EXPORT_MISSING_NOTE}</p>
       </section>
 
       <CollapsibleSection id="team-raid-known-caveats" heading="Known caveats" defaultOpen={false}>

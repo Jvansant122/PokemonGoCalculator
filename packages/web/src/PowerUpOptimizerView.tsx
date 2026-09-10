@@ -12,6 +12,7 @@ import {
   type RosterNeverCompetitiveEntry,
   type RosterPerBossImpact,
   type RosterPowerUpCandidate,
+  type RosterSignificanceMode,
   type SpeciesDefinition,
   type WeightedRaidTarget,
 } from "@pogo-analyzer/engine";
@@ -149,6 +150,13 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   multiRaidMaxBossCount: 30,
   candyByFamilyId: {},
   multiRaidMegaLevel: null,
+  // The user's own chosen default (2026-09-10): rank strictly on the
+  // weighted mean across the boss set, since the sort/efficiency columns
+  // and the headline ranking are already mean-based — this closes the one
+  // remaining place "best boss" alone could still admit a candidate. See
+  // powerUpOptimizerScenario.ts's own field doc comment for why an ABSENT
+  // decoded value deliberately does NOT fall back to this default.
+  multiRaidSignificanceMode: "aggregate-only",
 };
 
 export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
@@ -192,6 +200,7 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     multiRaidMaxBossCount: a.multiRaidMaxBossCount,
     candyByFamilyId: a.candyByFamilyId,
     multiRaidMegaLevel: a.multiRaidMegaLevel,
+    multiRaidSignificanceMode: a.multiRaidSignificanceMode,
   };
 }
 
@@ -264,6 +273,16 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     // `??` guards a link built before this field existed rather than
     // surfacing `undefined` into the multi-raid Mega Level <select>.
     multiRaidMegaLevel: s.multiRaidMegaLevel ?? DEFAULT_ASSUMPTIONS.multiRaidMegaLevel,
+    // INVERTED default versus every other `??` above — same precedent as
+    // Comparator/Team Raid's own showDetailedAssumptions (see this field's
+    // own doc comment in powerUpOptimizerScenario.ts). An absent value means
+    // the link predates this toggle, when every candidate that cleared a
+    // single boss's own noise floor already counted — decode to
+    // "aggregate-or-per-boss", NOT DEFAULT_ASSUMPTIONS.multiRaidSignificanceMode
+    // (which is "aggregate-only", this tab's own stricter default for a
+    // FRESH scenario). Do not "fix" this to match every other field's `??
+    // DEFAULT_ASSUMPTIONS...` pattern.
+    multiRaidSignificanceMode: s.multiRaidSignificanceMode ?? "aggregate-or-per-boss",
   };
 }
 
@@ -739,6 +758,8 @@ interface MultiRaidResultsSectionProps {
   onRunSweep: () => void;
   /** Same selector single-raid mode already exposes — sorts the ranked table client-side by the chosen resource's efficiency, same as single-raid's own sortedCandidates (CLAUDE.md standing decision: never blended into one score). */
   rankBy: PowerUpRankBy;
+  /** Which candidates QUALIFY for the ranked table below — see PowerUpOptimizerAssumptions.multiRaidSignificanceMode. Never changes what a visible row REPORTS (bestBossDeltaTeamDps/significantBossCount stay on every column either way). */
+  significanceMode: RosterSignificanceMode;
 }
 
 /**
@@ -768,6 +789,7 @@ function MultiRaidResultsSection({
   elapsedMs,
   onRunSweep,
   rankBy,
+  significanceMode,
 }: MultiRaidResultsSectionProps) {
   const [showAllMultiRaidCandidates, setShowAllMultiRaidCandidates] = useState(false);
 
@@ -777,6 +799,24 @@ function MultiRaidResultsSection({
   // (react-hooks/exhaustive-deps). Depending on `run` itself instead is
   // stable across renders where nothing actually changed.
   const dedupedCandidates = useMemo(() => dedupeInterchangeableCandidates(run?.data?.candidates ?? [], pool), [run, pool]);
+  // A candidate that only clears the noise floor against a SINGLE boss (not
+  // the boss-set average) is FILTERED OUT of the ranked table entirely when
+  // `significanceMode` is "aggregate-only" — never merely dimmed the way a
+  // candidate insignificant under BOTH measures still is below. `exceedsNoise`
+  // already reflects the CURRENT significanceMode (see rosterPlanner.ts's own
+  // doc comment on RosterPowerUpCandidate.exceedsNoise), so a row only
+  // qualifies as "hidden by this toggle" when it's per-boss significant
+  // (`significantBossCount > 0`) yet still failed to clear `exceedsNoise` —
+  // this is honestly derived from data every candidate already carries, not
+  // a second engine run under the other mode.
+  const hiddenBySignificanceMode = useMemo(
+    () => dedupedCandidates.filter((g) => !g.representative.exceedsNoise && g.representative.significantBossCount > 0),
+    [dedupedCandidates],
+  );
+  const qualifyingCandidates = useMemo(
+    () => dedupedCandidates.filter((g) => g.representative.exceedsNoise || g.representative.significantBossCount === 0),
+    [dedupedCandidates],
+  );
   // Re-sorted client-side by the chosen rankBy — same "cheap, bound to the
   // LIVE selector" reasoning as single-raid's own sortedCandidates (kept in
   // sync via powerUpCandidateSort.ts's shared comparator, per CLAUDE.md's
@@ -786,13 +826,13 @@ function MultiRaidResultsSection({
   // within a group, not to determine the final displayed order.
   const sortedCandidateGroups = useMemo(
     () =>
-      sortCandidatesByEfficiency(dedupedCandidates, (group) => ({
+      sortCandidatesByEfficiency(qualifyingCandidates, (group) => ({
         delta: group.representative.meanDeltaTeamDps,
         isSignificant: group.representative.exceedsNoise,
         costStardust: group.representative.cost.stardust,
         efficiency: rosterCandidateEfficiency(group.representative, rankBy),
       })),
-    [dedupedCandidates, rankBy],
+    [qualifyingCandidates, rankBy],
   );
   const visibleCandidateGroups = showAllMultiRaidCandidates
     ? sortedCandidateGroups
@@ -909,6 +949,16 @@ function MultiRaidResultsSection({
                 Never competitive
               </dt>
               <dd>{run.data.neverCompetitive.length}</dd>
+              <dt title="Significant against at least one boss, but not against the boss-set average — hidden from the ranked table below only because &quot;Also count a candidate that only helps against one boss…&quot; above is unchecked.">
+                Hidden by significance mode
+              </dt>
+              <dd>
+                {hiddenBySignificanceMode.length} candidate{hiddenBySignificanceMode.length === 1 ? "" : "s"} hidden:
+                significant against one boss but not on average
+                {significanceMode === "aggregate-only" && hiddenBySignificanceMode.length > 0
+                  ? " — check the box above to reveal them"
+                  : ""}
+              </dd>
             </dl>
           </div>
 
@@ -934,9 +984,9 @@ function MultiRaidResultsSection({
               </tbody>
             </table>
           </div>
-          {dedupedCandidates.length > MULTI_RAID_TABLE_INITIAL_ROWS && (
+          {qualifyingCandidates.length > MULTI_RAID_TABLE_INITIAL_ROWS && (
             <button type="button" style={{ marginTop: 8 }} onClick={() => setShowAllMultiRaidCandidates((v) => !v)}>
-              {showAllMultiRaidCandidates ? `Show top ${MULTI_RAID_TABLE_INITIAL_ROWS} only` : `Show all ${dedupedCandidates.length}`}
+              {showAllMultiRaidCandidates ? `Show top ${MULTI_RAID_TABLE_INITIAL_ROWS} only` : `Show all ${qualifyingCandidates.length}`}
             </button>
           )}
 
@@ -2044,6 +2094,7 @@ export function PowerUpOptimizerView() {
       multiRaidMaxBossCount: 30,
       candyByFamilyId: {},
       multiRaidMegaLevel: null,
+      multiRaidSignificanceMode: "aggregate-only",
     }),
     [
       assumptions.slots,
@@ -2114,6 +2165,7 @@ export function PowerUpOptimizerView() {
       // honest about what the assumptions object actually holds, and so the
       // wiring is already correct the moment that engine gap closes.
       multiRaidMegaLevel: assumptions.multiRaidMegaLevel,
+      multiRaidSignificanceMode: assumptions.multiRaidSignificanceMode,
       stardustOnHand: assumptions.stardustOnHand,
       rareCandyOnHand: assumptions.rareCandyOnHand,
       rareCandyXlOnHand: assumptions.rareCandyXlOnHand,
@@ -2134,6 +2186,7 @@ export function PowerUpOptimizerView() {
       assumptions.multiRaidBossIds,
       assumptions.candyByFamilyId,
       assumptions.multiRaidMegaLevel,
+      assumptions.multiRaidSignificanceMode,
       assumptions.stardustOnHand,
       assumptions.rareCandyOnHand,
       assumptions.rareCandyXlOnHand,
@@ -2318,6 +2371,7 @@ export function PowerUpOptimizerView() {
             elapsedMs={sweepElapsedMs}
             onRunSweep={handleRunMultiRaidSweep}
             rankBy={assumptions.rankBy}
+            significanceMode={assumptions.multiRaidSignificanceMode}
           />
           <MultiRaidBudgetPlanSection
             entryIdentities={entryIdentities}
