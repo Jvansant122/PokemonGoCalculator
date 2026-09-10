@@ -8,16 +8,14 @@ import type { PowerUpOptimizerAssumptions, PowerUpSlotAssumption } from "./Power
  * shown right next to the button so a level/IV number that looks slightly
  * different on the other tab never comes as a surprise. Unlike
  * teamRaidExport.ts's TEAM_RAID_EXPORT_MISSING_NOTE (which lists fields the
- * destination has NO source for at all), this direction's real gap is
- * structural rather than missing data: the Power-Up Optimizer gives every
- * slot its OWN level and IVs (the whole point of that tab), but Team Raid
- * models one shared level/IV spread for the whole roster (see
- * TeamAssumptions.level's own doc comment) — see
- * powerUpOptimizerAssumptionsToTeamAssumptions's own doc comment for exactly
- * how that reduction is computed.
+ * destination has NO source for at all), this direction has no real gap:
+ * TeamSlotAssumption's own per-slot `level`/`ivs` override (added for the
+ * Lineup Builder) is exactly the field this hand-off needed, so every slot's
+ * OWN post-plan level and IVs carry across unchanged — see
+ * powerUpOptimizerAssumptionsToTeamAssumptions's own doc comment.
  */
 export const POWER_UP_OPTIMIZER_EXPORT_MISSING_NOTE =
-  "Brings over your roster's species/moves/mega/Shadow flags, the boss, and every combat assumption. Team Raid shares ONE level and ONE IV spread across the whole roster (unlike this tab's per-slot values), so the level/IV fields below are the mean across your fielded slots, rounded to the nearest half-level/whole IV — not any one slot's exact number. Stardust/candy/Purified/Lucky have no Team Raid equivalent and are dropped.";
+  "Brings over your roster's species/moves/mega/Shadow flags, each slot's OWN post-plan level and IVs, the boss, and every combat assumption. Stardust/candy/Purified/Lucky have no Team Raid equivalent and are dropped.";
 
 /** Rounds to the nearest half-level (Team Raid's own NumberField step) and clamps to [1, MAX_POKEMON_POWER_UP_LEVEL] is left to the receiving tab's own normalization — this only rounds, matching the precision the destination's level field actually accepts. */
 function roundToHalfLevel(level: number): number {
@@ -29,12 +27,21 @@ function roundIv(iv: number): number {
   return Math.max(0, Math.min(15, Math.round(iv)));
 }
 
-function mean(values: number[]): number | null {
-  if (values.length === 0) return null;
-  return values.reduce((sum, v) => sum + v, 0) / values.length;
-}
-
-function slotToTeamSlot(s: PowerUpSlotAssumption): TeamSlotAssumption {
+/**
+ * Maps one Power-Up Optimizer slot onto a Team Raid slot, carrying its OWN
+ * resolved level (post-plan `toLevel` when the plan touched it, else the
+ * slot's current level — resolved by the caller and passed in as `level`)
+ * and its own IVs as that slot's per-slot `level`/`ivs` OVERRIDE
+ * (TeamSlotAssumption's own fields, added for exactly this kind of
+ * per-Pokémon hand-off — see that type's own doc comment) rather than
+ * folding them into the roster-wide shared spread. This is the same
+ * override field teamRaidExport.ts's slotToPowerUpSlot already reads in the
+ * opposite direction; mirroring it here (instead of collapsing to a mean)
+ * is what fixes the ~40% clear-time divergence measured before this field
+ * was wired up in this direction (see
+ * .claude/agent-memory/web-developer/feature_reverse_cross_tab_links_powerup_to_teamraid_and_speciesreport.md).
+ */
+function slotToTeamSlot(s: PowerUpSlotAssumption, level: number): TeamSlotAssumption {
   return {
     speciesId: s.speciesId,
     fastMoveId: s.fastMoveId,
@@ -42,6 +49,8 @@ function slotToTeamSlot(s: PowerUpSlotAssumption): TeamSlotAssumption {
     isMega: s.isMega,
     megaLevel: s.megaLevel,
     isShadow: s.isShadow,
+    level: roundToHalfLevel(level),
+    ivs: { attack: roundIv(s.ivAttack), defense: roundIv(s.ivDefense), stamina: roundIv(s.ivStamina) },
   };
 }
 
@@ -61,24 +70,37 @@ function slotToTeamSlot(s: PowerUpSlotAssumption): TeamSlotAssumption {
  * only for a slot the plan didn't touch, or when no plan exists at all,
  * e.g. `null` when the optimizer has no boss/fielded-slot result yet).
  *
- * **The one genuine reduction here** (documented to the user via
- * POWER_UP_OPTIMIZER_EXPORT_MISSING_NOTE, shown next to the button): Team
- * Raid has no per-slot level/IV concept at all (TeamAssumptions.level/
- * ivAttack/ivDefense/ivStamina are ONE shared spread for the whole roster —
- * see that type's own doc comment), while every Power-Up Optimizer slot
- * carries its own. There is no lossless way to carry N different post-plan
- * levels into a type that only has room for one, so the shared level/IVs
- * below are the MEAN across fielded slots (post-plan level where the plan
- * touched that slot, current level otherwise), rounded to the precision
- * Team Raid's own inputs accept (nearest half-level, whole-number IVs). An
- * empty roster (no fielded slots) falls back to 20/15/15/15 — Team Raid's
- * own empty-roster resting shape (TeamAssumptionPanel has no separate
- * "unknown" level concept the field itself always holds a number).
+ * **Every slot carries its OWN resolved level/IVs**, via TeamSlotAssumption's
+ * own per-slot `level`/`ivs` override field (see slotToTeamSlot above) — NOT
+ * folded into one roster-wide mean. That override field exists specifically
+ * for this: an earlier version of this function collapsed the whole roster
+ * onto `mean(fieldedLevels)` because, at the time it was written, Team Raid's
+ * `TeamSlotAssumption` had no per-slot level/IV concept at all and there was
+ * genuinely no lossless way to carry N different post-plan levels into a
+ * type with room for only one. That constraint no longer holds — the
+ * override field was added for the Lineup Builder (see
+ * TeamSlotAssumption.level's own doc comment) and this direction simply
+ * hadn't been re-wired to use it, which is the exact bug this rewrite fixes
+ * (measured ~40% clear-time divergence: a plan claiming 100% clear at 89.8s
+ * vs. Team Raid simulating the collapsed-mean roster at 125.7s).
+ *
+ * The roster-WIDE `level`/`ivAttack`/`ivDefense`/`ivStamina` fields below are
+ * no longer load-bearing for any fielded slot (every fielded slot has its
+ * own override, which Team Raid always prefers — see
+ * TeamAssumptionPanel.tsx's own rendering of `slot.level ?? value.level`).
+ * They're set to Team Raid's own plain resting default (20/15/15/15, same as
+ * DEFAULT_TEAM_ASSUMPTIONS's shape) rather than a computed mean — a mean
+ * would misleadingly imply one "typical" number represents the roster, when
+ * the whole point of this hand-off is that it doesn't. The shared fields
+ * still matter for one thing: they're the level/IVs Team Raid would use if
+ * the user manually ADDS a new slot afterwards (one with no override of its
+ * own), which is a sensible, honest fallback rather than a computed
+ * approximation of already-known per-slot data.
  *
  * What carries verbatim (same "these mean the same thing on both tabs"
  * precedent as the reverse export): every slot's species/fast move/charged
- * move/isMega/Mega Level/isShadow (in order), the boss target and its two
- * moves, and every shared combat assumption (dodge, dodgeFastAttacks,
+ * move/isMega/Mega Level/isShadow/level/IVs (in order), the boss target and
+ * its two moves, and every shared combat assumption (dodge, dodgeFastAttacks,
  * holdChargedMoveUntilSafe, weather, bossChargedMoveFrequencySeconds,
  * bossChargedMoveCadence, bossStartsPrimed, bossStartingEnergyFraction,
  * raidTimerSeconds, swapCostSeconds, reviveCostSeconds).
@@ -102,29 +124,23 @@ export function powerUpOptimizerAssumptionsToTeamAssumptions(
   a: PowerUpOptimizerAssumptions,
   finalLevels: PowerUpBudgetFinalLevel[] | null,
 ): TeamAssumptions {
-  const slots: TeamSlotAssumption[] = a.slots.slice(0, MAX_TEAM_RAID_SLOTS).map(slotToTeamSlot);
+  const slots: TeamSlotAssumption[] = a.slots.slice(0, MAX_TEAM_RAID_SLOTS).map((s, i) => {
+    const level = finalLevels?.[i]?.toLevel ?? s.level;
+    return slotToTeamSlot(s, level);
+  });
   while (slots.length < MAX_TEAM_RAID_SLOTS) slots.push(emptyTeamSlot());
-
-  const fieldedSlots = a.slots.filter((s) => s.speciesId !== null);
-
-  const fieldedLevels = a.slots
-    .map((s, i) => (s.speciesId === null ? null : (finalLevels?.[i]?.toLevel ?? s.level)))
-    .filter((level): level is number => level !== null);
-  const level = fieldedLevels.length > 0 ? roundToHalfLevel(mean(fieldedLevels)!) : 20;
-
-  const ivAttack = fieldedSlots.length > 0 ? roundIv(mean(fieldedSlots.map((s) => s.ivAttack))!) : 15;
-  const ivDefense = fieldedSlots.length > 0 ? roundIv(mean(fieldedSlots.map((s) => s.ivDefense))!) : 15;
-  const ivStamina = fieldedSlots.length > 0 ? roundIv(mean(fieldedSlots.map((s) => s.ivStamina))!) : 15;
 
   return {
     slots,
     targetId: a.targetId,
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
-    level,
-    ivAttack,
-    ivDefense,
-    ivStamina,
+    // Team Raid's own plain resting default — see this function's own doc
+    // comment for why this is no longer a computed mean.
+    level: 20,
+    ivAttack: 15,
+    ivDefense: 15,
+    ivStamina: 15,
     dodge: a.dodge,
     dodgeFastAttacks: a.dodgeFastAttacks,
     holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,

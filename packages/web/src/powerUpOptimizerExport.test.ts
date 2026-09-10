@@ -62,14 +62,32 @@ describe("powerUpOptimizerAssumptionsToTeamAssumptions", () => {
     });
   });
 
-  it("with no plan (null finalLevels), reduces the shared level/IVs to the mean of fielded slots' CURRENT values", () => {
+  it("carries each slot's OWN current level/IVs through as its per-slot override when no plan exists", () => {
     const a = baseAssumptions();
     const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, null);
-    // (35 + 25) / 2 = 30, already a legal half-level.
-    expect(result.level).toBe(30);
-    expect(result.ivAttack).toBe(13); // mean(15, 10) = 12.5 -> rounds to 13
-    expect(result.ivDefense).toBe(13);
-    expect(result.ivStamina).toBe(13);
+    expect(result.slots[0]!.level).toBe(35);
+    expect(result.slots[0]!.ivs).toEqual({ attack: 15, defense: 15, stamina: 15 });
+    expect(result.slots[1]!.level).toBe(25);
+    expect(result.slots[1]!.ivs).toEqual({ attack: 10, defense: 10, stamina: 10 });
+  });
+
+  it("carries N differing per-slot levels through DISTINCTLY, not collapsed to a shared mean (regression: this is what the ~40% clear-time divergence bug collapsed)", () => {
+    const a = baseAssumptions({
+      slots: [
+        slot({ speciesId: "machamp", level: 21 }),
+        slot({ speciesId: "terrakion", level: 30 }),
+        slot({ speciesId: "excadrill", level: 45 }),
+        slot(),
+        slot(),
+        slot(),
+      ],
+    });
+    const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, null);
+    expect(result.slots[0]!.level).toBe(21);
+    expect(result.slots[1]!.level).toBe(30);
+    expect(result.slots[2]!.level).toBe(45);
+    // The shared roster-wide field is NOT a mean of these — see below.
+    expect(result.level).not.toBe(32); // mean(21, 30, 45) would be 32
   });
 
   it("prefers a committed plan's POST-PLAN toLevel over the slot's current level for a touched slot", () => {
@@ -83,34 +101,28 @@ describe("powerUpOptimizerAssumptionsToTeamAssumptions", () => {
       { slotIndex: 5, speciesId: null, speciesName: null, fromLevel: null, toLevel: null },
     ];
     const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, finalLevels);
-    // (40 + 25) / 2 = 32.5, already a legal half-level.
-    expect(result.level).toBe(32.5);
+    expect(result.slots[0]!.level).toBe(40);
+    expect(result.slots[1]!.level).toBe(25);
   });
 
   it("falls back to a slot's own current level when the plan's finalLevels entry for it is missing/unfielded", () => {
     const a = baseAssumptions();
     const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, []);
-    expect(result.level).toBe(30);
+    expect(result.slots[0]!.level).toBe(35);
+    expect(result.slots[1]!.level).toBe(25);
   });
 
-  it("rounds an uneven mean level to the nearest half-level", () => {
+  it("rounds a slot's level to the nearest half-level and its IVs to the nearest whole number", () => {
     const a = baseAssumptions({
-      slots: [
-        slot({ speciesId: "machamp", level: 21 }),
-        slot({ speciesId: "terrakion", level: 22 }),
-        slot({ speciesId: "excadrill", level: 22 }),
-        slot(),
-        slot(),
-        slot(),
-      ],
+      slots: [slot({ speciesId: "machamp", level: 21.3, ivAttack: 12.6, ivDefense: 12.4, ivStamina: 12.5 }), slot(), slot(), slot(), slot(), slot()],
     });
-    // mean(21, 22, 22) = 21.666... -> nearest half-level is 21.5.
     const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, null);
-    expect(result.level).toBe(21.5);
+    expect(result.slots[0]!.level).toBe(21.5);
+    expect(result.slots[0]!.ivs).toEqual({ attack: 13, defense: 12, stamina: 13 });
   });
 
-  it("falls back to 20/15/15/15 for a fully empty roster", () => {
-    const a = baseAssumptions({ slots: [slot(), slot(), slot(), slot(), slot(), slot()] });
+  it("leaves the roster-wide shared level/IVs at Team Raid's own plain resting default (20/15/15/15), not a computed mean", () => {
+    const a = baseAssumptions();
     const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, null);
     expect(result.level).toBe(20);
     expect(result.ivAttack).toBe(15);

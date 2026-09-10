@@ -68,3 +68,4 @@
 - [BossSetPanel per-boss hand-pick](feature_boss_set_panel_handpick.md) — REPLACE not union with filters, single-boss fast path, blanket `taskkill node.exe` mistake to avoid next time
 - [Party-size flip (Comparator) + boss-moveset sweep (Team Raid)](feature_partysize_flip_and_boss_moveset_sweep.md) — reused engine's unused findCrossoverPartySize; Playwright-as-browser-tool technique
 - [Lineup Builder UI (Team Raid entry point)](feature_lineup_builder_ui.md) — per-slot level/IVs threaded through 3 call sites, export fix, verified concurrently with an unrelated engine WIP
+- [Bugfix: Power-Up -> Team Raid mean-collapse](bugfix_powerup_to_teamraid_meancollapse.md) — mirrored teamRaidExport's per-slot override; live-verified 125.7s(bug)->89.6s(fixed) vs plan's 89.8s claim

@@ -215,6 +215,20 @@ test("power-up-optimizer: 'Send post-plan roster to Team Raid Simulator' carries
   const destSubtitle = page.locator(".subtitle").first();
   await expect(destSubtitle).toContainText("Mega Lucario");
   await expect(destSubtitle).toContainText("Tyranitar");
+
+  // Regression for the ~40% clear-time-divergence bug: the tab's own
+  // DEFAULT_ASSUMPTIONS fields six slots starting at six DIFFERENT levels
+  // (35/30/40/38/31/25), and its default 200k-stardust/20-candy/10-XL
+  // budget powers up slot 1 (Mega Lucario, 35->36.5) and slot 5
+  // (Conkeldurr, 31->37.5) per the committed plan's own finalLevels —
+  // confirm those POST-PLAN levels survive the hand-off as distinct
+  // per-slot overrides (TeamSlotAssumption.level, surfaced via the
+  // "Own level/IVs:" hint), not collapsed onto one shared roster-wide mean.
+  await expandAssumptions(page);
+  const ownLevelHints = page.locator("p.species-picker-hint", { hasText: "Own level/IVs:" });
+  await expect(ownLevelHints).toHaveCount(6);
+  const teamLevels = (await ownLevelHints.allTextContents()).map((h) => h.match(/Own level\/IVs: ([\d.]+)/)?.[1]);
+  expect(teamLevels).toEqual(["36.5", "30", "40", "38", "37.5", "25"]);
 });
 
 /**
