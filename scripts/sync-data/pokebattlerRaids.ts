@@ -72,6 +72,7 @@
  */
 
 import type { RaidTier, SpeciesDefinition } from "@pogo-analyzer/engine";
+import { formDisplayName } from "./gameMasterMatching.ts";
 
 export interface RawPokebattlerRaidBossEntry {
   pokemon: string;
@@ -205,10 +206,19 @@ function normalizeFormToken(w: string): string {
   return w.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
-/** This project's own fromGameMaster qualified-name convention: bare name for the roster's single normalized "Normal" form, "Name (Form)" otherwise. */
+/**
+ * This project's own fromGameMaster qualified-name convention: bare name for
+ * the roster's single normalized "Normal" form, "Name (Form)" otherwise.
+ * `defaultFormByPokemonId` holds the RAW pogoapi form string (possibly
+ * underscored, e.g. "West_sea") — cleaned via formDisplayName (2026-09-10
+ * fix) so this reconstructed name matches the roster's own now-cleaned
+ * `.name` field (see that function's doc comment in ./gameMasterMatching.ts
+ * for why every independent reconstruction of this convention needs the same
+ * treatment).
+ */
 function qualifiedRosterName(pokemonName: string, pokemonId: number, ctx: PokebattlerResolutionContext): string {
   const form = ctx.defaultFormByPokemonId.get(pokemonId) ?? "Normal";
-  return form === "Normal" ? pokemonName : `${pokemonName} (${form})`;
+  return form === "Normal" ? pokemonName : `${pokemonName} (${formDisplayName(form)})`;
 }
 
 function finalizeBase(

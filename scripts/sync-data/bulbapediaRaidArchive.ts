@@ -245,15 +245,24 @@ function normalizeApostrophe(s: string): string {
  * `SpeciesDefinition.name` convention (bare "Form2" style suffix, e.g.
  * "Giratina (Altered)"). Confirmed against 5 real cases before trusting the
  * general rule: "Altered Form"->"Altered", "Incarnate Forme"->"Incarnate",
- * "Plant Cloak"->"Plant", "West Sea"->"West_sea", Unown letters unchanged.
+ * "Plant Cloak"->"Plant", "West Sea"->"West Sea" (unchanged — see below),
+ * Unown letters unchanged.
+ *
+ * UPDATED 2026-09-10: this function used to rewrite "West Sea"/"East Sea" to
+ * "West_sea"/"East_sea" specifically to match the roster's OLD, underscored
+ * `.name` convention (see formDisplayName's doc comment in
+ * ./gameMasterMatching.ts for that fix). Now that the roster's own name is
+ * cleaned to natural spacing ("Shellos (West Sea)"), rewriting TO an
+ * underscore would itself become the mismatch — Bulbapedia's own "West Sea"/
+ * "East Sea" text already matches the new convention verbatim, so the
+ * special case is simply removed rather than flipped to insert a space (a
+ * no-op that would only add confusion).
  */
 function normalizeFormText(form: string): string {
   let f = form.trim();
   f = f.replace(/\s+Cloak$/i, "");
   f = f.replace(/\s+Forme?$/i, "");
   f = f.replace(/\s+of Many Battles$/i, "");
-  if (/^west sea$/i.test(f)) f = "West_sea";
-  if (/^east sea$/i.test(f)) f = "East_sea";
   return f;
 }
 

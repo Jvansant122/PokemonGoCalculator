@@ -33,6 +33,11 @@ export interface StoredRosterEntry {
   ivsAreApproximate: boolean;
   levelIsApproximate: boolean;
   movesetIsDefaulted: boolean;
+  /** See RosterEntry's own doc comment (import/pokeGenieMatch.ts) — the per-slot detail behind movesetIsDefaulted. */
+  fastMoveIsDefaulted: boolean;
+  chargedMoveIsDefaulted: boolean;
+  fastMoveUnmatchedName: string | null;
+  chargedMoveUnmatchedName: string | null;
   secondChargedMoveName?: string;
   sourceLineNumber: number;
   unmatchedMoveNames: string[];
@@ -74,6 +79,10 @@ export function dehydrateRosterEntry(entry: RosterEntry): StoredRosterEntry {
     ivsAreApproximate: entry.ivsAreApproximate,
     levelIsApproximate: entry.levelIsApproximate,
     movesetIsDefaulted: entry.movesetIsDefaulted,
+    fastMoveIsDefaulted: entry.fastMoveIsDefaulted,
+    chargedMoveIsDefaulted: entry.chargedMoveIsDefaulted,
+    fastMoveUnmatchedName: entry.fastMoveUnmatchedName,
+    chargedMoveUnmatchedName: entry.chargedMoveUnmatchedName,
     secondChargedMoveName: entry.secondChargedMoveName,
     sourceLineNumber: entry.sourceLineNumber,
     unmatchedMoveNames: entry.unmatchedMoveNames,
@@ -99,22 +108,75 @@ export function hydrateRosterEntry(stored: StoredRosterEntry, registry: SpeciesL
     ivsAreApproximate: stored.ivsAreApproximate,
     levelIsApproximate: stored.levelIsApproximate,
     movesetIsDefaulted: stored.movesetIsDefaulted,
+    // `?? false`/`?? null` rather than a bare passthrough: a pool saved to
+    // localStorage before these four fields existed won't carry them at all
+    // (TS's static requiredness on StoredRosterEntry doesn't survive
+    // JSON.parse — same reasoning this project already applies to a
+    // Scenario field missing from an old share link). Defaulting to "not
+    // defaulted" is the safe direction — it just means an old cached entry
+    // won't show the new badge until the roster is re-imported, never a
+    // crash or a false positive.
+    fastMoveIsDefaulted: stored.fastMoveIsDefaulted ?? false,
+    chargedMoveIsDefaulted: stored.chargedMoveIsDefaulted ?? false,
+    fastMoveUnmatchedName: stored.fastMoveUnmatchedName ?? null,
+    chargedMoveUnmatchedName: stored.chargedMoveUnmatchedName ?? null,
     secondChargedMoveName: stored.secondChargedMoveName,
     sourceLineNumber: stored.sourceLineNumber,
     unmatchedMoveNames: stored.unmatchedMoveNames,
   };
 }
 
+/**
+ * True when a stored entry was saved by a version of this app that predates
+ * `fastMoveIsDefaulted`/`chargedMoveIsDefaulted`/`fastMoveUnmatchedName`/
+ * `chargedMoveUnmatchedName` (added 2026-09-10) — i.e. this is `JSON.parse`d
+ * localStorage data that never HAD these keys at all, not an entry that
+ * genuinely resolved a fully-known moveset. `StoredRosterEntry` declares
+ * these as required (non-optional) fields, but that requiredness is a
+ * compile-time claim only and does not survive `JSON.parse` any more than a
+ * `Scenario` field survives on an old share link — `stored.fastMoveIsDefaulted`
+ * can be a real runtime `undefined` here despite its declared type, which is
+ * EXACTLY what `hydrateRosterEntry`'s own `?? false` fallback below silently
+ * launders into "not defaulted" — indistinguishable on screen from a row
+ * that genuinely resolved cleanly. Checking this one field is representative
+ * of all four: they were added together in the same migration, so a stored
+ * entry either has all four or none of them.
+ */
+export function entryPredatesMovesetBadgeFields(stored: StoredRosterEntry): boolean {
+  return (stored as Partial<StoredRosterEntry>).fastMoveIsDefaulted === undefined;
+}
+
+export interface HydratedRosterPool {
+  entries: RosterEntry[];
+  /** Count of entries dropped because their species is no longer in this registry. */
+  droppedCount: number;
+  /**
+   * Count of successfully-hydrated entries that predate the moveset-badge
+   * fields (see entryPredatesMovesetBadgeFields) — these entries carry no
+   * "default moveset" signal at all yet, even though the Import table above
+   * (and the multi-raid result rows joined onto rosterMovesetBadge.ts) would
+   * correctly show one for the SAME entry if it were re-imported today. A
+   * caller should prompt a re-import rather than let this silently read as
+   * "every moveset here is fully known."
+   */
+  staleMovesetBadgeCount: number;
+}
+
 /** Hydrates every entry in a pool, dropping (and counting) any whose species this registry no longer has rather than throwing. */
-export function hydrateRosterPool(pool: RosterPool, registry: SpeciesLookup): { entries: RosterEntry[]; droppedCount: number } {
+export function hydrateRosterPool(pool: RosterPool, registry: SpeciesLookup): HydratedRosterPool {
   const entries: RosterEntry[] = [];
   let droppedCount = 0;
+  let staleMovesetBadgeCount = 0;
   for (const stored of pool.entries) {
     const hydrated = hydrateRosterEntry(stored, registry);
-    if (hydrated) entries.push(hydrated);
-    else droppedCount += 1;
+    if (hydrated) {
+      entries.push(hydrated);
+      if (entryPredatesMovesetBadgeFields(stored)) staleMovesetBadgeCount += 1;
+    } else {
+      droppedCount += 1;
+    }
   }
-  return { entries, droppedCount };
+  return { entries, droppedCount, staleMovesetBadgeCount };
 }
 
 const STORAGE_KEY = `pogo-analyzer:roster-pool:v${ROSTER_POOL_SCHEMA_VERSION}`;

@@ -493,7 +493,17 @@ merit** — only ruled out on access.
 | `pogo-gamer.fr` | DNS resolution failure (`ENOTFOUND`) — domain appears gone entirely | 2026-09-09 |
 | `github.com/ccev/pogoinfo`, `github.com/ReuschelCGN/pogoinfo` | Looks live/structured but is empirically stale — zero species overlap with the real live raid roster when checked | 2026-09-07 |
 | `gist.github.com/pekingduck/...raid-bosses.json` | Frozen 2023 snapshot, no update mechanism | 2026-09-07 |
-| Niantic Helpshift FAQ pages (`nianticlabs.com`/support subdomains) | HTTP 403 | 2026-09-05 |
+| Niantic Helpshift FAQ pages (`nianticlabs.com`/support subdomains, incl. `niantic.helpshift.com`) | HTTP 403 | 2026-09-05, reconfirmed (different subdomain) 2026-09-10 |
+| `community.gamepress.gg` | DNS resolution failure (`ENOTFOUND`) — same family as the already-dead `gamepress.gg`, confirms the whole domain family, not just the redirect-then-403 subdomains already listed | 2026-09-10 |
+| `poke-info.com` | HTTP 403 on at least one dated guide URL tried | 2026-09-10 |
+
+**Newly encountered this session, worth keeping**: `pokemon.com/us/strategy/...` (official Pokémon
+Company brand site, distinct from Niantic/Scopely's own `pokemongo.com` operational posts — treat
+as `[community-consensus]`-plus, stronger than a fan wiki but not `[first-party]` for game-engine
+mechanics since it's not the game's operator) directly fetched and useful 2026-09-10.
+`pogojournal.substack.com` (independent Pokémon GO commentary Substack) directly fetched
+2026-09-10, useful for player anecdote/sentiment on the Charged TM randomness question specifically
+— treat as `[community-consensus]`, single-author, not a data source.
 
 ---
 

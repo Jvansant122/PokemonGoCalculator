@@ -589,3 +589,48 @@ describe("TeamRaidSlotInput.megaLevel", () => {
     expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
   });
 });
+
+describe("TeamRaidSlotResult.dodgeFastAttacksLockout", () => {
+  // WEAK_FAST (0.5s, this file's shared boss fast move) is exactly
+  // DODGE_COST_SECONDS — see simulate.ts's StepwiseRunResult.dodgeFastAttacksLockout.
+  const weakBoss: SpeciesDefinition = {
+    id: "weak-boss",
+    name: "Weak Boss",
+    types: ["normal"],
+    baseAttack: 20,
+    baseDefense: 50,
+    baseStamina: 500,
+    fastMoves: [WEAK_FAST],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  it("is threaded through to each slot's own result when dodgeFastAttacks is on", () => {
+    const result = runTeamRaid(
+      baseInputs({
+        slots: [makeSlot(HARD_HITTER)],
+        boss: weakBoss,
+        dodgeFastAttacks: true,
+        raidTimerSeconds: 180,
+      }),
+    );
+    expect(result.slots.length).toBeGreaterThan(0);
+    for (const slot of result.slots) {
+      expect(slot.dodgeFastAttacksLockout).toBe(true);
+    }
+  });
+
+  it("is false per-slot when dodgeFastAttacks is off (the default)", () => {
+    const result = runTeamRaid(
+      baseInputs({
+        slots: [makeSlot(HARD_HITTER)],
+        boss: weakBoss,
+        raidTimerSeconds: 180,
+      }),
+    );
+    expect(result.slots.length).toBeGreaterThan(0);
+    for (const slot of result.slots) {
+      expect(slot.dodgeFastAttacksLockout).toBe(false);
+    }
+  });
+});

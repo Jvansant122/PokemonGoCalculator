@@ -59,3 +59,15 @@ Fed into the multi-raid-optimizer research response (2026-09-08). Recommended: (
 flag/exclude unevolved-with-available-evolution candidates from power-up ranking, and add
 second-charged-move unlock as a new candidate type sharing the existing stardust/candy pool.
 Elite TM: (c) out of scope, different currency entirely.
+
+**Update 2026-09-10**: confirmed structurally (not just "no table found") that this project's own
+committed `data/raw/game_master.json` has exactly three top-level data keys — `pokemon`, `moves`,
+`upgradeSettings` — and nothing else; `scripts/sync-data/fetchCache.ts`'s own fetch layer only
+ever extracts `pokemonSettings`/`moveSettings`/`POKEMON_UPGRADE_SETTINGS`/`LUCKY_POKEMON_SETTINGS`
+from the upstream dump. A WebSearch for the plausible upstream template name
+(`CANDY_TO_UNLOCK_SECOND_MOVE_SETTINGS`) found no confirmation either — so the real template name
+remains unconfirmed, not just unsynced. This is now the anchor fact behind the "no first-party
+Niantic table found" line above: it isn't that nobody's looked, it's that this project's pipeline
+was never built to look, and the exact field to look for isn't independently confirmed anywhere.
+See `fact_tm_move_change_mechanics` (a sibling gap — TM item definitions are equally absent from
+this same file) and `proposal_move_change_optimizer_candidates`.

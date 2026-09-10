@@ -1,7 +1,14 @@
-import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type MegaLevel, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import {
+  MAX_POKEMON_POWER_UP_LEVEL,
+  type DodgeBehavior,
+  type MegaLevel,
+  type SpeciesDefinition,
+  type WeatherCondition,
+} from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { NumberField } from "./NumberField.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
-import { MoveSelect } from "./MoveSelect.js";
+import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -190,8 +197,19 @@ export function TeamAssumptionPanel({
     : undefined;
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
 
+  // Type-effectiveness opponents for the move pickers below (display-only —
+  // see MoveSelect.tsx's own `opponents` prop doc comment). Each slot's own
+  // move pickers measure against the boss (one entry); the boss's own move
+  // pickers measure against every currently-resolved (non-empty) roster
+  // slot at once, tagged by slot NUMBER rather than species name so a long
+  // move name and a long chip label never fight for the same space.
+  const bossOpponent: MoveSelectOpponent[] = bossSpecies ? [{ label: "Boss", types: bossSpecies.types }] : [];
+  const slotOpponents: MoveSelectOpponent[] = slotSpecies
+    .map((sp, i): MoveSelectOpponent | null => (sp ? { label: String(i + 1), types: sp.types } : null))
+    .filter((o): o is MoveSelectOpponent => o !== null);
+
   return (
-    <CollapsibleSection id="team-raid-assumptions" heading="Assumptions" defaultOpen>
+    <CollapsibleSection id="team-raid-assumptions" heading="Assumptions" defaultOpen={false}>
 
       <div style={{ marginBottom: 10 }}>
         <button type="button" onClick={clearAllMega} disabled={!value.slots.some((s) => s.isMega)}>
@@ -251,6 +269,7 @@ export function TeamAssumptionPanel({
                     kind="fast"
                     value={slot.fastMoveId}
                     onChange={(id) => updateSlot(i, { fastMoveId: id })}
+                    opponents={bossOpponent}
                   />
                   <MoveSelect
                     idPrefix={`team-slot-${i}-charged`}
@@ -259,6 +278,7 @@ export function TeamAssumptionPanel({
                     kind="charged"
                     value={slot.chargedMoveId}
                     onChange={(id) => updateSlot(i, { chargedMoveId: id })}
+                    opponents={bossOpponent}
                   />
                   <div className="team-slot-flags">
                     <label className="species-picker-hint">
@@ -328,6 +348,7 @@ export function TeamAssumptionPanel({
                 kind="fast"
                 value={value.bossFastMoveId}
                 onChange={(id) => set("bossFastMoveId", id)}
+                opponents={slotOpponents}
               />
               <MoveSelect
                 idPrefix="team-boss-charged"
@@ -336,6 +357,7 @@ export function TeamAssumptionPanel({
                 kind="charged"
                 value={value.bossChargedMoveId}
                 onChange={(id) => set("bossChargedMoveId", id)}
+                opponents={slotOpponents}
               />
             </>
           )}
@@ -344,51 +366,47 @@ export function TeamAssumptionPanel({
         <div>
           <div className="field">
             <label htmlFor="team-level">Level (whole roster)</label>
-            <input
+            <NumberField
               id="team-level"
-              type="number"
               min={1}
-              max={40}
+              max={MAX_POKEMON_POWER_UP_LEVEL}
               step={0.5}
               value={value.level}
-              onChange={(e) => set("level", Number(e.target.value))}
+              onChange={(v) => set("level", v ?? 1)}
             />
           </div>
           <div className="iv-row">
             <div className="field">
               <label htmlFor="team-ivAttack">Attack IV</label>
-              <input
+              <NumberField
                 id="team-ivAttack"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={value.ivAttack}
-                onChange={(e) => set("ivAttack", Number(e.target.value))}
+                onChange={(v) => set("ivAttack", v ?? 0)}
               />
             </div>
             <div className="field">
               <label htmlFor="team-ivDefense">Defense IV</label>
-              <input
+              <NumberField
                 id="team-ivDefense"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={value.ivDefense}
-                onChange={(e) => set("ivDefense", Number(e.target.value))}
+                onChange={(v) => set("ivDefense", v ?? 0)}
               />
             </div>
             <div className="field">
               <label htmlFor="team-ivStamina">Stamina IV</label>
-              <input
+              <NumberField
                 id="team-ivStamina"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={value.ivStamina}
-                onChange={(e) => set("ivStamina", Number(e.target.value))}
+                onChange={(v) => set("ivStamina", v ?? 0)}
               />
             </div>
           </div>
@@ -413,14 +431,13 @@ export function TeamAssumptionPanel({
         {value.dodge.kind === "percentage-missed" && (
           <div className="field">
             <label htmlFor="team-missedFraction">Fraction of charged hits NOT dodged</label>
-            <input
+            <NumberField
               id="team-missedFraction"
-              type="number"
               min={0}
               max={1}
               step={0.05}
               value={value.dodge.missedFraction}
-              onChange={(e) => set("dodge", { kind: "percentage-missed", missedFraction: Number(e.target.value) })}
+              onChange={(v) => set("dodge", { kind: "percentage-missed", missedFraction: v ?? 0 })}
             />
           </div>
         )}
@@ -438,7 +455,11 @@ export function TeamAssumptionPanel({
         </div>
 
         <div className="field">
-          <label htmlFor="team-detailed-assumptions" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <label
+            htmlFor="team-detailed-assumptions"
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+            title="Reveals four advanced knobs below (hold-for-safe-window, boss charged-move mean frequency, swap-in cost, wipe-and-rejoin cost) whose current values are deliberate placeholders pending further research, not confirmed game constants. See &quot;Known caveats&quot; below for the full explanation."
+          >
             <input
               id="team-detailed-assumptions"
               type="checkbox"
@@ -447,11 +468,6 @@ export function TeamAssumptionPanel({
             />
             More detailed assumptions
           </label>
-          <p className="species-picker-hint">
-            Reveals four advanced knobs below (hold-for-safe-window, boss charged-move mean frequency, swap-in cost,
-            wipe-and-rejoin cost) whose current values are deliberate placeholders pending further research, not
-            confirmed game constants. Leave this unchecked to use the simple, documented defaults instead.
-          </p>
         </div>
 
         {!value.showDetailedAssumptions && (
@@ -525,14 +541,13 @@ export function TeamAssumptionPanel({
         {value.bossStartsPrimed && (
           <div className="field">
             <label htmlFor="team-bossStartingEnergyFraction">Boss starting energy (% of its charged-move cost)</label>
-            <input
+            <NumberField
               id="team-bossStartingEnergyFraction"
-              type="number"
               min={0}
               max={100}
               step={5}
               value={Math.round(value.bossStartingEnergyFraction * 100)}
-              onChange={(e) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, Number(e.target.value) / 100)))}
+              onChange={(v) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, (v ?? 0) / 100)))}
             />
           </div>
         )}
@@ -547,12 +562,11 @@ export function TeamAssumptionPanel({
               Boss charged-move mean frequency (s)
               {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
             </label>
-            <input
+            <NumberField
               id="team-bossFreq"
-              type="number"
               min={1}
               value={value.bossChargedMoveFrequencySeconds}
-              onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
+              onChange={(v) => set("bossChargedMoveFrequencySeconds", v ?? 1)}
               disabled={value.bossChargedMoveCadence === "energy-driven"}
             />
             {value.bossChargedMoveCadence === "energy-driven" && (
@@ -563,23 +577,26 @@ export function TeamAssumptionPanel({
 
         <div className="field">
           <label htmlFor="team-raidTimer">Raid timer</label>
-          <select id="team-raidTimer" value={value.raidTimerSeconds} onChange={(e) => set("raidTimerSeconds", Number(e.target.value))}>
+          <select
+            id="team-raidTimer"
+            value={value.raidTimerSeconds}
+            onChange={(e) => set("raidTimerSeconds", Number(e.target.value))}
+            title="Real, documented per-tier raid countdown — see &quot;Known caveats&quot; below for the source."
+          >
             <option value={180}>180s — Tier 1/3 Raids</option>
             <option value={300}>300s — Mega/Legendary/Primal Raids</option>
           </select>
-          <p className="species-picker-hint">Real, documented per-tier raid countdown — see raidBoss.ts's RAID_TIER_TABLE.</p>
         </div>
 
         {value.showDetailedAssumptions && (
           <div className="field">
             <label htmlFor="team-swapCost">Swap-in cost per mid-roster faint (s)</label>
-            <input
+            <NumberField
               id="team-swapCost"
-              type="number"
               min={0}
               step={0.5}
               value={value.swapCostSeconds}
-              onChange={(e) => set("swapCostSeconds", Math.max(0, Number(e.target.value)))}
+              onChange={(v) => set("swapCostSeconds", Math.max(0, v ?? 0))}
               title="No documented real value exists for this in-game (a 'brief revival screen pause' of unconfirmed duration) — defaults to 0.5s, an honest placeholder rather than a fabricated number."
             />
           </div>
@@ -588,35 +605,25 @@ export function TeamAssumptionPanel({
         {value.showDetailedAssumptions && (
           <div className="field">
             <label htmlFor="team-reviveCost">Full-wipe revive-and-rejoin cost (s)</label>
-            <input
+            <NumberField
               id="team-reviveCost"
-              type="number"
               min={0}
               step={0.5}
               value={value.reviveCostSeconds}
-              onChange={(e) => set("reviveCostSeconds", Math.max(0, Number(e.target.value)))}
+              onChange={(v) => set("reviveCostSeconds", Math.max(0, v ?? 0))}
               title="Paid once every time the whole fielded roster faints out, before restarting from the first fielded slot. No official fixed value exists."
             />
-            <button type="button" onClick={() => set("reviveCostSeconds", 13)} style={{ marginTop: 4, alignSelf: "flex-start" }}>
+            <button
+              type="button"
+              onClick={() => set("reviveCostSeconds", 13)}
+              style={{ marginTop: 4, alignSelf: "flex-start" }}
+              title="Pokémon GO Hub's &quot;Tips for short-manning raids&quot; reports 12-15s to heal a full team in the lobby — a player/hardware-dependent community estimate, not a confirmed game constant. See &quot;Known caveats&quot; below for the full explanation."
+            >
               Use ~13s (community estimate, unverified)
             </button>
-            <p className="species-picker-hint">
-              Pokémon GO Hub's "Tips for short-manning raids" reports 12-15s to heal a full team in the lobby — a
-              player/hardware-dependent community estimate, not a confirmed game constant. Default is 15s, chosen at
-              the top of that 12-15s window to allow for user error, rather than baking in the community estimate as
-              though it were fact.
-            </p>
           </div>
         )}
       </div>
-
-      <p className="caveats note-block" style={{ marginTop: 12 }}>
-        A team can field fewer than {MAX_TEAM_RAID_SLOTS} Pokémon — leave any slot empty ("clear" it) and it simply
-        never enters the fight. This tab models a SOLO trainer's own roster only: the mega/primal team-wide damage
-        boost never applies to the mega-bringer's own party in the real game (only to OTHER trainers simultaneously
-        in the same raid), so there is no cross-slot team-boost math here at all — a slot's own `.boost` only ever
-        affects that slot's own damage while it's the active attacker.
-      </p>
     </CollapsibleSection>
   );
 }

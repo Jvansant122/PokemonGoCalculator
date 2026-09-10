@@ -27,11 +27,28 @@ function attachErrorListeners(page: Page) {
   return { consoleErrors, pageErrors };
 }
 
+/**
+ * "Assumptions" collapses by default (2026-09-10) — the single-raid/multi-raid
+ * mode switch buttons live inside it, so both tests below need it open before
+ * clicking one. Sets `open` directly rather than `.click()`-ing the summary
+ * (a toggle, unsafe to call unconditionally) — see share-link.spec.ts's
+ * identical helper for the same reasoning.
+ */
+async function expandAssumptions(page: Page) {
+  // `exact: true` — see share-link.spec.ts's identical helper for why a bare
+  // substring match is unsafe here once "Known caveats" has ever been open.
+  const details = page.getByRole("heading", { name: "Assumptions", exact: true }).locator("xpath=ancestor::details[1]");
+  await details.evaluate((el) => {
+    (el as HTMLDetailsElement).open = true;
+  });
+}
+
 test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep off the main thread, real rows render", async ({ page }) => {
   const { consoleErrors, pageErrors } = attachErrorListeners(page);
 
   await page.goto("/?view=power-up-optimizer");
-  await expect(page.getByRole("heading", { name: "Assumptions" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assumptions", exact: true })).toBeVisible();
+  await expandAssumptions(page);
 
   await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
   await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
@@ -111,6 +128,7 @@ test("power-up-optimizer multi-raid: a share link opened in a fresh browser cont
   browser,
 }) => {
   await page.goto("/?view=power-up-optimizer");
+  await expandAssumptions(page);
   await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
   await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
 

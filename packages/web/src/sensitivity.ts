@@ -1,4 +1,4 @@
-import { convertUptimeToTeamDamage, runSustainedComparison } from "@pogo-analyzer/engine";
+import { MAX_POKEMON_POWER_UP_LEVEL, convertUptimeToTeamDamage, runSustainedComparison } from "@pogo-analyzer/engine";
 import type { DodgeBehavior, RaidTier, SpeciesDefinition, SustainedCandidateResult } from "@pogo-analyzer/engine";
 import type { Assumptions } from "./AssumptionPanel.js";
 
@@ -122,8 +122,22 @@ export function computeSensitivity(
    * directly.
    */
   bossRaidTier?: RaidTier,
+  /**
+   * The boss charged-move mean frequency ACTUALLY driving the main result
+   * cards for this scenario — see run/runComparator.ts's own
+   * effectiveBossChargedMoveFrequencySeconds (derived from the boss's own
+   * fast-move charge time whenever a.showDetailedAssumptions is false).
+   * Falls back to a.bossChargedMoveFrequencySeconds (the stored value) when
+   * omitted, which only agrees with the real driving value when
+   * a.showDetailedAssumptions is true — every real call site should pass
+   * this explicitly, or the "current winner" baseline below (and check 7's
+   * own scan) can silently disagree with what the result cards above this
+   * panel actually show whenever the advanced-assumptions gate is off.
+   */
+  effectiveBossChargedMoveFrequencySeconds?: number,
 ): SensitivityCheck[] {
   const ivs = { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina };
+  const effectiveBossFreq = effectiveBossChargedMoveFrequencySeconds ?? a.bossChargedMoveFrequencySeconds;
   const moveSelections = {
     candidateFastMoveIds: [a.candidateAFastMoveId, a.candidateBFastMoveId],
     candidateChargedMoveIds: [a.candidateAChargedMoveId, a.candidateBChargedMoveId],
@@ -171,7 +185,7 @@ export function computeSensitivity(
       candidateDodge: a.candidateDodge,
       candidateDodgeFastAttacks: a.candidateDodgeFastAttacks,
       holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
-      bossChargedMoveMeanIntervalSeconds: overrides.bossChargedMoveMeanIntervalSeconds ?? a.bossChargedMoveFrequencySeconds,
+      bossChargedMoveMeanIntervalSeconds: overrides.bossChargedMoveMeanIntervalSeconds ?? effectiveBossFreq,
       // AFFECTS: not yet on SustainedComparisonInputs as of 2026-09-08 — see
       // this feature's AFFECTS note. bossChargedMoveMeanIntervalSeconds above
       // is ignored entirely by the engine whenever this is "energy-driven",
@@ -351,13 +365,20 @@ export function computeSensitivity(
     });
   }
 
-  // 5. Level: scan nearby levels for the nearest flip.
+  // 5. Level: scan nearby levels for the nearest flip. The +/-10 scan window
+  // (and the matching rangeMin/rangeMax clamp below) is this check's own scan
+  // bound, unrelated to the real game's "power-up allowed up to trainer level
+  // + 10" mechanic (see MECHANICS.md's "Trainer Level cap on power-ups" — the
+  // trainer-level half of that rule is deliberately not modelled here); it
+  // just keeps the flip search local rather than scanning the full 1-
+  // MAX_POKEMON_POWER_UP_LEVEL range every time. The absolute ceiling is the
+  // real Pokémon-level power-up cap, not a UI convenience number.
   {
     let nearest: number | null = null;
     let flipValue: number | null = null;
     for (let delta = 0.5; delta <= 10; delta += 0.5) {
       for (const candidateLevel of [a.level - delta, a.level + delta]) {
-        if (candidateLevel < 1 || candidateLevel > 40) continue;
+        if (candidateLevel < 1 || candidateLevel > MAX_POKEMON_POWER_UP_LEVEL) continue;
         let result;
         try {
           result = runSustained({ level: candidateLevel });
@@ -381,7 +402,7 @@ export function computeSensitivity(
       distance: nearest ?? Infinity,
       distanceLabel: nearest === null ? "no flip within +/-10 levels" : `flips within ${nearest} level(s)`,
       rangeMin: Math.max(1, a.level - 10),
-      rangeMax: Math.min(40, a.level + 10),
+      rangeMax: Math.min(MAX_POKEMON_POWER_UP_LEVEL, a.level + 10),
       currentNumericValue: a.level,
       flipNumericValue: flipValue,
     });
@@ -447,7 +468,7 @@ export function computeSensitivity(
       flipNumericValue: null,
     });
   } else {
-    const current = a.bossChargedMoveFrequencySeconds;
+    const current = effectiveBossFreq;
     const step = 2;
     const minBound = 1;
     const maxBound = 40;

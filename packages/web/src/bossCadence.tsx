@@ -24,9 +24,15 @@ export type { BossChargedMoveCadence };
 export const DEFAULT_BOSS_CHARGED_MOVE_CADENCE: BossChargedMoveCadence = "fixed-interval";
 
 /**
- * The explanation shown under the cadence <select> on all three panels.
- * Deliberately hedged to match MECHANICS.md's own sourcing tags rather than
- * overselling "energy-driven" as simply more correct:
+ * The cadence model's deep-sourcing explanation. As of 2026-09-10 this no
+ * longer renders inline under the <select> at all — a 384-word block on
+ * every one of the (now five, across single/multi-raid) panels that render
+ * `BossCadenceSelect` was exactly the "wall of text when picking a Pokémon"
+ * this project's own UI rules warn against. Each tab instead renders this
+ * exact text ONCE in its own "Known caveats" section; the control itself
+ * carries only a `title` tooltip pointing there. Deliberately hedged to match
+ * MECHANICS.md's own sourcing tags rather than overselling "energy-driven" as
+ * simply more correct — do not soften this wording when relocating it:
  *
  * - The 0.5-energy-per-HP rate IS independently corroborated (Bulbapedia,
  *   in addition to the original Silph Road source).
@@ -77,12 +83,16 @@ interface BossCadenceSelectProps {
 }
 
 /**
- * The cadence <select> plus its explanation — reused verbatim across
- * AssumptionPanel.tsx, TeamAssumptionPanel.tsx and SpeciesReportView.tsx so
- * the three tabs can never present a subtly different account of the same
- * model. Each caller is still responsible for disabling/marking its OWN
- * "boss charged-move mean frequency" field via BOSS_FREQUENCY_INAPPLICABLE_HINT
- * above — that field's id/onChange differ per tab, so it isn't folded in here.
+ * The cadence <select> — reused verbatim across AssumptionPanel.tsx,
+ * TeamAssumptionPanel.tsx, SpeciesReportView.tsx and (both modes of)
+ * PowerUpOptimizerAssumptionPanel.tsx so every panel can never present a
+ * subtly different account of the same model. Each caller is still
+ * responsible for disabling/marking its OWN "boss charged-move mean
+ * frequency" field via BOSS_FREQUENCY_INAPPLICABLE_HINT above — that field's
+ * id/onChange differ per tab, so it isn't folded in here. BOSS_CADENCE_HINT
+ * itself does NOT render here (see that constant's own doc comment) — every
+ * caller renders it once in its own tab's "Known caveats" section instead;
+ * this control only carries a `title` tooltip pointing there.
  */
 export function BossCadenceSelect({ idPrefix, value, onChange }: BossCadenceSelectProps) {
   return (
@@ -92,22 +102,12 @@ export function BossCadenceSelect({ idPrefix, value, onChange }: BossCadenceSele
         id={`${idPrefix}-bossCadence`}
         value={value}
         onChange={(e) => onChange(e.target.value as BossChargedMoveCadence)}
+        title="Fixed interval is this tab's long-standing default; the other two are experimental and off by default. See &quot;Known caveats&quot; below for what each one changes and how well sourced it is."
       >
         <option value="fixed-interval">Fixed interval (default)</option>
         <option value="energy-driven">Energy-driven (experimental)</option>
         <option value="energy-gated-interval">Energy-gated interval (experimental)</option>
       </select>
-      {/*
-        Explanatory prose only — collapsed by default because it is a
-        multi-paragraph account of the model's sourcing, not an input and not
-        a result caveat. The control itself, and every number it changes,
-        stay fully visible (this project's "assumptions are always visible"
-        rule applies to inputs and results, not to background reading).
-      */}
-      <details className="prose-details">
-        <summary>What this model does, and how well sourced it is</summary>
-        <p>{BOSS_CADENCE_HINT}</p>
-      </details>
     </div>
   );
 }

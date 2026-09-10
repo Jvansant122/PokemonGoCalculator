@@ -36506,7 +36506,7 @@
   },
   {
     "id": "shellos-west_sea",
-    "name": "Shellos (West_sea)",
+    "name": "Shellos (West Sea)",
     "types": [
       "water"
     ],
@@ -36578,7 +36578,7 @@
   },
   {
     "id": "gastrodon-west_sea",
-    "name": "Gastrodon (West_sea)",
+    "name": "Gastrodon (West Sea)",
     "types": [
       "water",
       "ground"
@@ -47004,7 +47004,7 @@
   },
   {
     "id": "basculin-blue_striped",
-    "name": "Basculin (Blue_striped)",
+    "name": "Basculin (Blue Striped)",
     "types": [
       "water"
     ],
@@ -60706,7 +60706,7 @@
   },
   {
     "id": "zygarde-fifty_percent",
-    "name": "Zygarde (Fifty_percent)",
+    "name": "Zygarde (Fifty Percent)",
     "types": [
       "dragon",
       "ground"
@@ -73114,7 +73114,7 @@
   },
   {
     "id": "morpeko-full_belly",
-    "name": "Morpeko (Full_belly)",
+    "name": "Morpeko (Full Belly)",
     "types": [
       "electric",
       "dark"
@@ -74254,7 +74254,7 @@
   },
   {
     "id": "urshifu-rapid_strike",
-    "name": "Urshifu (Rapid_strike)",
+    "name": "Urshifu (Rapid Strike)",
     "types": [
       "fighting",
       "water"
@@ -76994,7 +76994,7 @@
   },
   {
     "id": "maushold-family_of_four",
-    "name": "Maushold (Family_of_four)",
+    "name": "Maushold (Family of Four)",
     "types": [
       "normal"
     ],
@@ -86639,7 +86639,7 @@
   },
   {
     "id": "tauros-paldea_aqua",
-    "name": "Tauros (Paldea_aqua)",
+    "name": "Tauros (Paldea Aqua)",
     "types": [
       "fighting",
       "water"
@@ -86730,7 +86730,7 @@
   },
   {
     "id": "tauros-paldea_blaze",
-    "name": "Tauros (Paldea_blaze)",
+    "name": "Tauros (Paldea Blaze)",
     "types": [
       "fighting",
       "fire"
@@ -86821,7 +86821,7 @@
   },
   {
     "id": "tauros-paldea_combat",
-    "name": "Tauros (Paldea_combat)",
+    "name": "Tauros (Paldea Combat)",
     "types": [
       "fighting"
     ],
@@ -90620,7 +90620,7 @@
   },
   {
     "id": "darmanitan-galarian_standard",
-    "name": "Darmanitan (Galarian_standard)",
+    "name": "Darmanitan (Galarian Standard)",
     "types": [
       "ice"
     ],
@@ -90700,7 +90700,7 @@
   },
   {
     "id": "darmanitan-galarian_zen",
-    "name": "Darmanitan (Galarian_zen)",
+    "name": "Darmanitan (Galarian Zen)",
     "types": [
       "ice",
       "fire"
@@ -91613,6 +91613,16 @@
         "energyCost": 100,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "FREEZE_SHOCK",
+        "name": "Freeze Shock",
+        "type": "ice",
+        "power": 160,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/646.png",
@@ -91712,6 +91722,16 @@
         "power": 140,
         "energyGain": 0,
         "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "ICE_BURN",
+        "name": "Ice Burn",
+        "type": "ice",
+        "power": 90,
+        "energyGain": 0,
+        "energyCost": 50,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
       }
@@ -92591,7 +92611,7 @@
   },
   {
     "id": "zygarde-complete_ten_percent",
-    "name": "Zygarde (Complete_ten_percent)",
+    "name": "Zygarde (Complete Ten Percent)",
     "types": [
       "dragon",
       "ground"
@@ -92692,7 +92712,7 @@
   },
   {
     "id": "zygarde-ten_percent",
-    "name": "Zygarde (Ten_percent)",
+    "name": "Zygarde (Ten Percent)",
     "types": [
       "dragon",
       "ground"
@@ -94950,7 +94970,7 @@
   },
   {
     "id": "necrozma-dawn_wings",
-    "name": "Necrozma (Dawn_wings)",
+    "name": "Necrozma (Dawn Wings)",
     "types": [
       "psychic",
       "ghost"
@@ -95030,6 +95050,16 @@
         "energyCost": 50,
         "durationSeconds": 4,
         "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "MOONGEIST_BEAM",
+        "name": "Moongeist Beam",
+        "type": "ghost",
+        "power": 230,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/800.png",
@@ -95041,7 +95071,7 @@
   },
   {
     "id": "necrozma-dusk_mane",
-    "name": "Necrozma (Dusk_mane)",
+    "name": "Necrozma (Dusk Mane)",
     "types": [
       "psychic",
       "steel"
@@ -95121,6 +95151,16 @@
         "energyCost": 50,
         "durationSeconds": 4,
         "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "SUNSTEEL_STRIKE",
+        "name": "Sunsteel Strike",
+        "type": "steel",
+        "power": 230,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/800.png",
@@ -95294,7 +95334,7 @@
   },
   {
     "id": "zacian-crowned_sword",
-    "name": "Zacian (Crowned_sword)",
+    "name": "Zacian (Crowned Sword)",
     "types": [
       "fairy",
       "steel"
@@ -95354,6 +95394,16 @@
         "energyCost": 100,
         "durationSeconds": 4.5,
         "vulnerableWindowSeconds": 4.5
+      },
+      {
+        "id": "BEHEMOTH_BLADE",
+        "name": "Behemoth Blade",
+        "type": "steel",
+        "power": 200,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3.5,
+        "vulnerableWindowSeconds": 3.5
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/888.png",
@@ -95365,7 +95415,7 @@
   },
   {
     "id": "zamazenta-crowned_shield",
-    "name": "Zamazenta (Crowned_shield)",
+    "name": "Zamazenta (Crowned Shield)",
     "types": [
       "fighting",
       "steel"
@@ -95425,6 +95475,16 @@
         "energyCost": 100,
         "durationSeconds": 4.5,
         "vulnerableWindowSeconds": 4.5
+      },
+      {
+        "id": "BEHEMOTH_BASH",
+        "name": "Behemoth Bash",
+        "type": "steel",
+        "power": 125,
+        "energyGain": 0,
+        "energyCost": 50,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5
       }
     ],
     "imageUrl": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/889.png",
@@ -95507,7 +95567,7 @@
   },
   {
     "id": "urshifu-single_strike",
-    "name": "Urshifu (Single_strike)",
+    "name": "Urshifu (Single Strike)",
     "types": [
       "fighting",
       "dark"
@@ -95598,7 +95658,7 @@
   },
   {
     "id": "calyrex-ice_rider",
-    "name": "Calyrex (Ice_rider)",
+    "name": "Calyrex (Ice Rider)",
     "types": [
       "psychic",
       "ice"
@@ -95679,7 +95739,7 @@
   },
   {
     "id": "calyrex-shadow_rider",
-    "name": "Calyrex (Shadow_rider)",
+    "name": "Calyrex (Shadow Rider)",
     "types": [
       "psychic",
       "ghost"
@@ -101358,6 +101418,18 @@
         "energyCost": 50,
         "durationSeconds": 3,
         "vulnerableWindowSeconds": 3
+      },
+      {
+        "id": "ACID_SPRAY_PLUS",
+        "name": "Acid Spray+",
+        "type": "poison",
+        "power": 160,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -101594,6 +101666,18 @@
         "energyCost": 100,
         "durationSeconds": 4,
         "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "PSYBEAM_PLUS",
+        "name": "Psybeam+",
+        "type": "psychic",
+        "power": 170,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -101665,6 +101749,18 @@
         "energyCost": 100,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "BRICK_BREAK_PLUS",
+        "name": "Brick Break+",
+        "type": "fighting",
+        "power": 150,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "boost": {
@@ -101939,6 +102035,18 @@
         "energyCost": 100,
         "durationSeconds": 4,
         "vulnerableWindowSeconds": 4
+      },
+      {
+        "id": "FUTURESIGHT_PLUS",
+        "name": "Future Sight+",
+        "type": "psychic",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2.5,
+        "vulnerableWindowSeconds": 2.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -102081,6 +102189,18 @@
         "energyCost": 33,
         "durationSeconds": 2.5,
         "vulnerableWindowSeconds": 2.5
+      },
+      {
+        "id": "LIQUIDATION_PLUS",
+        "name": "Liquidation+",
+        "type": "water",
+        "power": 180,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 3,
+        "vulnerableWindowSeconds": 3,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "lastKnownRaidTier": "Super Mega Raids",
@@ -102326,6 +102446,18 @@
         "energyCost": 50,
         "durationSeconds": 3.5,
         "vulnerableWindowSeconds": 3.5
+      },
+      {
+        "id": "MYSTICAL_FIRE_PLUS",
+        "name": "Mystical Fire+",
+        "type": "fire",
+        "power": 140,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 2,
+        "vulnerableWindowSeconds": 2,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "boost": {
@@ -102427,6 +102559,18 @@
         "energyCost": 50,
         "durationSeconds": 2,
         "vulnerableWindowSeconds": 2
+      },
+      {
+        "id": "SURF_PLUS",
+        "name": "Surf+",
+        "type": "water",
+        "power": 130,
+        "energyGain": 0,
+        "energyCost": 100,
+        "durationSeconds": 1.5,
+        "vulnerableWindowSeconds": 1.5,
+        "isPlusMove": true,
+        "plusMovePowerConfidence": "community-estimate"
       }
     ],
     "boost": {

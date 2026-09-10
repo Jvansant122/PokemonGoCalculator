@@ -93,6 +93,7 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "bossChargedHitsTaken",
         "chargedAttacksLanded",
         "cycleIndex",
+        "dodgeFastAttacksLockout",
         "endedAtRaidSeconds",
         "faintedAtSeconds",
         "ownDamageDealt",
@@ -148,6 +149,7 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "fractionDiedDuringOwnAnimation",
         "bossChargedMoveCadenceClamped",
         "bossChargedMoveEffectiveMinIntervalSeconds",
+        "dodgeFastAttacksLockout",
         "representativeRun",
       ].sort(),
     );

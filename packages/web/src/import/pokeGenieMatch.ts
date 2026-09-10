@@ -23,6 +23,29 @@ export interface RosterEntry {
   levelIsApproximate: boolean;
   movesetIsDefaulted: boolean;
   /**
+   * Per-slot detail behind `movesetIsDefaulted` — *which* move (fast,
+   * charged, or both) had to be guessed. Kept separate from
+   * `movesetIsDefaulted`/`unmatchedMoveNames` on purpose: when BOTH moves
+   * are defaulted and exactly one of the two raw names was unrecognized,
+   * `unmatchedMoveNames`'s own length (1) can't say which slot that name
+   * came from, and neither field alone can say "only the charged move was
+   * guessed" (see PowerUpOptimizerView.tsx's roster result tables, which
+   * need to say precisely that rather than overstate a partial default as
+   * "default moveset").
+   */
+  fastMoveIsDefaulted: boolean;
+  chargedMoveIsDefaulted: boolean;
+  /**
+   * Non-null only when a name WAS present in the source row's Quick Move
+   * column but didn't match any of this species' own fast moves (see
+   * `resolveMoveByName`). Null both when the fast move resolved fine AND
+   * when the source row was genuinely blank for it — use
+   * `fastMoveIsDefaulted` to distinguish "resolved" from "blank."
+   */
+  fastMoveUnmatchedName: string | null;
+  /** Same as `fastMoveUnmatchedName`, for the Charge Move column. */
+  chargedMoveUnmatchedName: string | null;
+  /**
    * Poke Genie's "Charge Move 2" column, when present — recorded, NEVER
    * modelled (the engine simulates one charged move per attacker; see the
    * plan's §3 "Charge Move 2" note).
@@ -38,7 +61,10 @@ export interface RosterEntry {
    * data, not a bad user input. Never includes a move name that was simply
    * BLANK in the source row (that's `movesetIsDefaulted` alone, an
    * expected/common case — 55%/60% of the real export — not a data
-   * problem).
+   * problem). Equivalent to
+   * `[fastMoveUnmatchedName, chargedMoveUnmatchedName].filter(n => n !== null)`,
+   * kept as its own field since it predates the per-slot split above and
+   * `RosterImportPanel.tsx` already reads it directly.
    */
   unmatchedMoveNames: string[];
 }
@@ -323,6 +349,10 @@ function buildRosterEntry(row: PokeGenieRow, species: SpeciesDefinition): Roster
     ivsAreApproximate: !hasAllRawIvs,
     levelIsApproximate,
     movesetIsDefaulted,
+    fastMoveIsDefaulted: fast.id === null,
+    chargedMoveIsDefaulted: charged.id === null,
+    fastMoveUnmatchedName: fast.unmatchedName,
+    chargedMoveUnmatchedName: charged.unmatchedName,
     secondChargedMoveName: secondChargedMoveNameRaw === "" ? undefined : secondChargedMoveNameRaw,
     sourceLineNumber: row.lineNumber,
     unmatchedMoveNames,

@@ -17,6 +17,7 @@ import {
 import type { TeamAssumptions } from "../TeamAssumptionPanel.js";
 import { applyShadowToggle } from "../shadowToggle.js";
 import { raidTierForSpeciesId } from "../registry.js";
+import { deriveEffectiveBossChargedMoveFrequencySeconds } from "./effectiveBossChargedMoveFrequency.js";
 
 export interface TeamRaidRunResult {
   slotSpecies: (SpeciesDefinition | null)[];
@@ -28,14 +29,62 @@ export interface TeamRaidRunResult {
    * The boss charged-move mean frequency actually fed into runTeamRaid for
    * THIS run. Equal to the stored `a.bossChargedMoveFrequencySeconds` when
    * `a.showDetailedAssumptions` is true; otherwise derived from the boss's
-   * own fast-move charge time (see the inline comment above where this is
-   * computed) — a placeholder pending improvement, not this boss's
-   * confirmed real cadence. Exposed so the assumption panel can show it and
-   * seed the stored field with it when the user opts into detailed mode.
+   * own fast-move charge time (see effectiveBossChargedMoveFrequency.ts's
+   * own doc comment for the full derivation — shared with
+   * run/runComparator.ts's identical field, so the two tabs can't compute
+   * two different numbers for the same "simple mode" concept) — a
+   * placeholder pending improvement, not this boss's confirmed real cadence.
+   * Exposed so the assumption panel can show it and seed the stored field
+   * with it when the user opts into detailed mode.
    */
   effectiveBossChargedMoveFrequencySeconds: number;
   data: ReturnType<typeof runTeamRaid> | null;
   error: string | null;
+  /**
+   * Extra context for a run that never found a clearing point at all
+   * (`data.timeToClearSeconds === null`) — TeamRaidResult's own outcome
+   * fields (wipeCount, slotsUsed, Finishing blow) are all legitimately "n/a"
+   * or 0 in that case, which reads as "broken," not "you lost." Null
+   * whenever `data` is null, OR the run DID find a clearing point — either a
+   * clean clear, or a LATE clear after the timer already expired
+   * (`timeToClearSeconds` is non-null in both of those, and the existing
+   * "Timer margin" stat already renders a real, informative number for the
+   * late-clear case, e.g. "-10.0s short" — this summary exists only for the
+   * genuinely-never-cleared case that has nothing else to show).
+   */
+  failureSummary: TeamRaidFailureSummary | null;
+}
+
+export interface TeamRaidFailureSummary {
+  /**
+   * Sum of every recorded fight's own damage — the total the boss actually
+   * took across the whole run, however long the engine let the LAST
+   * unresolved fight play out (see teamRaid.ts's own maxSecondsPerSlot doc
+   * comment: that fight's simulated window can run past what the real
+   * raidTimerSeconds would have allowed, which is why this can very slightly
+   * overcount rather than undercount — a documented engine simplification,
+   * not something this summary invents).
+   */
+  totalDamageDealt: number;
+  /** bossHp - totalDamageDealt, floored at 0 — how much boss HP was left. */
+  bossHpRemaining: number;
+  /** totalDamageDealt / bossHp, clamped to [0, 1] — "how far the boss's HP got," as a fraction. */
+  fractionOfBossHpDealt: number;
+  /**
+   * raidTimerSeconds minus the raid-global clock this run actually reached,
+   * clamped to [0, raidTimerSeconds]. Ordinarily 0 (the timer genuinely ran
+   * out) — a positive value only occurs in the rare case the engine's own
+   * MAX_TEAM_RAID_CYCLES safety cap stopped a near-zero-damage roster before
+   * the timer itself did (see teamRaid.ts's own doc comment on that
+   * constant).
+   */
+  timeLeftOnClockSeconds: number;
+  /** bossHp / raidTimerSeconds — the average team DPS this run would have needed to sustain, uninterrupted, across the WHOLE timer to clear exactly at the buzzer. */
+  requiredAverageTeamDps: number;
+  /** totalDamageDealt / raidTimerSeconds — this run's own actual average pace over the whole timer, already including every swap/revive/wipe delay it paid along the way. */
+  achievedAverageTeamDps: number;
+  /** requiredAverageTeamDps - achievedAverageTeamDps, floored at 0 — the headline "how much more DPS would it have taken" figure. Always > 0 for a genuine failure (see this field's call site for why that's guaranteed, not just typical). */
+  averageTeamDpsShortfall: number;
 }
 
 export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistry): TeamRaidRunResult {
@@ -52,39 +101,28 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
   const bossStartingEnergy =
     a.bossStartsPrimed && bossSpecies ? a.bossStartingEnergyFraction * (selectedBossChargedMove?.energyCost ?? 0) : 0;
 
+  const bossFastMove = bossSpecies
+    ? (bossSpecies.fastMoves.find((m) => m.id === a.bossFastMoveId) ?? bossSpecies.fastMoves[0])
+    : undefined;
+
   let bossReadySeconds: number | null = null;
-  if (bossSpecies) {
-    const fastMove = bossSpecies.fastMoves.find((m) => m.id === a.bossFastMoveId) ?? bossSpecies.fastMoves[0];
-    if (fastMove && selectedBossChargedMove) {
-      bossReadySeconds = bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, bossStartingEnergy);
-    }
+  if (bossSpecies && bossFastMove && selectedBossChargedMove) {
+    bossReadySeconds = bossChargedMoveReadySeconds(bossFastMove, selectedBossChargedMove, bossStartingEnergy);
   }
 
   const bossHp = bossSpecies ? bossEffectiveHp(bossSpecies, bossRaidTier) : null;
 
-  /**
-   * "Boss charged-move mean frequency" while showDetailedAssumptions is
-   * false: derived from the boss's own fast-move charge time, standing in
-   * for "the time it takes to charge its first charged attack" — a
-   * placeholder pending improvement, not a modeled mechanic. Deliberately
-   * passes 0 starting energy (NOT bossStartingEnergy) — this models a
-   * steady-state cadence, not the fight's opening warmup, so "boss starts
-   * already partway charged" must not perturb it.
-   * bossChargedMoveReadySeconds returns Infinity when the fast move has no
-   * energy gain, and 0 when the cost is already covered — both degenerate
-   * results fall back to the stored bossChargedMoveFrequencySeconds rather
-   * than feeding a useless number into the simulator.
-   */
-  let effectiveBossChargedMoveFrequencySeconds = a.bossChargedMoveFrequencySeconds;
-  if (!a.showDetailedAssumptions && bossSpecies) {
-    const fastMove = bossSpecies.fastMoves.find((m) => m.id === a.bossFastMoveId) ?? bossSpecies.fastMoves[0];
-    if (fastMove && selectedBossChargedMove) {
-      const derived = bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, 0);
-      if (Number.isFinite(derived) && derived > 0) {
-        effectiveBossChargedMoveFrequencySeconds = derived;
-      }
-    }
-  }
+  // See effectiveBossChargedMoveFrequency.ts's own doc comment for the full
+  // derivation this stands in for while showDetailedAssumptions is false —
+  // shared with runComparator.ts so the two tabs can't compute two
+  // different numbers for the same "simple mode" concept.
+  const effectiveBossChargedMoveFrequencySeconds = deriveEffectiveBossChargedMoveFrequencySeconds({
+    showDetailedAssumptions: a.showDetailedAssumptions,
+    bossSpecies,
+    bossFastMove,
+    bossChargedMove: selectedBossChargedMove,
+    stored: a.bossChargedMoveFrequencySeconds,
+  });
 
   let data: ReturnType<typeof runTeamRaid> | null = null;
   let error: string | null = null;
@@ -128,6 +166,35 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     }
   }
 
+  // See TeamRaidFailureSummary's own doc comment for what this covers and
+  // why: only a run that never found a clearing point at all needs it — a
+  // clean clear or a late clear both already have a real, informative
+  // timeToClearSeconds/timerMarginSeconds to show.
+  let failureSummary: TeamRaidFailureSummary | null = null;
+  if (data && data.timeToClearSeconds === null && bossHp !== null) {
+    const totalDamageDealt = data.slots.reduce((sum, s) => sum + s.ownDamageDealt, 0);
+    const lastSlot = data.slots[data.slots.length - 1];
+    const raidTimerSeconds = a.raidTimerSeconds;
+    // Clamped to raidTimerSeconds: the last recorded fight's own
+    // endedAtRaidSeconds can overshoot it (teamRaid.ts's own
+    // maxSecondsPerSlot doc comment — a fight that survives its own full
+    // simulated window without fainting means the real timer necessarily
+    // ran out sometime DURING it, so clamping here states a true fact,
+    // it doesn't invent one).
+    const elapsedClamped = lastSlot ? Math.min(raidTimerSeconds, Math.max(0, lastSlot.endedAtRaidSeconds)) : raidTimerSeconds;
+    const requiredAverageTeamDps = raidTimerSeconds > 0 ? bossHp / raidTimerSeconds : 0;
+    const achievedAverageTeamDps = raidTimerSeconds > 0 ? totalDamageDealt / raidTimerSeconds : 0;
+    failureSummary = {
+      totalDamageDealt,
+      bossHpRemaining: Math.max(0, bossHp - totalDamageDealt),
+      fractionOfBossHpDealt: bossHp > 0 ? Math.min(1, totalDamageDealt / bossHp) : 0,
+      timeLeftOnClockSeconds: Math.max(0, raidTimerSeconds - elapsedClamped),
+      requiredAverageTeamDps,
+      achievedAverageTeamDps,
+      averageTeamDpsShortfall: Math.max(0, requiredAverageTeamDps - achievedAverageTeamDps),
+    };
+  }
+
   return {
     slotSpecies,
     bossSpecies,
@@ -137,5 +204,6 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     effectiveBossChargedMoveFrequencySeconds,
     data,
     error,
+    failureSummary,
   };
 }

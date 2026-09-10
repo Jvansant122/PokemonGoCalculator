@@ -269,6 +269,7 @@ describe("teamDamageAtRaidSeconds", () => {
         chargedAttacksLanded: 0,
         bossChargedHitsTaken: 0,
         ownDamageTrajectory,
+        dodgeFastAttacksLockout: false,
       })),
     };
   }

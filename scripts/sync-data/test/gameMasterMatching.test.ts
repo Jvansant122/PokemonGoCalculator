@@ -7,6 +7,7 @@ import {
   pokemonClassToRarity,
   displayNameForMovementId,
   guessMovementIdForDisplayName,
+  formDisplayName,
   resolveMegaFromGameMaster,
   isFullyEvolved,
   realEvolutionTargets,
@@ -125,6 +126,43 @@ describe("displayNameForMovementId / guessMovementIdForDisplayName (inverse roun
   it("handles a single-word move name", () => {
     expect(displayNameForMovementId("TACKLE_FAST", true)).toBe("Tackle");
     expect(guessMovementIdForDisplayName("Tackle", true)).toBe("TACKLE_FAST");
+  });
+});
+
+describe("formDisplayName", () => {
+  // 2026-09-10 fix for 21 species whose name carried a raw underscored form
+  // straight through, e.g. "Zacian (Crowned_sword)".
+  it("title-cases each underscore-separated word", () => {
+    expect(formDisplayName("Crowned_sword")).toBe("Crowned Sword");
+    expect(formDisplayName("West_sea")).toBe("West Sea");
+    expect(formDisplayName("Paldea_aqua")).toBe("Paldea Aqua");
+    expect(formDisplayName("Fifty_percent")).toBe("Fifty Percent");
+  });
+
+  // Maushold is the only one of the 21 that needs this today. Kept as its own
+  // case so a future addition to LOWERCASE_FORM_PARTICLES has an obvious home,
+  // and so the first-word exception is pinned rather than assumed.
+  it("leaves a lowercase particle lowercase unless it starts the form", () => {
+    expect(formDisplayName("Family_of_four")).toBe("Family of Four");
+    expect(formDisplayName("Of_something")).toBe("Of Something");
+  });
+
+  // Guards the deliberate split from titleCaseUnderscoredWords: the particle
+  // rule must NOT leak into move display names, whose output is validated
+  // against pogoapi's exact naming (308/317, zero mismatches).
+  it("does not change how move display names are built", () => {
+    expect(displayNameForMovementId("PSYCHO_CUT_FAST", true)).toBe("Psycho Cut");
+    expect(displayNameForMovementId("V_CREATE", false)).toBe("V Create");
+  });
+
+  it("is idempotent on a single word already correctly cased (no underscore to clean)", () => {
+    expect(formDisplayName("Hero")).toBe("Hero");
+    expect(formDisplayName("Shield")).toBe("Shield");
+    expect(formDisplayName("Standard")).toBe("Standard");
+  });
+
+  it("handles a fully-uppercase GAME_MASTER-style form key the same way (shared transform with displayNameForMovementId)", () => {
+    expect(formDisplayName("CROWNED_SWORD")).toBe("Crowned Sword");
   });
 });
 

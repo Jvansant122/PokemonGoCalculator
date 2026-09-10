@@ -21,7 +21,9 @@ import {
   type PowerUpOptimizerAssumptions,
   type PowerUpSlotAssumption,
 } from "./PowerUpOptimizerAssumptionPanel.js";
+import { BOSS_CADENCE_HINT } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import {
   buildPowerUpOptimizerScenarioUrl,
   parsePowerUpOptimizerScenarioFromUrl,
@@ -53,22 +55,34 @@ import {
 } from "./run/runRosterPlanner.js";
 import { runRosterBudgetOffMainThread, runRosterPlannerOffMainThread } from "./rosterPlannerWorkerClient.js";
 import { dedupeInterchangeableCandidates, type DedupedRosterCandidateGroup } from "./rosterCandidateDedupe.js";
+import { movesetDefaultBadge, type MovesetDefaultBadgeInfo } from "./rosterMovesetBadge.js";
 import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates real
 // ranked results immediately, not an empty form — same precedent as every
-// other tab's own DEFAULT_*. Reuses the Team Raid tab's exact default roster
-// (one genuine mega slot, five non-mega fillers, vs. tyranitar-mega) so the
-// two tabs never accidentally disagree about what a "typical" roster looks
-// like, but at VARIED levels (unlike Team Raid's single shared level) since
-// this tab's whole point is per-slot power-up headroom.
-const DEFAULT_TARGET_ID = "tyranitar-mega";
+// other tab's own DEFAULT_*. Reuses the Team Raid tab's exact default
+// roster/boss/moves (see TeamRaidView.tsx's own DEFAULT_TEAM_ASSUMPTIONS doc
+// comment for why this specific Fighting/Steel-counter roster vs. plain
+// tyranitar replaced an earlier default that failed outright) so the two tabs
+// never accidentally disagree about what a "typical" roster looks like, but
+// at VARIED levels (unlike Team Raid's single shared level) since this tab's
+// whole point is per-slot power-up headroom. Verified: 100% clear rate over
+// 20 seeds, mean 111.5s of the 300s timer, baseline 32.5 team DPS against
+// this 3600 HP boss — replaces an earlier default (vs. tyranitar-mega,
+// 9000 HP) that failed outright (0% clear rate, 7.1 team DPS).
+const DEFAULT_TARGET_ID = "tyranitar";
 
-function defaultSlot(speciesId: string, level: number, isMega: boolean): PowerUpSlotAssumption {
+function defaultSlot(
+  speciesId: string,
+  level: number,
+  isMega: boolean,
+  fastMoveId: string | null = null,
+  chargedMoveId: string | null = null,
+): PowerUpSlotAssumption {
   return {
     speciesId,
-    fastMoveId: null,
-    chargedMoveId: null,
+    fastMoveId,
+    chargedMoveId,
     isMega,
     megaLevel: null,
     isShadow: false,
@@ -89,12 +103,12 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   // it always has.
   mode: "single-raid",
   slots: [
-    defaultSlot("latios-mega", 35, true),
-    defaultSlot("garchomp", 30, false),
-    defaultSlot("dragonite", 40, false),
-    defaultSlot("kartana", 38, false),
-    defaultSlot("tyranitar", 31, false),
-    defaultSlot("rayquaza", 25, false),
+    defaultSlot("lucario-mega", 35, true, "COUNTER_FAST", "CLOSE_COMBAT"),
+    defaultSlot("machamp", 30, false, "COUNTER_FAST", "CLOSE_COMBAT"),
+    defaultSlot("terrakion", 40, false, "DOUBLE_KICK_FAST", "CLOSE_COMBAT"),
+    defaultSlot("excadrill", 38, false, "MUD_SLAP_FAST", "EARTHQUAKE"),
+    defaultSlot("conkeldurr", 31, false, "COUNTER_FAST", "FOCUS_BLAST"),
+    defaultSlot("heracross", 25, false, "COUNTER_FAST", "CLOSE_COMBAT"),
   ],
   stardustOnHand: 200000,
   // Modest, non-zero two-digit defaults so the fixed-budget plan's shared
@@ -479,8 +493,26 @@ const MULTI_RAID_ROW_COLUMN_COUNT = 12;
  * IV spread is what makes a recommendation actionable. Two entries that are
  * still identical after dedup ARE genuinely interchangeable, so either one
  * satisfies the recommendation — hence a count, not a list of which ones.
+ *
+ * `movesetBadge` is a web-only join, not something `group.representative`
+ * itself carries — see rosterMovesetBadge.ts's own top doc comment for why
+ * (the engine's `RosterPowerUpCandidate` has no import-time provenance at
+ * all). When the deduped group has `count > 1`, this reads as true for its
+ * REPRESENTATIVE pool entry specifically — the same "good enough for a
+ * collapsed row" caveat `identity` above already accepts, since the dedup
+ * key doesn't distinguish "explicitly matched this exact move" from
+ * "defaulted to the exact same move" (both resolve to the same
+ * fastMoveId/chargedMoveId).
  */
-function MultiRaidCandidateRow({ group, identity }: { group: DedupedRosterCandidateGroup; identity?: string }) {
+function MultiRaidCandidateRow({
+  group,
+  identity,
+  movesetBadge,
+}: {
+  group: DedupedRosterCandidateGroup;
+  identity?: string;
+  movesetBadge?: MovesetDefaultBadgeInfo;
+}) {
   const [expanded, setExpanded] = useState(false);
   const c = group.representative;
   // "—" when this candidate isn't significant (aggregate OR per-boss — see
@@ -510,6 +542,11 @@ function MultiRaidCandidateRow({ group, identity }: { group: DedupedRosterCandid
           {identity && (
             <span className="caveats" style={{ display: "block", fontSize: "0.85em" }}>
               {identity}
+            </span>
+          )}
+          {movesetBadge && (
+            <span className="badge badge-approximate" title={movesetBadge.title}>
+              {movesetBadge.label}
             </span>
           )}
           {c.costUnverified && (
@@ -569,12 +606,15 @@ function ExcludedEntriesTable({
   heading,
   description,
   entries,
+  entryMovesetBadges,
   initialRows = MULTI_RAID_TABLE_INITIAL_ROWS,
 }: {
   sectionId: string;
   heading: string;
   description: string;
   entries: RosterNeverCompetitiveEntry[];
+  /** entryId -> a "moveset had to be guessed" badge — see rosterMovesetBadge.ts. Optional so this shared table doesn't force every future caller to pass one. */
+  entryMovesetBadges?: Map<string, MovesetDefaultBadgeInfo>;
   initialRows?: number;
 }) {
   const [showAll, setShowAll] = useState(false);
@@ -600,12 +640,22 @@ function ExcludedEntriesTable({
             </tr>
           </thead>
           <tbody>
-            {visible.map((e, i) => (
-              <tr key={`${e.entryId}-${i}`}>
-                <td>{e.speciesName}</td>
-                <td>{e.reason}</td>
-              </tr>
-            ))}
+            {visible.map((e, i) => {
+              const movesetBadge = entryMovesetBadges?.get(e.entryId);
+              return (
+                <tr key={`${e.entryId}-${i}`}>
+                  <td>
+                    {e.speciesName}
+                    {movesetBadge && (
+                      <span className="badge badge-approximate" title={movesetBadge.title}>
+                        {movesetBadge.label}
+                      </span>
+                    )}
+                  </td>
+                  <td>{e.reason}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -672,9 +722,13 @@ interface MultiRaidResultsSectionProps {
   hydratedPoolCount: number;
   /** entryId -> a short human identity (IV spread) for the ranked tables — see MultiRaidCandidateRow's `identity`. */
   entryIdentities: Map<string, string>;
+  /** entryId -> a "moveset had to be guessed" badge, present only for entries whose fast and/or charged move was defaulted at import — see rosterMovesetBadge.ts. */
+  entryMovesetBadges: Map<string, MovesetDefaultBadgeInfo>;
   /** The hydrated pool itself — needed (not just entryIdentities) so dedupeInterchangeableCandidates can compare full IV/moveset/cost-modifier identity, not just its display string. */
   pool: ImportedRosterEntry[];
   rosterDroppedCount: number;
+  /** Count of hydrated entries that predate the moveset-badge fields — see rosterPool.ts's HydratedRosterPool.staleMovesetBadgeCount. */
+  rosterStaleMovesetBadgeCount: number;
   bossCount: number;
   run: RosterPlannerRunResult | null;
   isRunning: boolean;
@@ -702,8 +756,10 @@ interface MultiRaidResultsSectionProps {
 function MultiRaidResultsSection({
   hydratedPoolCount,
   entryIdentities,
+  entryMovesetBadges,
   pool,
   rosterDroppedCount,
+  rosterStaleMovesetBadgeCount,
   bossCount,
   run,
   isRunning,
@@ -789,6 +845,15 @@ function MultiRaidResultsSection({
             data layer no longer has.
           </span>
         )}
+        {rosterStaleMovesetBadgeCount > 0 && (
+          <span
+            className="caveats"
+            title="These rows carry no default-moveset signal at all yet, even where one would show today — not the same as a genuinely fully-resolved moveset. Re-import your Poke Genie CSV export to restore it."
+          >
+            {rosterStaleMovesetBadgeCount} roster entr{rosterStaleMovesetBadgeCount === 1 ? "y" : "ies"} imported
+            before moveset badges existed — re-import your CSV to see &ldquo;default moveset&rdquo; flags below.
+          </span>
+        )}
       </div>
 
       {!run && !isRunning && (
@@ -859,7 +924,12 @@ function MultiRaidResultsSection({
               <MultiRaidCandidateTableHead withTooltips />
               <tbody>
                 {visibleCandidateGroups.map((group) => (
-                  <MultiRaidCandidateRow key={group.key} group={group} identity={entryIdentities.get(group.representative.entryId)} />
+                  <MultiRaidCandidateRow
+                    key={group.key}
+                    group={group}
+                    identity={entryIdentities.get(group.representative.entryId)}
+                    movesetBadge={entryMovesetBadges.get(group.representative.entryId)}
+                  />
                 ))}
               </tbody>
             </table>
@@ -888,7 +958,12 @@ function MultiRaidResultsSection({
                   <MultiRaidCandidateTableHead withTooltips={false} />
                   <tbody>
                     {dedupedBenched.map((group) => (
-                      <MultiRaidCandidateRow key={`bench-${group.key}`} group={group} identity={entryIdentities.get(group.representative.entryId)} />
+                      <MultiRaidCandidateRow
+                        key={`bench-${group.key}`}
+                        group={group}
+                        identity={entryIdentities.get(group.representative.entryId)}
+                        movesetBadge={entryMovesetBadges.get(group.representative.entryId)}
+                      />
                     ))}
                   </tbody>
                 </table>
@@ -901,6 +976,7 @@ function MultiRaidResultsSection({
             heading="Never competitive"
             description="Excluded from candidate generation entirely — reported, not hidden, so this sweep never silently ignores most of the roster. An unevolved species is excluded because evolution (candy only, no stardust) always buys strictly more team DPS per stardust afterward — power it up AFTER evolving."
             entries={neverCompetitive}
+            entryMovesetBadges={entryMovesetBadges}
           />
         </>
       )}
@@ -927,7 +1003,17 @@ const MULTI_RAID_BUDGET_STEP_COLUMN_COUNT = 10;
  * exactly the "where the ranking flips" thesis applied to a spend decision,
  * not just a read-only ranked row.
  */
-function MultiRaidBudgetStepRow({ step, identity, index }: { step: RosterBudgetStep; identity?: string; index: number }) {
+function MultiRaidBudgetStepRow({
+  step,
+  identity,
+  movesetBadge,
+  index,
+}: {
+  step: RosterBudgetStep;
+  identity?: string;
+  movesetBadge?: MovesetDefaultBadgeInfo;
+  index: number;
+}) {
   const [expanded, setExpanded] = useState(false);
   const bestBossName = step.bestBossId ? (step.perBoss.find((p) => p.bossId === step.bestBossId)?.bossName ?? step.bestBossId) : null;
   return (
@@ -947,6 +1033,11 @@ function MultiRaidBudgetStepRow({ step, identity, index }: { step: RosterBudgetS
           {identity && (
             <span className="caveats" style={{ display: "block", fontSize: "0.85em" }}>
               {identity}
+            </span>
+          )}
+          {movesetBadge && (
+            <span className="badge badge-approximate" title={movesetBadge.title}>
+              {movesetBadge.label}
             </span>
           )}
         </td>
@@ -984,6 +1075,8 @@ function MultiRaidBudgetStepRow({ step, identity, index }: { step: RosterBudgetS
 interface MultiRaidBudgetPlanSectionProps {
   /** entryId -> a short human identity (IV spread) — same map MultiRaidResultsSection's rows use, so a step naming "Mewtwo" is just as disambiguated as a ranked-table row. */
   entryIdentities: Map<string, string>;
+  /** entryId -> a "moveset had to be guessed" badge — same map MultiRaidResultsSection's rows use, so a committed spend step carries the same provenance warning as the ranked table it's drawn from. */
+  entryMovesetBadges: Map<string, MovesetDefaultBadgeInfo>;
   /** familyId -> a representative display label — same list PowerUpOptimizerAssumptionPanel's candy editor already builds, reused here so the ledger table names families the same way the editor that unlocks them does. */
   rosterFamilyOptions: { familyId: string; label: string }[];
   run: RosterBudgetPlanRunResult | null;
@@ -1005,7 +1098,16 @@ interface MultiRaidBudgetPlanSectionProps {
  * request type) — so the two sections can never describe two different
  * (inputs, pool) snapshots.
  */
-function MultiRaidBudgetPlanSection({ entryIdentities, rosterFamilyOptions, run, isRunning, isStale, ranOn, elapsedMs }: MultiRaidBudgetPlanSectionProps) {
+function MultiRaidBudgetPlanSection({
+  entryIdentities,
+  entryMovesetBadges,
+  rosterFamilyOptions,
+  run,
+  isRunning,
+  isStale,
+  ranOn,
+  elapsedMs,
+}: MultiRaidBudgetPlanSectionProps) {
   const familyLabel = (familyId: string) => rosterFamilyOptions.find((f) => f.familyId === familyId)?.label ?? familyId;
 
   return (
@@ -1125,7 +1227,13 @@ function MultiRaidBudgetPlanSection({ entryIdentities, rosterFamilyOptions, run,
                 </thead>
                 <tbody>
                   {run.data.steps.map((step, i) => (
-                    <MultiRaidBudgetStepRow key={`${step.entryId}-${step.toLevel}-${i}`} step={step} identity={entryIdentities.get(step.entryId)} index={i} />
+                    <MultiRaidBudgetStepRow
+                      key={`${step.entryId}-${step.toLevel}-${i}`}
+                      step={step}
+                      identity={entryIdentities.get(step.entryId)}
+                      movesetBadge={entryMovesetBadges.get(step.entryId)}
+                      index={i}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -1181,6 +1289,7 @@ function MultiRaidBudgetPlanSection({ entryIdentities, rosterFamilyOptions, run,
             heading="Excluded from this plan"
             description="Never silently dropped: an unevolved species (evolve first, same reasoning as the ranked sweep's own 'never competitive' list) or an entry whose resolved candy family has no known on-hand pool yet — fill it in in the candy editor above to unlock that species for this plan (it can still be RANKED in the sweep above, just not planned against here)."
             entries={run.data.excludedEntries}
+            entryMovesetBadges={entryMovesetBadges}
           />
         </>
       )}
@@ -1303,6 +1412,16 @@ function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlan
             {(plan.final.teamDps - plan.baseline.teamDps).toFixed(2)} team DPS
             {plan.baseline.teamDps > 0 &&
               ` (${(((plan.final.teamDps - plan.baseline.teamDps) / plan.baseline.teamDps) * 100).toFixed(1)}% over baseline)`}
+          </dd>
+          <dt title="Fraction of simulated runs that clear the boss within the raid timer, BEFORE this plan">Baseline clear rate</dt>
+          <dd>{(plan.baseline.clearRate * 100).toFixed(0)}%</dd>
+          <dt title="Fraction of simulated runs that clear the boss within the raid timer, AFTER committing every step below — the question this plan's stardust/candy spend actually answers, not just its DPS gain">
+            Clear rate after this plan
+          </dt>
+          <dd>
+            {(plan.final.clearRate * 100).toFixed(0)}%
+            {plan.final.clearRate === 0 && " — still doesn't clear"}
+            {plan.final.meanTimeToClearSeconds !== null && ` (avg ${plan.final.meanTimeToClearSeconds.toFixed(1)}s to clear)`}
           </dd>
           <dt>Stardust spent</dt>
           <dd>
@@ -1684,14 +1803,46 @@ function SingleRaidResultsSection({
       )}
 
       <CollapsibleSection id="pu-known-caveats-single" heading="Known caveats" defaultOpen={false}>
-        <p className="caveats note-block">
+        <div className="note-block">
+        <details className="prose-details">
+          <summary>Roster scope</summary>
+          <p>
+          A team can field fewer than {MAX_TEAM_RAID_SLOTS} Pokémon — leave any slot empty ("clear" it) and it simply
+          never enters the fight and never contributes a power-up candidate. Every power-up candidate below is a
+          SINGLE-SLOT power-up run through a full paired team-raid simulation against the other 5 slots exactly as
+          configured — no multi-slot power-up plans and no "add a hypothetical 7th Pokémon" candidates in this v1.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Mega Level</summary>
+          <p>
           Mega Level (per slot, above): every number on this tab honors each slot's own selected Mega Level —
           baseline, ranked candidates' Δ team DPS, the fixed-budget plan, and the per-slot damage ladder's
           breakpoint check alike. Super Max additionally applies a +2 effective-level bump, whose magnitude is a
           community-consensus figure rather than a published one; a "+" charged move's power scaling by tier is a
           weaker community estimate still. Both are flagged where they surface.
-        </p>
-        <p className="caveats note-block">
+          </p>
+          <p>{MEGA_LEVEL_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Boss charged-move cadence model</summary>
+          <p>{BOSS_CADENCE_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Ranking display</summary>
+          <p>
+          "Rank candidates by" is display-only — never changes which candidates exist or their own numbers, only the
+          sort order of the ranked table (both modes). Stardust and candy are deliberately kept as two separate
+          efficiency numbers rather than one blended score, since they aren't fungible resources for a real player.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Raid timer</summary>
+          <p>Real, documented per-tier raid countdown — see raidBoss.ts's RAID_TIER_TABLE.</p>
+        </details>
+        <details className="prose-details">
+          <summary>Scope, noise floor &amp; cost-table gaps</summary>
+          <p>
           v1, rudimentary scope: every candidate above is a SINGLE-SLOT power-up — no multi-slot plans (e.g. "power up
           two Pokémon together") and no "add a hypothetical 7th Pokémon" candidates. Each candidate/baseline number is
           the mean of {data ? data.iterations : 20} paired-seed (common-random-numbers) team-raid runs, not one
@@ -1717,7 +1868,9 @@ function SingleRaidResultsSection({
           healing items on a full wipe, and no cap on wipe-and-rejoin cycles other than a purely-engineering safety guard. A raid target badged
           "approximate" in the picker is one the live raid feed named but whose exact form this data layer couldn't
           resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
-        </p>
+          </p>
+        </details>
+        </div>
       </CollapsibleSection>
     </>
   );
@@ -1744,10 +1897,11 @@ export function PowerUpOptimizerView() {
   // a side effect of its own import/clear actions); this is just the
   // canonical in-memory value both it and the sweep now share.
   const [rosterPool, setRosterPool] = useState<RosterPool>(loadRosterPool);
-  const { entries: hydratedPool, droppedCount: rosterDroppedCount } = useMemo(
-    () => hydrateRosterPool(rosterPool, speciesRegistry),
-    [rosterPool],
-  );
+  const {
+    entries: hydratedPool,
+    droppedCount: rosterDroppedCount,
+    staleMovesetBadgeCount: rosterStaleMovesetBadgeCount,
+  } = useMemo(() => hydrateRosterPool(rosterPool, speciesRegistry), [rosterPool]);
 
   // entryId -> a short identity for the multi-raid result tables. A roster
   // routinely holds several entries of the SAME species (4 Mewtwo, 12
@@ -1759,6 +1913,25 @@ export function PowerUpOptimizerView() {
     for (const entry of hydratedPool) {
       const { attack, defense, stamina } = entry.ivs;
       map.set(entry.entryId, `IV ${attack}/${defense}/${stamina}${entry.ivsAreApproximate ? " (approx)" : ""}`);
+    }
+    return map;
+  }, [hydratedPool]);
+
+  // entryId -> a "moveset had to be guessed" badge for the multi-raid result
+  // tables — a real trust bug fixed 2026-09-10: `RosterPowerUpCandidate`/
+  // `RosterNeverCompetitiveEntry`/`RosterBudgetStep` (engine result types)
+  // don't carry `movesetIsDefaulted` at all, and this used to be visible
+  // ONLY in the "Import a whole roster" table further up the page — a
+  // recommendation like "power up Rayquaza" rested on a guessed moveset with
+  // no signal of that anywhere near the number itself. Same "map built once
+  // from the hydrated pool, joined by entryId" shape as entryIdentities
+  // above — see rosterMovesetBadge.ts's own top doc comment for the full
+  // story and why this is a web-only join, not an engine change.
+  const entryMovesetBadges = useMemo(() => {
+    const map = new Map<string, MovesetDefaultBadgeInfo>();
+    for (const entry of hydratedPool) {
+      const badge = movesetDefaultBadge(entry);
+      if (badge) map.set(entry.entryId, badge);
     }
     return map;
   }, [hydratedPool]);
@@ -2133,8 +2306,10 @@ export function PowerUpOptimizerView() {
           <MultiRaidResultsSection
             hydratedPoolCount={hydratedPool.length}
             entryIdentities={entryIdentities}
+            entryMovesetBadges={entryMovesetBadges}
             pool={hydratedPool}
             rosterDroppedCount={rosterDroppedCount}
+            rosterStaleMovesetBadgeCount={rosterStaleMovesetBadgeCount}
             bossCount={assumptions.multiRaidBossIds.length}
             run={multiRaidRun?.result ?? null}
             isRunning={isRunningMultiRaidSweep}
@@ -2146,6 +2321,7 @@ export function PowerUpOptimizerView() {
           />
           <MultiRaidBudgetPlanSection
             entryIdentities={entryIdentities}
+            entryMovesetBadges={entryMovesetBadges}
             rosterFamilyOptions={rosterFamilyOptions}
             run={multiRaidBudgetRun?.result ?? null}
             isRunning={isRunningMultiRaidBudget}
@@ -2153,6 +2329,51 @@ export function PowerUpOptimizerView() {
             ranOn={multiRaidBudgetRun?.ranOn ?? null}
             elapsedMs={budgetElapsedMs}
           />
+
+          <CollapsibleSection id="pu-known-caveats-multi" heading="Known caveats" defaultOpen={false}>
+            <div className="note-block">
+            <details className="prose-details">
+              <summary>Roster-wide Mega Level</summary>
+              <p>
+              Applies ROSTER-WIDE (the imported roster is ~164 Pokémon, so a per-entry control would be unusable),
+              and only ever to an entry that can actually Mega Evolve. Feeds the real simulated team-DPS behind
+              both the ranked table and the fixed-budget plan.
+              </p>
+              <p>{MEGA_LEVEL_HINT}</p>
+            </details>
+            <details className="prose-details">
+              <summary>Candy family data</summary>
+              <p>
+              Poke Genie exports no candy-on-hand column at all — every family starts UNKNOWN, not zero. Fill in only
+              the families you care about; an unknown family&rsquo;s candidates are still ranked, just marked
+              &ldquo;cost unverified&rdquo; and excluded from the fixed-budget plan below (filling a family in here is
+              what UNLOCKS it for that plan — see the &ldquo;Fixed-budget plan&rdquo; section&rsquo;s own
+              &ldquo;Excluded from this plan&rdquo; table for exactly which families/species are still missing).
+              Pooled per candy FAMILY (e.g. Houndour and Houndoom share one pool), never per species — a mega/primal roster
+              entry&rsquo;s candy is resolved from its BASE species&rsquo; family automatically (e.g. Mega Blaziken
+              draws Blaziken&rsquo;s candy; labeled below as &ldquo;Blaziken (for Mega Blaziken)&rdquo;), since that
+              is whose candy a real power-up actually spends.
+              </p>
+            </details>
+            <details className="prose-details">
+              <summary>Boss charged-move cadence model</summary>
+              <p>{BOSS_CADENCE_HINT}</p>
+            </details>
+            <details className="prose-details">
+              <summary>Ranking display</summary>
+              <p>
+              &ldquo;Rank candidates by&rdquo; is display-only — never changes which candidates exist or their own
+              numbers, only the sort order of the ranked table (both modes). Stardust and candy are deliberately
+              kept as two separate efficiency numbers rather than one blended score, since they aren&rsquo;t
+              fungible resources for a real player.
+              </p>
+            </details>
+            <details className="prose-details">
+              <summary>Raid timer</summary>
+              <p>Real, documented per-tier raid countdown — see raidBoss.ts&rsquo;s RAID_TIER_TABLE.</p>
+            </details>
+            </div>
+          </CollapsibleSection>
         </>
       )}
 

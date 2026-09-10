@@ -231,6 +231,46 @@ export interface RawGameMasterEvolutionBranchFull {
   temporaryEvolutionEnergyCostSubsequent?: number;
 }
 
+/**
+ * One group within a `formChange[].moveReassignment.cinematicMoves`/
+ * `.quickMoves` array — see MECHANICS.md's "Form-change `moveReassignment`
+ * grants moves that appear in no movepool array" and
+ * scripts/sync-data/formChangeMoveGrants.ts for the full semantics:
+ * `existingMoves` names moves the DECLARING form (the pokemonSettings
+ * template this formChange entry sits on) holds; `replacementMoves` names
+ * moves the TARGET form (formChange[].availableForm) holds after the
+ * transition. Either key can be absent ENTIRELY (confirmed live: the
+ * Necrozma/Kyurem FUSE entries carry only `replacementMoves` — not an empty
+ * array, the key itself is missing).
+ */
+export interface RawGameMasterMoveReassignmentGroupFull {
+  existingMoves?: string[];
+  replacementMoves?: string[];
+}
+
+/** `formChange[].moveReassignment` — carries `cinematicMoves` (observed live, 2026-09-10 audit) and, structurally, `quickMoves` (never observed live as of that audit, handled anyway per this pipeline's "route each to the right movepool" requirement — see formChangeMoveGrants.ts). */
+export interface RawGameMasterMoveReassignmentFull {
+  cinematicMoves?: RawGameMasterMoveReassignmentGroupFull[];
+  quickMoves?: RawGameMasterMoveReassignmentGroupFull[];
+}
+
+/**
+ * One entry of a pokemonSettings template's `formChange` array — a form-
+ * TRANSITION table (Crowned Sword <-> Hero, Kyurem fusion/un-fusion, Necrozma
+ * fusion/un-fusion), NOT a movepool. Most of its real fields (candyCost,
+ * item, componentPokemonSettings, locationCardSettings,
+ * requiredCinematicMoves, formChangeBonusAttributes, requiredBreadMoves,
+ * priority) govern the in-game form-change UI/requirements and are
+ * irrelevant to this pipeline — only `availableForm` (the target form this
+ * entry transitions TO) and `moveReassignment` (see above) are extracted.
+ * See fetchGameMasterData's doc comment (./fetchCache.ts) for the extraction
+ * pass and formChangeMoveGrants.ts for the resolution pass built on this.
+ */
+export interface RawGameMasterFormChangeFull {
+  availableForm?: string[];
+  moveReassignment?: RawGameMasterMoveReassignmentFull;
+}
+
 export interface RawGameMasterPokemonSettingsFull {
   pokemonId: string;
   /**
@@ -260,6 +300,15 @@ export interface RawGameMasterPokemonSettingsFull {
   familyId?: string;
   tempEvoOverrides?: RawGameMasterTempEvoOverrideFull[];
   evolutionBranch?: RawGameMasterEvolutionBranchFull[];
+  /**
+   * A form-TRANSITION table (see RawGameMasterFormChangeFull above) — added
+   * 2026-09-10, previously discarded entirely at fetch time (see
+   * fetchGameMasterData's doc comment in ./fetchCache.ts). Kept through to
+   * GameMasterPokemonRecord.formChange (filtered to move-bearing entries
+   * only) rather than consumed here directly, since a formChange entry's
+   * TARGET form may be a template this extraction pass hasn't visited yet.
+   */
+  formChange?: RawGameMasterFormChangeFull[];
 }
 
 export interface RawGameMasterMoveSettingsFull {
@@ -368,6 +417,33 @@ export interface GameMasterEvolutionBranchRecord {
   candyCostPurified?: number;
 }
 
+/** Compact echo of RawGameMasterMoveReassignmentGroupFull, cached verbatim as part of GameMasterFormChangeEntryRecord below. */
+export interface GameMasterMoveReassignmentGroupRecord {
+  existingMoves?: string[];
+  replacementMoves?: string[];
+}
+
+/**
+ * Compact per-declaring-template formChange entry, kept ONLY when it carries
+ * a non-empty moveReassignment (every OTHER formChange entry — a plain
+ * UNFUSE with no move data, or one whose moveReassignment has neither a
+ * cinematicMoves nor a quickMoves group at all — is dropped at extraction
+ * time; this pipeline models the move-grant facet of formChange only, never
+ * the whole form-change UI/requirements). Cached verbatim to
+ * data/raw/game_master.json under each GameMasterPokemonRecord.formChange so
+ * the source data behind a granted move stays auditable, separate from the
+ * RESOLVED grants applied onto quickMoves/cinematicMoves by
+ * resolveFormChangeMoveGrants (./formChangeMoveGrants.ts) — see that module
+ * and MECHANICS.md's "Form-change `moveReassignment` grants moves that
+ * appear in no movepool array" for the full rule.
+ */
+export interface GameMasterFormChangeEntryRecord {
+  /** GAME_MASTER's own form key(s) this entry transitions to, e.g. ["ZACIAN_CROWNED_SWORD"]. Always length 1 in the 18 real entries found in the 2026-09-10 audit, but the raw field is an array. */
+  availableForm: string[];
+  cinematicMoves: GameMasterMoveReassignmentGroupRecord[];
+  quickMoves: GameMasterMoveReassignmentGroupRecord[];
+}
+
 /** Compact per-template species record cached to data/raw/game_master.json. */
 export interface GameMasterPokemonRecord {
   pokemonId: string;
@@ -401,6 +477,19 @@ export interface GameMasterPokemonRecord {
    * species.json" caveat.
    */
   evolutionBranch: GameMasterEvolutionBranchRecord[];
+  /**
+   * This template's own formChange entries, already filtered to move-bearing
+   * ones only (see GameMasterFormChangeEntryRecord). Added 2026-09-10.
+   * OPTIONAL (unlike tempEvoOverrides/evolutionBranch above, which are
+   * required-but-usually-empty arrays) specifically so every existing
+   * GameMasterPokemonRecord fixture literal elsewhere in this codebase keeps
+   * type-checking unchanged — the overwhelming majority of templates carry
+   * none of this data at all (18 real entries across 6 forms, out of ~2472
+   * templates in the 2026-09-10 audit). Consumers must read
+   * `record.formChange ?? []` — see resolveFormChangeMoveGrants
+   * (./formChangeMoveGrants.ts), the sole consumer.
+   */
+  formChange?: GameMasterFormChangeEntryRecord[];
 }
 
 /** Compact per-move record cached to data/raw/game_master.json — this is GAME_MASTER's `moveSettings` (PvE) table, NEVER `combatMove` (PvP/Trainer-Battle-only, different balance numbers for the same move name — verified 2026-09-06 by direct inspection of both tables). */

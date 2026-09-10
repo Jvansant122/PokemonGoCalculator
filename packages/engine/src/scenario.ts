@@ -103,6 +103,51 @@ export interface Scenario {
    * still decodes to the same result it always gave.
    */
   weather: WeatherCondition;
+  /**
+   * Whether the Comparator's UI shows its advanced/detailed assumption
+   * controls, or collapses them behind a single "advanced" toggle — the
+   * dodge model (`dodgeModel`), `dodgeFastAttacks`, the per-candidate
+   * `candidateDodge`/`candidateDodgeFastAttacks` overrides,
+   * `holdChargedMoveUntilSafe`, and the "extend simulated window" override
+   * (`minFightLengthSeconds`) are the fields it gates. Mirrors
+   * `TeamAssumptionPanel.tsx`'s own `showDetailedAssumptions` field and
+   * `runTeamRaid.ts`'s `effectiveBossChargedMoveFrequencySeconds` (the Team
+   * Raid Simulator tab) — but UNLIKE that tab, this is a genuine field on
+   * THIS engine type rather than a web-only bolt-on: `TeamScenario` itself
+   * (teamScenario.ts) declares no such field at all; `TeamRaidView.tsx`'s
+   * `TeamScenarioWithShadow` layers it on locally because folding it into
+   * the engine properly was left as a deliberate follow-up. This field is
+   * PURE UI STATE as far as this package is concerned — nothing in
+   * comparison.ts reads it, and it has zero effect on any computed number.
+   * It exists here only so a shared link preserves which panel section the
+   * sender had open/relied on, per this project's standing "every
+   * user-facing assumption round-trips through Scenario" rule. Whether
+   * packages/web additionally derives a different value for any gated field
+   * when this is false (the way Team Raid's
+   * `bossChargedMoveFrequencySeconds` does when its own flag is false) is
+   * entirely a web-side decision this field does not constrain.
+   *
+   * ABSENT (a scenario URL encoded before this field existed) is treated as
+   * `true` — DELIBERATELY NOT `false`, and deliberately not phrased as
+   * "defaults to today's implicit behavior" the way every sibling field
+   * above is, because this field has no single stable "today's implicit
+   * behavior" to fall back to: every Comparator link ever shared before this
+   * field existed was authored under "everything visible, nothing
+   * collapsed" — there was no advanced/simple split yet to have a default
+   * for. `true` (show everything) is the only reading that reproduces that
+   * history exactly; `false` would newly hide controls — and, depending on
+   * how packages/web ultimately wires the gate, potentially substitute a
+   * derived value for one — that a sender may have deliberately set and
+   * shared, silently changing what a recipient sees for the very same link.
+   * This matches the one existing precedent for this exact field name
+   * elsewhere in this codebase (`TeamScenarioWithShadow`'s
+   * `showDetailedAssumptions ?? true`, chosen for the identical reason — see
+   * its own comment in TeamRaidView.tsx). `decodeScenario` performs no
+   * runtime defaulting of its own (same as every sibling field on this
+   * interface) — implementing the `?? true` fallback is packages/web's
+   * responsibility, in its own `scenarioToAssumptions`.
+   */
+  showDetailedAssumptions: boolean;
 }
 
 /**

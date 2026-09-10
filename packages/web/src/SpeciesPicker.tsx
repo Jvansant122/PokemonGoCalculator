@@ -76,7 +76,16 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange, prima
           aria-autocomplete="list"
           autoComplete="off"
           value={query}
-          onFocus={() => setOpen(true)}
+          onFocus={(e) => {
+            setOpen(true);
+            // Select the existing text so typing immediately replaces it
+            // rather than appending — clicking into a picker already reading
+            // e.g. "Kartana" and typing "mewtwo" used to produce
+            // "Kartanamewtwo" (-> "No matches"). Plain DOM .select(), not
+            // React state — doesn't touch `query`/`open`, so it can't disturb
+            // the controlled-input/listbox wiring below.
+            e.target.select();
+          }}
           onChange={(e) => {
             setQuery(e.target.value);
             setOpen(true);

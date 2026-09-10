@@ -192,6 +192,10 @@ import {
   isFullyEvolved,
   realEvolutionTargets,
   type EvolutionTarget,
+  // 2026-09-10 fix for 21 species whose name carried a raw underscored form
+  // straight through (e.g. "Zacian (Crowned_sword)") — see
+  // applyCleanFormDisplayName below and formDisplayName's own doc comment.
+  formDisplayName,
 } from "./sync-data/gameMasterMatching.ts";
 import {
   megaSpeciesIdFor,
@@ -492,6 +496,36 @@ function buildTypesArray(rawTypeStrings: string[]): [PokemonType] | [PokemonType
   return secondary !== undefined ? [primary as PokemonType, secondary] : [primary as PokemonType];
 }
 
+/**
+ * fromGameMaster composes `.name` as `` `${pokemon_name} (${raw.form})` ``
+ * using the SAME raw form string that (correctly) drives `.id` via
+ * speciesIdFor (packages/engine/src/gamemaster.ts) — and that id must NEVER
+ * change (species ids are embedded in every shared scenario URL). So this
+ * cleanup runs AFTER fromGameMaster has already returned, overwriting ONLY
+ * `.name` with the same pokemon_name plus a title-cased form
+ * (formDisplayName, ./sync-data/gameMasterMatching.ts) — never touching
+ * `.id`, never touching the raw `form` value passed into fromGameMaster
+ * itself (still needed, unmodified, for GAME_MASTER form-key matching and
+ * pokemon_stats.json row lookups elsewhere in this file).
+ *
+ * 2026-09-10 fix for 21 species whose name carried a raw underscore straight
+ * through, e.g. "Zacian (Crowned_sword)" -> "Zacian (Crowned Sword)".
+ * Deliberately NOT a change to packages/engine/src/gamemaster.ts itself —
+ * fromGameMaster's `.id`/`.name` share one input field by design, and
+ * reaching in from outside to fix only the display half keeps that
+ * single-source-of-truth transform in the engine untouched.
+ *
+ * A no-op for the "Normal" form (fromGameMaster already omits the
+ * parenthetical entirely in that case) and for a form with no underscore at
+ * all (formDisplayName is idempotent on those — title-casing a single word
+ * already spelled "Hero" or "Shield" reproduces it unchanged).
+ */
+function applyCleanFormDisplayName(definition: SpeciesDefinition, pokemonName: string, rawForm: string | undefined): void {
+  if (rawForm && rawForm !== "Normal") {
+    definition.name = `${pokemonName} (${formDisplayName(rawForm)})`;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Build normalized species list (one form per species — "Normal", or the
 // documented fallback above). VALUES now come primarily from GAME_MASTER,
@@ -696,6 +730,9 @@ for (const stat of normalStats) {
     resolvedFast,
     resolvedCharged,
   );
+  // 2026-09-10 fix — see applyCleanFormDisplayName's own doc comment. Never
+  // touches `definition.id`, only the composed display name.
+  applyCleanFormDisplayName(definition, stat.pokemon_name, stat.form);
   // National-dex sprite, keyed by the pokemon_id we already have — no extra
   // network call needed for any of the Normal-form-or-fallback-form species
   // handled here (unlike the 48 mega entries below, which need a per-species
@@ -960,6 +997,10 @@ for (const [pokemonId, rows] of statsByPokemonId) {
       resolvedFast,
       resolvedCharged,
     );
+    // 2026-09-10 fix — see applyCleanFormDisplayName's own doc comment. Never
+    // touches `definition.id`, only the composed display name; the
+    // collision check right below still compares the untouched `.id`.
+    applyCleanFormDisplayName(definition, row.pokemon_name, row.form);
 
     if (species.some((s) => s.id === definition.id)) {
       skippedExtraForms.push({
@@ -2437,8 +2478,14 @@ for (const group of pogoapiPreviousGroups.values()) {
     // otherwise (see gamemaster.ts's fromGameMaster) — pogoapi's own form
     // strings are exactly what stat.form/RawGameMasterSpecies.form already
     // carry, since both this project's species roster and raid_bosses.json
-    // come from the same pogoapi.net form-naming convention.
-    const qualifiedName = group.form === "Normal" ? group.name : `${group.name} (${group.form})`;
+    // come from the same pogoapi.net form-naming convention. `group.form`
+    // itself is RAW (possibly underscored, e.g. "West_sea") — cleaned via
+    // formDisplayName (2026-09-10 fix) to match the roster's own now-cleaned
+    // `.name`, same as applyCleanFormDisplayName above and
+    // qualifiedRosterName in ./sync-data/pokebattlerRaids.ts; the raw
+    // `group.form` itself is untouched (only this display string is built
+    // from a cleaned copy).
+    const qualifiedName = group.form === "Normal" ? group.name : `${group.name} (${formDisplayName(group.form)})`;
     resolvedRaidName = qualifiedName;
     resolvedSpeciesId = speciesIdByNameLower.get(qualifiedName.toLowerCase()) ?? null;
   } else {
@@ -2886,6 +2933,19 @@ if (gameMasterAvailable) {
     `  - VALIDATION: GAME_MASTER fetch FAILED this run (${gameMasterFetchResult.error}) — every species this run fell all the way back to pogoapi-sourced stats/typing/moveset, and rarity defaulted to "STANDARD" across the board (pokemon_rarity.json is no longer fetched independently — see below). Re-run once GAME_MASTER is reachable again.`,
   );
 }
+console.log(
+  `  - Form-change moveReassignment grants (2026-09-10, MECHANICS.md "Form-change moveReassignment grants moves that appear in no movepool array" — pokemonSettings.formChange[].moveReassignment entries this pipeline now reads instead of discarding at fetch time; see resolveFormChangeMoveGrants in scripts/sync-data/formChangeMoveGrants.ts): ${
+    gameMasterFetchResult.formChangeMoveGrants.length === 0
+      ? "none applied this run"
+      : gameMasterFetchResult.formChangeMoveGrants
+          .map((g) => {
+            const added = [...g.addedCinematicMoves, ...g.addedQuickMoves];
+            const skipped = [...g.skippedCinematicMoves, ...g.skippedQuickMoves];
+            return `${g.pokemonId}${g.form ? ` (${g.form})` : ""}${added.length > 0 ? `: +${added.join(", ")}` : ""}${skipped.length > 0 ? ` [SKIPPED, no moveSettings match this run: ${skipped.join(", ")}]` : ""}`;
+          })
+          .join("; ")
+  }.${gameMasterFetchResult.unmatchedFormChangeTargets.length > 0 ? ` UNMATCHED target form(s) (named by a formChange entry but no matching pokemonSettings template this run): ${gameMasterFetchResult.unmatchedFormChangeTargets.join(", ")}.` : ""}`,
+);
 if (powerUpCostTable) {
   // Field names below are the engine's own PowerUpCostTable (packages/engine/src/powerUp.ts) — luckyStardustMultiplier is 1 - GAME_MASTER's powerUpStardustDiscountPercent.
   const step1 = powerUpCostTable.steps.find((s) => s.fromLevel === 1);

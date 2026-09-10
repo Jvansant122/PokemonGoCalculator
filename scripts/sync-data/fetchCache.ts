@@ -28,6 +28,7 @@ import type {
   RawRaidBossesResponse,
 } from "./rawShapes.ts";
 import type { RawPokebattlerResponse, RawPokebattlerTier } from "./pokebattlerRaids.ts";
+import { resolveFormChangeMoveGrants, type FormChangeMoveGrantReport } from "./formChangeMoveGrants.ts";
 
 export function readJson<T>(rawDir: string, filename: string): T {
   return JSON.parse(readFileSync(join(rawDir, filename), "utf-8")) as T;
@@ -240,6 +241,17 @@ export interface GameMasterFetchResult {
    * malformed, never thrown" discipline.
    */
   luckyStardustDiscountPercent: number | null;
+  /**
+   * Forms whose movepool gained (or would have gained but skipped) a move
+   * via formChange[].moveReassignment resolution this run (2026-09-10) — see
+   * resolveFormChangeMoveGrants (./formChangeMoveGrants.ts) and MECHANICS.md's
+   * "Form-change `moveReassignment` grants moves that appear in no movepool
+   * array". Empty array (never undefined) when nothing was applied, including
+   * on the error path below.
+   */
+  formChangeMoveGrants: FormChangeMoveGrantReport[];
+  /** Target form keys named by a formChange entry with no matching pokemonSettings template this run — see resolveFormChangeMoveGrants. Empty array (never undefined) when there were none, including on the error path below. */
+  unmatchedFormChangeTargets: string[];
 }
 
 /**
@@ -285,6 +297,21 @@ export interface GameMasterFetchResult {
  * branch whose only entries are TEMPORARY (mega) evolutions, Charizard and
  * Metagross among them, and the naive check marks those unevolved. See
  * MECHANICS.md, "Evolution: candy-only".
+ *
+ * As of 2026-09-10, each pokemonSettings template's `formChange` entries are
+ * ALSO retained (filtered to move-bearing ones only — see
+ * GameMasterFormChangeEntryRecord's doc comment in rawShapes.ts), previously
+ * discarded entirely. `formChange` is a form-TRANSITION table, and some
+ * forms' real signature moves (Zacian/Zamazenta's Crowned forms, Necrozma's
+ * Dusk Mane/Dawn Wings, Kyurem Black/White) are granted ONLY through a
+ * `formChange[].moveReassignment` entry, never appearing in that form's own
+ * `quickMoves`/`cinematicMoves`/elite arrays at all — see MECHANICS.md's
+ * "Form-change `moveReassignment` grants moves that appear in no movepool
+ * array". Once this loop finishes collecting every template,
+ * resolveFormChangeMoveGrants (./formChangeMoveGrants.ts) resolves and
+ * applies those grants onto the correct forms' `cinematicMoves`/
+ * `quickMoves` arrays in place — see that call site below and its own doc
+ * comment for the full resolution rule.
  * Deliberately NOT extracted: `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
  * POKEMON_ETERNATUS`, a real per-species override (30x candy cost) — v1 of
  * the power-up cost table this feeds only models the universal table (see
@@ -418,6 +445,27 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
             }
             return acc;
           }, []),
+          // 2026-09-10 fix for MECHANICS.md's "Form-change `moveReassignment`
+          // grants moves that appear in no movepool array" — kept only as the
+          // RAW source data (not yet resolved/applied; see
+          // resolveFormChangeMoveGrants below, called once this whole loop
+          // finishes). Filters out every formChange entry with no
+          // moveReassignment group at all (candyCost/item/UNFUSE-only
+          // entries etc.) — this pipeline models the move-grant facet of
+          // formChange only.
+          formChange: (ps.formChange ?? [])
+            .map((fc) => ({
+              availableForm: fc.availableForm ?? [],
+              cinematicMoves: (fc.moveReassignment?.cinematicMoves ?? []).map((g) => ({
+                existingMoves: g.existingMoves,
+                replacementMoves: g.replacementMoves,
+              })),
+              quickMoves: (fc.moveReassignment?.quickMoves ?? []).map((g) => ({
+                existingMoves: g.existingMoves,
+                replacementMoves: g.replacementMoves,
+              })),
+            }))
+            .filter((fc) => fc.cinematicMoves.length > 0 || fc.quickMoves.length > 0),
         });
       }
 
@@ -475,6 +523,20 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
       }
     }
 
+    // Form-change moveReassignment resolution (2026-09-10) — see
+    // resolveFormChangeMoveGrants's own doc comment (./formChangeMoveGrants.ts)
+    // and MECHANICS.md's "Form-change `moveReassignment` grants moves that
+    // appear in no movepool array". Runs ONCE, here, now that `pokemon` and
+    // `moves` are both complete — a formChange entry's TARGET form can be a
+    // template the main loop above visited before OR after the one declaring
+    // the grant, so this can't run inside that loop. Mutates the relevant
+    // records' own cinematicMoves/quickMoves arrays in place, so both the
+    // cached data/raw/game_master.json body below AND the in-memory `pokemon`
+    // this function returns (which sync-data.ts builds species.json from
+    // directly, never re-reading the cache file) already reflect the
+    // resolved grants.
+    const { grants: formChangeMoveGrants, unmatchedFormChangeTargets } = resolveFormChangeMoveGrants(pokemon, moves);
+
     if (!existsSync(rawDir)) mkdirSync(rawDir, { recursive: true });
     const cacheBody = JSON.stringify(
       {
@@ -490,7 +552,17 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
     );
     writeFileSync(join(rawDir, "game_master.json"), cacheBody);
     recordFetchMeta(rawDir, "game_master.json", Buffer.byteLength(cacheBody, "utf-8"));
-    return { pokemon, moves, source: "live", recoveredMoveIds, droppedMoveCount, upgradeSettings, luckyStardustDiscountPercent };
+    return {
+      pokemon,
+      moves,
+      source: "live",
+      recoveredMoveIds,
+      droppedMoveCount,
+      upgradeSettings,
+      luckyStardustDiscountPercent,
+      formChangeMoveGrants,
+      unmatchedFormChangeTargets,
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return {
@@ -502,6 +574,8 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
       droppedMoveCount: 0,
       upgradeSettings: null,
       luckyStardustDiscountPercent: null,
+      formChangeMoveGrants: [],
+      unmatchedFormChangeTargets: [],
     };
   }
 }

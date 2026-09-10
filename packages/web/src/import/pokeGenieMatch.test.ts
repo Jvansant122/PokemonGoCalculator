@@ -241,12 +241,38 @@ describe("matchPokeGenieRows — per-row interpretation", () => {
     expect(entry.chargedMoveId).toBe("CRUNCH"); // fell back to the species' first charged move
     expect(entry.movesetIsDefaulted).toBe(true);
     expect(entry.unmatchedMoveNames).toEqual(["Return"]);
+    // Per-slot detail: only the CHARGED move was defaulted, and specifically
+    // because "Return" was present but unrecognized — never conflate this
+    // with a blank slot (see movesetDefaultBadge, which words these two
+    // cases differently).
+    expect(entry.fastMoveIsDefaulted).toBe(false);
+    expect(entry.chargedMoveIsDefaulted).toBe(true);
+    expect(entry.fastMoveUnmatchedName).toBeNull();
+    expect(entry.chargedMoveUnmatchedName).toBe("Return");
   });
 
   it("defaults a BLANK move silently — a blank move is not reported as unmatched", () => {
     const entry = matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150", "Quick Move": "", "Charge Move": "" });
     expect(entry.movesetIsDefaulted).toBe(true);
     expect(entry.unmatchedMoveNames).toEqual([]);
+    // Both slots defaulted, and both because the source row was genuinely
+    // blank — neither carries an unmatched name.
+    expect(entry.fastMoveIsDefaulted).toBe(true);
+    expect(entry.chargedMoveIsDefaulted).toBe(true);
+    expect(entry.fastMoveUnmatchedName).toBeNull();
+    expect(entry.chargedMoveUnmatchedName).toBeNull();
+  });
+
+  it("flags only the FAST move as defaulted (blank) when the charged move resolves normally — the mirror image of the Raticate case above", () => {
+    // "Body Slam" is this registry's OWN charged move name (see the shared
+    // `species()` fixture helper above) — must resolve, not default, or this
+    // test would accidentally exercise the "both defaulted" path instead.
+    const entry = matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150", "Quick Move": "", "Charge Move": "Body Slam" });
+    expect(entry.movesetIsDefaulted).toBe(true);
+    expect(entry.fastMoveIsDefaulted).toBe(true);
+    expect(entry.chargedMoveIsDefaulted).toBe(false);
+    expect(entry.fastMoveUnmatchedName).toBeNull();
+    expect(entry.chargedMoveUnmatchedName).toBeNull();
   });
 
   it("records Charge Move 2 without ever resolving it to a move id (the engine only simulates one charged move)", () => {

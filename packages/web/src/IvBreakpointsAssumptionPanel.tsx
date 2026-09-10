@@ -1,6 +1,7 @@
 import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
-import { MoveSelect } from "./MoveSelect.js";
+import { NumberField } from "./NumberField.js";
+import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -33,8 +34,15 @@ export function IvBreakpointsAssumptionPanel({
   species,
   boss,
 }: Props) {
+  // Type-effectiveness opponents for the move pickers below (display-only —
+  // see MoveSelect.tsx's own `opponents` prop doc comment). Both IV spreads
+  // share one species/moveset, so there is exactly one attacker and one
+  // target here — never a per-candidate letter/number tag to juggle.
+  const bossOpponent: MoveSelectOpponent[] = boss ? [{ label: "Boss", types: boss.types }] : [];
+  const attackerOpponent: MoveSelectOpponent[] = species ? [{ label: "Attacker", types: species.types }] : [];
+
   return (
-    <CollapsibleSection id="iv-breakpoints-assumptions" heading="Assumptions" defaultOpen>
+    <CollapsibleSection id="iv-breakpoints-assumptions" heading="Assumptions" defaultOpen={false}>
       <div className="assumption-grid">
         <div>
           <SpeciesPicker
@@ -58,6 +66,7 @@ export function IvBreakpointsAssumptionPanel({
                 kind="fast"
                 value={assumptions.fastMoveId}
                 onChange={(id) => setAssumptions({ ...assumptions, fastMoveId: id })}
+                opponents={bossOpponent}
               />
               <MoveSelect
                 idPrefix="iv-breakpoints-charged"
@@ -66,6 +75,7 @@ export function IvBreakpointsAssumptionPanel({
                 kind="charged"
                 value={assumptions.chargedMoveId}
                 onChange={(id) => setAssumptions({ ...assumptions, chargedMoveId: id })}
+                opponents={bossOpponent}
               />
               {(() => {
                 const shadowState = shadowToggleUiState(species);
@@ -98,38 +108,35 @@ export function IvBreakpointsAssumptionPanel({
           <div className="iv-row">
             <div className="field">
               <label htmlFor="iv-breakpoints-a-attack">Attack IV</label>
-              <input
+              <NumberField
                 id="iv-breakpoints-a-attack"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={assumptions.ivA.attack}
-                onChange={(e) => setAssumptions({ ...assumptions, ivA: { ...assumptions.ivA, attack: Number(e.target.value) } })}
+                onChange={(v) => setAssumptions({ ...assumptions, ivA: { ...assumptions.ivA, attack: v ?? 0 } })}
               />
             </div>
             <div className="field">
               <label htmlFor="iv-breakpoints-a-defense">Defense IV</label>
-              <input
+              <NumberField
                 id="iv-breakpoints-a-defense"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={assumptions.ivA.defense}
-                onChange={(e) => setAssumptions({ ...assumptions, ivA: { ...assumptions.ivA, defense: Number(e.target.value) } })}
+                onChange={(v) => setAssumptions({ ...assumptions, ivA: { ...assumptions.ivA, defense: v ?? 0 } })}
               />
             </div>
             <div className="field">
               <label htmlFor="iv-breakpoints-a-stamina">Stamina IV</label>
-              <input
+              <NumberField
                 id="iv-breakpoints-a-stamina"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={assumptions.ivA.stamina}
-                onChange={(e) => setAssumptions({ ...assumptions, ivA: { ...assumptions.ivA, stamina: Number(e.target.value) } })}
+                onChange={(v) => setAssumptions({ ...assumptions, ivA: { ...assumptions.ivA, stamina: v ?? 0 } })}
               />
             </div>
           </div>
@@ -140,38 +147,35 @@ export function IvBreakpointsAssumptionPanel({
           <div className="iv-row">
             <div className="field">
               <label htmlFor="iv-breakpoints-b-attack">Attack IV</label>
-              <input
+              <NumberField
                 id="iv-breakpoints-b-attack"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={assumptions.ivB.attack}
-                onChange={(e) => setAssumptions({ ...assumptions, ivB: { ...assumptions.ivB, attack: Number(e.target.value) } })}
+                onChange={(v) => setAssumptions({ ...assumptions, ivB: { ...assumptions.ivB, attack: v ?? 0 } })}
               />
             </div>
             <div className="field">
               <label htmlFor="iv-breakpoints-b-defense">Defense IV</label>
-              <input
+              <NumberField
                 id="iv-breakpoints-b-defense"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={assumptions.ivB.defense}
-                onChange={(e) => setAssumptions({ ...assumptions, ivB: { ...assumptions.ivB, defense: Number(e.target.value) } })}
+                onChange={(v) => setAssumptions({ ...assumptions, ivB: { ...assumptions.ivB, defense: v ?? 0 } })}
               />
             </div>
             <div className="field">
               <label htmlFor="iv-breakpoints-b-stamina">Stamina IV</label>
-              <input
+              <NumberField
                 id="iv-breakpoints-b-stamina"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={assumptions.ivB.stamina}
-                onChange={(e) => setAssumptions({ ...assumptions, ivB: { ...assumptions.ivB, stamina: Number(e.target.value) } })}
+                onChange={(v) => setAssumptions({ ...assumptions, ivB: { ...assumptions.ivB, stamina: v ?? 0 } })}
               />
             </div>
           </div>
@@ -193,6 +197,7 @@ export function IvBreakpointsAssumptionPanel({
               kind="fast"
               value={assumptions.bossFastMoveId}
               onChange={(id) => setAssumptions({ ...assumptions, bossFastMoveId: id })}
+              opponents={attackerOpponent}
             />
           )}
         </div>
@@ -219,15 +224,14 @@ export function IvBreakpointsAssumptionPanel({
         {assumptions.dodge.kind === "percentage-missed" && (
           <div className="field">
             <label htmlFor="iv-breakpoints-missedFraction">Fraction of hits NOT dodged</label>
-            <input
+            <NumberField
               id="iv-breakpoints-missedFraction"
-              type="number"
               min={0}
               max={1}
               step={0.05}
               value={assumptions.dodge.missedFraction}
-              onChange={(e) =>
-                setAssumptions({ ...assumptions, dodge: { kind: "percentage-missed", missedFraction: Number(e.target.value) } })
+              onChange={(v) =>
+                setAssumptions({ ...assumptions, dodge: { kind: "percentage-missed", missedFraction: v ?? 0 } })
               }
             />
           </div>

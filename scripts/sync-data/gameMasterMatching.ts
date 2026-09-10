@@ -232,6 +232,26 @@ export function pokemonClassToRarity(pokemonClass: string | undefined): PokemonR
 }
 
 /**
+ * Splits `value` on any run of underscores and title-cases each resulting
+ * word (e.g. "PSYCHO_CUT" -> "Psycho Cut", "Crowned_sword" -> "Crowned
+ * Sword", "west_sea" -> "West Sea") — the shared word-transform behind BOTH
+ * displayNameForMovementId (movementIds, always ALL_CAPS input) and
+ * formDisplayName below (pogoapi/GAME_MASTER form suffixes, which arrive
+ * already-mixed-case, e.g. "Crowned_sword"), each layering its own
+ * field-specific handling on top (movementId's `_FAST` stripping) rather
+ * than duplicating this split-and-title-case logic a third time. Explicitly
+ * upper-cases each word's first character (not just relying on it already
+ * being upper-case), so both all-caps and mixed-case input converge on the
+ * identical correct output.
+ */
+function titleCaseUnderscoredWords(value: string): string {
+  return value
+    .split("_")
+    .map((word) => (word.length > 0 ? word[0]!.toUpperCase() + word.slice(1).toLowerCase() : word))
+    .join(" ");
+}
+
+/**
  * Converts a GAME_MASTER movementId (e.g. "PSYCHO_CUT_FAST") into the same
  * human-readable display name pogoapi.net's own move `name` field would give
  * it (e.g. "Psycho Cut") — GAME_MASTER's `moveSettings` table has no display
@@ -248,11 +268,56 @@ export function pokemonClassToRarity(pokemonClass: string | undefined): PokemonR
  */
 export function displayNameForMovementId(movementId: string, isFast: boolean): string {
   const trimmed = isFast && movementId.endsWith("_FAST") ? movementId.slice(0, -5) : movementId;
-  return trimmed
-    .split("_")
-    .map((word) => (word.length > 0 ? word[0] + word.slice(1).toLowerCase() : word))
+  return titleCaseUnderscoredWords(trimmed);
+}
+
+/**
+ * Cleans a pogoapi/GAME_MASTER form suffix (e.g. "Crowned_sword", "West_sea",
+ * "Paldea_aqua", "Fifty_percent") into the natural display text a species
+ * name composes it into ("Crowned Sword", "West Sea", "Paldea Aqua", "Fifty
+ * Percent") — 2026-09-10 fix for 21 species whose `SpeciesDefinition.name`
+ * carried a raw underscore straight through (e.g. "Zacian (Crowned_sword)").
+ * See titleCaseUnderscoredWords above for the shared transform.
+ *
+ * NEVER apply this to the raw `form` string used anywhere else in this
+ * pipeline — GAME_MASTER form-key matching (`${enum}_${form.toUpperCase()}`),
+ * pokemon_stats.json row lookups, and `fromGameMaster`'s own `speciesIdFor`
+ * (packages/engine/src/gamemaster.ts) all need the RAW underscored form
+ * verbatim; `speciesIdFor` in particular is what derives a species' `.id`,
+ * which must never change (ids are embedded in every shared scenario URL).
+ * This function exists ONLY to recompute a cleaned `.name` on a
+ * SpeciesDefinition `fromGameMaster` has already returned — see
+ * applyCleanFormDisplayName in sync-data.ts (the primary caller),
+ * qualifiedRosterName in ./pokebattlerRaids.ts, and the pogoapi-previous
+ * raidHistory backfill's own qualified-name construction in sync-data.ts —
+ * every place that independently reconstructs this project's "Name (Form)"
+ * display convention for a LOOKUP (not just a log message) needs this same
+ * cleanup or it silently stops matching the now-cleaned roster name.
+ */
+export function formDisplayName(rawForm: string): string {
+  return titleCaseUnderscoredWords(rawForm)
+    .split(" ")
+    .map((word, index) => (index > 0 && LOWERCASE_FORM_PARTICLES.has(word.toLowerCase()) ? word.toLowerCase() : word))
     .join(" ");
 }
+
+/**
+ * Words a real form name leaves lowercase when they aren't the first word —
+ * so Maushold's "FAMILY_OF_FOUR" reads "Family of Four", the way the game
+ * itself writes it, rather than the "Family Of Four" a naive per-word title
+ * case produces. Exactly one of the 21 forms this cleanup touches needs it
+ * today; the set is kept minimal and additive rather than importing a general
+ * English title-case rule, because every extra word here is a new chance to
+ * lowercase something that is genuinely part of a name.
+ *
+ * Deliberately applied ONLY in formDisplayName, never in
+ * titleCaseUnderscoredWords itself — that shared helper also backs
+ * displayNameForMovementId, whose output is validated to reconstruct
+ * pogoapi's exact move display names (308/317, zero mismatches). Moving this
+ * rule up into the shared helper would put that validation at risk to fix a
+ * cosmetic issue in a different namespace.
+ */
+const LOWERCASE_FORM_PARTICLES = new Set(["of"]);
 
 /**
  * The same reverse transform in the opposite direction: guesses the

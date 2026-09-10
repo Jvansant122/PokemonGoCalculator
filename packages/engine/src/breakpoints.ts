@@ -46,6 +46,26 @@ export function findFastMoveBreakpoints(params: {
    * megaLevel.ts's chargedMoveAtMegaLevel) has no meaning for a FAST move
    * (Super Max "+" moves are charged-move-only) and isn't this function's
    * concern regardless; the caller is always responsible for `power` itself.
+   *
+   * NOT GATED HERE, unlike comparison.ts/teamRaid.ts/ivComparison.ts/
+   * powerUp.ts — deliberately, and this is the one call site of the six
+   * named in this feature's own task brief that CANNOT centralize through
+   * comparison.ts's resolveCandidateMegaLevel: this whole module operates on
+   * raw stat primitives (`baseAttack` above, a plain number) and never
+   * receives a `SpeciesDefinition`/`chargedMoves` list at all, so it has
+   * nothing to call `.boost` OR megaLevel.ts's `canReachSuperMax` against —
+   * there is no species-shaped value in scope to gate on. This function
+   * already trusted the caller for the (pre-existing) `.boost` gate for
+   * exactly the same structural reason; the NEW Super Max eligibility gate
+   * (`canReachSuperMax`) is subject to the identical constraint, not a new
+   * one. The caller (this engine's own comparison.ts et al. for their own
+   * derived grids, or packages/web for a direct call) MUST resolve/clamp
+   * `megaLevel` — e.g. via comparison.ts's `resolveCandidateMegaLevel` — the
+   * same way it already has to decide whether to pass a non-null megaLevel
+   * at all for a species with no `.boost`. Passing `"super-max"` for a
+   * species that can't reach it will silently apply the +2-effective-level
+   * bonus anyway; that is the caller's bug to avoid, not this function's to
+   * catch.
    */
   megaLevel?: MegaLevel | null;
 }): FastMoveDamageBreakpoint[] {
@@ -230,6 +250,35 @@ export const DODGE_WINDOW_SECONDS = 0.7;
  * "free" in the sense that no resource is consumed.
  */
 export const DODGE_COST_SECONDS = 0.5;
+
+/**
+ * Whether a fast move's own cadence recycles at or faster than
+ * DODGE_COST_SECONDS — i.e. whether an attacker trying to dodge EVERY
+ * instance of this move is structurally unable to ever catch back up to its
+ * own attack schedule. Each dodge attempt pushes the attacker's own next
+ * fast-move eligibility later by DODGE_COST_SECONDS (see simulate.ts); if
+ * the move that's being dodged fires at least that often, that push arrives
+ * at least as fast as real time elapses, so the attacker's own scheduled
+ * fire time can never arrive on its own — only something that stops
+ * attempting dodges for a stretch of real time (the attacker's own
+ * charged-move cast, which doesn't dodge while it's playing out) can ever
+ * close the gap. This is pure config-level arithmetic — no RNG, HP, or
+ * defense stat involved — so a caller (e.g. the web UI) can call this
+ * directly, before running any simulation, against a boss's selected fast
+ * move and the dodgeFastAttacks toggle, to warn that this pairing wastes
+ * the attacker's timeline instead of rendering a mysterious near-zero
+ * result. See simulate.ts's StepwiseRunResult.dodgeFastAttacksLockout for
+ * the same fact surfaced on an actual run.
+ *
+ * `<=`, not `<`: at EXACT equality the push exactly matches the elapsed
+ * time between hits, which is still a permanent tie (the gap never closes),
+ * not a near-miss — verified against simulateStepwiseBattle directly using
+ * Bite's real 500ms duration (see simulate.test.ts's "dodgeFastAttacksLockout"
+ * describe block).
+ */
+export function fastMoveCadenceTooFastToDodge(fastMoveDurationSeconds: number): boolean {
+  return fastMoveDurationSeconds <= DODGE_COST_SECONDS;
+}
 
 /**
  * Governs how well the attacker dodges the boss's CHARGED attacks

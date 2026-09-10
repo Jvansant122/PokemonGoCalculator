@@ -170,13 +170,28 @@ ladder from `CPM_TABLE`'s keys.**
 
 ### Mega Level: Base / High / Max / Super Max
 
-A **per-species** ladder (not per-individual, not account-wide) raised by
-repeatedly Mega Evolving the same species, max once per day. Introduced
-2022-04-28; the fourth tier, **Super Max**, launched at GO Tour: Kalos
-(2026-02-28) and costs 5,000 of that species' own Mega Energy on top of Max.
-`[community-consensus]` Bulbapedia "Mega Evolution (GO)" as raw wikitext,
-fetched 2026-09-08; `[first-party]` pokemongo.com/news/mega-evolution-2026-update
-for Super Max's existence and benefits.
+A **per-individual-Pokémon** ladder raised by repeatedly Mega Evolving that
+specific Pokémon, max once per day. Introduced 2022-04-28; the fourth tier,
+**Super Max**, launched at GO Tour: Kalos (2026-02-28) and costs 5,000 of that
+species' own Mega Energy on top of Max. `[first-party]`
+pokemongo.com/news/mega-evolution-2026-update for Super Max's existence and
+benefits.
+
+⚠️ **CORRECTED 2026-09-10 — this entry previously said "per-species (not
+per-individual)", and that was wrong.** The claim came from a reading of
+Bulbapedia "Mega Evolution (GO)" (raw wikitext, fetched 2026-09-08). The user
+corrected it directly from their own account: **two Pokémon of the same species
+legitimately sit at different Mega Levels.** That is a first-hand observation of
+account state, which outranks a wiki paraphrase — treat it as settled and do not
+"restore" the per-species reading from Bulbapedia on a future pass without new
+first-party evidence, because that page has now misled this project once.
+
+The correction has teeth, because the two readings imply different products.
+Per-species would mean two roster slots holding the same species could not
+legitimately differ, and the Team Raid Simulator / Power-Up Optimizer letting
+them differ would be a bug to close. Per-individual means that is **correct
+behaviour and must be preserved** — a trainer can own a heavily-Mega-Evolved
+Charizard and a fresh one, field both, and this tool has to be able to say so.
 
 **For most of its life this system touched nothing combat-relevant** — only
 Mega Energy cost on repeats (80% / 90% / 95% reduction) and the rest period
@@ -203,6 +218,35 @@ Mega Energy cost on repeats (80% / 90% / 95% reduction) and the rest period
    "regardless of their current Mega Level" — so the tier sets its power, not
    its availability.
 
+3. **Super Max is only reachable by a mega that has a "+" move.** `[unverified]`
+   — stated by the user (a high-investment player relaying their own account
+   state) on 2026-09-09: *"not every mega can get to super mega level its only
+   the ones with plus moves unlocked."* No published source states this either
+   way, so it is recorded at user-report tier; it is nonetheless the only claim
+   anyone has made about Super Max eligibility, and it is self-consistent with
+   Niantic having shipped Super Max and the "+" moves as one feature. The
+   practical consequence is that item 1's +2 effective levels must **not** be
+   grantable to the ~46 megas with no "+" move — before 2026-09-10 the engine
+   handed that CP bump to any mega whose scenario asked for Super Max.
+
+**The in-game client displays a "+" move's damage, and it moves with Mega
+Level.** `[user-report]`, 2026-09-09 — the user's group owns Mewtwo at what
+they call **"lvl 3"**, and reports the move display "shows a number next to the
+move." ⚠️ **Do not map "lvl 3" onto one of this file's four named tiers.** The
+client's own numeric labelling has never been confirmed against Base / High /
+Max / Super Max, and a source cited elsewhere in this section calls Super Max
+"Mega Level 4" — which would make "lvl 3" our `"max"`, not `"super-max"`. That
+inference is plausible and unverified; an earlier draft of this very entry
+asserted it as fact and had to be corrected. Leave it open.
+
+The observation settles the weaker of the two questions in item 2: the scaling is real,
+per-tier, and surfaced by the game itself, so it is not a community invention.
+It does **not** settle the `+10%` magnitude. It does, however, describe a
+**directly checkable** experiment that would retire the estimate outright: one
+reading of (move name, Mega Level, displayed damage) for a known "+" move pins
+the real multiplier. Nobody has yet supplied one — ask for it before trusting
+the curve any further.
+
 **The 1.3x mega/primal team-wide damage boost is UNCHANGED at every tier,
 including Super Max.** Reconfirmed across three independent research rounds
 (2026-09-08, and twice on 2026-09-09); no source has ever described Mega
@@ -222,7 +266,18 @@ per-slot elsewhere, round-tripped through all six tabs' share links.
 cross-references the team boost as the documented coincidence above);
 `SUPER_MAX_EFFECTIVE_LEVEL_BONUS = 2` applies the effective-level step via
 `effectiveLevelForMegaLevel`; `chargedMoveAtMegaLevel` scales a "+" move's
-power and is an exact no-op for every ordinary move. Mega Energy cost and
+power and is an exact no-op for every ordinary move. **Eligibility (added
+2026-09-10):** `canReachSuperMax(species)` returns true only when the species
+carries a move with `isPlusMove`, and `comparison.ts`'s
+`resolveCandidateMegaLevel` — the one gate every orchestration path routes
+through — **clamps** a `"super-max"` request down to `"max"` for anything
+else. Before that clamp existed, asking for Super Max on any of the ~46
+megas with no "+" move silently granted them the +2 effective levels, which
+is why an old share link doing exactly that now computes a lower (correct)
+number. The clamp is deliberately a clamp, not a throw, so a stale link
+degrades instead of erroring. `breakpoints.ts` is the one module it can't
+reach — its functions take raw stat numbers, never a species — so its
+callers pre-resolve. Mega Energy cost and
 cooldown are **not modelled at all** — a per-species currency this engine has
 no concept of, and irrelevant to a single fight's math.
 
@@ -734,6 +789,60 @@ A later (2024-12-16) Hub article on dodging still says "damage window"; that
 reads as informal shorthand for "the moment damage lands," not a claim the
 literal timers are back. Noted so the phrase does not reopen this.
 
+### A boss fast move at ≤0.5s cannot be fast-dodged at all — and that is arithmetic, not a bug
+
+Diagnosed 2026-09-10 (`engine-developer`) after two separate UI agents reported a
+"fast-attack lockout". The conclusion is that the engine is right and was merely
+illegible: with `dodgeFastAttacks` on, an attacker facing a boss whose fast move
+recycles at **0.5s or faster** does **literally zero** damage, forever, and that
+is the correct answer.
+
+**Why.** `DODGE_COST_SECONDS` is `0.5`, and `simulate.ts` pushes the attacker's
+next fast-move eligibility back by that amount **once per dodged boss fast hit**,
+unconditionally. If the boss's own fast move has period `P ≤ 0.5s`, the push
+arrives at least as fast as real time elapses, so the attacker's eligibility can
+never catch up. A provable livelock, confirmed empirically at exactly `P = 0.5`
+against real Mega Tyranitar and real **Bite** (`durationMs: 500` — sitting
+exactly on the boundary): `totalFastMoveDamage: 0`, `chargedAttacksLanded: 0`.
+No off-by-one and no tick-quantisation artefact — `DODGE_COST_SECONDS` is itself
+tick-aligned.
+
+This is consistent with the already-recorded first-party `dodgeDurationMs: 500`
+above, and it is the engine's expression of something the user said long before
+the engine could show it:
+
+> *"I can technically calculate dodges into the math but lord save me if you have
+> to dodge every fast attack from kyogre just choose a different mega"*
+
+**A second-order finding, verified rather than assumed.** The only escape route
+is the attacker's own charged-move cast, since dodging is never attempted
+mid-own-animation, so real time can close the gap during a cast. But "true zero
+forever" does **not** require chip energy to fail to accumulate. It is reachable
+even when energy accrues fine: reaching the charged move's cost on chip damage
+alone means the attacker has already spent most of its HP getting there, leaving
+too little margin to survive a full-damage boss hit landing mid-cast (mid-animation
+hits are never dodge-reduced, by separate pre-existing design). The cast is
+interrupted before it completes.
+
+**Not the same as** the `holdChargedMoveUntilSafe` open question recorded below —
+that concerns dodging timed around a *held* cast. This is `dodgeFastAttacks`
+against the boss's own fast-move cadence. Adjacent, unrelated.
+
+**Engine: detected and reported, deliberately NOT "fixed."** Changing the numbers
+would be inventing damage the model says isn't there. Instead the condition is
+now surfaced, following the existing `bossChargedMoveCadenceClamped` precedent
+("config hit a structural floor — flag it, never silently adjust"):
+
+- `fastMoveCadenceTooFastToDodge(fastMoveDurationSeconds)` in `breakpoints.ts` —
+  a pure predicate (`≤ DODGE_COST_SECONDS`) usable for a live warning on the
+  toggle itself, with no simulation run.
+- `dodgeFastAttacksLockout: boolean` on `StepwiseRunResult`, `DistributionSummary`,
+  `SustainedCandidateResult` (so it reaches the Comparator and Species Report for
+  free via an existing spread) and `TeamRaidSlotResult` (per slot).
+- Deliberately not wired into `rosterPlanner.ts` — that never calls the stepwise
+  simulator directly and its output is too many layers of aggregation removed from
+  a per-tick diagnostic.
+
 ### Unconfirmed: dodge damage may scale with remaining HP
 
 Silph Road observed a player surviving 8 dodged Paybacks where 4–5 was
@@ -802,7 +911,7 @@ server-side at the encounter. Two live instances as of 2026-09-09:
   confirmed verbatim on official pokemongo.com posts and re-verified
   adversarially 2026-09-09. None of these movementIds exist in GAME_MASTER at
   all, so no sync can pick them up. `[first-party]` for the mechanic; the
-  per-species powers are published unevenly, at four distinct tiers (all
+  per-species powers are published unevenly, at three distinct tiers (all
   figures are **raid**-context and all are **Base**-tier readings, confirmed by
   4 of 4 checkable anchors — not ceilings):
   - `[first-party]` **3**: Brave Bird+ 150, Dark Pulse+ 150, Fell Stinger+ 140
@@ -810,30 +919,286 @@ server-side at the encounter. Two live instances as of 2026-09-09:
     the one move with a published two-context split.
   - `[community-consensus]` **1**: Zap Cannon+ 160 — two independently-run
     community sites agreeing.
-  - `[unverified]` **6**: Seed Bomb+ 150, Volt Tackle+ 170, Drill Peck+ 170,
-    Outrage+ 185, Dynamic Punch+ 130, Future Sight+ 140 — each self-labelled a
-    community estimate by the site carrying it.
-  - **6 with no raid-power figure from any source**: Mystical Fire+, Surf+,
-    Brick Break+, Liquidation+, Acid Spray+, Psybeam+. PvP-context power and
-    energy DO exist for these (PvPoke's dataset), but PvP and raid values
-    demonstrably differ on the base moves underneath them — base Fell Stinger
-    is PvE 33 vs PvP 35, Seed Bomb PvE 33 vs PvP 40. **A PvP number is not a
-    raid number; do not substitute one.**
+  - `[unverified]` **11**: Seed Bomb+ 150, Volt Tackle+ 170, Drill Peck+ 170,
+    Outrage+ 185, Dynamic Punch+ 130, Future Sight+ 140, and — added
+    2026-09-10 — Acid Spray+ 160, Brick Break+ 150, Liquidation+ 180,
+    Mystical Fire+ 140, Psybeam+ 170, Surf+ 130. Each rests on a single site's
+    own dedicated page for that specific move (`db.pokemongohub.net`), which
+    is why they ship at this project's `community-estimate` confidence tier
+    rather than `cross-site`.
+
+  **RESOLVED 2026-09-10: the last 6 unknown powers.** Until this date the six
+  moves added above had **no raid-power figure from any source**, and were
+  deliberately excluded from `SUPER_MAX_PLUS_MOVES` rather than filled from
+  PvPoke's PvP dataset — PvP and raid values demonstrably differ on the base
+  moves underneath them (base Fell Stinger is PvE 33 vs PvP 35, Seed Bomb PvE
+  33 vs PvP 40). **That warning still stands in general: a PvP number is not a
+  raid number, do not substitute one.** It simply no longer applies here — the
+  user read all 15 rows off `db.pokemongohub.net`'s own raid-context move
+  pages on 2026-09-09 and supplied them directly, and the site states these
+  are the complete set, so absence from it is itself meaningful (Brave Bird+ /
+  Mega Staraptor is correctly absent, undebuted until 2026-09-19).
 
   **Raid energy cost: every "+" move costs 100, regardless of its base move.**
   `[community-consensus]` — `db.pokemongohub.net` per-move pages, fetched
   2026-09-09 (user-supplied lead), each stating verbatim "In Gym and Raid
   battles, it deals N damage and it costs 100 energy," with separate and
-  different PvP figures. Confirmed across all 8 modelled moves; the same pages
-  independently reproduce all 8 of our power values. Three earlier research
-  rounds recorded this as unpublished — that was a confident negative that
-  turned out to be wrong, so treat "nobody publishes X" as a statement about
-  search coverage, not about the world.
+  different PvP figures. Three earlier research rounds recorded this as
+  unpublished — that was a confident negative that turned out to be wrong, so
+  treat "nobody publishes X" as a statement about search coverage, not about
+  the world.
 
-  **Duration** is separately `[community-consensus]`: 11 of 11 community-
-  reported "+" durations match this project's own GAME_MASTER duration for the
-  corresponding base move exactly, and the same site's Animation Duration
-  agrees (Volt Tackle+ 3.5s = base `VOLT_TACKLE` 3500ms).
+  **Strengthened 2026-09-10 to 15 of 15.** The obvious worry about that source
+  was that a flat "100 energy" on every page is a template default rather than
+  real data. It is not. The 15 base moves underneath span **three** different
+  real energy costs in GAME_MASTER — 33 (Drill Peck, Volt Tackle, Fell
+  Stinger, Seed Bomb, Brick Break, Liquidation, Mystical Fire), 50 (Dark
+  Pulse, Outrage, Dynamic Punch, Acid Spray, Psybeam, Surf) and 100 (Zap
+  Cannon, Future Sight) — and all 15 "+" moves read 100 regardless. A template
+  default could not produce a uniform value that *contradicts* the underlying
+  data in 13 of 15 cases; a real uniform rule is the only reading left.
+
+  **Duration: 15 of 15, exact.** Independently re-checked 2026-09-10 against
+  the committed `data/raw/game_master.json`: every one of the user's 15
+  durations equals the base move's own `durationMs` to the millisecond,
+  including all 6 moves that had no power figure at the time the original
+  11-of-11 check was run. This is now the best-evidenced assumption in the
+  whole "+" move model.
+
+### RESOLVED: Form-change `moveReassignment` grants moves that appear in no movepool array
+
+`[first-party]`, from the GAME_MASTER dump itself, established 2026-09-10 after
+the user reported four "missing" signature moves (Behemoth Blade, Behemoth Bash,
+Moongeist Beam, Gigaton Hammer).
+
+This is the **opposite** shape to the entry above, and the two are easy to
+confuse. There, the move template exists and no species template grants it —
+nothing a sync can do. Here the grant **is** in GAME_MASTER, just not in the
+field every sync reads. A form's own `pokemonSettings.quickMoves` /
+`cinematicMoves` / `eliteCinematicMove` can omit a move it really has, because
+the grant is recorded on `pokemonSettings.formChange[].moveReassignment`
+instead — a *transition* table describing what happens to a moveset when the
+Pokémon changes form.
+
+Each `moveReassignment.cinematicMoves[]` entry sits on a **declaring** form and
+names a **target** form (`formChange[].availableForm`). Its two arrays are
+ownership claims about two different forms:
+
+- `existingMoves` — moves the **declaring** form holds, that get replaced on
+  transition.
+- `replacementMoves` — moves the **target** form holds after the transition.
+
+The whole dump carries only 18 such entries, covering six forms. Zacian and
+Zamazenta declare theirs from **both** directions (Hero→Crowned lists the move
+as a `replacementMove`; Crowned→Hero lists the same move as an `existingMove`),
+which independently confirms the reading above; the fusion cases are one-way, so
+`replacementMoves` → target is the operative direction.
+
+| Form | Move it really has | How it is declared |
+| :--- | :--- | :--- |
+| Zacian (Crowned Sword) | `BEHEMOTH_BLADE` | both directions |
+| Zamazenta (Crowned Shield) | `BEHEMOTH_BASH` | both directions |
+| Necrozma (Dawn Wings) | `MOONGEIST_BEAM` | `replacementMoves`, FUSE from Necrozma |
+| Necrozma (Dusk Mane) | `SUNSTEEL_STRIKE` | `replacementMoves`, FUSE from Necrozma |
+| Kyurem (Black) | `FREEZE_SHOCK` | `replacementMoves`, FUSE from Kyurem |
+| Kyurem (White) | `ICE_BURN` | `replacementMoves`, FUSE from Kyurem |
+
+In every case the move's own `V####_MOVE_*` template is present and complete —
+only the *assignment* was being missed, so this costs nothing but a read of one
+more field.
+
+Kyurem Black/White are the reason this matters beyond tidiness: Kyurem is a real
+recommendation the Power-Up Optimizer has surfaced on the user's own roster, and
+it was being simulated without the signature move it actually has.
+
+**Not** an instance of this shape: **Gigaton Hammer**, which the user cited as
+Tinkatuff's. It is Tinkaton's, sits in Tinkaton's ordinary `cinematicMoves`, and
+already syncs correctly. Tinkatuff (the middle stage) does not learn it in
+Pokémon GO, and its absence there is correct.
+
+**Engine: not modelled, and it doesn't need to be** — this was always a
+data-layer gap, not an engine one; the engine has always correctly consumed
+whatever `chargedMoves` the sync produces.
+
+**Data layer: fixed 2026-09-10.** `fetchGameMasterData` (`scripts/sync-data/
+fetchCache.ts`) now keeps each pokemonSettings template's `formChange`
+entries (filtered to move-bearing ones only — see
+`GameMasterFormChangeEntryRecord` in `rawShapes.ts`) instead of discarding
+the field at fetch time. A new pure module, `scripts/sync-data/
+formChangeMoveGrants.ts` (`resolveFormChangeMoveGrants`), resolves both
+directions and unions the result onto the correct form's `cinematicMoves`/
+`quickMoves`, de-duplicated (unit-tested: both directions, the absent-
+`existingMoves` fusion case, de-duplication across up to 5 independent
+asserting entries, the elite-array self-grant no-op, skip-and-report for an
+unresolvable move or target form). All six moves confirmed present in
+`data/normalized/species.json` after a live re-sync the same day; two are
+pinned at value level in `scripts/sync-data/test/normalizedGolden.test.ts`
+(Kyurem Black's Freeze Shock, Zacian Crowned Sword's Behemoth Blade — the
+latter also serving as the id-stability sentinel for the companion
+display-name fix below).
+
+### Changing a move: the four TM items, and what each can't touch
+
+Researched 2026-09-10 (`pogo-researcher`) to price move changes as Power-Up
+Optimizer candidates. Nothing about *how TMs work* was recorded here before —
+the "Second charged move unlock" entry below covers only that unlock's cost.
+
+**Exactly four items exist**, no others: **Fast TM**, **Charged TM**, **Elite
+Fast TM**, **Elite Charged TM**. `[community-consensus]` Bulbapedia, one page
+each, corroborated across every guide checked.
+
+| | outcome | legacy/event moves | scarcity |
+| :--- | :--- | :--- | :--- |
+| Fast / Charged TM | **random**, always a *different* move | can never be **learned** this way | plentiful — raids, GBL sets, research |
+| Elite Fast / Charged TM | **player picks** | can be learned | genuinely single-digit for most players |
+
+Bulbapedia, verbatim: a regular TM *"changes its Fast/Charged Attack to a
+random, **different** move in the Pokémon's current move pool"*, and
+*"Legacy and event-exclusive moves … cannot be learned this way."*
+`[community-consensus]`
+
+Two consequences the wording makes easy to miss:
+
+- A regular TM is **never a wasted no-op** — the result is guaranteed different
+  from what you had.
+- The exclusion is about *learning*, not *holding*. A Pokémon that currently
+  holds a legacy move and gets regular-TM'd **loses it**, and no regular TM can
+  give it back. Only an Elite TM can. `[inference from the two quoted rules —
+  not separately stated by any source, but it follows directly.]`
+
+**Elite TM scarcity is structural, not incidental.** Both free routes demand
+heavy PvP: GO Battle League Season 28's seasonal research grants one at 400
+wins and one at 500 wins, and ladder Rank 19 guarantees one of each per season.
+Otherwise they appear in ~1,280-coin Community Day boxes, rare Route rewards,
+and occasional compensation grants. `[community-consensus]`, checked against
+the live season 2026-09-08. A roster owner realistically holds 0-3.
+
+**On a Pokémon with two charged moves**, the player first chooses *which* slot
+the TM rerolls, then it behaves normally. Bulbapedia, verbatim: *"If it has
+multiple Charged Attacks, the player chooses which move to replace upon using
+the item."* Fast moves never have this ambiguity — there is always exactly one
+fast slot. `[community-consensus]`
+
+**No TM of any kind can touch these:**
+
+- **Frustration / Return** — see the next entry.
+- **Signature moves**: Behemoth Bash, Behemoth Blade, Dynamax Cannon, Secret
+  Sword. Structurally the same "granted, never TM'd" category as the
+  `formChange` grants recorded above — Behemoth Blade/Bash reach this project
+  *through* that mechanism, so the two entries agree.
+- **Smeargle** — moveset fixed at catch, un-TM-able entirely.
+- **Super Max "+" moves** — additive, granted by Mega Evolving, never members of
+  any `cinematicMoves` pool, so never a TM target in either direction.
+
+**No cost, cooldown, or per-day limit** on applying a TM you already own —
+instant and repeatable. `[community-consensus by absence of contrary evidence
+across several exhaustive pages.]`
+
+⚠️ **The randomness distribution is NOT confirmed uniform.** "Uniform over the
+pool minus the current move" is the standard assumption every community
+calculator uses and the only practical one to build against, but Niantic has
+never stated it and community suspicion is real rather than noise (a GamePress
+Q&A titled "Are Charged TMs Truly Random?" existed; that whole domain is now
+dead — see the source catalog). Any expected-value number built on it inherits
+that uncertainty and **must be labelled an assumption on screen**, not
+presented as fact.
+
+**Engine: not modelled.** No TM item, inventory, or move-change action exists
+anywhere in `packages/engine` or the Power-Up Optimizer today.
+
+### Frustration is event-gated; purification is not
+
+`[first-party]` for the move numbers, straight from `data/raw/game_master.json`:
+**Frustration** is power 10 / energyDelta -33 / 2000 ms; **Return** is power 25
+/ energyDelta -33 / **500 ms**. Same energy, 2.5× the power, a quarter of the
+time exposed — Frustration is the weakest charged move in the game by design.
+
+Every Shadow Pokémon knows Frustration, and **neither a regular nor an Elite
+Charged TM can remove it except during a branded "Taken Over" event**. Confirmed
+against a real dated event page (`pokemongohub.net`, "Steeled Resolve: Taken
+Over", 2026-04-30 to 2026-05-04): *"You can use a Charged TM to help a Shadow
+Pokémon forget the Charged Attack Frustration."* Roughly six such events across
+2025-2026 — call it quarterly: worth planning around, not "basically never."
+During the window both TM types work normally; the event's only effect is making
+Frustration an eligible reroll target. Once removed, it can never be relearned.
+`[community-consensus]`
+
+**Purification is the always-available alternative** and needs no event: it
+replaces Frustration with Return in the first charged slot automatically, and
+does not touch the fast move. `[community-consensus]` Bulbapedia, verbatim:
+*"Learn Return, replacing the Charged Attack in the first slot."*
+
+Stated plainly because it is easy to assume otherwise: **Purified gets no TM
+discount, because TMs cost no stardust or candy for anyone.** The ×0.8 Purified
+rate flagged in the second-charged-move entry applies to that unlock and to
+power-ups — never to TM application, which is free once the item is owned,
+regardless of Shadow/Purified/Lucky.
+
+**Engine: not modelled**, and consequential — a Shadow attacker in an imported
+roster is simulated on whatever charged move resolved, with no notion that it
+may be stuck on a power-10 move for most of the year.
+
+### A blank move column means "not captured", never "has no move"
+
+Established 2026-09-10 by two independent passes (`pogo-researcher`,
+`pogo-player`) after a feature spec proposed treating a Poke Genie row with no
+move data as a Pokémon *needing a TM for both slots*. Recorded because the
+premise is wrong in a way that would have silently mispriced roughly half a real
+roster.
+
+**The game fact, which needs no source:** every Pokémon in a player's storage
+has exactly one fast move and one or two charged moves **at all times** — moves
+are assigned on capture, hatch, evolution and trade, and no state exists in which
+a Pokémon holds none. So a blank cell in an export can only ever mean *the export
+did not capture that field.* It can never mean the Pokémon lacks a move.
+
+`[speculative]` as to why it happens so often: Poke Genie's Batch Scan reads the
+storage **list** view, which does not show per-Pokémon moves, unlike the
+individual detail screen. Unconfirmed, and not needed for the conclusion.
+
+**Empirically it does not correlate with "untouched", either.** On the committed
+`packages/web/src/import/test/pokeGenieSample.csv` (23 rows): 12 rows have both
+moves, 2 fast only, 1 charged only, and **8 have neither**. Most of the 8 are
+level-1-to-13 mules — but two are not: a kept Rayquaza at 82.2% IV, and a kept
+Hisuian Sneasel. Blank hits invested Pokémon.
+
+**There is a third state, and `movesetIsDefaulted` currently hides it.**
+`packages/web/src/import/pokeGenieMatch.ts` computes
+`movesetIsDefaulted = fast.id === null || charged.id === null`, which conflates:
+
+1. a genuinely blank cell (`unmatchedMoveNames` empty), and
+2. a move name that *was* recorded but did not match this project's own move data
+   (`unmatchedMoveNames` non-empty) — a staleness problem on our side, not a
+   missing moveset. Live example in that same sample: a Raticate (Alola) row
+   recording **"Return"**.
+
+**Engine: the fallback is implemented, the distinction is not.** Both cases fall
+back to `species.fastMoves[0]` / `chargedMoves[0]` identically. The correct third
+state is **"moveset unknown — verify in game"**, kept structurally separate from
+"known and suboptimal": recommending a TM (let alone a single-digit-supply Elite
+TM) against a moveset the tool never observed spends a real item to fix something
+that may not be broken.
+
+### A Mega form has no movepool of its own
+
+`[first-party]`, read directly out of `data/raw/game_master.json` for two
+species. `tempEvoOverrides` carries only stats, type overrides and Mega Energy
+costs — never its own `quickMoves` / `cinematicMoves` / elite arrays:
+
+```
+"pokemonId": "BLAZIKEN", "quickMoves": [...], "cinematicMoves": [...],
+"tempEvoOverrides": [{ "tempEvoId": "TEMP_EVOLUTION_MEGA", "baseAttack": 329, ... }]
+```
+
+A Mega/Primal is a temporary transformation flag on the same underlying
+Pokémon, not a second stored entity. **A TM on the base form is a TM on the
+Mega form** — there is no separate "which form holds which move" question, and
+nothing to reconcile between this project's separate mega species entries and
+their bases. The Super Max "+" moves are not a counter-example: they are
+additive and granted at Mega Evolution, never stored in a movepool array.
+
+**Engine: consistent by construction** — mega species are built from the base
+species' resolved moves plus any attached "+" move, so this already holds.
 
 ### RESOLVED: a DPE sanity check caught a wrong "+" move energy assumption
 

@@ -1,7 +1,9 @@
+import { MAX_POKEMON_POWER_UP_LEVEL } from "@pogo-analyzer/engine";
 import type { DodgeBehavior, MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { NumberField } from "./NumberField.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
-import { MoveSelect } from "./MoveSelect.js";
+import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
@@ -106,6 +108,30 @@ export interface Assumptions {
    * pre-existing implicit behavior.
    */
   weather: WeatherCondition;
+  /**
+   * Gates visibility of the dodge group (`dodge`, `dodgeFastAttacks`, and
+   * both candidates' `candidateDodge`/`candidateDodgeFastAttacks`
+   * overrides), `holdChargedMoveUntilSafe`, `minFightLengthSeconds`
+   * ("extend simulated window"), and `bossChargedMoveFrequencySeconds` in
+   * the assumption panel — `false` (the default for a fresh scenario) hides
+   * them behind their current stored values (usually the documented
+   * defaults) so a first-time user isn't confronted with a wall of
+   * dodge/timing knobs; `true` reveals them for direct editing. This is
+   * purely a DISPLAY gate — every one of those fields still exists and
+   * still drives the simulation regardless of this flag. The one exception
+   * is `bossChargedMoveFrequencySeconds` itself: while this is `false`, the
+   * run module derives an effective value from the selected boss's own
+   * fast-move charge time instead of reading the stored field verbatim (see
+   * run/runComparator.ts's `effectiveBossChargedMoveFrequencySeconds`,
+   * which shares its derivation with run/runTeamRaid.ts's identical field
+   * via run/effectiveBossChargedMoveFrequency.ts) — pending further
+   * research, this is a placeholder approximation, not a modeled mechanic.
+   * Mirrors `TeamAssumptions.showDetailedAssumptions` exactly, including the
+   * one asymmetry that matters: an ABSENT value on decode resolves to
+   * `true` here (never `false`, this field's own DEFAULT_ASSUMPTIONS value)
+   * — see ComparatorView's `scenarioToAssumptions` for why.
+   */
+  showDetailedAssumptions: boolean;
 }
 
 interface Props {
@@ -128,6 +154,16 @@ interface Props {
   energyBuffers: { name: string; buffer: number }[];
   /** Auto-computed natural minimum for the chart window (before any minFightLengthSeconds override) — shown so the user knows what they're extending past. */
   naturalFightLengthSeconds: number | null;
+  /**
+   * The boss charged-move mean frequency actually driving THIS run — either
+   * the stored value (showDetailedAssumptions true) or the derived one
+   * (false), computed by runComparatorScenario. Used both for the "Simple
+   * assumptions in force" summary line and to seed
+   * bossChargedMoveFrequencySeconds when the user checks "More detailed
+   * assumptions" on, so flipping that checkbox doesn't itself change any
+   * result. Mirrors TeamAssumptionPanel's own prop of the same name.
+   */
+  effectiveBossChargedMoveFrequencySeconds: number;
 }
 
 /**
@@ -145,17 +181,52 @@ function hasActiveBoost(species: SpeciesDefinition | null, disabled: boolean): b
   return !!species?.boost && !disabled;
 }
 
-/** DodgeBehavior["kind"], plus the extra "same" sentinel this control's <select> needs for "use the shared setting" (null on the underlying value). */
-type CandidateDodgeSelectValue = "same" | DodgeBehavior["kind"];
+/** Human-readable label for the "Simple assumptions in force" summary and other plain-text renderings of a DodgeBehavior's kind. */
+function dodgeKindLabel(kind: DodgeBehavior["kind"]): string {
+  switch (kind) {
+    case "none":
+      return "None";
+    case "perfect":
+      return "Perfect";
+    case "percentage-missed":
+      return "Percentage missed";
+  }
+}
+
+/**
+ * Pure, testable core of the per-candidate dodge-override checkbox
+ * (CandidateDodgeOverride below) — exported so packages/web's own vitest
+ * suite can assert the seed/clear behavior directly, without rendering.
+ * Checking the box seeds BOTH override fields from whatever the SHARED
+ * dodge/dodgeFastAttacks settings currently are, so ticking it on never
+ * itself changes a result — only unlocks per-candidate editing (same "seed
+ * on check" convention as TeamAssumptionPanel's showDetailedAssumptions
+ * checkbox). Unchecking always returns BOTH fields to `null` together — an
+ * override is all-or-nothing per candidate, never a stale half-set pair.
+ */
+export function setCandidateDodgeOverriding(value: Assumptions, index: 0 | 1, checked: boolean): Assumptions {
+  const candidateDodge: [DodgeBehavior | null, DodgeBehavior | null] = [...value.candidateDodge];
+  const candidateDodgeFastAttacks: [boolean | null, boolean | null] = [...value.candidateDodgeFastAttacks];
+  candidateDodge[index] = checked ? value.dodge : null;
+  candidateDodgeFastAttacks[index] = checked ? value.dodgeFastAttacks : null;
+  return { ...value, candidateDodge, candidateDodgeFastAttacks };
+}
 
 /**
  * Per-candidate override for the shared "Dodge boss's charged attacks" /
  * "Also dodge boss's fast attacks?" controls further down this panel — one
  * instance rendered under each candidate's move pickers (index 0 = A,
- * index 1 = B). `null` in Assumptions.candidateDodge/candidateDodgeFastAttacks
- * means "use the shared setting", surfaced here as an explicit "Same as
- * shared setting" option rather than defaulting silently to one of the real
- * choices — a user must deliberately opt into overriding a candidate.
+ * index 1 = B), only while showDetailedAssumptions is on (see this panel's
+ * own gating below). `null` in both
+ * Assumptions.candidateDodge/candidateDodgeFastAttacks means "use the
+ * shared setting" for that candidate — surfaced here as a single checkbox
+ * ("Override dodge settings for this candidate") rather than a per-field
+ * "same as shared" sentinel option, per the user's explicit request:
+ * ticking it "auto turn[s] off the shared ones" for THIS candidate only
+ * (the other candidate, if not also overridden, keeps using the shared
+ * setting — see the "Overridden for..." note next to the shared controls
+ * below, which makes that legible rather than just removing the shared
+ * control).
  */
 function CandidateDodgeOverride({
   value,
@@ -170,14 +241,20 @@ function CandidateDodgeOverride({
   const fastOverride = value.candidateDodgeFastAttacks[index];
   const isOverriding = dodgeOverride !== null || fastOverride !== null;
   const idPrefix = index === 0 ? "candidate-a" : "candidate-b";
+  // Falls back to the shared setting for DISPLAY only — normally
+  // unreachable once this checkbox is the only writer (it always sets both
+  // fields together), but a share link built by the old per-field "same as
+  // shared" selects could carry just one of the pair set.
+  const currentDodge = dodgeOverride ?? value.dodge;
+  const currentFast = fastOverride ?? value.dodgeFastAttacks;
 
-  function setDodgeOverride(next: DodgeBehavior | null) {
+  function setDodgeOverride(next: DodgeBehavior) {
     const candidateDodge: [DodgeBehavior | null, DodgeBehavior | null] = [...value.candidateDodge];
     candidateDodge[index] = next;
     onChange({ ...value, candidateDodge });
   }
 
-  function setFastOverride(next: boolean | null) {
+  function setFastOverride(next: boolean) {
     const candidateDodgeFastAttacks: [boolean | null, boolean | null] = [...value.candidateDodgeFastAttacks];
     candidateDodgeFastAttacks[index] = next;
     onChange({ ...value, candidateDodgeFastAttacks });
@@ -188,51 +265,58 @@ function CandidateDodgeOverride({
       className={`species-picker-hint${isOverriding ? " candidate-dodge-override-active" : ""}`}
       style={{ display: "block", marginTop: 6 }}
     >
-      <div style={{ fontWeight: isOverriding ? 700 : undefined }}>
-        Dodge override{isOverriding && " (active — differs from the shared setting below)"}
-      </div>
-      <select
-        id={`${idPrefix}-dodge-override`}
-        value={(dodgeOverride?.kind ?? "same") as CandidateDodgeSelectValue}
-        onChange={(e) => {
-          const kind = e.target.value as CandidateDodgeSelectValue;
-          setDodgeOverride(
-            kind === "same" ? null : kind === "percentage-missed" ? { kind, missedFraction: 0.5 } : ({ kind } as DodgeBehavior),
-          );
-        }}
-        title="Overrides the shared 'Dodge boss's charged attacks' setting below for just this candidate — lets you compare, e.g., a bulky pick played with no dodging against a glass cannon played with perfect dodging."
+      <label
+        htmlFor={`${idPrefix}-dodge-override-toggle`}
+        style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: isOverriding ? 700 : undefined, cursor: "pointer" }}
       >
-        <option value="same">Same as shared setting</option>
-        <option value="none">None</option>
-        <option value="perfect">Perfect</option>
-        <option value="percentage-missed">Percentage missed</option>
-      </select>
-      {dodgeOverride?.kind === "percentage-missed" && (
         <input
-          type="number"
-          min={0}
-          max={1}
-          step={0.05}
-          value={dodgeOverride.missedFraction}
-          onChange={(e) => setDodgeOverride({ kind: "percentage-missed", missedFraction: Number(e.target.value) })}
-          style={{ marginTop: 4, display: "block" }}
-          title="Fraction of this candidate's charged hits NOT dodged."
+          id={`${idPrefix}-dodge-override-toggle`}
+          type="checkbox"
+          checked={isOverriding}
+          onChange={(e) => onChange(setCandidateDodgeOverriding(value, index, e.target.checked))}
+          title="Overrides the shared dodge settings below for just this candidate — lets you compare, e.g., a bulky pick played with no dodging against a glass cannon played with perfect dodging. Turns the shared setting off for THIS candidate only; the other candidate keeps using it unless it has its own override checked too."
         />
+        Override dodge settings for this candidate{isOverriding && " (active — differs from the shared setting below)"}
+      </label>
+      {isOverriding && (
+        <>
+          <select
+            id={`${idPrefix}-dodge-override`}
+            value={currentDodge.kind}
+            onChange={(e) => {
+              const kind = e.target.value as DodgeBehavior["kind"];
+              setDodgeOverride(kind === "percentage-missed" ? { kind, missedFraction: 0.5 } : ({ kind } as DodgeBehavior));
+            }}
+            style={{ marginTop: 4 }}
+            title="This candidate's own charged-attack dodge setting, independent of the shared one below."
+          >
+            <option value="none">None</option>
+            <option value="perfect">Perfect</option>
+            <option value="percentage-missed">Percentage missed</option>
+          </select>
+          {currentDodge.kind === "percentage-missed" && (
+            <NumberField
+              min={0}
+              max={1}
+              step={0.05}
+              value={currentDodge.missedFraction}
+              onChange={(v) => setDodgeOverride({ kind: "percentage-missed", missedFraction: v ?? 0 })}
+              style={{ marginTop: 4, display: "block" }}
+              title="Fraction of this candidate's charged hits NOT dodged."
+            />
+          )}
+          <select
+            id={`${idPrefix}-dodge-fast-override`}
+            value={currentFast ? "yes" : "no"}
+            onChange={(e) => setFastOverride(e.target.value === "yes")}
+            style={{ marginTop: 4 }}
+            title="This candidate's own fast-attack dodge setting, independent of the shared one below."
+          >
+            <option value="no">Fast-attack dodge: No</option>
+            <option value="yes">Fast-attack dodge: Yes</option>
+          </select>
+        </>
       )}
-      <select
-        id={`${idPrefix}-dodge-fast-override`}
-        value={fastOverride === null ? "same" : fastOverride ? "yes" : "no"}
-        onChange={(e) => {
-          const v = e.target.value;
-          setFastOverride(v === "same" ? null : v === "yes");
-        }}
-        style={{ marginTop: 4 }}
-        title="Overrides the shared 'Also dodge boss's fast attacks?' setting below for just this candidate."
-      >
-        <option value="same">Fast-attack dodge: same as shared</option>
-        <option value="no">Fast-attack dodge: No</option>
-        <option value="yes">Fast-attack dodge: Yes</option>
-      </select>
     </div>
   );
 }
@@ -258,9 +342,23 @@ export function AssumptionPanel({
   bossReadySeconds,
   energyBuffers,
   naturalFightLengthSeconds,
+  effectiveBossChargedMoveFrequencySeconds,
 }: Props) {
   function set<K extends keyof Assumptions>(key: K, next: Assumptions[K]) {
     onChange({ ...value, [key]: next });
+  }
+
+  function setShowDetailedAssumptions(checked: boolean) {
+    onChange(
+      checked
+        // Seed the stored field with whatever value is ACTUALLY in force
+        // right now (the derived one, since we're coming from simple mode)
+        // so checking this box on doesn't itself change any result — only
+        // unlocks the field for further editing. Mirrors
+        // TeamAssumptionPanel's identical setShowDetailedAssumptions.
+        ? { ...value, showDetailedAssumptions: true, bossChargedMoveFrequencySeconds: effectiveBossChargedMoveFrequencySeconds }
+        : { ...value, showDetailedAssumptions: false },
+    );
   }
 
   const selectedBossChargedMove = bossSpecies
@@ -278,8 +376,52 @@ export function AssumptionPanel({
     hasActiveBoost(candidateSpecies[0], value.candidateMegaBoostDisabled[0]) ||
     hasActiveBoost(candidateSpecies[1], value.candidateMegaBoostDisabled[1]);
 
+  // Type-effectiveness opponents for the move pickers below (display-only —
+  // see MoveSelect.tsx's own `opponents` prop doc comment). A candidate's
+  // own move pickers measure against the boss (one entry); the boss's own
+  // move pickers measure against whichever of the two candidates currently
+  // resolve (up to two, each tagged by its own letter so the reader never
+  // has to guess which chip belongs to which candidate).
+  const bossOpponent: MoveSelectOpponent[] = bossSpecies ? [{ label: "Boss", types: bossSpecies.types }] : [];
+  const candidateOpponents: MoveSelectOpponent[] = [
+    ...(candidateSpecies[0] ? [{ label: "A", types: candidateSpecies[0].types }] : []),
+    ...(candidateSpecies[1] ? [{ label: "B", types: candidateSpecies[1].types }] : []),
+  ];
+
+  // Which candidates currently have an active per-candidate dodge override
+  // (CandidateDodgeOverride above) — surfaced as a note next to the SHARED
+  // dodge controls below so "the checkbox auto turns off the shared ones"
+  // is legible there too, not just at the override checkbox itself. The
+  // shared control is never removed or disabled — the other candidate (if
+  // not also overridden) still uses it.
+  const overriddenCandidateNames = (["A", "B"] as const)
+    .filter((_, i) => value.candidateDodge[i] !== null || value.candidateDodgeFastAttacks[i] !== null)
+    .map((letter) => `Candidate ${letter}`);
+
+  // Built as one plain string (not interleaved JSX expressions) so line
+  // wrapping in this source file can't silently eat a space the way JSX's
+  // own whitespace-collapsing rules once did in DamageOverTimeChart.tsx's
+  // ranking-flip sentence (an `{expr}` immediately followed by a newline
+  // then text loses the space entirely) — every value here is read live off
+  // `value`, not a hardcoded "typical default", so this stays accurate even
+  // if a user set something non-default before unchecking the box.
+  const simpleAssumptionsSummary = value.showDetailedAssumptions
+    ? null
+    : [
+        `Dodge boss's charged attacks: ${dodgeKindLabel(value.dodge.kind)}${
+          value.dodge.kind === "percentage-missed" ? ` (${Math.round(value.dodge.missedFraction * 100)}% missed)` : ""
+        }`,
+        `also dodge fast attacks: ${value.dodgeFastAttacks ? "yes" : "no"}`,
+        `hold charged move for a safer moment: ${value.holdChargedMoveUntilSafe ? "yes" : "no"}`,
+        value.minFightLengthSeconds > 0
+          ? `chart window extended to at least ${value.minFightLengthSeconds}s`
+          : "chart window not extended",
+        `boss charged-move mean frequency ~${effectiveBossChargedMoveFrequencySeconds.toFixed(1)}s (derived from this boss's own fast-move charge time — a placeholder pending improvement, not this boss's confirmed real cadence)`,
+      ].join("; ") +
+      ". Any per-candidate dodge override set earlier stays in force but is hidden here — check the box above to see or change it.";
+
   return (
-    <CollapsibleSection id="comparator-assumptions" heading="Assumptions" defaultOpen>
+    <CollapsibleSection id="comparator-assumptions" heading="Assumptions" defaultOpen={false}>
       <div className="assumption-grid">
         <div>
           <SpeciesPicker
@@ -304,6 +446,7 @@ export function AssumptionPanel({
                 kind="fast"
                 value={value.candidateAFastMoveId}
                 onChange={(id) => set("candidateAFastMoveId", id)}
+                opponents={bossOpponent}
               />
               <MoveSelect
                 idPrefix="candidate-a-charged"
@@ -312,6 +455,7 @@ export function AssumptionPanel({
                 kind="charged"
                 value={value.candidateAChargedMoveId}
                 onChange={(id) => set("candidateAChargedMoveId", id)}
+                opponents={bossOpponent}
               />
               {candidateSpecies[0].boost && (
                 <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
@@ -352,7 +496,7 @@ export function AssumptionPanel({
                   </label>
                 );
               })()}
-              <CandidateDodgeOverride value={value} index={0} onChange={onChange} />
+              {value.showDetailedAssumptions && <CandidateDodgeOverride value={value} index={0} onChange={onChange} />}
             </>
           )}
         </div>
@@ -376,6 +520,7 @@ export function AssumptionPanel({
                 kind="fast"
                 value={value.candidateBFastMoveId}
                 onChange={(id) => set("candidateBFastMoveId", id)}
+                opponents={bossOpponent}
               />
               <MoveSelect
                 idPrefix="candidate-b-charged"
@@ -384,6 +529,7 @@ export function AssumptionPanel({
                 kind="charged"
                 value={value.candidateBChargedMoveId}
                 onChange={(id) => set("candidateBChargedMoveId", id)}
+                opponents={bossOpponent}
               />
               {candidateSpecies[1].boost && (
                 <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
@@ -424,7 +570,7 @@ export function AssumptionPanel({
                   </label>
                 );
               })()}
-              <CandidateDodgeOverride value={value} index={1} onChange={onChange} />
+              {value.showDetailedAssumptions && <CandidateDodgeOverride value={value} index={1} onChange={onChange} />}
             </>
           )}
         </div>
@@ -452,6 +598,7 @@ export function AssumptionPanel({
                 kind="fast"
                 value={value.bossFastMoveId}
                 onChange={(id) => set("bossFastMoveId", id)}
+                opponents={candidateOpponents}
               />
               <MoveSelect
                 idPrefix="boss-charged"
@@ -460,6 +607,7 @@ export function AssumptionPanel({
                 kind="charged"
                 value={value.bossChargedMoveId}
                 onChange={(id) => set("bossChargedMoveId", id)}
+                opponents={candidateOpponents}
               />
             </>
           )}
@@ -468,103 +616,131 @@ export function AssumptionPanel({
         <div>
           <div className="field">
             <label htmlFor="level">Level (both candidates)</label>
-            <input
+            <NumberField
               id="level"
-              type="number"
               min={1}
-              max={40}
+              max={MAX_POKEMON_POWER_UP_LEVEL}
               step={0.5}
               value={value.level}
-              onChange={(e) => set("level", Number(e.target.value))}
+              onChange={(v) => set("level", v ?? 1)}
             />
           </div>
 
           <div className="iv-row">
             <div className="field">
               <label htmlFor="ivAttack">Attack IV</label>
-              <input
+              <NumberField
                 id="ivAttack"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={value.ivAttack}
-                onChange={(e) => set("ivAttack", Number(e.target.value))}
+                onChange={(v) => set("ivAttack", v ?? 0)}
               />
             </div>
             <div className="field">
               <label htmlFor="ivDefense">Defense IV</label>
-              <input
+              <NumberField
                 id="ivDefense"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={value.ivDefense}
-                onChange={(e) => set("ivDefense", Number(e.target.value))}
+                onChange={(v) => set("ivDefense", v ?? 0)}
               />
             </div>
             <div className="field">
               <label htmlFor="ivStamina">Stamina IV</label>
-              <input
+              <NumberField
                 id="ivStamina"
                 className="iv-input"
-                type="number"
                 min={0}
                 max={15}
                 value={value.ivStamina}
-                onChange={(e) => set("ivStamina", Number(e.target.value))}
+                onChange={(v) => set("ivStamina", v ?? 0)}
               />
             </div>
           </div>
         </div>
 
         <div className="field">
-          <label htmlFor="dodge">Dodge boss's charged attacks</label>
-          <select
-            id="dodge"
-            value={value.dodge.kind}
-            onChange={(e) => {
-              const kind = e.target.value as DodgeBehavior["kind"];
-              set(
-                "dodge",
-                kind === "percentage-missed" ? { kind, missedFraction: 0.5 } : ({ kind } as DodgeBehavior),
-              );
-            }}
+          <label
+            htmlFor="comparator-detailed-assumptions"
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
+            title="Reveals the dodge controls, hold-for-safe-window, boss charged-move mean frequency, and the chart's extend-window override. Only changes what's SHOWN, never what's simulated — see &quot;Known caveats&quot; below for the full explanation."
           >
-            <option value="none">None</option>
-            <option value="perfect">Perfect</option>
-            <option value="percentage-missed">Percentage missed</option>
-          </select>
+            <input
+              id="comparator-detailed-assumptions"
+              type="checkbox"
+              checked={value.showDetailedAssumptions}
+              onChange={(e) => setShowDetailedAssumptions(e.target.checked)}
+            />
+            More detailed assumptions
+          </label>
         </div>
 
-        {value.dodge.kind === "percentage-missed" && (
+        {simpleAssumptionsSummary !== null && (
           <div className="field">
-            <label htmlFor="missedFraction">Fraction of charged hits NOT dodged</label>
-            <input
-              id="missedFraction"
-              type="number"
-              min={0}
-              max={1}
-              step={0.05}
-              value={value.dodge.missedFraction}
-              onChange={(e) => set("dodge", { kind: "percentage-missed", missedFraction: Number(e.target.value) })}
-            />
+            <label>Simple assumptions in force</label>
+            <p className="computed-value">{simpleAssumptionsSummary}</p>
           </div>
         )}
 
-        <div className="field">
-          <label htmlFor="dodgeFastAttacks">Also dodge boss's fast attacks?</label>
-          <select
-            id="dodgeFastAttacks"
-            value={value.dodgeFastAttacks ? "yes" : "no"}
-            onChange={(e) => set("dodgeFastAttacks", e.target.value === "yes")}
-            title="Dodging every fast attack costs 0.5s of your own attack cycle each time (see DODGE_COST_SECONDS) — usually not worth it, but can matter for a glass cannon. A separate yes/no from charged-attack dodging above, since these are different real decisions."
-          >
-            <option value="no">No</option>
-            <option value="yes">Yes</option>
-          </select>
-        </div>
+        {value.showDetailedAssumptions && (
+          <>
+            <div className="field">
+              <label htmlFor="dodge">Dodge boss's charged attacks</label>
+              <select
+                id="dodge"
+                value={value.dodge.kind}
+                onChange={(e) => {
+                  const kind = e.target.value as DodgeBehavior["kind"];
+                  set(
+                    "dodge",
+                    kind === "percentage-missed" ? { kind, missedFraction: 0.5 } : ({ kind } as DodgeBehavior),
+                  );
+                }}
+              >
+                <option value="none">None</option>
+                <option value="perfect">Perfect</option>
+                <option value="percentage-missed">Percentage missed</option>
+              </select>
+              {overriddenCandidateNames.length > 0 && (
+                <p className="species-picker-hint">
+                  Overridden for {overriddenCandidateNames.join(" and ")} — see that candidate's own dodge override
+                  above instead of this shared setting.
+                </p>
+              )}
+            </div>
+
+            {value.dodge.kind === "percentage-missed" && (
+              <div className="field">
+                <label htmlFor="missedFraction">Fraction of charged hits NOT dodged</label>
+                <NumberField
+                  id="missedFraction"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={value.dodge.missedFraction}
+                  onChange={(v) => set("dodge", { kind: "percentage-missed", missedFraction: v ?? 0 })}
+                />
+              </div>
+            )}
+
+            <div className="field">
+              <label htmlFor="dodgeFastAttacks">Also dodge boss's fast attacks?</label>
+              <select
+                id="dodgeFastAttacks"
+                value={value.dodgeFastAttacks ? "yes" : "no"}
+                onChange={(e) => set("dodgeFastAttacks", e.target.value === "yes")}
+                title="Dodging every fast attack costs 0.5s of your own attack cycle each time (see DODGE_COST_SECONDS) — usually not worth it, but can matter for a glass cannon. A separate yes/no from charged-attack dodging above, since these are different real decisions."
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </div>
+          </>
+        )}
 
         <div className="field">
           <label>Boss ready for its first charged move</label>
@@ -593,14 +769,13 @@ export function AssumptionPanel({
         {value.bossStartsPrimed && (
           <div className="field">
             <label htmlFor="bossStartingEnergyFraction">Boss starting energy (% of its charged-move cost)</label>
-            <input
+            <NumberField
               id="bossStartingEnergyFraction"
-              type="number"
               min={0}
               max={100}
               step={5}
               value={Math.round(value.bossStartingEnergyFraction * 100)}
-              onChange={(e) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, Number(e.target.value) / 100)))}
+              onChange={(v) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, (v ?? 0) / 100)))}
               title="100% means the boss can fire immediately."
             />
           </div>
@@ -610,78 +785,79 @@ export function AssumptionPanel({
 
         <BossCadenceSelect idPrefix="candidate" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 
-        <div className="field">
-          <label htmlFor="bossFreq">
-            Boss charged-move mean frequency (s)
-            {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
-          </label>
-          <input
-            id="bossFreq"
-            type="number"
-            min={1}
-            value={value.bossChargedMoveFrequencySeconds}
-            onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
-            disabled={value.bossChargedMoveCadence === "energy-driven"}
-            title="Mean seconds between the boss's charged moves once it's ready to use them (randomized +/-40% per run). Below the boss charged-move duration (commonly 2-3s) its attacks overlap, so dodging cannot help and the dodge setting stops affecting results entirely."
-          />
-          {value.bossChargedMoveCadence === "energy-driven" && (
-            <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
-          )}
-        </div>
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="bossFreq">
+              Boss charged-move mean frequency (s)
+              {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
+            </label>
+            <NumberField
+              id="bossFreq"
+              min={1}
+              value={value.bossChargedMoveFrequencySeconds}
+              onChange={(v) => set("bossChargedMoveFrequencySeconds", v ?? 1)}
+              disabled={value.bossChargedMoveCadence === "energy-driven"}
+              title="Mean seconds between the boss's charged moves once it's ready to use them (randomized +/-40% per run). Below the boss charged-move duration (commonly 2-3s) its attacks overlap, so dodging cannot help and the dodge setting stops affecting results entirely."
+            />
+            {value.bossChargedMoveCadence === "energy-driven" && (
+              <p className="species-picker-hint">{BOSS_FREQUENCY_INAPPLICABLE_HINT}</p>
+            )}
+          </div>
+        )}
 
-        <div className="field">
-          <label htmlFor="holdChargedMove">Hold charged move for a safer moment?</label>
-          <select
-            id="holdChargedMove"
-            value={value.holdChargedMoveUntilSafe ? "yes" : "no"}
-            onChange={(e) => set("holdChargedMoveUntilSafe", e.target.value === "yes")}
-            title="Instead of firing the instant energy allows, wait until right after successfully dodging one of the boss's charged attacks (or until energy caps at 100, whichever comes first). Trades some DPS for avoiding your undodgeable cast window overlapping the boss's next hit."
-          >
-            <option value="no">No — fire as soon as ready</option>
-            <option value="yes">Yes — wait for a safe window</option>
-          </select>
-          {value.holdChargedMoveUntilSafe && (
-            <p className="species-picker-hint">
-              {value.dodge.kind !== "perfect"
-                ? `This is meant to be used with "Dodge boss's charged attacks" set to Perfect — with dodging set to "${value.dodge.kind}", the safe-window trigger will rarely or never fire, so this degrades to just waiting for the energy cap.`
-                : bossChargedMoveIsUndodgeable
-                  ? "The boss's selected charged move is flagged as not reliably perfectly-dodgeable, so the safe-window trigger won't fire against it — this degrades to just waiting for the energy cap."
-                  : "Safe-window trigger active: will fire right after a dodged boss charged hit, or when energy caps, whichever comes first."}
-              {energyBuffers.length > 0 && (
-                <>
-                  {" "}Energy buffer (100 minus the move's cost — how much can be banked before more is wasted):{" "}
-                  {energyBuffers.map((b) => `${b.name} ${b.buffer}`).join(", ")}
-                </>
-              )}
-            </p>
-          )}
-        </div>
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="holdChargedMove">Hold charged move for a safer moment?</label>
+            <select
+              id="holdChargedMove"
+              value={value.holdChargedMoveUntilSafe ? "yes" : "no"}
+              onChange={(e) => set("holdChargedMoveUntilSafe", e.target.value === "yes")}
+              title="Instead of firing the instant energy allows, wait until right after successfully dodging one of the boss's charged attacks (or until energy caps at 100, whichever comes first). Trades some DPS for avoiding your undodgeable cast window overlapping the boss's next hit."
+            >
+              <option value="no">No — fire as soon as ready</option>
+              <option value="yes">Yes — wait for a safe window</option>
+            </select>
+            {value.holdChargedMoveUntilSafe && (
+              <p className="species-picker-hint">
+                {value.dodge.kind !== "perfect"
+                  ? `This is meant to be used with "Dodge boss's charged attacks" set to Perfect — with dodging set to "${value.dodge.kind}", the safe-window trigger will rarely or never fire, so this degrades to just waiting for the energy cap.`
+                  : bossChargedMoveIsUndodgeable
+                    ? "The boss's selected charged move is flagged as not reliably perfectly-dodgeable, so the safe-window trigger won't fire against it — this degrades to just waiting for the energy cap."
+                    : "Safe-window trigger active: will fire right after a dodged boss charged hit, or when energy caps, whichever comes first."}
+                {energyBuffers.length > 0 && (
+                  <>
+                    {" "}Energy buffer (100 minus the move's cost — how much can be banked before more is wasted):{" "}
+                    {energyBuffers.map((b) => `${b.name} ${b.buffer}`).join(", ")}
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        )}
 
         {anyBoostActive && (
           <>
             <div className="field">
               <label htmlFor="partySize">Other trainers also in this raid (not this candidate)</label>
-              <input
+              <NumberField
                 id="partySize"
-                type="number"
                 min={0}
                 max={20}
                 value={value.partySize}
-                onChange={(e) => {
-                  const partySize = Number(e.target.value);
+                onChange={(v) => {
+                  const partySize = v ?? 0;
                   onChange({ ...value, partySize, matchingTeammateCount: Math.min(value.matchingTeammateCount, partySize) });
                 }}
               />
             </div>
             <div className="field">
               <label htmlFor="teammateDps">Other trainers' DPS (each)</label>
-              <input
+              <NumberField
                 id="teammateDps"
-                type="number"
                 min={0}
                 step={0.1}
                 value={value.teammateDps}
-                onChange={(e) => set("teammateDps", Number(e.target.value))}
+                onChange={(v) => set("teammateDps", v ?? 0)}
               />
             </div>
             <div className="field">
@@ -703,21 +879,22 @@ export function AssumptionPanel({
           </>
         )}
 
-        <div className="field">
-          <label htmlFor="minFightLength">Extend simulated window to at least (s)</label>
-          <input
-            id="minFightLength"
-            type="number"
-            min={0}
-            step={1}
-            value={value.minFightLengthSeconds}
-            onChange={(e) => set("minFightLengthSeconds", Math.max(0, Number(e.target.value)))}
-            title="The chart's window is auto-computed from how long each candidate actually survives — this can only stretch it further out (e.g. to see a longer horizon), never shrink it below that real outcome."
-          />
-          {naturalFightLengthSeconds !== null && (
-            <span className="species-picker-hint">Natural minimum for this scenario: ~{naturalFightLengthSeconds.toFixed(1)}s</span>
-          )}
-        </div>
+        {value.showDetailedAssumptions && (
+          <div className="field">
+            <label htmlFor="minFightLength">Extend simulated window to at least (s)</label>
+            <NumberField
+              id="minFightLength"
+              min={0}
+              step={1}
+              value={value.minFightLengthSeconds}
+              onChange={(v) => set("minFightLengthSeconds", Math.max(0, v ?? 0))}
+              title="The chart's window is auto-computed from how long each candidate actually survives — this can only stretch it further out (e.g. to see a longer horizon), never shrink it below that real outcome."
+            />
+            {naturalFightLengthSeconds !== null && (
+              <span className="species-picker-hint">Natural minimum for this scenario: ~{naturalFightLengthSeconds.toFixed(1)}s</span>
+            )}
+          </div>
+        )}
       </div>
     </CollapsibleSection>
   );

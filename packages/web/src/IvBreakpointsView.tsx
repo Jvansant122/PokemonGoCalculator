@@ -17,6 +17,7 @@ import {
   parseIvBreakpointsScenarioFromUrl,
   type IvBreakpointsScenario,
 } from "./ivBreakpointsScenario.js";
+import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
 import { getBaseUrl } from "./urlUtils.js";
@@ -258,12 +259,15 @@ export function IvBreakpointsView() {
       </section>
 
       <CollapsibleSection id="iv-breakpoints-known-caveats" heading="Known caveats" defaultOpen={false}>
-        <p className="caveats note-block">
+        <div className="note-block">
+        <h3>Level range</h3>
+        <p className="caveats">
           Both the per-level table below and the all-raid-targets report above only check levels 35 through 50 (in
           the usual 0.5 steps, 31 levels total) — the range a player already investing candy/stardust into a
           specific Pokémon actually cares about, not the full 1-50 range this engine can compute. This is a fixed
           scope for this tab, not a setting.
         </p>
+        <h3>Simulation model</h3>
         <p className="caveats">
           This is a deliberately simpler model than the Comparator/Team Raid/Species Report tabs' full randomized
           stepwise simulator: the target's incoming damage here is modeled as its FAST move landing repeatedly,
@@ -287,6 +291,9 @@ export function IvBreakpointsView() {
           dataset — no such dataset exists for this tool (see the Species Report tab's own documented scope for the
           same limitation).
         </p>
+        <h3>Mega Level</h3>
+        <p className="caveats">{MEGA_LEVEL_HINT}</p>
+        </div>
       </CollapsibleSection>
     </>
   );

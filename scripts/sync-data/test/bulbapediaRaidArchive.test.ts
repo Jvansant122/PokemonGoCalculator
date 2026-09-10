@@ -138,6 +138,24 @@ describe("resolveBulbapediaRow", () => {
     });
   });
 
+  // 2026-09-10 fix: normalizeFormText used to rewrite Bulbapedia's "West Sea"
+  // text to "West_sea" specifically to match the roster's OLD, underscored
+  // `.name` — now that the roster's own name is cleaned to natural spacing,
+  // Bulbapedia's raw "West Sea" text matches it directly with NO rewrite.
+  it("resolves a 'West Sea' form row against the roster's own cleaned (space) qualified name", () => {
+    const base = species("shellos-west_sea", "Shellos (West Sea)") as SpeciesDefinition;
+    const index = buildBaseNameIndex([base]);
+    const speciesById = new Map([["shellos-west_sea", base]]);
+    const row: BulbapediaRaidRow = { bucket: "normal", name: "Shellos", form: "West Sea", normalTier: "1-Star Raids" };
+    expect(resolveBulbapediaRow(row, index, speciesById, defaultRaidTierForSpecies)).toEqual({
+      speciesId: "shellos-west_sea",
+      raidName: "Shellos (West Sea)",
+      tier: "1-Star Raids",
+      viaBaseNameFallback: false,
+      eraHp: undefined,
+    });
+  });
+
   it("strips a Shadow prefix and resolves against the BASE roster (this general archive parser has no shadow-variant concept — that's the dedicated shadow-page path's job instead)", () => {
     const base = species("slowpoke", "Slowpoke") as SpeciesDefinition;
     const index = buildBaseNameIndex([base]);

@@ -267,6 +267,15 @@ export interface TeamRaidSlotResult {
    * cycleIndex, an ordinary next-slot divider otherwise).
    */
   ownDamageTrajectory: DamageTrajectoryPoint[];
+  /**
+   * See simulate.ts's StepwiseRunResult.dodgeFastAttacksLockout — true when
+   * this slot's dodgeFastAttacks setting and the boss's fast move cadence
+   * make dodging every fast attack structurally unrecoverable for this
+   * fight (the boss's fast move recycles at or faster than
+   * DODGE_COST_SECONDS). A config-level fact about this fight's own inputs,
+   * not an artifact of this specific run's RNG.
+   */
+  dodgeFastAttacksLockout: boolean;
 }
 
 export type TeamRaidOutcome = "cleared" | "timerExpired";
@@ -615,6 +624,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
           atSeconds: startClock + p.atSeconds,
           cumulativeDamage: bossDamageAccum + p.cumulativeDamage,
         })),
+        dodgeFastAttacksLockout: run.dodgeFastAttacksLockout,
       });
 
       if (clearedThisFight) {

@@ -25,6 +25,7 @@ import type { Assumptions } from "../AssumptionPanel.js";
 import { applyShadowToggle } from "../shadowToggle.js";
 import { computeSensitivity, type SensitivityCheck } from "../sensitivity.js";
 import { raidTierForSpeciesId } from "../registry.js";
+import { deriveEffectiveBossChargedMoveFrequencySeconds } from "./effectiveBossChargedMoveFrequency.js";
 
 const MAX_ENERGY = 100;
 
@@ -46,6 +47,18 @@ export interface ComparatorRunResult {
   speciesError: string | null;
   bossRaidTier: RaidTier | undefined;
   bossReadySeconds: number | null;
+  /**
+   * The boss charged-move mean frequency actually fed into BOTH
+   * runSustainedComparison and (when applicable) compareAcrossBossChargedMoves
+   * for THIS run. Equal to the stored `a.bossChargedMoveFrequencySeconds`
+   * when `a.showDetailedAssumptions` is true; otherwise derived from the
+   * boss's own fast-move charge time — see effectiveBossChargedMoveFrequency.ts's
+   * own doc comment for the full derivation, shared with
+   * run/runTeamRaid.ts's identical field. Exposed so the assumption panel
+   * can show it and seed the stored field with it when the user opts into
+   * detailed mode.
+   */
+  effectiveBossChargedMoveFrequencySeconds: number;
   energyBuffers: { name: string; buffer: number }[];
   results: ReturnType<typeof runSustainedComparison> | null;
   resultsError: string | null;
@@ -83,16 +96,34 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     ? (boss.chargedMoves.find((m) => m.id === a.bossChargedMoveId) ?? boss.chargedMoves[0])
     : undefined;
 
+  const selectedBossFastMove = boss
+    ? (boss.fastMoves.find((m) => m.id === a.bossFastMoveId) ?? boss.fastMoves[0])
+    : undefined;
+
   const bossStartingEnergy =
     a.bossStartsPrimed && boss ? a.bossStartingEnergyFraction * (selectedBossChargedMove?.energyCost ?? 0) : 0;
 
   let bossReadySeconds: number | null = null;
-  if (boss) {
-    const fastMove = boss.fastMoves.find((m) => m.id === a.bossFastMoveId) ?? boss.fastMoves[0];
-    if (fastMove && selectedBossChargedMove) {
-      bossReadySeconds = bossChargedMoveReadySeconds(fastMove, selectedBossChargedMove, bossStartingEnergy);
-    }
+  if (boss && selectedBossFastMove && selectedBossChargedMove) {
+    bossReadySeconds = bossChargedMoveReadySeconds(selectedBossFastMove, selectedBossChargedMove, bossStartingEnergy);
   }
+
+  // The boss charged-move mean frequency ACTUALLY fed into BOTH engine calls
+  // below (runSustainedComparison and, when applicable,
+  // compareAcrossBossChargedMoves) for THIS run — equal to the stored
+  // a.bossChargedMoveFrequencySeconds when a.showDetailedAssumptions is
+  // true, otherwise derived from the boss's own fast-move charge time.
+  // Shared with run/runTeamRaid.ts's identical field via
+  // effectiveBossChargedMoveFrequency.ts so the two tabs can't compute two
+  // different numbers for the same "simple mode" concept — see that
+  // module's own doc comment for the full derivation.
+  const effectiveBossChargedMoveFrequencySeconds = deriveEffectiveBossChargedMoveFrequencySeconds({
+    showDetailedAssumptions: a.showDetailedAssumptions,
+    bossSpecies: boss,
+    bossFastMove: selectedBossFastMove,
+    bossChargedMove: selectedBossChargedMove,
+    stored: a.bossChargedMoveFrequencySeconds,
+  });
 
   const energyBuffers: { name: string; buffer: number }[] = candidates
     ? candidates.map((c, i) => {
@@ -124,7 +155,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
         candidateDodge: a.candidateDodge,
         candidateDodgeFastAttacks: a.candidateDodgeFastAttacks,
         holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
-        bossChargedMoveMeanIntervalSeconds: a.bossChargedMoveFrequencySeconds,
+        bossChargedMoveMeanIntervalSeconds: effectiveBossChargedMoveFrequencySeconds,
         bossChargedMoveCadence: a.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: a.weather,
@@ -152,7 +183,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
   let sensitivity: SensitivityCheck[] = [];
   if (shadowAdjustedCandidates && boss) {
     try {
-      sensitivity = computeSensitivity(shadowAdjustedCandidates, boss, a, bossRaidTier);
+      sensitivity = computeSensitivity(shadowAdjustedCandidates, boss, a, bossRaidTier, effectiveBossChargedMoveFrequencySeconds);
     } catch {
       sensitivity = [];
     }
@@ -177,7 +208,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
         candidateDodge: a.candidateDodge,
         candidateDodgeFastAttacks: a.candidateDodgeFastAttacks,
         holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
-        bossChargedMoveMeanIntervalSeconds: a.bossChargedMoveFrequencySeconds,
+        bossChargedMoveMeanIntervalSeconds: effectiveBossChargedMoveFrequencySeconds,
         bossChargedMoveCadence: a.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: a.weather,
@@ -195,6 +226,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     speciesError,
     bossRaidTier,
     bossReadySeconds,
+    effectiveBossChargedMoveFrequencySeconds,
     energyBuffers,
     results,
     resultsError,

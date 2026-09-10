@@ -1,0 +1,21 @@
+{
+  // Type-checks the ENGINE'S OWN TESTS, which packages/engine/tsconfig.json
+  // deliberately cannot: that config sets `rootDir: "src"` because it emits to
+  // dist/, and a rootDir cannot contain test/. So `npm run typecheck:engine`
+  // has never checked a single file under test/.
+  //
+  // That gap was not theoretical. On 2026-09-10 a hand-built TeamRaidResult
+  // mock in test/powerUp.test.ts silently went stale when a required field was
+  // added to that type, and BOTH gates missed it: tsc never saw the file, and
+  // vitest's esbuild transform strips types without checking them, so a test
+  // can pass while asserting against a shape that no longer compiles.
+  //
+  // No outDir/rootDir here on purpose — this config never emits, it only
+  // checks. Wired into `npm run typecheck` via `typecheck:engine-test`.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src", "test"]
+}

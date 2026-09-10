@@ -269,8 +269,102 @@ describe("species.json sentinels", () => {
     expect(move!.plusMovePowerConfidence).toBe("official");
   });
 
+  // 2026-09-10 ADDITION: 7 more "+" moves resolved on a full 15-row
+  // db.pokemongohub.net table read directly by the user, lifting this
+  // table's previous 7 exclusions (see superMaxPlusMoves.ts's "Deliberately
+  // EXCLUDED" block, repurposed 2026-09-10 into a resolution record). These
+  // 2 pins sample the batch: one species whose base move was ALREADY in its
+  // own moveset (Acid Spray/Victreebel, same pattern as Fell Stinger/Beedrill
+  // above) and one that resolves the earlier FUTURE_SIGHT-vs-FUTURESIGHT
+  // movementId correction (Future Sight+/Mewtwo Y). Both at
+  // "community-estimate" confidence — single-site (db.pokemongohub.net),
+  // no cross-site corroboration — per PlusMovePowerConfidence's own
+  // definition.
+  it('Mega Victreebel carries Acid Spray+ as a genuinely additional charged move: poison, power 160, energyCost 100, duration 3s, "community-estimate"', () => {
+    const s = speciesById.get("victreebel-mega")!;
+    expect(s).toBeDefined();
+    expect(s.chargedMoves.length).toBeGreaterThanOrEqual(3);
+    const move = s.chargedMoves.find((m) => m.id === "ACID_SPRAY_PLUS");
+    expect(move).toBeDefined();
+    expect(move!.name).toBe("Acid Spray+");
+    expect(move!.type).toBe("poison");
+    expect(move!.power).toBe(160);
+    expect(move!.energyCost).toBe(100);
+    expect(move!.durationSeconds).toBe(3);
+    expect(move!.isPlusMove).toBe(true);
+    expect(move!.plusMovePowerConfidence).toBe("community-estimate");
+  });
+
+  it('Mega Mewtwo Y carries Future Sight+ as a genuinely additional charged move: psychic, power 140, energyCost 100, duration 2.5s, "community-estimate"', () => {
+    const s = speciesById.get("mewtwo-mega-y")!;
+    expect(s).toBeDefined();
+    expect(s.chargedMoves.length).toBeGreaterThanOrEqual(3);
+    const move = s.chargedMoves.find((m) => m.id === "FUTURESIGHT_PLUS");
+    expect(move).toBeDefined();
+    expect(move!.name).toBe("Future Sight+");
+    expect(move!.type).toBe("psychic");
+    expect(move!.power).toBe(140);
+    expect(move!.energyCost).toBe(100);
+    expect(move!.durationSeconds).toBe(2.5);
+    expect(move!.isPlusMove).toBe(true);
+    expect(move!.plusMovePowerConfidence).toBe("community-estimate");
+  });
+
   it("Mega Staraptor's Brave Bird+ entry stays inert until the species itself syncs in (not present in species.json today)", () => {
     expect(speciesById.get("staraptor-mega")).toBeUndefined();
+  });
+
+  // 2026-09-10 fix for MECHANICS.md's "Form-change `moveReassignment` grants
+  // moves that appear in no movepool array" — Kyurem (Black)'s real
+  // signature move was previously entirely absent from species.json (only
+  // reachable via pokemonSettings.formChange[].moveReassignment, which this
+  // pipeline discarded at fetch time). The fusion direction is one-way (no
+  // `existingMoves` key on the granting formChange entry at all), the case
+  // this sentinel specifically covers. [Niantic GAME_MASTER moveSettings
+  // V0466_MOVE_FREEZE_SHOCK, direct 2026-09-10 fetch.]
+  it("Kyurem (Black) carries its real signature move Freeze Shock: ice, power 160, energyCost 100, duration 1.5s", () => {
+    const s = speciesById.get("kyurem-black")!;
+    expect(s).toBeDefined();
+    const move = s.chargedMoves.find((m) => m.id === "FREEZE_SHOCK");
+    expect(move).toBeDefined();
+    expect(move!.type).toBe("ice");
+    expect(move!.power).toBe(160);
+    expect(move!.energyCost).toBe(100);
+    expect(move!.durationSeconds).toBe(1.5);
+  });
+
+  // Zacian (Crowned Sword): the form-change grant declared from BOTH
+  // directions (Hero->Crowned's replacementMoves AND Crowned->Hero's
+  // existingMoves independently assert the same fact) — see MECHANICS.md.
+  // ALSO the id-stability sentinel for the companion display-name fix: the
+  // id must stay the untouched, underscore-carrying
+  // "zacian-crowned_sword" (species ids are embedded in every shared
+  // scenario URL and must never change), while `.name` is now cleaned to
+  // natural spacing instead of carrying the raw "Crowned_sword" form
+  // straight through. [Niantic GAME_MASTER moveSettings
+  // V0469_MOVE_BEHEMOTH_BLADE, direct 2026-09-10 fetch.]
+  it("Zacian (Crowned Sword): id stays zacian-crowned_sword, name is cleaned (no underscore), and it carries Behemoth Blade (steel, power 200, energyCost 100, duration 3.5s)", () => {
+    const s = speciesById.get("zacian-crowned_sword")!;
+    expect(s).toBeDefined();
+    expect(s.id).toBe("zacian-crowned_sword");
+    expect(s.name).toBe("Zacian (Crowned Sword)");
+    const move = s.chargedMoves.find((m) => m.id === "BEHEMOTH_BLADE");
+    expect(move).toBeDefined();
+    expect(move!.type).toBe("steel");
+    expect(move!.power).toBe(200);
+    expect(move!.energyCost).toBe(100);
+    expect(move!.durationSeconds).toBe(3.5);
+  });
+
+  // 2026-09-10 fix, pure display-name half (no signature-move angle) — a
+  // second, independent id-stability + clean-name sentinel so this isn't
+  // resting entirely on the Zacian case above. Real Pokémon GO form name is
+  // "West Sea" (Bulbapedia, GAME_MASTER's own form key "SHELLOS_WEST_SEA").
+  it("Shellos (West Sea): id stays shellos-west_sea, name is cleaned to natural spacing", () => {
+    const s = speciesById.get("shellos-west_sea")!;
+    expect(s).toBeDefined();
+    expect(s.id).toBe("shellos-west_sea");
+    expect(s.name).toBe("Shellos (West Sea)");
   });
 });
 
@@ -374,6 +468,19 @@ describe("structural invariants (mirrors what check-mega-gates.mjs / check-raid-
       expect(s.types.length, `${s.id} has no typing`).toBeGreaterThanOrEqual(1);
       expect(s.types.length, `${s.id} has more than 2 types`).toBeLessThanOrEqual(2);
     }
+  });
+
+  // 2026-09-10 fix: 21 species previously carried a raw pogoapi/GAME_MASTER
+  // form suffix straight through into `.name` (e.g. "Zacian (Crowned_sword)")
+  // — see applyCleanFormDisplayName in sync-data.ts and formDisplayName's own
+  // doc comment in scripts/sync-data/gameMasterMatching.ts. A display name is
+  // user-facing prose, never a raw identifier, so it should never contain the
+  // underscore-as-separator convention ids/enums use — this is a project-wide
+  // regression guard, not just a per-species pin (see the Zacian/Shellos
+  // sentinels above for the two most specific cases).
+  it("no species display name carries a raw underscore", () => {
+    const underscored = species.filter((s) => s.name.includes("_"));
+    expect(underscored.map((s) => s.name)).toEqual([]);
   });
 
   it("every fast/charged move has a finite power and a positive duration (no dangling/malformed move data)", () => {

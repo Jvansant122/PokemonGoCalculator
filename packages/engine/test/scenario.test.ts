@@ -25,6 +25,7 @@ const sampleScenario: Scenario = {
   holdChargedMoveUntilSafe: false,
   minFightLengthSeconds: 0,
   weather: "none",
+  showDetailedAssumptions: true,
 };
 
 describe("scenario serialization", () => {
@@ -161,6 +162,47 @@ describe("scenario serialization", () => {
     expect(() => decodeScenario(legacyEncoded)).not.toThrow();
     const decoded = decodeScenario(legacyEncoded);
     expect(decoded.candidateMegaLevel).toBeUndefined();
+    expect(decoded.target).toBe(sampleScenario.target);
+  });
+
+  it("round-trips showDetailedAssumptions in both directions rather than collapsing to one value", () => {
+    // Regression guard, same shape as the others above: this is a pure
+    // boolean UI-visibility flag, but it still must survive a share link
+    // faithfully in EITHER state — a sender who deliberately collapsed (or
+    // deliberately expanded) the advanced panel before sharing must not have
+    // that choice silently flipped for the recipient.
+    const collapsed: Scenario = { ...sampleScenario, showDetailedAssumptions: false };
+    const expanded: Scenario = { ...sampleScenario, showDetailedAssumptions: true };
+    expect(decodeScenario(encodeScenario(collapsed)).showDetailedAssumptions).toBe(false);
+    expect(decodeScenario(encodeScenario(expanded)).showDetailedAssumptions).toBe(true);
+    expect(
+      parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", collapsed))!.showDetailedAssumptions,
+    ).toBe(false);
+    expect(
+      parseScenarioFromUrl(buildScenarioUrl("https://pogo-analyzer.example/compare", expanded))!.showDetailedAssumptions,
+    ).toBe(true);
+  });
+
+  it("decodes a scenario encoded before showDetailedAssumptions existed to undefined, not a runtime-enforced default", () => {
+    // Same "older build never had this key" simulation as the
+    // candidateMegaLevel/candidateDodge tests above. decodeScenario itself
+    // does no schema validation/defaulting — it stays a bare JSON.parse cast
+    // — so the field reads back `undefined` despite the interface typing it
+    // as a required `boolean`. The recommended consumer fallback for that
+    // `undefined` is `?? true` (NOT `?? false`), documented on the field's
+    // own comment in scenario.ts and asserted here so the reasoning has a
+    // pinned, executable check: an old link predates the advanced/simple
+    // split entirely, so "show everything" is the only reading that
+    // reproduces what that link actually showed and meant.
+    const { showDetailedAssumptions: _showDetailedAssumptions, ...legacyShape } = sampleScenario;
+    const legacyJson = JSON.stringify(legacyShape);
+    const legacyEncoded = toBase64Url(new TextEncoder().encode(legacyJson));
+
+    expect(() => decodeScenario(legacyEncoded)).not.toThrow();
+    const decoded = decodeScenario(legacyEncoded);
+    expect(decoded.showDetailedAssumptions).toBeUndefined();
+    expect(decoded.showDetailedAssumptions ?? true).toBe(true);
+    // Every other field the legacy payload did carry survives untouched.
     expect(decoded.target).toBe(sampleScenario.target);
   });
 

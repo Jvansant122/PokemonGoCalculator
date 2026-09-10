@@ -106,6 +106,14 @@ The handful of product-level calls that must survive no matter which agent touch
   and flags `isApproximate`, which reads as "no better data exists" when the exact data was
   sitting in `data/raw/pokemon_stats.json` all along. This was narrowed to stats-only once and
   had to be widened again — do not re-narrow it.
+- **This tool targets the high-investment player, and a tab is never removed because a casual
+  player wouldn't open it.** Stated by the user 2026-09-10 after a multi-archetype audit:
+  *"we dont care that the casual player doesnt want some tabs. any audit saying to remove an entire
+  tab should be ignored."* The deep tabs (Attack/Defense Breakpoints' 51-column grid, the six-slot
+  Team Raid roster, the Power-Up Optimizer's roster import) exist precisely because they answer
+  questions a casual player never asks. `pogo-player`'s `casual-optimizer` archetype rejecting them
+  on premise is expected output, labelled `STRUCTURAL` — worth one line, never a fix cycle, never a
+  de-scope proposal. Objections to how a tab *works* stay fully in scope from every archetype.
 - **A "Teambuilding Analyzer" (multi-trainer mega staggering across a raid, since the mega boost
   doesn't stack) is out of scope for this tool** — a separate future project, not a feature to fold
   in here. Explicitly ruled out once already; if reproposed (most likely by `pogo-researcher`
@@ -235,7 +243,7 @@ npm run check-mega-gaps              # diffs the mega/primal roster against Bulb
 npm run sync-data                    # refreshes data/raw + data/normalized
 npm run diff-normalized              # what a sync changed (--base, --dir, --json; --strict fails if raidHistory lost a row)
 npm run run-scenario -- "<url>"      # a share link's headline numbers without a browser (--json for the full result)
-npm run typecheck                    # engine + web + scripts (tsx never type-checks scripts/; this does)
+npm run typecheck                    # engine src + engine test + web + scripts (tsx never type-checks scripts/; this does)
 npm run lint                         # root eslint.config.js — unused vars/imports are errors
 npm run unused-exports               # ts-unused-exports, advisory
 ```
@@ -263,7 +271,7 @@ existing credentials.
 
 ## Subagents and routing
 
-`.claude/agents/` has nine project-specific subagents. Agent definitions load once at session
+`.claude/agents/` has ten project-specific subagents. Agent definitions load once at session
 start, not live — a session restart/resume is needed to pick up a newly-added or edited `.md`
 file. Route by what the request actually needs, not by habit:
 
@@ -287,6 +295,11 @@ file. Route by what the request actually needs, not by habit:
 - **`pogo-researcher`** — real Pokémon GO game mechanics/content/meta questions, and feature or
   metric ideas for the comparator. Never implements — proposes only, and must flag anything that
   would touch a standing decision above rather than quietly routing around it.
+- **`pogo-player`** — the player's point of view rather than the code's: reacts as a named user
+  archetype to a feature idea, a tab's output, its wording, or a priority call, and may answer
+  "I'd never open this". Drives the live app like a player. Desirability, not correctness —
+  `skeptic` asks whether a number is wrong, this asks whether a right number is useful. Never
+  establishes a game fact (`pogo-researcher`'s job) and never implements.
 - **`skeptic`** — an independent, read-only pass over the *live, rendered* app: visually drives
   every tab and cross-checks what's on screen against `data/normalized/` and real game facts,
   looking for a reason to distrust each number rather than trusting it. Use after a UI or data

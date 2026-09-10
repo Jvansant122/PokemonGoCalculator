@@ -5,6 +5,7 @@ import {
   dehydrateRosterEntry,
   deserializeRosterPoolFromJson,
   emptyRosterPool,
+  entryPredatesMovesetBadgeFields,
   hydrateRosterEntry,
   hydrateRosterPool,
   loadRosterPool,
@@ -42,6 +43,10 @@ function fakeEntry(overrides: Partial<RosterEntry> = {}): RosterEntry {
     ivsAreApproximate: false,
     levelIsApproximate: false,
     movesetIsDefaulted: false,
+    fastMoveIsDefaulted: false,
+    chargedMoveIsDefaulted: false,
+    fastMoveUnmatchedName: null,
+    chargedMoveUnmatchedName: null,
     sourceLineNumber: 2,
     unmatchedMoveNames: [],
     ...overrides,
@@ -99,6 +104,56 @@ describe("hydrateRosterPool", () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]!.entryId).toBe("a");
     expect(droppedCount).toBe(1);
+  });
+
+  it("counts a hydrated entry as staleMovesetBadgeCount when its stored JSON predates the moveset-badge fields entirely", () => {
+    const fresh = dehydrateRosterEntry(fakeEntry({ entryId: "fresh" }));
+    // Simulate real pre-migration localStorage JSON: a stored entry that
+    // never had these 4 keys at all (not `false`/`null` — genuinely absent),
+    // the same shape JSON.parse would produce from a roster saved before
+    // 2026-09-10. `delete` (not `as any` reassignment to undefined) so the
+    // keys are truly absent from the object, matching what JSON.stringify of
+    // an old pool would have actually produced.
+    const stale = dehydrateRosterEntry(fakeEntry({ entryId: "stale" })) as Partial<StoredRosterEntry>;
+    delete stale.fastMoveIsDefaulted;
+    delete stale.chargedMoveIsDefaulted;
+    delete stale.fastMoveUnmatchedName;
+    delete stale.chargedMoveUnmatchedName;
+
+    const pool: RosterPool = {
+      version: ROSTER_POOL_SCHEMA_VERSION,
+      entries: [fresh, stale as StoredRosterEntry],
+      candyBySpeciesId: {},
+      savedAt: new Date(0).toISOString(),
+    };
+    const registry = { has: () => true, get: (id: string) => fakeSpecies(id) };
+    const { entries, staleMovesetBadgeCount } = hydrateRosterPool(pool, registry);
+    // Both still hydrate safely (never dropped/thrown) — staleness is purely
+    // a "should this prompt a re-import" signal, not a hydration failure.
+    expect(entries).toHaveLength(2);
+    expect(staleMovesetBadgeCount).toBe(1);
+  });
+
+  it("never flags a freshly-dehydrated entry as stale, even when its moveset genuinely resolved with false/null values", () => {
+    // The exact case the task's own "make sure a fresh import never trips
+    // the notice" requirement is about: fastMoveIsDefaulted/etc. are
+    // LEGITIMATELY false/null here (a real, fully-resolved moveset), not
+    // absent — dehydrateRosterEntry always writes them explicitly (see
+    // pokeGenieMatch.ts's buildRosterEntry), so JSON.stringify keeps them as
+    // real `false`/`null` literals, never drops them the way `undefined`
+    // would be dropped.
+    const entry = fakeEntry({ fastMoveIsDefaulted: false, chargedMoveIsDefaulted: false, fastMoveUnmatchedName: null, chargedMoveUnmatchedName: null });
+    const stored = dehydrateRosterEntry(entry);
+    expect(entryPredatesMovesetBadgeFields(stored)).toBe(false);
+
+    const pool: RosterPool = {
+      version: ROSTER_POOL_SCHEMA_VERSION,
+      entries: [stored],
+      candyBySpeciesId: {},
+      savedAt: new Date(0).toISOString(),
+    };
+    const registry = { has: () => true, get: (id: string) => fakeSpecies(id) };
+    expect(hydrateRosterPool(pool, registry).staleMovesetBadgeCount).toBe(0);
   });
 });
 

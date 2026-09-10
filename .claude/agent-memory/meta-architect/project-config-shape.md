@@ -7,22 +7,23 @@ metadata:
 
 **Snapshot 2026-09-08.** Nine agents in `.claude/agents/`: `data-sync`, `engine-developer`,
 `engine-verifier`, `web-developer`, `site-builder`, `code-simplifier`, `skeptic`,
-`pogo-researcher`, `meta-architect`. Per-agent audits: [[six-agent-split]],
-[[pogo-researcher-addition]], [[skeptic-addition]], [[code-simplifier-addition]].
+`pogo-researcher`, `meta-architect` — plus `pogo-player` (added 2026-09-10, so **ten** as of
+then). Per-agent audits: [[six-agent-split]], [[pogo-researcher-addition]],
+[[skeptic-addition]], [[code-simplifier-addition]], [[pogo-player-addition]].
 
 Seven skills in `.claude/skills/`: `verify-and-ship`, `watch-github-actions`,
 `add-scenario-assumption`, `new-tab`, `add-mega-allowlist-entry`, `record-mechanic`,
 `close-session` — the last four added 2026-09-08 ([[skills-and-gates-2026-09-08]]).
 
-Sizes (2026-09-07): agent bodies ~66 KB total; description-field sum ~4.1k chars (~1k tokens)
-across all 9 — far under the ~15k-token warning, so descriptions are never the lever. CLAUDE.md
+Sizes (2026-09-10): agent bodies ~93 KB total; description-field sum ~4.85k chars (~1.2k tokens)
+across all 10 — far under the ~15k-token warning, so descriptions are never the lever. CLAUDE.md
 (~21 KB → ~5.3k tokens) is the expensive surface: loaded into the main conversation *and* every
 non-Explore/Plan subagent. Measure it before touching descriptions.
 
 Deliberate settings, don't relitigate:
 - `engine-verifier`: `disallowedTools: Write, Edit`. Overlap with the test hook is by design —
   [[engine-verifier-hook-overlap]].
-- `code-simplifier` / `skeptic` / `pogo-researcher`: `Write` granted **only** for their own memory
+- `code-simplifier` / `skeptic` / `pogo-researcher` / `pogo-player`: `Write` granted **only** for their own memory
   file; each body says so explicitly, which is what makes the grant justifiable.
 - `meta-architect`: `model: inherit`, `memory: project`.
 - `.claude/settings.json`: `SessionStart` → `.claude/hooks/session-start.sh` (Node on PATH via

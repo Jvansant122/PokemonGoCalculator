@@ -1,6 +1,6 @@
 import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajectoryPoint } from "./combat.js";
 import type { DodgeBehavior } from "./breakpoints.js";
-import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
+import { canReachSuperMax, chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
 import { shadowAdjustedBaseStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
@@ -181,14 +181,34 @@ export function ownBoostMultiplier(boost: SpeciesDefinition["boost"] | undefined
  * already treat identically to `"base"` (no bonus, Base-tier "+" move power)
  * — so every existing caller that never passes this at all sees
  * byte-identical behavior. Exported so teamRaid.ts's/speciesReport.ts's/
- * ivComparison.ts's own per-candidate wiring shares exactly this gate rather
- * than each re-deriving it slightly differently.
+ * powerUp.ts's own per-candidate wiring shares exactly this gate rather than
+ * each re-deriving it slightly differently — ivComparison.ts now also calls
+ * THIS function directly (it used to hand-roll only the `.boost` half of
+ * this check locally; see this file's own history/megaLevel.ts's own
+ * canReachSuperMax doc comment).
+ *
+ * SECOND GATE (added 2026-09-10, confirmed in-game observation — see
+ * megaLevel.ts's canReachSuperMax): a request of exactly `"super-max"` is
+ * additionally CLAMPED down to `"max"` — the highest tier every mega/primal
+ * can reach regardless of "+" move eligibility — whenever `canReachSuperMax`
+ * says this species can't actually get there. This is a CLAMP, not a throw:
+ * a share link or saved scenario built before this gate existed (every mega
+ * could reach super-max then — a real bug) degrades to the nearest legal
+ * value on decode instead of erroring or silently keeping the illegal
+ * +2-effective-level bonus. Every OTHER tier (base/high/max) is reachable by
+ * every mega regardless of "+" move eligibility (see megaLevel.ts's
+ * MegaLevel doc comment — they only ever affect re-Mega Energy cost/
+ * cooldown), so `"super-max"` is the only value this second gate ever
+ * touches; the clamp is invisible for every other input, including
+ * `null`/`undefined`.
  */
 export function resolveCandidateMegaLevel(
-  species: Pick<SpeciesDefinition, "boost">,
+  species: Pick<SpeciesDefinition, "boost" | "chargedMoves">,
   megaLevel: MegaLevel | null | undefined,
 ): MegaLevel | null {
-  return species.boost ? (megaLevel ?? null) : null;
+  if (!species.boost) return null;
+  const resolved = megaLevel ?? null;
+  return resolved === "super-max" && !canReachSuperMax(species) ? "max" : resolved;
 }
 
 export interface ComparisonInputs {

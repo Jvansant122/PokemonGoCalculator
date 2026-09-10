@@ -801,4 +801,112 @@ describe("simulateStepwiseBattle", () => {
       }
     });
   });
+
+  describe("dodgeFastAttacksLockout", () => {
+    // Reported against Mega Tyranitar's Bite (real durationMs: 500, i.e.
+    // exactly DODGE_COST_SECONDS) — an attacker with dodgeFastAttacks:true
+    // appeared to do literally nothing. Diagnosis: correct, not a bug. Every
+    // dodge attempt pushes the attacker's own next fast-move eligibility
+    // later by DODGE_COST_SECONDS (see the main hit-handling block above);
+    // if the boss's fast move recycles at least that often, that push
+    // arrives at least as fast as real time elapses, so eligibility can
+    // never catch up on its own — only the attacker's own charged-move cast
+    // (which doesn't attempt to dodge while it plays out) can close the gap.
+    // quickBossFastMove mirrors Bite's real numbers (power 6, 500ms) against
+    // this file's shared `attacker`/BOSS_TIDE stats.
+    const quickBossFastMove = (power: number, durationSeconds: number) => ({
+      id: `test-quick-fast-${power}-${durationSeconds}`,
+      name: "Test Quick Fast",
+      type: "water" as const,
+      power,
+      energyGain: 4,
+      durationSeconds,
+    });
+    const quickBoss = (power: number, durationSeconds: number) => ({
+      attackStat: bossAttack,
+      defenseStat: bossDefense,
+      fastMove: quickBossFastMove(power, durationSeconds),
+      damageOut: { stab: true, typeEffectiveness: bossVsAlpha },
+    });
+
+    it("flags true, and this specific matchup provably does zero fast AND zero charged damage for the whole run", () => {
+      // power=6 mirrors Bite. Chip energy from dodged hits (floor(floor(15*0.25)*0.5) = 1/hit)
+      // does accumulate, but by the time it reaches Volt Slam's 45-energy
+      // cost the attacker has already spent 135 of its 150 HP getting
+      // there (dodged damage taken en route) — leaving only 15 HP of margin
+      // against the FULL, UNDODGED damage a boss hit deals while the
+      // attacker is mid-own-cast (see the "never lets a dodge reduce
+      // damage... mid-animation" test above), which is fatal before the
+      // cast can complete. Zero fast attacks AND zero charged attacks is a
+      // real, reachable outcome, not just a theoretical limit.
+      const result = simulateStepwiseBattle({
+        attacker,
+        boss: quickBoss(6, 0.5),
+        dodge: { kind: "none" },
+        dodgeFastAttacks: true,
+        seed: 1,
+      });
+      expect(result.dodgeFastAttacksLockout).toBe(true);
+      expect(result.totalFastMoveDamage).toBe(0);
+      expect(result.chargedAttacksLanded).toBe(0);
+      expect(result.totalChargedDamage).toBe(0);
+      expect(result.diedDuringOwnChargedMoveAnimation).toBe(true);
+      expect(result.survivedFullWindow).toBe(false);
+      expect(result.faintedAtSeconds).toBe(23);
+    });
+
+    it("is false for the identical boss when dodgeFastAttacks is off — the flag reflects the CONFIGURATION, not just this boss", () => {
+      const result = simulateStepwiseBattle({
+        attacker,
+        boss: quickBoss(6, 0.5),
+        dodge: { kind: "none" },
+        dodgeFastAttacks: false,
+        seed: 1,
+      });
+      expect(result.dodgeFastAttacksLockout).toBe(false);
+    });
+
+    it("does NOT imply zero fast-move damage in general — a charged-move cast that survives to completion lets attacks through around it", () => {
+      // Same 0.5s cadence (still exactly at the DODGE_COST_SECONDS boundary,
+      // so still flagged), but a weaker fast move (power 3 instead of 6)
+      // leaves enough HP margin for the attacker's charged-move cast to
+      // survive to completion: one Arc Spark and one Volt Slam land before
+      // it eventually faints to accumulated chip damage.
+      const result = simulateStepwiseBattle({
+        attacker,
+        boss: quickBoss(3, 0.5),
+        dodge: { kind: "none" },
+        dodgeFastAttacks: true,
+        seed: 1,
+      });
+      expect(result.dodgeFastAttacksLockout).toBe(true);
+      expect(result.totalFastMoveDamage).toBeGreaterThan(0);
+      expect(result.totalFastMoveDamage).toBe(5); // one Arc Spark hit
+      expect(result.chargedAttacksLanded).toBe(1);
+      expect(result.totalChargedDamage).toBe(171); // one Volt Slam hit
+      expect(result.diedDuringOwnChargedMoveAnimation).toBe(false);
+      expect(result.faintedAtSeconds).toBe(28.5);
+    });
+
+    it("flips off, and fast-move throughput meaningfully recovers, just above the DODGE_COST_SECONDS boundary", () => {
+      const result = simulateStepwiseBattle({
+        attacker,
+        boss: quickBoss(6, 0.6),
+        dodge: { kind: "none" },
+        dodgeFastAttacks: true,
+        seed: 1,
+      });
+      expect(result.dodgeFastAttacksLockout).toBe(false);
+      expect(result.totalFastMoveDamage).toBeGreaterThan(0);
+    });
+
+    it("is a config-level fact, not a per-seed sample — aggregated onto DistributionSummary the same way for every run", () => {
+      const distribution = runStepwiseDistribution(
+        { attacker, boss: quickBoss(6, 0.5), dodge: { kind: "none" }, dodgeFastAttacks: true, maxSeconds: 30 },
+        5,
+      );
+      expect(distribution.dodgeFastAttacksLockout).toBe(true);
+      expect(distribution.representativeRun.dodgeFastAttacksLockout).toBe(true);
+    });
+  });
 });

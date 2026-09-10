@@ -93,6 +93,10 @@ describe("ComparatorScenario round-trip", () => {
     bossStartsPrimed: true,
     bossStartingEnergyFraction: 0.75,
     weather: "rainy",
+    // Non-default: DEFAULT_ASSUMPTIONS's own value is `false` (the tidy
+    // default for a fresh scenario) — see the dedicated absent-decode test
+    // below for the OTHER, inverted-default direction this field needs.
+    showDetailedAssumptions: true,
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -140,7 +144,24 @@ describe("ComparatorScenario round-trip", () => {
       dodge: { kind: "none" },
       partySize: 4,
       teammateDps: 26.5,
+      // A link this old predates the advanced/simple split existing at all —
+      // every field it gates was simply always visible, so the sender's
+      // stored bossChargedMoveFrequencySeconds (COMPARATOR_DEFAULTS's own
+      // 15, since `minimal` above doesn't set it either) WAS the real number
+      // in force. Decodes to `true`, not COMPARATOR_DEFAULTS's `false` — see
+      // comparatorScenarioToAssumptions's own comment on this `??` guard.
+      showDetailedAssumptions: true,
     });
+  });
+
+  it("decodes an absent showDetailedAssumptions to true, not DEFAULT_ASSUMPTIONS's false (an old link's stored bossChargedMoveFrequencySeconds must not silently swap for the derived value)", () => {
+    const withoutDetailFlag = { ...comparatorAssumptionsToScenario(nonDefault) } as Partial<ComparatorScenario>;
+    delete withoutDetailFlag.showDetailedAssumptions;
+    const url = buildScenarioUrl("http://example.test/", withoutDetailFlag as ComparatorScenario);
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    const roundTripped = comparatorScenarioToAssumptions(decoded!);
+    expect(roundTripped.showDetailedAssumptions).toBe(true);
   });
 });
 

@@ -42,6 +42,15 @@ const DRILL_PECK: GameMasterMoveRecord = { movementId: "DRILL_PECK", pokemonType
 const OUTRAGE: GameMasterMoveRecord = { movementId: "OUTRAGE", pokemonType: "POKEMON_TYPE_DRAGON", power: 110, energyDelta: -50, durationMs: 4000 };
 const DYNAMIC_PUNCH: GameMasterMoveRecord = { movementId: "DYNAMIC_PUNCH", pokemonType: "POKEMON_TYPE_FIGHTING", power: 85, energyDelta: -50, durationMs: 2500 };
 const BRAVE_BIRD: GameMasterMoveRecord = { movementId: "BRAVE_BIRD", pokemonType: "POKEMON_TYPE_FLYING", power: 130, energyDelta: -100, durationMs: 2000 };
+// Added 2026-09-10 for the 7-entry db.pokemongohub.net batch — see
+// superMaxPlusMoves.ts's own "2026-09-10 ADDITION" comment.
+const ACID_SPRAY: GameMasterMoveRecord = { movementId: "ACID_SPRAY", pokemonType: "POKEMON_TYPE_POISON", power: 20, energyDelta: -50, durationMs: 3000 };
+const BRICK_BREAK: GameMasterMoveRecord = { movementId: "BRICK_BREAK", pokemonType: "POKEMON_TYPE_FIGHTING", power: 40, energyDelta: -33, durationMs: 1500 };
+const FUTURESIGHT: GameMasterMoveRecord = { movementId: "FUTURESIGHT", pokemonType: "POKEMON_TYPE_PSYCHIC", power: 115, energyDelta: -100, durationMs: 2500 };
+const LIQUIDATION: GameMasterMoveRecord = { movementId: "LIQUIDATION", pokemonType: "POKEMON_TYPE_WATER", power: 70, energyDelta: -33, durationMs: 3000 };
+const MYSTICAL_FIRE: GameMasterMoveRecord = { movementId: "MYSTICAL_FIRE", pokemonType: "POKEMON_TYPE_FIRE", power: 60, energyDelta: -33, durationMs: 2000 };
+const PSYBEAM: GameMasterMoveRecord = { movementId: "PSYBEAM", pokemonType: "POKEMON_TYPE_PSYCHIC", power: 65, energyDelta: -50, durationMs: 3000 };
+const SURF: GameMasterMoveRecord = { movementId: "SURF", pokemonType: "POKEMON_TYPE_WATER", power: 60, energyDelta: -50, durationMs: 1500 };
 
 const FULL_MOVE_TABLE = new Map<string, GameMasterMoveRecord>([
   ["DARK_PULSE", DARK_PULSE],
@@ -53,11 +62,18 @@ const FULL_MOVE_TABLE = new Map<string, GameMasterMoveRecord>([
   ["OUTRAGE", OUTRAGE],
   ["DYNAMIC_PUNCH", DYNAMIC_PUNCH],
   ["BRAVE_BIRD", BRAVE_BIRD],
+  ["ACID_SPRAY", ACID_SPRAY],
+  ["BRICK_BREAK", BRICK_BREAK],
+  ["FUTURESIGHT", FUTURESIGHT],
+  ["LIQUIDATION", LIQUIDATION],
+  ["MYSTICAL_FIRE", MYSTICAL_FIRE],
+  ["PSYBEAM", PSYBEAM],
+  ["SURF", SURF],
 ]);
 
 describe("SUPER_MAX_PLUS_MOVES (table shape)", () => {
-  it("has exactly 9 entries (8 live + 1 deliberately inert Staraptor entry)", () => {
-    expect(SUPER_MAX_PLUS_MOVES.length).toBe(9);
+  it("has exactly 16 entries (15 live + 1 deliberately inert Staraptor entry)", () => {
+    expect(SUPER_MAX_PLUS_MOVES.length).toBe(16);
   });
 
   it("has no duplicate speciesId", () => {
@@ -114,7 +130,7 @@ describe("SUPER_MAX_PLUS_MOVES (table shape)", () => {
     }
   });
 
-  it("all 9 entries currently read energyCost 100 — db.pokemongohub.net's sourced value for the 8 live entries, and Staraptor's coincidental (unconfirmed) fallback", () => {
+  it("all 16 entries currently read energyCost 100 — db.pokemongohub.net's sourced value for the 15 live entries, and Staraptor's coincidental (unconfirmed) fallback", () => {
     for (const entry of SUPER_MAX_PLUS_MOVES) {
       expect(entry.energyCost, entry.speciesId).toBe(100);
     }
@@ -129,22 +145,38 @@ describe("SUPER_MAX_PLUS_MOVES (table shape)", () => {
     }
   });
 
-  it("never includes any of the deliberately excluded species/moves", () => {
-    const excludedMoveIds = [
-      "MYSTICAL_FIRE_PLUS",
-      "SURF_PLUS",
-      "BRICK_BREAK_PLUS",
-      "LIQUIDATION_PLUS",
-      "ACID_SPRAY_PLUS",
-      "PSYBEAM_PLUS",
-      "FUTURE_SIGHT_PLUS",
-      "FUTURESIGHT_PLUS",
-    ];
-    const actualIds = SUPER_MAX_PLUS_MOVES.map((e) => e.moveId);
-    for (const excluded of excludedMoveIds) {
-      expect(actualIds).not.toContain(excluded);
+  it("the seven entries added 2026-09-10 (single-source db.pokemongohub.net full-table read) sit at community-estimate confidence, at exact value level", () => {
+    const expected: Record<string, { baseMovementId: string; moveId: string; moveName: string; power: number }> = {
+      "victreebel-mega": { baseMovementId: "ACID_SPRAY", moveId: "ACID_SPRAY_PLUS", moveName: "Acid Spray+", power: 160 },
+      "falinks-mega": { baseMovementId: "BRICK_BREAK", moveId: "BRICK_BREAK_PLUS", moveName: "Brick Break+", power: 150 },
+      "mewtwo-mega-y": { baseMovementId: "FUTURESIGHT", moveId: "FUTURESIGHT_PLUS", moveName: "Future Sight+", power: 140 },
+      "starmie-mega": { baseMovementId: "LIQUIDATION", moveId: "LIQUIDATION_PLUS", moveName: "Liquidation+", power: 180 },
+      "delphox-mega": { baseMovementId: "MYSTICAL_FIRE", moveId: "MYSTICAL_FIRE_PLUS", moveName: "Mystical Fire+", power: 140 },
+      "malamar-mega": { baseMovementId: "PSYBEAM", moveId: "PSYBEAM_PLUS", moveName: "Psybeam+", power: 170 },
+      "greninja-mega": { baseMovementId: "SURF", moveId: "SURF_PLUS", moveName: "Surf+", power: 130 },
+    };
+    for (const [speciesId, values] of Object.entries(expected)) {
+      const entry = SUPER_MAX_PLUS_MOVES.find((e) => e.speciesId === speciesId);
+      expect(entry, speciesId).toBeDefined();
+      expect(entry, speciesId).toMatchObject({ ...values, confidence: "community-estimate", energyCost: 100 });
     }
-    expect(SUPER_MAX_PLUS_MOVES.some((e) => e.speciesId === "mewtwo-mega-y")).toBe(false);
+  });
+
+  it("Future Sight+ resolves the earlier FUTURE_SIGHT-vs-FUTURESIGHT movementId correction: moveId/baseMovementId both use the no-underscore spelling", () => {
+    const futureSight = SUPER_MAX_PLUS_MOVES.find((e) => e.speciesId === "mewtwo-mega-y")!;
+    expect(futureSight.baseMovementId).toBe("FUTURESIGHT");
+    expect(futureSight.moveId).toBe("FUTURESIGHT_PLUS");
+  });
+
+  it("never includes the Apex Lugia/Ho-Oh AEROBLAST_PLUS/SACRED_FIRE_PLUS moves — cited only as a naming-convention precedent, never table members", () => {
+    const actualIds = SUPER_MAX_PLUS_MOVES.map((e) => e.moveId);
+    expect(actualIds).not.toContain("AEROBLAST_PLUS");
+    expect(actualIds).not.toContain("AEROBLAST_PLUS_PLUS");
+    expect(actualIds).not.toContain("SACRED_FIRE_PLUS");
+    expect(actualIds).not.toContain("SACRED_FIRE_PLUS_PLUS");
+    const actualSpeciesIds = SUPER_MAX_PLUS_MOVES.map((e) => e.speciesId);
+    expect(actualSpeciesIds).not.toContain("lugia-apex");
+    expect(actualSpeciesIds).not.toContain("ho-oh-apex");
   });
 
   it("every entry carries its own citation in a comment directly above it in the source file", () => {
@@ -213,6 +245,57 @@ describe("resolveSuperMaxPlusMove", () => {
     });
   });
 
+  it("builds Acid Spray+ (community-estimate, 2026-09-10) from ACID_SPRAY's real base template — base move IS already in Mega Victreebel's own moveset, resolution is still against the global table", () => {
+    const entry = SUPER_MAX_PLUS_MOVES.find((e) => e.speciesId === "victreebel-mega")!;
+    const move = resolveSuperMaxPlusMove(entry, FULL_MOVE_TABLE);
+    expect(move).toEqual({
+      id: "ACID_SPRAY_PLUS",
+      name: "Acid Spray+",
+      type: "poison",
+      power: 160,
+      energyGain: 0,
+      energyCost: 100,
+      durationSeconds: 3,
+      vulnerableWindowSeconds: 3,
+      isPlusMove: true,
+      plusMovePowerConfidence: "community-estimate",
+    });
+  });
+
+  it("builds Future Sight+ (community-estimate, 2026-09-10) from FUTURESIGHT's real base template — the no-underscore movementId resolves correctly", () => {
+    const entry = SUPER_MAX_PLUS_MOVES.find((e) => e.speciesId === "mewtwo-mega-y")!;
+    const move = resolveSuperMaxPlusMove(entry, FULL_MOVE_TABLE);
+    expect(move).toEqual({
+      id: "FUTURESIGHT_PLUS",
+      name: "Future Sight+",
+      type: "psychic",
+      power: 140,
+      energyGain: 0,
+      energyCost: 100,
+      durationSeconds: 2.5,
+      vulnerableWindowSeconds: 2.5,
+      isPlusMove: true,
+      plusMovePowerConfidence: "community-estimate",
+    });
+  });
+
+  it("builds Surf+ (community-estimate, 2026-09-10) from SURF's real base template — energyCost 100, NOT the base move's own 50", () => {
+    const entry = SUPER_MAX_PLUS_MOVES.find((e) => e.speciesId === "greninja-mega")!;
+    const move = resolveSuperMaxPlusMove(entry, FULL_MOVE_TABLE);
+    expect(move).toEqual({
+      id: "SURF_PLUS",
+      name: "Surf+",
+      type: "water",
+      power: 130,
+      energyGain: 0,
+      energyCost: 100,
+      durationSeconds: 1.5,
+      vulnerableWindowSeconds: 1.5,
+      isPlusMove: true,
+      plusMovePowerConfidence: "community-estimate",
+    });
+  });
+
   it("returns null when the base movementId has no matching GAME_MASTER template (never expected for real data, defensive only)", () => {
     const entry = SUPER_MAX_PLUS_MOVES.find((e) => e.speciesId === "houndoom-mega")!;
     const move = resolveSuperMaxPlusMove(entry, new Map());
@@ -232,12 +315,12 @@ describe("attachSuperMaxPlusMoves", () => {
     expect(result.attached).toContain("Mega Houndoom (Dark Pulse+)");
   });
 
-  it("attaches to every one of the 8 live species when all are present, and reports exactly the Staraptor gap", () => {
+  it("attaches to every one of the 15 live species when all are present, and reports exactly the Staraptor gap", () => {
     const liveSpeciesIds = SUPER_MAX_PLUS_MOVES.filter((e) => e.speciesId !== "staraptor-mega").map((e) => e.speciesId);
     const allSpecies = liveSpeciesIds.map((id) => makeSpecies(id, id));
     const result = attachSuperMaxPlusMoves(allSpecies, FULL_MOVE_TABLE);
 
-    expect(result.attached).toHaveLength(8);
+    expect(result.attached).toHaveLength(15);
     expect(result.skippedUnknownSpecies).toEqual(["staraptor-mega"]);
     expect(result.skippedMissingBaseMove).toEqual([]);
     for (const species of allSpecies) {

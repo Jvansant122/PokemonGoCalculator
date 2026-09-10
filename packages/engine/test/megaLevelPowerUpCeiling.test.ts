@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { resolveCandidateMegaLevel } from "../src/comparison.js";
 import { CPM_TABLE, MAX_POKEMON_POWER_UP_LEVEL } from "../src/cpm.js";
-import { effectiveLevelForMegaLevel } from "../src/megaLevel.js";
+import { canReachSuperMax, effectiveLevelForMegaLevel } from "../src/megaLevel.js";
 import {
   optimizePowerUps,
   planPowerUpBudget,
@@ -201,7 +202,33 @@ describe("the power-up ceiling stays 50 even though CPM_TABLE now has effective-
   // generates in the first place (that ladder is bounded purely by
   // table.maxLevel, completely independent of megaLevel).
   describe("the same ceiling holds for a mega-capable species at Super Max Mega Level", () => {
-    const megaSpecies: SpeciesDefinition = { ...species, id: "ceiling-mega-species", boost: { multiplier: 1.3, boostedType: "normal" } };
+    // Must actually be Super Max-ELIGIBLE (see megaLevel.ts's
+    // canReachSuperMax, added 2026-09-10 — not every mega can reach Super
+    // Max, only ones with a "+" move) for `megaLevel: "super-max"` below to
+    // genuinely reach effective level 52 rather than being CLAMPED to "max"
+    // (+0). `species.chargedMoves` ([chargedMove], no "+" move) would fail
+    // that check, silently turning this describe block's own "confirm the
+    // level-52 lookup never leaks into the candidate ladder" premise into a
+    // no-op (the assertions below would still pass either way, since they
+    // only bound `toLevel`/level ceilings — but would stop actually
+    // exercising the level-52 lookup they're named for).
+    const megaChargedMovePlus: ChargedMove = {
+      ...chargedMove,
+      id: "ceiling-charged-plus",
+      isPlusMove: true,
+      plusMovePowerConfidence: "community-estimate",
+    };
+    const megaSpecies: SpeciesDefinition = {
+      ...species,
+      id: "ceiling-mega-species",
+      chargedMoves: [megaChargedMovePlus],
+      boost: { multiplier: 1.3, boostedType: "normal" },
+    };
+
+    it("sanity: megaSpecies is actually Super Max-eligible, so 'super-max' below is honored rather than clamped", () => {
+      expect(canReachSuperMax(megaSpecies)).toBe(true);
+      expect(resolveCandidateMegaLevel(megaSpecies, "super-max")).toBe("super-max");
+    });
 
     it("sanity: Super Max really does push the effective combat level past the real level-50 ceiling", () => {
       expect(effectiveLevelForMegaLevel(50, "super-max")).toBe(52);

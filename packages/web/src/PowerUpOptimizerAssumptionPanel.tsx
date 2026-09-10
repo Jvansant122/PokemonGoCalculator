@@ -1,7 +1,8 @@
-import { MAX_TEAM_RAID_SLOTS, type DodgeBehavior, type MegaLevel, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import { type DodgeBehavior, type MegaLevel, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { NumberField } from "./NumberField.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
-import { MoveSelect } from "./MoveSelect.js";
+import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -10,6 +11,17 @@ import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMo
 import { BossSetPanel } from "./BossSetPanel.js";
 import type { PowerUpOptimizerMode, PowerUpRankBy } from "./powerUpOptimizerScenario.js";
 import { resolveMultiRaidBossIds } from "./multiRaidBossSet.js";
+
+/**
+ * Soft sanity threshold for candy/XL-candy/stardust fields, which have no
+ * natural game-rule upper bound to clamp to (unlike Level or an IV) — a
+ * value above this renders a non-blocking hint rather than being rejected.
+ * Deliberately generous (real in-game candy/stardust bags can legitimately
+ * hold five- and six-figure amounts) — this exists only to catch the exact
+ * "clicked once, typed over a pre-filled value, got a 100x-too-large
+ * number" bug class, not to gatekeep a genuinely large stockpile.
+ */
+const CURRENCY_SANITY_THRESHOLD = 99_999;
 
 /** One roster slot's own configuration — mirrors powerUpOptimizerScenario.ts's PowerUpScenarioSlot exactly, field for field. */
 export interface PowerUpSlotAssumption {
@@ -204,8 +216,20 @@ export function PowerUpOptimizerAssumptionPanel({
     : undefined;
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
 
+  // Type-effectiveness opponents for the move pickers below (display-only —
+  // see MoveSelect.tsx's own `opponents` prop doc comment), single-raid
+  // mode only (the only mode with per-slot/boss move pickers at all — see
+  // multi-raid's own roster-wide handling elsewhere). Each slot's own move
+  // pickers measure against the boss (one entry); the boss's own move
+  // pickers measure against every currently-resolved (non-empty) slot at
+  // once, tagged by slot NUMBER, mirroring Team Raid's identical pattern.
+  const bossOpponent: MoveSelectOpponent[] = bossSpecies ? [{ label: "Boss", types: bossSpecies.types }] : [];
+  const slotOpponents: MoveSelectOpponent[] = slotSpecies
+    .map((sp, i): MoveSelectOpponent | null => (sp ? { label: String(i + 1), types: sp.types } : null))
+    .filter((o): o is MoveSelectOpponent => o !== null);
+
   return (
-    <CollapsibleSection id="pu-assumptions" heading="Assumptions" defaultOpen>
+    <CollapsibleSection id="pu-assumptions" heading="Assumptions" defaultOpen={false}>
       <div className="tab-switcher" role="group" aria-label="Power-up optimizer mode" style={{ marginBottom: 12 }}>
         <button
           type="button"
@@ -253,24 +277,20 @@ export function PowerUpOptimizerAssumptionPanel({
               onChange={(level) => set("multiRaidMegaLevel", level)}
             />
             <p className="species-picker-hint">
-              Applies ROSTER-WIDE (the imported roster is ~164 Pokémon, so a per-entry control would be unusable),
-              and only ever to an entry that can actually Mega Evolve. Feeds the real simulated team-DPS behind
-              both the ranked table and the fixed-budget plan.
+              Applies ROSTER-WIDE, to whichever entry can actually Mega Evolve — see "Known caveats" below for why
+              (and for what Mega Level itself changes).
             </p>
           </div>
 
           <div style={{ marginTop: 12 }}>
             <p className="field-group-label">Candy on hand, per candy family (multi-raid mode)</p>
-            <p className="species-picker-hint">
-              Poke Genie exports no candy-on-hand column at all — every family starts UNKNOWN, not zero. Fill in only
-              the families you care about below; an unknown family's candidates are still ranked, just marked
-              &ldquo;cost unverified&rdquo; and excluded from the fixed-budget plan below (filling a family in here is
-              what UNLOCKS it for that plan — see the &ldquo;Fixed-budget plan&rdquo; section&rsquo;s own
-              &ldquo;Excluded from this plan&rdquo; table for exactly which families/species are still missing).
-              Pooled per candy FAMILY (e.g. Houndour and Houndoom share one pool), never per species — a mega/primal roster
-              entry&rsquo;s candy is resolved from its BASE species&rsquo; family automatically (e.g. Mega Blaziken
-              draws Blaziken&rsquo;s candy; labeled below as &ldquo;Blaziken (for Mega Blaziken)&rdquo;), since that
-              is whose candy a real power-up actually spends.
+            <p
+              className="species-picker-hint"
+              title="Poke Genie exports no candy-on-hand column at all — every family starts UNKNOWN, not zero, and filling one in is what unlocks it for the fixed-budget plan below. See &quot;Known caveats&quot; below for the full explanation."
+            >
+              Every family starts UNKNOWN, not zero — fill in only what you care about. Pooled per candy FAMILY
+              (e.g. Houndour and Houndoom share one pool), never per species; see "Known caveats" below for how a
+              mega/primal entry's candy resolves.
             </p>
             {rosterFamilyOptions.length === 0 ? (
               <p className="species-picker-hint">No roster imported yet — import one below to see its candy families here.</p>
@@ -291,33 +311,33 @@ export function PowerUpOptimizerAssumptionPanel({
                         <tr key={familyId}>
                           <td>{label}</td>
                           <td>
-                            <input
-                              type="number"
+                            <NumberField
                               min={0}
-                              value={pool?.candy ?? ""}
+                              allowEmpty
+                              value={pool?.candy}
                               placeholder="unknown"
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const candy = raw === "" ? undefined : Math.max(0, Math.floor(Number(raw) || 0));
+                              warnAbove={CURRENCY_SANITY_THRESHOLD}
+                              onChange={(candy) => {
+                                const normalized = candy === undefined ? undefined : Math.max(0, Math.floor(candy || 0));
                                 set("candyByFamilyId", {
                                   ...value.candyByFamilyId,
-                                  [familyId]: candy === undefined ? undefined : { candy, xlCandy: pool?.xlCandy ?? 0 },
+                                  [familyId]: normalized === undefined ? undefined : { candy: normalized, xlCandy: pool?.xlCandy ?? 0 },
                                 });
                               }}
                             />
                           </td>
                           <td>
-                            <input
-                              type="number"
+                            <NumberField
                               min={0}
-                              value={pool?.xlCandy ?? ""}
+                              allowEmpty
+                              value={pool?.xlCandy}
                               placeholder="unknown"
-                              onChange={(e) => {
-                                const raw = e.target.value;
-                                const xlCandy = raw === "" ? undefined : Math.max(0, Math.floor(Number(raw) || 0));
+                              warnAbove={CURRENCY_SANITY_THRESHOLD}
+                              onChange={(xlCandy) => {
+                                const normalized = xlCandy === undefined ? undefined : Math.max(0, Math.floor(xlCandy || 0));
                                 set("candyByFamilyId", {
                                   ...value.candyByFamilyId,
-                                  [familyId]: xlCandy === undefined ? undefined : { candy: pool?.candy ?? 0, xlCandy },
+                                  [familyId]: normalized === undefined ? undefined : { candy: pool?.candy ?? 0, xlCandy: normalized },
                                 });
                               }}
                             />
@@ -383,6 +403,7 @@ export function PowerUpOptimizerAssumptionPanel({
                     kind="fast"
                     value={slot.fastMoveId}
                     onChange={(id) => updateSlot(i, { fastMoveId: id })}
+                    opponents={bossOpponent}
                   />
                   <MoveSelect
                     idPrefix={`pu-slot-${i}-charged`}
@@ -391,6 +412,7 @@ export function PowerUpOptimizerAssumptionPanel({
                     kind="charged"
                     value={slot.chargedMoveId}
                     onChange={(id) => updateSlot(i, { chargedMoveId: id })}
+                    opponents={bossOpponent}
                   />
                   <div className="team-slot-flags">
                     <label className="species-picker-hint">
@@ -449,73 +471,69 @@ export function PowerUpOptimizerAssumptionPanel({
                   </div>
                   <div className="field">
                     <label htmlFor={`pu-slot-${i}-level`}>Current level</label>
-                    <input
+                    <NumberField
                       id={`pu-slot-${i}-level`}
-                      type="number"
                       min={1}
                       max={50}
                       step={0.5}
                       value={slot.level}
-                      onChange={(e) => updateSlot(i, { level: Number(e.target.value) })}
+                      onChange={(v) => updateSlot(i, { level: v ?? 1 })}
                     />
                   </div>
                   <div className="iv-row">
                     <div className="field">
                       <label htmlFor={`pu-slot-${i}-ivAttack`}>Attack IV</label>
-                      <input
+                      <NumberField
                         id={`pu-slot-${i}-ivAttack`}
                         className="iv-input"
-                        type="number"
                         min={0}
                         max={15}
                         value={slot.ivAttack}
-                        onChange={(e) => updateSlot(i, { ivAttack: Number(e.target.value) })}
+                        onChange={(v) => updateSlot(i, { ivAttack: v ?? 0 })}
                       />
                     </div>
                     <div className="field">
                       <label htmlFor={`pu-slot-${i}-ivDefense`}>Defense IV</label>
-                      <input
+                      <NumberField
                         id={`pu-slot-${i}-ivDefense`}
                         className="iv-input"
-                        type="number"
                         min={0}
                         max={15}
                         value={slot.ivDefense}
-                        onChange={(e) => updateSlot(i, { ivDefense: Number(e.target.value) })}
+                        onChange={(v) => updateSlot(i, { ivDefense: v ?? 0 })}
                       />
                     </div>
                     <div className="field">
                       <label htmlFor={`pu-slot-${i}-ivStamina`}>Stamina IV</label>
-                      <input
+                      <NumberField
                         id={`pu-slot-${i}-ivStamina`}
                         className="iv-input"
-                        type="number"
                         min={0}
                         max={15}
                         value={slot.ivStamina}
-                        onChange={(e) => updateSlot(i, { ivStamina: Number(e.target.value) })}
+                        onChange={(v) => updateSlot(i, { ivStamina: v ?? 0 })}
                       />
                     </div>
                   </div>
                   <div className="iv-row">
                     <div className="field">
                       <label htmlFor={`pu-slot-${i}-candy`}>Candy on hand</label>
-                      <input
+                      <NumberField
                         id={`pu-slot-${i}-candy`}
-                        type="number"
                         min={0}
                         value={slot.candyOnHand}
-                        onChange={(e) => updateSlot(i, { candyOnHand: Math.max(0, Number(e.target.value)) })}
+                        warnAbove={CURRENCY_SANITY_THRESHOLD}
+                        onChange={(v) => updateSlot(i, { candyOnHand: Math.max(0, v ?? 0) })}
                       />
                     </div>
                     <div className="field">
                       <label htmlFor={`pu-slot-${i}-xlCandy`}>XL candy on hand</label>
-                      <input
+                      <NumberField
                         id={`pu-slot-${i}-xlCandy`}
-                        type="number"
                         min={0}
                         value={slot.xlCandyOnHand}
-                        onChange={(e) => updateSlot(i, { xlCandyOnHand: Math.max(0, Number(e.target.value)) })}
+                        warnAbove={CURRENCY_SANITY_THRESHOLD}
+                        onChange={(v) => updateSlot(i, { xlCandyOnHand: Math.max(0, v ?? 0) })}
                       />
                     </div>
                   </div>
@@ -553,6 +571,7 @@ export function PowerUpOptimizerAssumptionPanel({
                 kind="fast"
                 value={value.bossFastMoveId}
                 onChange={(id) => set("bossFastMoveId", id)}
+                opponents={slotOpponents}
               />
               <MoveSelect
                 idPrefix="pu-boss-charged"
@@ -561,6 +580,7 @@ export function PowerUpOptimizerAssumptionPanel({
                 kind="charged"
                 value={value.bossChargedMoveId}
                 onChange={(id) => set("bossChargedMoveId", id)}
+                opponents={slotOpponents}
               />
             </>
           )}
@@ -570,52 +590,52 @@ export function PowerUpOptimizerAssumptionPanel({
 
         <div className="field">
           <label htmlFor="pu-stardust">Stardust on hand</label>
-          <input
+          <NumberField
             id="pu-stardust"
-            type="number"
             min={0}
             value={value.stardustOnHand}
-            onChange={(e) => set("stardustOnHand", Math.max(0, Number(e.target.value)))}
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("stardustOnHand", Math.max(0, v ?? 0))}
             title="One shared account-wide pool, unlike candy/XL candy which are held per-species (see each slot's own candy fields above)."
           />
         </div>
 
         <div className="field">
           <label htmlFor="pu-rareCandy">Rare Candy on hand</label>
-          <input
+          <NumberField
             id="pu-rareCandy"
-            type="number"
             min={0}
             value={value.rareCandyOnHand}
-            onChange={(e) => set("rareCandyOnHand", Math.max(0, Number(e.target.value)))}
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("rareCandyOnHand", Math.max(0, v ?? 0))}
             title="A shared, account-wide pool — converts 1:1 into any species' regular Candy (never XL Candy). Only used by the fixed-budget plan below, after each slot's own candy on hand runs out."
           />
         </div>
 
         <div className="field">
           <label htmlFor="pu-rareCandyXl">Rare Candy XL on hand</label>
-          <input
+          <NumberField
             id="pu-rareCandyXl"
-            type="number"
             min={0}
             value={value.rareCandyXlOnHand}
-            onChange={(e) => set("rareCandyXlOnHand", Math.max(0, Number(e.target.value)))}
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("rareCandyXlOnHand", Math.max(0, v ?? 0))}
             title="A separate shared, account-wide pool from plain Rare Candy — converts 1:1 into any species' XL Candy only. Only used by the fixed-budget plan below, after each slot's own XL candy on hand runs out."
           />
         </div>
 
         <div className="field">
           <label htmlFor="pu-rankBy">Rank candidates by</label>
-          <select id="pu-rankBy" value={value.rankBy} onChange={(e) => set("rankBy", e.target.value as PowerUpRankBy)}>
+          <select
+            id="pu-rankBy"
+            value={value.rankBy}
+            onChange={(e) => set("rankBy", e.target.value as PowerUpRankBy)}
+            title="Display-only — never changes which candidates exist or their own numbers, only the sort order of the ranked table below (both modes). See &quot;Known caveats&quot; below for why stardust/candy stay separate."
+          >
             <option value="stardust">Team-DPS gained per 1000 stardust</option>
             <option value="candy">Team-DPS gained per candy</option>
             <option value="xlCandy">Team-DPS gained per XL candy</option>
           </select>
-          <p className="species-picker-hint">
-            Display-only — never changes which candidates exist or their own numbers, only the sort order of the
-            ranked table below (both modes). Stardust and candy are deliberately kept as two separate efficiency
-            numbers rather than one blended score, since they aren't fungible resources for a real player.
-          </p>
         </div>
 
         <div className="field">
@@ -637,14 +657,13 @@ export function PowerUpOptimizerAssumptionPanel({
         {value.dodge.kind === "percentage-missed" && (
           <div className="field">
             <label htmlFor="pu-missedFraction">Fraction of charged hits NOT dodged</label>
-            <input
+            <NumberField
               id="pu-missedFraction"
-              type="number"
               min={0}
               max={1}
               step={0.05}
               value={value.dodge.missedFraction}
-              onChange={(e) => set("dodge", { kind: "percentage-missed", missedFraction: Number(e.target.value) })}
+              onChange={(v) => set("dodge", { kind: "percentage-missed", missedFraction: v ?? 0 })}
             />
           </div>
         )}
@@ -724,14 +743,13 @@ export function PowerUpOptimizerAssumptionPanel({
         {value.bossStartsPrimed && (
           <div className="field">
             <label htmlFor="pu-bossStartingEnergyFraction">Boss starting energy (% of its charged-move cost)</label>
-            <input
+            <NumberField
               id="pu-bossStartingEnergyFraction"
-              type="number"
               min={0}
               max={100}
               step={5}
               value={Math.round(value.bossStartingEnergyFraction * 100)}
-              onChange={(e) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, Number(e.target.value) / 100)))}
+              onChange={(v) => set("bossStartingEnergyFraction", Math.min(1, Math.max(0, (v ?? 0) / 100)))}
             />
           </div>
         )}
@@ -747,12 +765,11 @@ export function PowerUpOptimizerAssumptionPanel({
             Boss charged-move mean frequency (s)
             {value.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
           </label>
-          <input
+          <NumberField
             id="pu-bossFreq"
-            type="number"
             min={1}
             value={value.bossChargedMoveFrequencySeconds}
-            onChange={(e) => set("bossChargedMoveFrequencySeconds", Number(e.target.value))}
+            onChange={(v) => set("bossChargedMoveFrequencySeconds", v ?? 1)}
             disabled={value.bossChargedMoveCadence === "energy-driven"}
           />
           {value.bossChargedMoveCadence === "energy-driven" && (
@@ -762,35 +779,37 @@ export function PowerUpOptimizerAssumptionPanel({
 
         <div className="field">
           <label htmlFor="pu-raidTimer">Raid timer</label>
-          <select id="pu-raidTimer" value={value.raidTimerSeconds} onChange={(e) => set("raidTimerSeconds", Number(e.target.value))}>
+          <select
+            id="pu-raidTimer"
+            value={value.raidTimerSeconds}
+            onChange={(e) => set("raidTimerSeconds", Number(e.target.value))}
+            title="Real, documented per-tier raid countdown — see &quot;Known caveats&quot; below for the source."
+          >
             <option value={180}>180s — Tier 1/3 Raids</option>
             <option value={300}>300s — Mega/Legendary/Primal Raids</option>
           </select>
-          <p className="species-picker-hint">Real, documented per-tier raid countdown — see raidBoss.ts's RAID_TIER_TABLE.</p>
         </div>
 
         <div className="field">
           <label htmlFor="pu-swapCost">Swap-in cost per mid-roster faint (s)</label>
-          <input
+          <NumberField
             id="pu-swapCost"
-            type="number"
             min={0}
             step={0.5}
             value={value.swapCostSeconds}
-            onChange={(e) => set("swapCostSeconds", Math.max(0, Number(e.target.value)))}
+            onChange={(v) => set("swapCostSeconds", Math.max(0, v ?? 0))}
             title="No documented real value exists for this in-game (a 'brief revival screen pause' of unconfirmed duration) — defaults to 0 (fastest-possible play), an honest placeholder rather than a fabricated number."
           />
         </div>
 
         <div className="field">
           <label htmlFor="pu-reviveCost">Full-wipe revive-and-rejoin cost (s)</label>
-          <input
+          <NumberField
             id="pu-reviveCost"
-            type="number"
             min={0}
             step={0.5}
             value={value.reviveCostSeconds}
-            onChange={(e) => set("reviveCostSeconds", Math.max(0, Number(e.target.value)))}
+            onChange={(v) => set("reviveCostSeconds", Math.max(0, v ?? 0))}
             title="Paid once every time the whole fielded roster faints out, before restarting from the first fielded slot — raid-clock time in which nothing is dealt. Defaults to 15s on this tab (within the community's ~12-15s lobby-rejoin estimate; no official figure exists). Set 0 to model instant, free revives."
           />
           <button type="button" onClick={() => set("reviveCostSeconds", 15)} style={{ marginTop: 4, alignSelf: "flex-start" }}>
@@ -798,13 +817,6 @@ export function PowerUpOptimizerAssumptionPanel({
           </button>
         </div>
       </div>
-
-      <p className="caveats note-block" style={{ marginTop: 12 }}>
-        A team can field fewer than {MAX_TEAM_RAID_SLOTS} Pokémon — leave any slot empty ("clear" it) and it simply
-        never enters the fight and never contributes a power-up candidate. Every power-up candidate below is a
-        SINGLE-SLOT power-up run through a full paired team-raid simulation against the other 5 slots exactly as
-        configured — no multi-slot power-up plans and no "add a hypothetical 7th Pokémon" candidates in this v1.
-      </p>
     </CollapsibleSection>
   );
 }

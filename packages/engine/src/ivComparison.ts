@@ -1,4 +1,5 @@
 import { calculateDamage, type DamageInputs } from "./damage.js";
+import { resolveCandidateMegaLevel } from "./comparison.js";
 import { CPM_TABLE, MAX_POKEMON_POWER_UP_LEVEL } from "./cpm.js";
 import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStatsAtLevel } from "./stats.js";
@@ -103,10 +104,15 @@ export function compareIvSpreads(params: {
    * level; (2) `chargedMove` is passed through chargedMoveAtMegaLevel first,
    * so a "+" move's power is scaled before `chargedMoveDamage` is computed —
    * a non-"+" `chargedMove` (the common case) is unaffected either way.
-   * Ignored entirely (treated as if omitted) when `species` has no `.boost`
-   * at all, since Mega Level is not a concept that applies to a non-mega
-   * species — a caller does not need to check this itself. Omitted/undefined
-   * is byte-identical to before this parameter existed.
+   * Resolved via comparison.ts's `resolveCandidateMegaLevel` (this module
+   * used to hand-roll only the `.boost` half of that gate locally; now
+   * shares the exact same function, so a caller does not need to check
+   * `.boost` OR Super Max eligibility itself): ignored entirely (treated as
+   * if omitted) when `species` has no `.boost` at all, and a `"super-max"`
+   * request is additionally CLAMPED down to `"max"` when `species` can't
+   * actually reach Super Max (no "+" move — see megaLevel.ts's
+   * canReachSuperMax). Omitted/undefined is byte-identical to before this
+   * parameter existed.
    */
   megaLevel?: MegaLevel | null;
 }): IvComparisonResult {
@@ -126,10 +132,12 @@ export function compareIvSpreads(params: {
     maxSeconds,
   } = params;
 
-  // See megaLevel's own doc comment above for why this is gated on
-  // species.boost here rather than trusted blindly — effectiveLevelForMegaLevel/
-  // chargedMoveAtMegaLevel are themselves pure and ungated.
-  const resolvedMegaLevel = species.boost ? (params.megaLevel ?? null) : null;
+  // Shares comparison.ts's resolveCandidateMegaLevel gate (species.boost
+  // check + the Super Max eligibility clamp) rather than re-deriving either
+  // locally — see megaLevel's own doc comment above.
+  // effectiveLevelForMegaLevel/chargedMoveAtMegaLevel are themselves pure
+  // and ungated, so SOME caller has to apply this gate before reaching them.
+  const resolvedMegaLevel = resolveCandidateMegaLevel(species, params.megaLevel);
   const chargedMove = chargedMoveAtMegaLevel(params.chargedMove, resolvedMegaLevel);
 
   const levels = [...(params.levels ?? ALL_LEVELS)].sort((a, b) => a - b);

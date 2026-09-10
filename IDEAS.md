@@ -157,3 +157,21 @@ as a bug. Nothing here is committed work.
     archived boss carrying a real recorded `eraHp` is cleared against today's tier HP inside
     `runTeamRaid`'s own clear-timer detection. Harmless while the multi-raid sweep defaults to
     currently-active bosses; it bites as soon as past bosses are routinely swept.
+
+15. **Shadow forms exist only for species that have been shadow *raid bosses*.** 108 shadow
+    entries today, and exactly one Alolan one (Shadow Sandslash). Shadow Alolan Sandshrew — the
+    case the user raised on 2026-09-09 — is a Team GO Rocket **grunt** shadow, so nothing in the
+    synthesis chain (raidHistory, Pokebattler `_SHADOW_LEGACY`, Bulbapedia's Shadow Raid page)
+    can ever produce it. That is arguably correct for a boss list and wrong for the *attacker*
+    picker and the Poke Genie import, where a user's grunt-caught shadow has no entry to match.
+    Widening the synthesis to grunt shadows needs its own evidence anchor — CLAUDE.md's standing
+    decision deliberately anchors shadows on recorded evidence, not on the live feed alone, so
+    this is a scope change to make deliberately rather than a bug to patch.
+
+16. **Two tabs now model "show advanced assumptions" two different ways.** The Comparator's
+    `showDetailedAssumptions` is a real field on the engine's `Scenario` (added 2026-09-10); Team
+    Raid's identically-named field is a `packages/web`-only bolt-on on `TeamScenarioWithShadow`,
+    because `TeamScenario` in the engine never got one — its own comment says folding it in
+    properly was left as `engine-developer`'s call. Neither is broken and both round-trip, so this
+    is tidying, not a bug. Reconcile in one direction deliberately rather than letting a third tab
+    pick a third pattern.

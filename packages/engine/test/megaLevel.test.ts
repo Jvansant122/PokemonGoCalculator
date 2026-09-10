@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fromGameMasterMove, type RawGameMasterMove } from "../src/gamemaster.js";
 import {
+  canReachSuperMax,
   chargedMoveAtMegaLevel,
   effectiveLevelForMegaLevel,
   MEGA_LEVEL_PLUS_MOVE_POWER_MULTIPLIER,
@@ -108,6 +109,40 @@ const zapCannonPlus: ChargedMove = {
   isPlusMove: true,
   plusMovePowerConfidence: "cross-site",
 };
+
+// [confirmed] user, 2026-09-10, relaying direct in-game observation: "not
+// every mega can get to super mega level its only the ones with plus moves
+// unlocked" — canReachSuperMax is the data-driven predicate this feature
+// gates the Super Max effective-level CP bonus behind (see
+// comparison.ts's resolveCandidateMegaLevel).
+describe("canReachSuperMax", () => {
+  it("is false for a species with an empty chargedMoves list", () => {
+    expect(canReachSuperMax({ chargedMoves: [] })).toBe(false);
+  });
+
+  it("is false for a species whose charged moves are all ordinary (no '+' move)", () => {
+    expect(canReachSuperMax({ chargedMoves: [nonPlusMove] })).toBe(false);
+    expect(canReachSuperMax({ chargedMoves: [nonPlusMove, { ...nonPlusMove, id: "another-ordinary" }] })).toBe(false);
+  });
+
+  it("is true for a species carrying at least one '+' move", () => {
+    expect(canReachSuperMax({ chargedMoves: [darkPulsePlus] })).toBe(true);
+    expect(canReachSuperMax({ chargedMoves: [fellStingerPlus] })).toBe(true);
+    expect(canReachSuperMax({ chargedMoves: [zapCannonPlus] })).toBe(true);
+  });
+
+  it("is true when the '+' move is mixed in among ordinary moves, regardless of array position", () => {
+    expect(canReachSuperMax({ chargedMoves: [nonPlusMove, darkPulsePlus] })).toBe(true);
+    expect(canReachSuperMax({ chargedMoves: [darkPulsePlus, nonPlusMove] })).toBe(true);
+  });
+
+  it("a species becomes eligible the instant a '+' move is added to its chargedMoves, with no other change — data-driven, not a hand-maintained species list", () => {
+    const beforeDataSyncAddsThePlusMove = { chargedMoves: [nonPlusMove] };
+    const afterDataSyncAddsThePlusMove = { chargedMoves: [nonPlusMove, zapCannonPlus] };
+    expect(canReachSuperMax(beforeDataSyncAddsThePlusMove)).toBe(false);
+    expect(canReachSuperMax(afterDataSyncAddsThePlusMove)).toBe(true);
+  });
+});
 
 describe("chargedMoveAtMegaLevel", () => {
   it.each<[MegaLevel | null | undefined]>([["base"], ["high"], ["max"], ["super-max"], [null], [undefined]])(

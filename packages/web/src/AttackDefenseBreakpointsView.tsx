@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import type { MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { BreakpointSheet } from "./BreakpointSheet.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
-import { MoveSelect } from "./MoveSelect.js";
-import { MegaLevelSelect } from "./megaLevelSelect.js";
+import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
+import { MegaLevelSelect, MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -163,6 +163,14 @@ export function AttackDefenseBreakpointsView() {
   const boss = runResult.boss;
   const result = { attack: runResult.attack, defense: runResult.defense, error: runResult.error };
 
+  // Type-effectiveness opponents for the move pickers below (display-only —
+  // see MoveSelect.tsx's own `opponents` prop doc comment). Exactly one
+  // opponent either direction: Attack mode measures this species' own moves
+  // against the boss; Defense mode measures the boss's own moves against
+  // this species.
+  const bossOpponent: MoveSelectOpponent[] = boss ? [{ label: "Boss", types: boss.types }] : [];
+  const attackerOpponent: MoveSelectOpponent[] = species ? [{ label: "Attacker", types: species.types }] : [];
+
   function handleShare() {
     const url = new URL(buildAttackDefenseBreakpointsScenarioUrl(getBaseUrl(), assumptionsToScenario(assumptions)));
     url.searchParams.set("view", "attack-defense-breakpoints");
@@ -192,7 +200,7 @@ export function AttackDefenseBreakpointsView() {
         — the full damage-output (or damage-received) spreadsheet across every IV x level combination.
       </p>
 
-      <CollapsibleSection id="adb-assumptions" heading="Assumptions" defaultOpen>
+      <CollapsibleSection id="adb-assumptions" heading="Assumptions" defaultOpen={false}>
         <div className="tab-switcher" role="group" aria-label="Breakpoints mode" style={{ marginBottom: 14 }}>
           <button
             type="button"
@@ -256,6 +264,7 @@ export function AttackDefenseBreakpointsView() {
                   kind="fast"
                   value={assumptions.fastMoveId}
                   onChange={(id) => setAssumptions({ ...assumptions, fastMoveId: id })}
+                  opponents={bossOpponent}
                 />
                 <MoveSelect
                   idPrefix="adb-charged"
@@ -264,6 +273,7 @@ export function AttackDefenseBreakpointsView() {
                   kind="charged"
                   value={assumptions.chargedMoveId}
                   onChange={(id) => setAssumptions({ ...assumptions, chargedMoveId: id })}
+                  opponents={bossOpponent}
                 />
               </>
             )}
@@ -288,6 +298,7 @@ export function AttackDefenseBreakpointsView() {
                   kind="fast"
                   value={assumptions.bossFastMoveId}
                   onChange={(id) => setAssumptions({ ...assumptions, bossFastMoveId: id })}
+                  opponents={attackerOpponent}
                 />
                 <MoveSelect
                   idPrefix="adb-boss-charged"
@@ -296,6 +307,7 @@ export function AttackDefenseBreakpointsView() {
                   kind="charged"
                   value={assumptions.bossChargedMoveId}
                   onChange={(id) => setAssumptions({ ...assumptions, bossChargedMoveId: id })}
+                  opponents={attackerOpponent}
                 />
               </>
             )}
@@ -386,6 +398,7 @@ export function AttackDefenseBreakpointsView() {
 
       <CollapsibleSection id="adb-known-caveats" heading="Known caveats" defaultOpen={false}>
         <div className="note-block">
+        <h3>Simulation model</h3>
         <p className="caveats">
           Every sheet here is a single isolated hit's damage at one IV/level combination — there is no fight, no
           combat phase, and no charged-move energy gating modeled at all, unlike the Comparator/Team Raid/Species
@@ -394,6 +407,7 @@ export function AttackDefenseBreakpointsView() {
           for it to apply to — each cell already IS one hit, full stop. If you need survival time or dodge modeling,
           use the IV Breakpoints tab (time-to-faint) or the Comparator tab (full simulation) instead.
         </p>
+        <h3>Mega/primal own-damage boost</h3>
         <p className="caveats">
           This view does not model a mega/primal species' own-damage boost multiplier at all — pick a non-mega,
           non-primal species for an exact match, or use the Comparator/Species Report tabs for a mega-form species'
@@ -403,6 +417,9 @@ export function AttackDefenseBreakpointsView() {
           selected "+" charged move's scaled power feeds the Attack-mode charged grid directly — neither touches
           the own-damage boost multiplier this paragraph is about.
         </p>
+        <h3>Mega Level — full sourcing</h3>
+        <p className="caveats">{MEGA_LEVEL_HINT}</p>
+        <h3>Scope &amp; breakpoint highlighting</h3>
         <p className="caveats">
           Level columns run 50 down to 25 in the usual 0.5 steps (51 columns total) — the practically relevant
           power-up range, not the full 1-50 range this engine can compute. Defense Breakpoints rows are Defense IV

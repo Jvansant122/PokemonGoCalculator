@@ -91,7 +91,20 @@ export const UNEVOLVED_SPECIES: SpeciesDefinition = makeAttacker("test-unevolved
 /** So weak (and so tightly stardust-bounded in its own test) that no affordable level ever lets it crack a team already full of STRONG_SPECIES — used for the "changes no team, delta exactly 0" case. */
 export const TINY_SPECIES: SpeciesDefinition = makeAttacker("test-tiny", 40, 40, 60);
 
-/** Same base-stat family as STRONG_SPECIES, but carries `.boost` — mega/primal-capable, for RosterPlannerInputs.megaLevel (roster-wide) tests. A RosterEntry using this species must set `canMega: true` (runRosterPlanner/planRosterBudget both throw otherwise — see RosterEntry.canMega). */
+/**
+ * Same base-stat family as STRONG_SPECIES, but carries `.boost` AND a "+"
+ * move — mega/primal-capable AND Super Max-eligible (see megaLevel.ts's
+ * canReachSuperMax), for RosterPlannerInputs.megaLevel (roster-wide) tests.
+ * The "+" move REPLACES the shared CHARGED_MOVE (a single chargedMoves
+ * entry, not an added second one) with the exact same power/energyCost/
+ * duration, so `chargedMoveId: null`'s default-move resolution
+ * (chargedMoves[0]) still exercises one unambiguous move, and this is
+ * otherwise invisible to anything that doesn't specifically probe Super Max
+ * eligibility. A RosterEntry using this species must set `canMega: true`
+ * (runRosterPlanner/planRosterBudget both throw otherwise — see
+ * RosterEntry.canMega).
+ */
 export const MEGA_BENCH_SPECIES: SpeciesDefinition = makeAttacker("test-mega-bench", 220, 120, 180, {
+  chargedMoves: [{ ...CHARGED_MOVE, id: "test-slam-plus", isPlusMove: true, plusMovePowerConfidence: "community-estimate" }],
   boost: { multiplier: 1.3, boostedType: "normal" },
 });

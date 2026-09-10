@@ -52,6 +52,26 @@ describe("runComparatorScenario (default scenario)", () => {
   }, 20_000);
 });
 
+describe("runComparatorScenario (showDetailedAssumptions derived-frequency fallback)", () => {
+  it("derives effectiveBossChargedMoveFrequencySeconds from the boss's own fast-move charge time when showDetailedAssumptions is false", () => {
+    const assumptions = { ...COMPARATOR_DEFAULTS, showDetailedAssumptions: false };
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.boss).not.toBeNull();
+    const boss = result.boss!;
+    const bossFastMove = boss.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? boss.fastMoves[0]!;
+    const bossChargedMove =
+      boss.chargedMoves.find((m) => m.id === assumptions.bossChargedMoveId) ?? boss.chargedMoves[0]!;
+    const expected = bossChargedMoveReadySeconds(bossFastMove, bossChargedMove, 0);
+    expect(result.effectiveBossChargedMoveFrequencySeconds).toBe(expected);
+  });
+
+  it("uses the stored bossChargedMoveFrequencySeconds verbatim when showDetailedAssumptions is true", () => {
+    const assumptions = { ...COMPARATOR_DEFAULTS, showDetailedAssumptions: true, bossChargedMoveFrequencySeconds: 42 };
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.effectiveBossChargedMoveFrequencySeconds).toBe(42);
+  });
+});
+
 describe("runTeamRaidScenario (default scenario)", () => {
   it("produces a well-formed result with no NaN/undefined headline numbers", () => {
     const result = runTeamRaidScenario(DEFAULT_TEAM_ASSUMPTIONS, speciesRegistry);
@@ -208,15 +228,24 @@ describe("runPowerUpOptimizerScenario (default scenario)", () => {
   }, 30_000);
 
   it("reports a non-null bestBlockedCandidate — with every shortfall named — when a real gain exists but the budget is too tight to afford it", () => {
-    // Same default roster/boss, but a deliberately tight budget (matches the
-    // real bug report this field exists to fix): a bigger gain exists just
-    // beyond what's affordable, and the plan must say so rather than reading
-    // as "nothing else helps."
+    // Same default roster/boss, but a deliberately tight budget: a bigger
+    // gain exists just beyond what's affordable, and the plan must say so
+    // rather than reading as "nothing else helps." Budget figures tightened
+    // 2026-09-10 alongside the default roster/boss replacement (see
+    // TeamRaidView.tsx's DEFAULT_TEAM_ASSUMPTIONS doc comment) — the new
+    // roster clears its former boss's replacement (a 3600 HP "tyranitar",
+    // not the old 9000 HP "tyranitar-mega") so comfortably that the ORIGINAL
+    // 100k-stardust/25-candy figures this test used to pin (from the real
+    // bug report this field exists to fix) no longer reproduce a blocked
+    // state at all — every candidate that clears the noise floor is already
+    // affordable at that budget now. Verified empirically that this tighter
+    // budget reliably reproduces a real (deltaTeamDps ~6.8, well above the
+    // ~1.3 noise floor) blocked candidate against the new default.
     const tightAssumptions = {
       ...PU_DEFAULTS,
-      stardustOnHand: 100_000,
-      rareCandyOnHand: 25,
-      slots: PU_DEFAULTS.slots.map((s) => ({ ...s, candyOnHand: 10 })),
+      stardustOnHand: 20_000,
+      rareCandyOnHand: 5,
+      slots: PU_DEFAULTS.slots.map((s) => ({ ...s, candyOnHand: 5 })),
     };
     const result = runPowerUpOptimizerScenario(tightAssumptions, speciesRegistry);
     expect(result.plan).not.toBeNull();
@@ -253,6 +282,10 @@ describe("runRosterPlannerScenario (multi-raid mode)", () => {
       ivsAreApproximate: false,
       levelIsApproximate: false,
       movesetIsDefaulted: false,
+      fastMoveIsDefaulted: false,
+      chargedMoveIsDefaulted: false,
+      fastMoveUnmatchedName: null,
+      chargedMoveUnmatchedName: null,
       sourceLineNumber: i + 2,
       unmatchedMoveNames: [],
     };
@@ -343,6 +376,10 @@ describe("runRosterBudgetScenario (multi-raid mode fixed-budget plan, Phase 4)",
       ivsAreApproximate: false,
       levelIsApproximate: false,
       movesetIsDefaulted: false,
+      fastMoveIsDefaulted: false,
+      chargedMoveIsDefaulted: false,
+      fastMoveUnmatchedName: null,
+      chargedMoveUnmatchedName: null,
       sourceLineNumber: i + 2,
       unmatchedMoveNames: [],
     };

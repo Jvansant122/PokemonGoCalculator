@@ -1,9 +1,85 @@
 # Handoff
 
-Last updated: 2026-09-09 (multi-raid whole-roster Power-Up Optimizer shipped). Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-10 (the second user's feedback batch + two player-audit rounds). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-09 (latest): multi-raid, whole-roster Power-Up Optimizer — SHIPPED
+## 2026-09-10 (latest): feedback batch, `pogo-player` agent, two audit rounds — SHIPPED
+
+Driven by three message logs from the project's real second user, then by two rounds of a new
+`pogo-player` audit agent. Everything below is verified: `npm run verify` green, `test:e2e` 14/14.
+
+### Data corrections
+
+- **All 15 Super Max "+" moves** (was 8). The user supplied the complete pokemongohub table; the 7
+  that had been deliberately excluded for want of a raid-context power figure are now in. Two
+  assumptions got *stronger*, not weaker: **15/15 durations** match the base move exactly, and all
+  15 cost **100 energy** while their base moves span 33/50/100 — which rules out the "uniform 100
+  is a template default" worry that had blocked them.
+- **Six signature moves recovered.** Behemoth Blade/Bash, Moongeist Beam, Sunsteel Strike, Freeze
+  Shock, Ice Burn were absent because the sync discarded `pokemonSettings.formChange`, where the
+  grant actually lives. Now read generically. **Kyurem Black/White were the real cost** — Kyurem is
+  a live optimizer recommendation on the user's own roster and was being simulated without its
+  signature move.
+- **21 form names** lost stray underscores (`Zacian (Crowned_sword)`). Species **ids unchanged**,
+  proven mechanically via `diff-normalized --json`.
+
+### Engine
+
+- **Super Max is now gated** to the 15 megas with a "+" move. Before, any mega could take the +2
+  effective-level CP bump — three existing tests were passing *because of* that bug.
+- **Mega Level is per-INDIVIDUAL, not per-species.** MECHANICS.md said the opposite, citing a
+  Bulbapedia paraphrase; the user corrected it from their own account. Two slots holding the same
+  species may legitimately differ — that is correct behaviour to preserve, not an inconsistency.
+- **Dodge lockout diagnosed as correct arithmetic**, not a bug: `DODGE_COST_SECONDS` is 0.5, so a
+  boss fast move at ≤0.5s (Bite is exactly 500ms) pushes the attacker's next attack at least as fast
+  as time passes — zero damage, forever. Detection added (`fastMoveCadenceTooFastToDodge`,
+  `dodgeFastAttacksLockout` on four result types); the numbers were deliberately left alone.
+
+### UI
+
+- All six **Assumptions panels collapsed by default**; caveat prose moved into per-topic
+  sub-disclosures (Comparator's opened caveats: **2286px → 222px**).
+- **Move pickers** show type-effectiveness chips instead of damage/energy when collapsed; one chip
+  per candidate/slot, never averaged.
+- **Comparator** advanced-options gate + dodge-override checkbox.
+- **Guessed-moveset badges** on every row that recommends a spend — this was a live trust bug
+  (191k stardust recommended on a fully-guessed Rayquaza, unflagged).
+- **Default roster now clears** (was an unwinnable Dragon/Flying/Psychic team into Dark/Fire), and a
+  *failed* raid now reports HP % reached / DPS shortfall / time left instead of six `n/a`s.
+- **Budget plan reports clear rate**, and says "0% — still doesn't clear" when a plan buys DPS but
+  not a win.
+- **Level cap lifted to 50** on the three tabs still stuck at 40, using the engine's own constant.
+- **`NumberField`** — one component behind all 50 numeric inputs: select-all on focus (candy `100`
+  + typing `50` silently became `10050`), blur clamp where a real ceiling exists, and a
+  non-blocking warning where none does.
+
+### Tooling
+
+`npm run typecheck` **never checked a single engine test** — `tsconfig.json` sets `rootDir: "src"`,
+and vitest strips types without checking them. A stale mock slipped through both gates. New
+`packages/engine/tsconfig.test.json`, wired in as `typecheck:engine-test`.
+
+### New agent
+
+**`pogo-player`** (`.claude/agents/`) — a user-proxy that drives the live app and judges whether a
+right number is *useful*, as one of four archetypes. No web access by design, so it can't drift into
+being a second `pogo-researcher`; it routes unverified mechanics out instead of asserting them.
+Its `casual-optimizer` archetype rejects four tabs on premise — per a standing decision added this
+session, that is **never** a reason to change the product.
+
+## Next
+
+1. **`PLAN_tm_move_change_optimizer.md`** — researched and scoped, not built. Read it before
+   starting: the user's "blank CSV move column ⇒ needs a TM" clause was deliberately overridden
+   (a Pokémon always has moves, so blank means the export missed it), and regular TMs are *random*,
+   which may make them unrankable against deterministic power-ups. Build the second-charged-move
+   half first.
+2. **Dodge-lockout UI** — engine detection has landed, nothing surfaces it yet, so that config still
+   shows unexplained zeros. Deliberately deferred by the user.
+3. `IDEAS.md` #9 (evolve-then-power-up) probably beats both: **6 of 8 "never competitive" entries in
+   the sample are blocked on "evolve first", none on moveset.**
+
+## 2026-09-09: multi-raid, whole-roster Power-Up Optimizer — SHIPPED
 
 `PLAN_multi_raid_roster_optimizer.md` is **complete and deleted** (all five phases). The
 Power-Up Optimizer now has two modes; `"single-raid"` is byte-for-byte unchanged and an old

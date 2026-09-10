@@ -203,6 +203,27 @@ describe("resolvePokebattlerPokemonId", () => {
       bucket: "normal",
     });
   });
+
+  // 2026-09-10 fix: qualifiedRosterName used to reconstruct the qualified
+  // name from the RAW (possibly underscored) form string, which stopped
+  // matching the roster's own now-cleaned `.name` (space, title-cased) —
+  // this pins that it resolves against the CLEANED form text.
+  it("resolves a _FORM id whose roster form is underscored, matching against the roster's own cleaned (space, title-cased) display name", () => {
+    const pokemonIdByName = new Map([["Shellos", 422]]);
+    const defaultFormByPokemonId = new Map([[422, "West_sea"]]);
+    const enumToPogoapiName = buildEnumToPogoapiName(pokemonIdByName, resolvePokemonEnumStub, new Set(["SHELLOS"]));
+    const ctx = makeContext({
+      pokemonIdByName,
+      defaultFormByPokemonId,
+      enumToPogoapiName,
+      speciesIdByNameLower: new Map([["shellos (west sea)", "shellos-west_sea"]]),
+    });
+    expect(resolvePokebattlerPokemonId("SHELLOS_WEST_SEA_FORM", ctx)).toEqual({
+      speciesId: "shellos-west_sea",
+      displayName: "Shellos (West Sea)",
+      bucket: "normal",
+    });
+  });
 });
 
 describe("resolveMegaLegacyTier", () => {

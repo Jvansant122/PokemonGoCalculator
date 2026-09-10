@@ -8,8 +8,9 @@ import {
   type TeamScenario,
 } from "@pogo-analyzer/engine";
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
-import type { BossChargedMoveCadence } from "./bossCadence.js";
+import { BOSS_CADENCE_HINT, type BossChargedMoveCadence } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
 import { getBaseUrl } from "./urlUtils.js";
@@ -19,26 +20,68 @@ import { runTeamRaidScenario } from "./run/runTeamRaid.js";
 // A ready-to-run default roster/target so a fresh page load demonstrates a
 // real result immediately, not an empty form — mirrors the comparator's own
 // DEFAULT_CANDIDATE_A_ID/DEFAULT_CANDIDATE_B_ID/DEFAULT_TARGET_ID precedent.
-// Exactly one slot (latios-mega) carries a boost mechanic and isMega: true;
+// Exactly one slot (lucario-mega) carries a boost mechanic and isMega: true;
 // every other default slot is deliberately a non-mega species so the roster
 // never accidentally exercises the "unflagged slot also happens to carry a
 // boost" edge case runTeamRaid's own validation doesn't police (see
 // TeamAssumptionPanel's normalization for how a bad decoded link is handled).
-const DEFAULT_TARGET_ID = "tyranitar-mega";
+//
+// Roster/boss/level replaced 2026-09-10 (a live audit found the previous
+// default — Mega Latios/Garchomp/Dragonite/Kartana/Tyranitar/Rayquaza vs.
+// tyranitar-mega — failed outright at every level: 0% clear rate, every
+// summary stat "n/a"). Root cause was a real type problem, not a level
+// problem: mostly Dragon/Flying/Psychic attacking into a Rock/Dark boss (Mega
+// Latios's Psychic charged move is FLAT IMMUNE to Dark), confirmed by
+// re-running the same roster at level 50 and still failing. This roster is a
+// Fighting/Steel raid-counter team (real, commonly-recommended raid picks)
+// with EXPLICIT fast/charged moves — not left to "first listed move" — so
+// every slot's charged move is Fighting-typed where the species has one:
+// Fighting is SUPER EFFECTIVE against BOTH Rock and Dark (2.56x combined
+// per this engine's own typeChart.ts), the best single-type answer to a
+// Rock/Dark boss that exists. The boss is plain "tyranitar" (3-Star Raids,
+// 3600 HP), not its Mega form (Mega Raids, 9000 HP) — verified empirically
+// that even this SAME near-ideal counter roster, at this tab's THEN-current
+// level-40 UI cap (since raised, see the 2026-09-10 addendum below) and with
+// dodgeFastAttacks off (the default — see that field below; flipping it on
+// trips a real pre-existing engine fast-attack-dodge lockout against this
+// boss's short Bite animation, not a viable fix), fell ~25% short of the ~30
+// team DPS a 9000 HP boss needs inside a 300s timer. A Mega/5-Star-tier raid
+// is realistically a multi-trainer format in the real game; a solo default
+// that can't clear one is a bad first impression (see this tab's own
+// failure-summary rendering below for the OTHER half of this fix — a roster
+// that genuinely can't clear must still report readable numbers, never six
+// "n/a"s). Level 35 (not a higher level such as 40, which already clears
+// with zero wipes) deliberately leaves the fight with a real wipe in it —
+// verified: clears at 118.5s of the 300s timer, one wipe, 6 faint events —
+// a believable win with visible stakes, not a curbstomp.
+//
+// 2026-09-10 addendum: this tab's level input was capped at 40 (a leftover
+// UI limit, not a real game or engine one — MAX_POKEMON_POWER_UP_LEVEL is
+// 50) when the paragraph above was written; the cap has since been lifted to
+// the real ceiling. Re-verified against tyranitar-mega with this SAME
+// roster at level 50 (max IVs, dodge already at "perfect," dodgeFastAttacks
+// still off): still does not clear inside the 300s timer — 8146/9000 HP
+// dealt (90.5%), average 27.15 team DPS achieved vs. 30.00 needed (~9.5%
+// short), 2 wipes, deterministic across repeated runs with identical
+// inputs. Substantially closer than the ~25% shortfall recorded above under
+// the old 40-level cap, but still a loss, not a win — the boss stays plain
+// "tyranitar" rather than reverting to the Mega form; see this feature's own
+// web-developer memory entry for the full level-by-level sweep.
+const DEFAULT_TARGET_ID = "tyranitar";
 
 export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   slots: [
-    { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: null, isShadow: false },
-    { speciesId: "garchomp", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "dragonite", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "kartana", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "tyranitar", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
-    { speciesId: "rayquaza", fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "lucario-mega", fastMoveId: "COUNTER_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: true, megaLevel: null, isShadow: false },
+    { speciesId: "machamp", fastMoveId: "COUNTER_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "terrakion", fastMoveId: "DOUBLE_KICK_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "excadrill", fastMoveId: "MUD_SLAP_FAST", chargedMoveId: "EARTHQUAKE", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "conkeldurr", fastMoveId: "COUNTER_FAST", chargedMoveId: "FOCUS_BLAST", isMega: false, megaLevel: null, isShadow: false },
+    { speciesId: "heracross", fastMoveId: "COUNTER_FAST", chargedMoveId: "CLOSE_COMBAT", isMega: false, megaLevel: null, isShadow: false },
   ],
   targetId: DEFAULT_TARGET_ID,
   bossFastMoveId: null,
   bossChargedMoveId: null,
-  level: 40,
+  level: 35,
   ivAttack: 15,
   ivDefense: 15,
   ivStamina: 15,
@@ -273,6 +316,7 @@ export function TeamRaidView() {
   const bossSpecies = runResult.bossSpecies;
   const bossReadySeconds = runResult.bossReadySeconds;
   const bossHp = runResult.bossHp;
+  const failureSummary = runResult.failureSummary;
   const result = { data: runResult.data, error: runResult.error };
 
   function handleShare() {
@@ -325,9 +369,15 @@ export function TeamRaidView() {
             <div className="result-card">
               <div className="stat-tile-headline">
                 <span className="stat-tile-value">
-                  {result.data.timeToClearSeconds === null ? "n/a" : `${result.data.timeToClearSeconds.toFixed(1)}s`}
+                  {result.data.timeToClearSeconds !== null
+                    ? `${result.data.timeToClearSeconds.toFixed(1)}s`
+                    : failureSummary
+                      ? `${(failureSummary.fractionOfBossHpDealt * 100).toFixed(0)}%`
+                      : "n/a"}
                 </span>
-                <span className="stat-tile-unit">time to clear</span>
+                <span className="stat-tile-unit">
+                  {result.data.timeToClearSeconds !== null ? "time to clear" : failureSummary ? "of boss HP dealt" : "time to clear"}
+                </span>
               </div>
               <dl>
                 <dt>Time to clear</dt>
@@ -344,6 +394,24 @@ export function TeamRaidView() {
                         result.data.timerMarginSeconds >= 0 ? "to spare" : "short"
                       }`}
                 </dd>
+                {failureSummary && (
+                  <>
+                    <dt title="How much of the boss's HP this run actually dealt before the timer ran out">Boss HP reached</dt>
+                    <dd>
+                      {(failureSummary.fractionOfBossHpDealt * 100).toFixed(0)}% ({failureSummary.totalDamageDealt.toFixed(0)} /{" "}
+                      {(failureSummary.totalDamageDealt + failureSummary.bossHpRemaining).toFixed(0)} HP)
+                    </dd>
+                    <dt title="Average team DPS this run actually achieved vs. what the boss's HP over the raid timer would have needed">
+                      Team DPS shortfall
+                    </dt>
+                    <dd>
+                      ~{failureSummary.averageTeamDpsShortfall.toFixed(1)} short (avg {failureSummary.achievedAverageTeamDps.toFixed(1)}{" "}
+                      of ~{failureSummary.requiredAverageTeamDps.toFixed(1)} needed)
+                    </dd>
+                    <dt>Time left when the clock ran out</dt>
+                    <dd>{failureSummary.timeLeftOnClockSeconds.toFixed(1)}s</dd>
+                  </>
+                )}
                 <dt>Finishing blow</dt>
                 <dd>
                   {result.data.clearingCycleIndex === null || result.data.clearingSlotIndex === null
@@ -391,36 +459,73 @@ export function TeamRaidView() {
       </section>
 
       <CollapsibleSection id="team-raid-known-caveats" heading="Known caveats" defaultOpen={false}>
-        <p className="caveats note-block">
-          Solo-trainer scope only: the mega/primal team-wide damage boost never applies to the mega-bringer's own
-          party in the real game (only to OTHER trainers simultaneously present in the same raid) — so bringing a
-          mega into this roster only ever boosts that ONE slot's own damage while it's the active attacker, and
-          there is no "other trainers in this raid" modeling here at all (a deliberately separate, out-of-scope
-          axis — see the design doc's Section 7). V1 assumes unlimited healing items on a full wipe (a real resource
-          constraint the game enforces via Bag items, not modeled here) and no cap on wipe-and-rejoin cycles other
-          than a purely-engineering safety guard against a degenerate near-zero-damage roster looping indefinitely
-          (MAX_TEAM_RAID_CYCLES). The boss's charged-move cooldown carries forward continuously across every slot
-          handoff and every wipe-and-revive — it's one continuous encounter from the boss's own side; it doesn't
-          reset just because the trainer swapped Pokémon or briefly returned to the lobby to heal.
-          "Boss charged-move cadence model" (in Assumptions) defaults to the fixed mean-interval model this tab has
-          always used; two experimental alternatives instead derive the boss's timing from its own energy across the
-          WHOLE encounter (every slot, every cycle) — "Energy-driven" (a 50% roll per move-completion boundary) and
-          "Energy-gated interval" (one jittered delay once eligible) — see that control's own explanation for what's
-          independently sourced, what's this project's own reasoned inference, and what's simply unvalidated. Both stay
-          off by default so a shared link's meaning never silently changes.
+        <div className="note-block">
+        <details className="prose-details">
+          <summary>Roster &amp; boost scope</summary>
+          <p>
+          A team can field fewer than {MAX_TEAM_RAID_SLOTS} Pokémon — leave any slot empty ("clear" it) and it
+          simply never enters the fight. Solo-trainer scope only: the mega/primal team-wide damage boost never
+          applies to the mega-bringer's own party in the real game (only to OTHER trainers simultaneously present in
+          the same raid) — so bringing a mega into this roster only ever boosts that ONE slot's own damage while
+          it's the active attacker, and there is no "other trainers in this raid" modeling here at all (a
+          deliberately separate, out-of-scope axis — see the design doc's Section 7).
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Simulation model</summary>
+          <p>
+          V1 assumes unlimited healing items on a full wipe (a real resource constraint the game enforces via Bag
+          items, not modeled here) and no cap on wipe-and-rejoin cycles other than a purely-engineering safety guard
+          against a degenerate near-zero-damage roster looping indefinitely (MAX_TEAM_RAID_CYCLES). The boss's
+          charged-move cooldown carries forward continuously across every slot handoff and every wipe-and-revive —
+          it's one continuous encounter from the boss's own side; it doesn't reset just because the trainer swapped
+          Pokémon or briefly returned to the lobby to heal. "Boss charged-move cadence model" (in Assumptions)
+          defaults to the fixed mean-interval model this tab has always used; two experimental alternatives instead
+          derive the boss's timing from its own energy across the WHOLE encounter (every slot, every cycle) —
+          "Energy-driven" (a 50% roll per move-completion boundary) and "Energy-gated interval" (one jittered delay
+          once eligible) — see "Boss charged-move cadence model" below for what's independently sourced, what's this
+          project's own reasoned inference, and what's simply unvalidated. Both stay off by default so a shared
+          link's meaning never silently changes. A boss badged "approximate" in the target picker is one the live
+          raid feed named but whose exact form this data layer couldn't resolve, so a documented stand-in species'
+          stats are used — treat those runs as directional.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Mega Level</summary>
+          <p>{MEGA_LEVEL_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Boss charged-move cadence model</summary>
+          <p>{BOSS_CADENCE_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>The "More detailed" toggle</summary>
+          <p>
+          Reveals four advanced knobs (hold-for-safe-window, boss charged-move mean frequency, swap-in cost,
+          wipe-and-rejoin cost) whose current values are deliberate placeholders pending further research, not
+          confirmed game constants. Leave this unchecked to use the simple, documented defaults instead. With it
+          unchecked, the boss's charged-move mean frequency is likewise a placeholder — derived from this boss's own
+          fast-move charge time rather than a fixed number, standing in for "the time it takes to charge its first
+          charged attack" pending further improvement, not a modeled mechanic.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Swap-in / wipe-and-rejoin cost sourcing</summary>
+          <p>
           swapCostSeconds/reviveCostSeconds have no confirmed real value from any official or community source —
           they default to 0.5s and 15s respectively rather than 0 (fastest-possible play), both honest placeholders
           rather than fabricated "realistic" numbers: 0.5s for a swap-in, and 15s for a full wipe chosen at the TOP
           of the community-reported 12-15s heal window specifically to allow for user error, not because 15s is any
-          more confirmed than the rest of that window; a labeled ~13s community estimate is still offered as an
-          optional preset for reviveCostSeconds. With "More detailed assumptions" unchecked, the boss's charged-move
-          mean frequency is likewise a placeholder — derived from this boss's own fast-move charge time rather than
-          a fixed number, standing in for "the time it takes to charge its first charged attack" pending further
-          improvement, not a modeled mechanic. A boss badged "approximate" in the target picker is one the live raid
-          feed named but whose exact form this data layer couldn't resolve, so a documented stand-in species' stats
-          are used — treat those runs as directional. The other four tabs already spelled this out; this one
-          didn't, which is the only reason it's stated here rather than being left to the badge alone.
-        </p>
+          more confirmed than the rest of that window. Pokémon GO Hub's "Tips for short-manning raids" is the source
+          of that 12-15s figure — a player/hardware-dependent community estimate, not a confirmed game constant; a
+          labeled ~13s preset from the same source is offered as an alternative to the default 15s.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Raid timer</summary>
+          <p>Real, documented per-tier raid countdown — see raidBoss.ts's RAID_TIER_TABLE.</p>
+        </details>
+        </div>
       </CollapsibleSection>
     </>
   );

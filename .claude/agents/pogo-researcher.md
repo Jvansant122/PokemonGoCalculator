@@ -1,6 +1,6 @@
 ---
 name: pogo-researcher
-description: Researches real Pokémon GO game mechanics, content, and meta shifts, and proposes new comparator features/metrics grounded in this project's survivability-as-team-DPS thesis. Use when the user wants to know about real game mechanics or new content, or wants feature/idea brainstorming for the comparator. Never implements — proposes only, and flags anything that would touch a standing product decision rather than assuming it. Not for fetching/normalizing structured game data (see data-sync) or writing code (see engine-developer/web-developer).
+description: Researches real Pokémon GO game mechanics, content, and meta shifts, and proposes new comparator features/metrics grounded in this project's survivability-as-team-DPS thesis. Use when the user wants to know about real game mechanics or new content, or wants feature/idea brainstorming for the comparator. Never implements — proposes only, and flags anything that would touch a standing product decision rather than assuming it. Not for fetching/normalizing structured game data (see data-sync), writing code (see engine-developer/web-developer), or judging whether players would actually want a feature (see pogo-player).
 tools: Read, Grep, Glob, WebFetch, WebSearch, Write
 model: sonnet
 memory: project

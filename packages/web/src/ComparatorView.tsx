@@ -7,12 +7,13 @@ import {
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
 import { AssumptionPanel, type Assumptions } from "./AssumptionPanel.js";
-import type { BossChargedMoveCadence } from "./bossCadence.js";
+import { BOSS_CADENCE_HINT, type BossChargedMoveCadence } from "./bossCadence.js";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BossMovesetSweep } from "./BossMovesetSweep.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
+import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
@@ -59,6 +60,13 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   bossStartsPrimed: false,
   bossStartingEnergyFraction: 0.5,
   weather: "none",
+  // The tidy default for a fresh scenario — hides the dodge group,
+  // holdChargedMoveUntilSafe, minFightLengthSeconds, and
+  // bossChargedMoveFrequencySeconds behind their own values (see
+  // Assumptions.showDetailedAssumptions). A DECODED scenario missing this
+  // field entirely is a different case handled in scenarioToAssumptions
+  // below (?? true, NOT this default) — see that guard's own comment.
+  showDetailedAssumptions: false,
 };
 
 /**
@@ -114,6 +122,7 @@ export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
     bossStartsPrimed: a.bossStartsPrimed,
     bossStartingEnergyFraction: a.bossStartingEnergyFraction,
     weather: a.weather,
+    showDetailedAssumptions: a.showDetailedAssumptions,
   };
 }
 
@@ -167,6 +176,18 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // `??` guards a scenario URL encoded before this field existed rather than
     // surfacing `undefined` into the weather <select> above.
     weather: s.weather ?? "none",
+    // INVERTED default versus every other `??` above: an ABSENT value here
+    // means the link was shared before this setting existed, when there was
+    // no advanced/simple split at all — every field this gates was simply
+    // always visible, and the sender's stored bossChargedMoveFrequencySeconds
+    // WAS the real number in force for that run. Defaulting the absent case
+    // to `true` (not DEFAULT_ASSUMPTIONS.showDetailedAssumptions, which is
+    // `false`) preserves that — "a shared link's meaning never silently
+    // changes" (see bossCadence.tsx's identical concern, and
+    // TeamRaidView.tsx's teamScenarioToAssumptions for the exact same
+    // pattern on the sibling tab). Do not "fix" this to match the
+    // DEFAULT_ASSUMPTIONS pattern every other field uses.
+    showDetailedAssumptions: s.showDetailedAssumptions ?? true,
   };
 }
 
@@ -326,6 +347,23 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   const overallError = species.error ?? results.error;
   const boss = species.boss;
 
+  // Plain string, not interleaved JSX expressions — see AssumptionPanel.tsx's
+  // simpleAssumptionsSummary for why (JSX's own whitespace-collapsing rules
+  // can silently eat a space between a line-wrapped `{expr}` and text).
+  // Always names the value ACTUALLY fed into the simulation this run
+  // (runResult.effectiveBossChargedMoveFrequencySeconds), not the raw stored
+  // assumptions.bossChargedMoveFrequencySeconds — those two differ exactly
+  // when showDetailedAssumptions is false, and showing the stored one here
+  // would silently disagree with what was actually simulated.
+  const bossCadenceCaveat =
+    `The boss's charged-move timing is randomized each run (mean ${runResult.effectiveBossChargedMoveFrequencySeconds.toFixed(1)}s ` +
+    `between casts once it's ready, +/-40%), so results are reported as a distribution rather than a single number ` +
+    `— including how often each candidate faints mid-animation on its own charged move.` +
+    (assumptions.showDetailedAssumptions
+      ? ""
+      : ` This mean is derived from the boss's own fast-move charge time because "More detailed assumptions" is ` +
+        `unchecked above — check that box to see or set it directly.`);
+
   function speciesLabel(s: SpeciesDefinition): string {
     return s.isHypothetical ? `${s.name} (hypothetical)` : s.name;
   }
@@ -362,6 +400,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
         bossReadySeconds={bossReadySeconds}
         energyBuffers={energyBuffers}
         naturalFightLengthSeconds={naturalFightLengthSeconds}
+        effectiveBossChargedMoveFrequencySeconds={runResult.effectiveBossChargedMoveFrequencySeconds}
       />
 
       {overallError && (
@@ -377,11 +416,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
             heading={`Fight results — distribution over ${results.candidates[0]!.iterations} randomized runs`}
             defaultOpen
           >
-            <p className="caveats" style={{ marginBottom: 12 }}>
-              The boss's charged-move timing is randomized each run (mean {assumptions.bossChargedMoveFrequencySeconds}s
-              between casts once it's ready, +/-40%), so results are reported as a distribution rather than a single
-              number — including how often each candidate faints mid-animation on its own charged move.
-            </p>
+            <p className="caveats" style={{ marginBottom: 12 }}>{bossCadenceCaveat}</p>
             <div className="result-row">
               {results.candidates.map((c, i) => {
                 // Damage attributable to this candidate's mega/primal boost,
@@ -623,7 +658,10 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
       </section>
 
       <CollapsibleSection id="comparator-known-caveats" heading="Known caveats" defaultOpen={false}>
-        <p className="caveats note-block">
+        <div className="note-block">
+        <details className="prose-details">
+          <summary>Simulation, damage tracking &amp; mega/primal mechanics</summary>
+          <p>
           There's no "opening burst vs sustained" mode to pick — every fight is one continuous simulation, and
           whether the boss has thrown a charged move yet is a computed fact (see "Boss ready for its first charged
           move" above), derived from the target's own fast-move energy gain and its charged move's cost. That
@@ -631,35 +669,54 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           also gain from damage taken, so a boss could in principle go off sooner, never later — except when "Boss
           charged-move cadence model" above is switched to "Energy-driven," which closes exactly that gap by driving
           the whole fight's cadence off the boss's energy instead. That mode is experimental and off by default: see
-          its own explanation text for what's independently sourced (the 0.5-energy-per-HP rate) versus what's a
-          reasoned inference this project made itself (the roll's trigger) versus what's simply unvalidated (the
-          15-34% survival-time impact this project measured). "Energy-driven" is not the only alternative: "Energy-
-          gated interval" also closes that gap by tracking the same energy but replaces the 50% roll with a single
-          jittered delay once the boss becomes eligible — see its own explanation text for what's corroborated by
-          another simulator versus this project's own unsourced assumption. "Mean charged damage"
-          and "mean fast-move damage" above are tracked separately. "Died mid own-animation" describes only the
-          final, fatal charged-move attempt of a run — that specific attempt lands 0 damage, since the candidate
-          dies before its own cast resolves. It does not mean the run's charged damage total is zero: a candidate
-          can land one or more earlier charged-move casts (each counting toward "mean charged damage") before a
-          later cast turns fatal mid-animation, and can also have dealt real fast-move damage throughout — "mean
-          total damage" and the median/p10-p90 figures are the combined total, not charged-only. Any boss hit — fast
-          or charged — that lands while a candidate is mid-animation on
-          its own charged move deals guaranteed full damage: you can't throw a new dodge while locked into your own
-          cast, and a dodge's reduction window (roughly 0.7s) couldn't cover a multi-second animation even if you
-          could. Dodging costs 0.5s of your own attack cycle per attempt, whether it's a charged-attack dodge or (if
-          enabled) a fast-attack one — dodging everything is not free DPS-wise. The mega/primal boost never reaches
-          this candidate's own bench — in the real game a solo trainer only has one Pokémon active at a time, so
-          there's no "own party" for it to boost. It boosts other trainers simultaneously in the same raid lobby
-          instead (who can reciprocally boost this candidate back if they've also brought a mega/primal), and isn't
+          "Boss charged-move cadence model" below for what's independently sourced (the 0.5-energy-per-HP rate)
+          versus what's a reasoned inference this project made itself (the roll's trigger) versus what's simply
+          unvalidated (the 15-34% survival-time impact this project measured). "Energy-driven" is not the only
+          alternative: "Energy-gated interval" also closes that gap by tracking the same energy but replaces the 50%
+          roll with a single jittered delay once the boss becomes eligible — see "Boss charged-move cadence model"
+          below for what's corroborated by another simulator versus this project's own unsourced assumption. "Mean
+          charged damage" and "mean fast-move damage" above are tracked separately. "Died mid own-animation"
+          describes only the final, fatal charged-move attempt of a run — that specific attempt lands 0 damage,
+          since the candidate dies before its own cast resolves. It does not mean the run's charged damage total is
+          zero: a candidate can land one or more earlier charged-move casts (each counting toward "mean charged
+          damage") before a later cast turns fatal mid-animation, and can also have dealt real fast-move damage
+          throughout — "mean total damage" and the median/p10-p90 figures are the combined total, not charged-only.
+          Any boss hit — fast or charged — that lands while a candidate is mid-animation on its own charged move
+          deals guaranteed full damage: you can't throw a new dodge while locked into your own cast, and a dodge's
+          reduction window (roughly 0.7s) couldn't cover a multi-second animation even if you could. Dodging costs
+          0.5s of your own attack cycle per attempt, whether it's a charged-attack dodge or (if enabled) a
+          fast-attack one — dodging everything is not free DPS-wise. The mega/primal boost never reaches this
+          candidate's own bench — in the real game a solo trainer only has one Pokémon active at a time, so there's
+          no "own party" for it to boost. It boosts other trainers simultaneously in the same raid lobby instead
+          (who can reciprocally boost this candidate back if they've also brought a mega/primal), and isn't
           all-or-nothing by type either: every other trainer's Pokémon gets at least a flat 1.1x boost regardless of
           type, and only the ones matching the boosted type get the full multiplier (1.3x by default) — "other
           trainers matching boost type" above lets that be a mix, not one yes/no for the whole raid. That multiplier
-          is still load-bearing:
-          at 1.1x instead of 1.3x for the matching share, which candidate leads can flip — see the sensitivity panel.
-          Raid targets marked "approximate" use a documented stand-in species' stats (e.g. a Shadow-prefixed raid
-          boss matched to its non-Shadow base stats) because no better data exists yet — treat those results as
-          directional, not exact. Species marked "hypothetical" are not live-game content at all.
-        </p>
+          is still load-bearing: at 1.1x instead of 1.3x for the matching share, which candidate leads can flip —
+          see the sensitivity panel. Raid targets marked "approximate" use a documented stand-in species' stats
+          (e.g. a Shadow-prefixed raid boss matched to its non-Shadow base stats) because no better data exists yet
+          — treat those results as directional, not exact. Species marked "hypothetical" are not live-game content
+          at all.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Mega Level</summary>
+          <p>{MEGA_LEVEL_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Boss charged-move cadence model</summary>
+          <p>{BOSS_CADENCE_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>The "More detailed" toggle</summary>
+          <p>
+          Reveals the dodge controls (charged and fast-attack, shared and per-candidate), hold-for-safe-window, the
+          boss's charged-move mean frequency, and the chart's "extend simulated window" override. Leave this
+          unchecked for a tidier panel — every one of those keeps using whatever it's already set to (Perfect
+          charged-move dodging by default); this only changes what's SHOWN, never what's simulated.
+          </p>
+        </details>
+        </div>
       </CollapsibleSection>
     </>
   );

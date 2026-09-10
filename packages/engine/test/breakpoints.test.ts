@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { attackDamageGrid, defenseDamageGrid, findFastMoveBreakpoints, timeToFaint, timeToFaintTable } from "../src/breakpoints.js";
+import {
+  attackDamageGrid,
+  defenseDamageGrid,
+  DODGE_COST_SECONDS,
+  fastMoveCadenceTooFastToDodge,
+  findFastMoveBreakpoints,
+  timeToFaint,
+  timeToFaintTable,
+} from "../src/breakpoints.js";
 import { calculateDamage } from "../src/damage.js";
 import { CPM_TABLE } from "../src/cpm.js";
 import { effectiveLevelForMegaLevel } from "../src/megaLevel.js";
@@ -295,5 +303,23 @@ describe("megaLevel threading (Super Max's effective-level CP bonus)", () => {
     expect(superMax.level).toBe(50);
     expect(superMax.hp).toBe(effectiveStat(200, 15, expectedCpm));
     expect(superMax.hp).toBeGreaterThan(base.hp);
+  });
+});
+
+describe("fastMoveCadenceTooFastToDodge", () => {
+  it("is true at exactly DODGE_COST_SECONDS — an exact tie is still a permanent, not a near-miss", () => {
+    expect(fastMoveCadenceTooFastToDodge(DODGE_COST_SECONDS)).toBe(true);
+    expect(fastMoveCadenceTooFastToDodge(0.5)).toBe(true);
+  });
+
+  it("is true for any cadence faster than DODGE_COST_SECONDS", () => {
+    expect(fastMoveCadenceTooFastToDodge(0.1)).toBe(true);
+    expect(fastMoveCadenceTooFastToDodge(0.4)).toBe(true);
+  });
+
+  it("is false for any cadence slower than DODGE_COST_SECONDS", () => {
+    expect(fastMoveCadenceTooFastToDodge(0.6)).toBe(false);
+    expect(fastMoveCadenceTooFastToDodge(1.0)).toBe(false);
+    expect(fastMoveCadenceTooFastToDodge(2.5)).toBe(false);
   });
 });

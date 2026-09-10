@@ -1,6 +1,12 @@
 import { bossChargedMoveReadySeconds } from "./combat.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
-import { DODGE_COST_SECONDS, DODGE_DAMAGE_MULTIPLIER, dodgeMultiplierForHit, type DodgeBehavior } from "./breakpoints.js";
+import {
+  DODGE_COST_SECONDS,
+  DODGE_DAMAGE_MULTIPLIER,
+  dodgeMultiplierForHit,
+  fastMoveCadenceTooFastToDodge,
+  type DodgeBehavior,
+} from "./breakpoints.js";
 import { calculateDamage, type DamageInputs } from "./damage.js";
 import { bossEnergyFromDamageTaken, energyFromDamageTaken, MAX_ENERGY } from "./energy.js";
 import type { ChargedMove, FastMove } from "./types.js";
@@ -479,6 +485,52 @@ export interface StepwiseRunResult {
    * surface this as "requested cadence was physically impossible; clamped."
    */
   bossChargedMoveCadenceClamped: boolean;
+  /**
+   * True when `dodgeFastAttacks` was on AND the boss's fast move recycles at
+   * or faster than `DODGE_COST_SECONDS` (see breakpoints.ts's
+   * `fastMoveCadenceTooFastToDodge`) — i.e. this run's configuration asked
+   * the attacker to dodge a fast attack it structurally cannot ever recover
+   * from: every dodge attempt pushes the attacker's own next fast-move
+   * eligibility later by at least as much real time as the boss takes to
+   * throw its next fast hit, so that eligibility can never catch up to the
+   * clock on its own. This is a DIAGNOSIS of the configuration, not a claim
+   * about this specific run's numbers — it is computed once up front from
+   * `boss.fastMove.durationSeconds` and `dodgeFastAttacks` alone (no RNG, no
+   * stats), so it is identical for every run/seed built from the same
+   * inputs, the same way `bossChargedMoveCadenceClamped` is a config-level
+   * fact rather than a per-seed sample.
+   *
+   * IMPORTANT — this is NOT the same claim as "totalFastMoveDamage is 0 for
+   * this run": the attacker's own charged-move cast doesn't attempt to
+   * dodge while it's playing out (see isMidOwnAnimation below), so real
+   * time keeps passing with no further pushes during a cast, which can
+   * close the gap and let a handful of fast attacks land right after the
+   * cast ends — IF the cast survives to completion. An attacker that
+   * reaches a charged move purely from `energyFromDamageTaken` chip damage
+   * (see energy.ts) can therefore land an occasional fast attack even with
+   * this flag true — verified empirically: this flag does not imply
+   * totalFastMoveDamage === 0, only that it is structurally suppressed to
+   * "whatever trickles through around charged-move casts" rather than a
+   * sustained cadence.
+   *
+   * True zero-fast-AND-zero-charged-damage for the WHOLE run (the exact
+   * reported symptom) is also possible, and confirmed empirically, but not
+   * because chip energy fails to accumulate: reaching the charged move's
+   * energy cost via chip damage alone means the attacker has already spent
+   * most of its HP getting there (each unit of chip energy costs
+   * `1/ENERGY_PER_DAMAGE_TAKEN` HP), so by the time the cast starts there is
+   * often too little HP margin left to survive even one FULL-damage boss
+   * hit landing mid-cast (mid-animation hits are never dodged/reduced — see
+   * the boss-hit block below) — the cast is interrupted
+   * (diedDuringOwnChargedMoveAnimation true) before it can land or let a
+   * fast attack through. See simulate.test.ts's "dodgeFastAttacksLockout"
+   * describe block for both this case and the "cast survives, a couple of
+   * attacks land" case pinned side by side. The web layer should surface a
+   * true value as "this boss's fast move is too fast to dodge reliably —
+   * this configuration wastes this attacker's timeline," not silently trust
+   * a low/zero fast-damage number as a normal result.
+   */
+  dodgeFastAttacksLockout: boolean;
 }
 
 /** Simple seeded PRNG (mulberry32) so a given seed always reproduces the same run. */
@@ -513,6 +565,11 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   const { attacker, boss } = params;
   const dodge = params.dodge ?? { kind: "none" };
   const dodgeFastAttacks = params.dodgeFastAttacks ?? false;
+  // Config-level fact, computed once up front (no RNG/stats involved) — see
+  // StepwiseRunResult.dodgeFastAttacksLockout's doc comment for the full
+  // rationale and breakpoints.ts's fastMoveCadenceTooFastToDodge for the
+  // arithmetic.
+  const dodgeFastAttacksLockout = dodgeFastAttacks && fastMoveCadenceTooFastToDodge(boss.fastMove.durationSeconds);
   const tick = params.tickSeconds ?? DEFAULT_TICK_SECONDS;
   const maxSeconds = params.maxSeconds ?? DEFAULT_STEPWISE_MAX_SECONDS;
   const rng = mulberry32(params.seed ?? 1);
@@ -925,6 +982,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     bossChargedMoveResidualSeconds,
     bossEndingEnergy: bossTracksEnergy ? bossEnergy : null,
     bossChargedMoveCadenceClamped,
+    dodgeFastAttacksLockout,
   };
 }
 
@@ -962,6 +1020,16 @@ export interface DistributionSummary {
    * like "requested Xs is below this move's Ys cast time; using Ys."
    */
   bossChargedMoveEffectiveMinIntervalSeconds: number | null;
+  /**
+   * See StepwiseRunResult.dodgeFastAttacksLockout — a config-level fact
+   * (boss fast-move duration vs `dodgeFastAttacks`/`DODGE_COST_SECONDS`,
+   * no RNG involved), so it is identical across every run in this
+   * distribution; aggregated with `.some(...)` purely to match this file's
+   * existing convention for surfacing a per-run diagnostic flag at the
+   * distribution level (see bossChargedMoveCadenceClamped above), not
+   * because the value could actually differ between runs.
+   */
+  dodgeFastAttacksLockout: boolean;
   /**
    * The first iteration's full run (seed = baseSeed), exposed so callers have
    * one concrete, reproducible ownDamageTrajectory to chart even though the
@@ -1013,6 +1081,7 @@ export function runStepwiseDistribution(
     fractionDiedDuringOwnAnimation: runs.filter((r) => r.diedDuringOwnChargedMoveAnimation).length / iterations,
     bossChargedMoveCadenceClamped: runs.some((r) => r.bossChargedMoveCadenceClamped),
     bossChargedMoveEffectiveMinIntervalSeconds,
+    dodgeFastAttacksLockout: runs.some((r) => r.dodgeFastAttacksLockout),
     representativeRun: runs[0]!,
   };
 }

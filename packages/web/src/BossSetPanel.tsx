@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { activeRaidBossOptions, pastRaidBossOptions } from "./registry.js";
 import { multiRaidTiersPresent, resolveMultiRaidBossIds, type MultiRaidBossFilters } from "./multiRaidBossSet.js";
+import { NumberField } from "./NumberField.js";
 
 export interface BossSetPanelValue extends MultiRaidBossFilters {
   bossIds: string[];
@@ -71,12 +72,11 @@ export function BossSetPanel({ value, onChange }: Props) {
 
       <div className="field">
         <label htmlFor="pu-multiraid-maxCount">Max boss count</label>
-        <input
+        <NumberField
           id="pu-multiraid-maxCount"
-          type="number"
           min={0}
           value={value.maxBossCount}
-          onChange={(e) => applyFilters({ maxBossCount: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+          onChange={(v) => applyFilters({ maxBossCount: Math.max(0, Math.floor(v ?? 0)) })}
           title="Trims the resolved boss set to at most this many bosses (default 30) — the compute cost of a sweep scales directly with this number."
         />
       </div>

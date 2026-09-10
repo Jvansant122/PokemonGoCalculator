@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 import {
+  MAX_POKEMON_POWER_UP_LEVEL,
   RAID_TIER_TABLE,
   defaultRaidTierForSpecies,
   type DodgeBehavior,
@@ -10,10 +11,11 @@ import {
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
-import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
+import { BOSS_CADENCE_HINT, BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
-import { MegaLevelSelect } from "./megaLevelSelect.js";
+import { NumberField } from "./NumberField.js";
+import { MegaLevelSelect, MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -420,7 +422,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
         — ranked by survival-weighted sustained output, not raw DPS.
       </p>
 
-      <CollapsibleSection id="species-report-assumptions" heading="Assumptions" defaultOpen>
+      <CollapsibleSection id="species-report-assumptions" heading="Assumptions" defaultOpen={false}>
         <div className="assumption-grid">
           <div>
             <SpeciesPicker
@@ -437,6 +439,15 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
             />
             {species && (
               <>
+                {/*
+                  No `opponents` prop on either move picker below — this tab
+                  sweeps every currently-active (and optionally past) raid
+                  boss at once, so there is no single target to measure type
+                  effectiveness against. Per MoveSelect.tsx's own doc comment,
+                  a no-meaningful-opponent call site degrades to rendering no
+                  indicator at all rather than picking one boss arbitrarily
+                  or inventing a blended/averaged matchup.
+                */}
                 <MoveSelect
                   idPrefix="species-report-fast"
                   label="Fast move"
@@ -476,51 +487,47 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           <div>
             <div className="field">
               <label htmlFor="species-report-level">Level</label>
-              <input
+              <NumberField
                 id="species-report-level"
-                type="number"
                 min={1}
-                max={40}
+                max={MAX_POKEMON_POWER_UP_LEVEL}
                 step={0.5}
                 value={assumptions.level}
-                onChange={(e) => setAssumptions({ ...assumptions, level: Number(e.target.value) })}
+                onChange={(v) => setAssumptions({ ...assumptions, level: v ?? 1 })}
               />
             </div>
             <div className="iv-row">
               <div className="field">
                 <label htmlFor="species-report-ivAttack">Attack IV</label>
-                <input
+                <NumberField
                   id="species-report-ivAttack"
                   className="iv-input"
-                  type="number"
                   min={0}
                   max={15}
                   value={assumptions.ivAttack}
-                  onChange={(e) => setAssumptions({ ...assumptions, ivAttack: Number(e.target.value) })}
+                  onChange={(v) => setAssumptions({ ...assumptions, ivAttack: v ?? 0 })}
                 />
               </div>
               <div className="field">
                 <label htmlFor="species-report-ivDefense">Defense IV</label>
-                <input
+                <NumberField
                   id="species-report-ivDefense"
                   className="iv-input"
-                  type="number"
                   min={0}
                   max={15}
                   value={assumptions.ivDefense}
-                  onChange={(e) => setAssumptions({ ...assumptions, ivDefense: Number(e.target.value) })}
+                  onChange={(v) => setAssumptions({ ...assumptions, ivDefense: v ?? 0 })}
                 />
               </div>
               <div className="field">
                 <label htmlFor="species-report-ivStamina">Stamina IV</label>
-                <input
+                <NumberField
                   id="species-report-ivStamina"
                   className="iv-input"
-                  type="number"
                   min={0}
                   max={15}
                   value={assumptions.ivStamina}
-                  onChange={(e) => setAssumptions({ ...assumptions, ivStamina: Number(e.target.value) })}
+                  onChange={(v) => setAssumptions({ ...assumptions, ivStamina: v ?? 0 })}
                 />
               </div>
             </div>
@@ -548,15 +555,14 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           {assumptions.dodge.kind === "percentage-missed" && (
             <div className="field">
               <label htmlFor="species-report-missedFraction">Fraction of charged hits NOT dodged</label>
-              <input
+              <NumberField
                 id="species-report-missedFraction"
-                type="number"
                 min={0}
                 max={1}
                 step={0.05}
                 value={assumptions.dodge.missedFraction}
-                onChange={(e) =>
-                  setAssumptions({ ...assumptions, dodge: { kind: "percentage-missed", missedFraction: Number(e.target.value) } })
+                onChange={(v) =>
+                  setAssumptions({ ...assumptions, dodge: { kind: "percentage-missed", missedFraction: v ?? 0 } })
                 }
               />
             </div>
@@ -592,12 +598,11 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               Boss charged-move mean frequency (s)
               {assumptions.bossChargedMoveCadence === "energy-driven" && " (inactive)"}
             </label>
-            <input
+            <NumberField
               id="species-report-bossFreq"
-              type="number"
               min={1}
               value={assumptions.bossChargedMoveFrequencySeconds}
-              onChange={(e) => setAssumptions({ ...assumptions, bossChargedMoveFrequencySeconds: Number(e.target.value) })}
+              onChange={(v) => setAssumptions({ ...assumptions, bossChargedMoveFrequencySeconds: v ?? 1 })}
               disabled={assumptions.bossChargedMoveCadence === "energy-driven"}
               title="Mean seconds between each boss's charged moves once it's ready to use them (randomized +/-40% per run) — one shared assumption swept across every boss below. Below the boss charged-move duration (commonly 2-3s) its attacks overlap, so dodging cannot help and the dodge setting stops affecting results entirely."
             />
@@ -612,38 +617,37 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               id="species-report-includePast"
               value={assumptions.includePastRaids ? "yes" : "no"}
               onChange={(e) => setAssumptions({ ...assumptions, includePastRaids: e.target.value === "yes" })}
-              title="Also sweeps bosses this pipeline has recorded before but that aren't part of the currently-active raid roster right now — see the 'past'/'past (researched)'/'past (archive)' badges in the table below for each one's provenance."
+              title="Also sweeps bosses this pipeline has recorded before but that aren't part of the currently-active raid roster right now — see the 'past'/'past (researched)'/'past (archive)' badges in the table below for each one's provenance, and &quot;Known caveats&quot; below for this data source's real coverage limits."
             >
               <option value="no">No — active raids only</option>
               <option value="yes">Yes — active + past raids ({bossOptions.length + pastRaidOptions.length} recorded)</option>
             </select>
             {/*
-              The coverage description belongs HERE, on the control itself,
-              not only in the caveats paragraph at the bottom of the page —
-              someone toggling this on should learn its real shape from the
-              control rather than having to go hunting for it. Updated once
-              data-sync backfilled pogoapi's raid_bosses.json `previous`
-              archive (~500 "past (archive)" entries) on top of the original
-              live-feed/researched-tier log: the coverage limit is no longer
-              "only since 2026-09-07, mega/primal only" (that was true before
-              the backfill landed) — it's now "no date information on archive
+              The full coverage description used to live HERE, inline, on the
+              theory that someone toggling this on should learn its real shape
+              from the control rather than having to go hunting for it — see
+              this feature's own history for that reasoning. As of 2026-09-10
+              it was relocated into "Known caveats" (this exact paragraph, verbatim, under
+              a "Past/inactive raid data sourcing" heading) along with every other tab's
+              background/sourcing prose, so picking a Pokémon isn't buried in
+              sourcing text — the `title` tooltip above is this control's own
+              remaining pointer there. Updated once data-sync backfilled
+              pogoapi's raid_bosses.json `previous` archive (~500 "past
+              (archive)" entries) on top of the original live-feed/researched-
+              tier log: the coverage limit is no longer "only since
+              2026-09-07, mega/primal only" (that was true before the
+              backfill landed) — it's now "no date information on archive
               entries, and EX Raids excluded entirely" instead. Both are real,
               durable limits of this data source, just different ones than
-              before — keep this paragraph in sync if that changes again.
-              Same day, data-sync added a second archive source (Bulbapedia's
-              raid-boss-change pages, ~75 more "past (archive)" entries — see
-              registry.ts's RawRaidHistoryEntry doc comment) plus a real
-              recorded max HP for most archive rows from either source, now
-              shown in the results table's "Boss HP" column — that HP is
-              display context only and doesn't change this coverage-limit
-              paragraph.
+              before — keep the relocated paragraph in sync if that changes
+              again. Same day, data-sync added a second archive source
+              (Bulbapedia's raid-boss-change pages, ~75 more "past (archive)"
+              entries — see registry.ts's RawRaidHistoryEntry doc comment)
+              plus a real recorded max HP for most archive rows from either
+              source, now shown in the results table's "Boss HP" column —
+              that HP is display context only and doesn't change this
+              coverage-limit paragraph.
             */}
-            <p className="species-picker-hint">
-              A sourced historical archive, not a live log — most entries above have no date
-              information, so they can't be ordered or filtered by when they were actually active
-              (see each row's "past (archive)" badge for the provenance behind that). EX Raids are
-              excluded entirely, since no modern raid tier equivalent exists to simulate them at.
-            </p>
           </div>
 
           <div>
@@ -705,16 +709,25 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           }
           defaultOpen
         >
-          <p className="caveats" style={{ marginBottom: 12 }}>
-            Each row is the same real stepwise/dodge/randomized-boss-cadence simulator the two-candidate comparator
-            uses (200 randomized runs per boss, single-candidate) — a survival-weighted number, not a flat
-            power/duration DPS stat that ignores whether {result.data.speciesName} is even still alive against that
-            specific boss's real incoming damage. "Type-matchup percentile" is different and cheaper: pure
-            type-effectiveness arithmetic against every registered species' own default moveset, no simulation at
-            all — labeled explicitly so it's never confused with the simulated ranking. Scoped to the currently-live
-            raid roster (plus past/inactive raids when that toggle is on above), not every species that has ever
-            been a boss (no such archival list exists in this tool's data layer).
+          <p className="caveats" style={{ marginBottom: 8 }}>
+            Ranked by a real battle simulation — a survival-weighted number, not flat DPS. The "Type rank"
+            column is a different, much cheaper stat (type chart only, no simulation) shown for context —
+            never a substitute ranking.
           </p>
+          <details className="prose-details" style={{ marginBottom: 12 }}>
+            <summary>How "Sustained mean damage" and "Type rank" are actually computed</summary>
+            <p>
+              "Sustained mean damage" is the same real stepwise/dodge/randomized-boss-cadence simulator the
+              two-candidate comparator uses (200 randomized runs per boss, single-candidate) — it accounts
+              for whether {result.data.speciesName} is even still alive against that specific boss's real
+              incoming damage, not just how hard it hits. "Type rank" is pure type-effectiveness arithmetic
+              (the better of this species' two moves against the boss's types) ranked against every
+              registered species' own default moveset — no stats, no move power, no simulation at all.
+              Both are scoped to the currently-live raid roster (plus past/inactive raids when that toggle
+              is on above), not every species that has ever been a boss (no such archival list exists in
+              this tool's data layer).
+            </p>
+          </details>
 
           <div className="tab-switcher" role="group" aria-label="Sort by" style={{ marginBottom: 12 }}>
             <button
@@ -729,7 +742,7 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               className={`tab-button${assumptions.sortMode === "typeMatchup" ? " active" : ""}`}
               onClick={() => setAssumptions({ ...assumptions, sortMode: "typeMatchup" })}
             >
-              Sort: type-matchup percentile
+              Sort: type rank
             </button>
           </div>
 
@@ -739,8 +752,8 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           {topByDamage && topByType && (
             <p className="crossover-note" style={{ marginTop: 0, marginBottom: 12 }}>
               {topByDamage.bossId === topByType.bossId
-                ? `Both rankings agree: ${bossMetaById.get(topByDamage.bossId)?.raidName ?? topByDamage.bossName} is the top result either way.`
-                : `The two rankings disagree on the top result — sustained mean damage favors ${bossMetaById.get(topByDamage.bossId)?.raidName ?? topByDamage.bossName}, while the cheap type-only percentile favors ${bossMetaById.get(topByType.bossId)?.raidName ?? topByType.bossName}. The simulated (damage/survival) ranking is the one to trust for a real decision; the type percentile is sanity-check context only.`}
+                ? `Both rankings agree: ${bossMetaById.get(topByDamage.bossId)?.raidName ?? topByDamage.bossName} is the top result.`
+                : `Rankings disagree — go with the simulated pick, ${bossMetaById.get(topByDamage.bossId)?.raidName ?? topByDamage.bossName}; type rank alone favors ${bossMetaById.get(topByType.bossId)?.raidName ?? topByType.bossName} instead.`}
             </p>
           )}
 
@@ -755,7 +768,9 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
               <tr>
                 <th>Boss</th>
                 <th>Type matchup</th>
-                <th>Type-matchup percentile</th>
+                <th title="The percentage of all registered species this type matchup beats or ties, using each species' own default moveset — type chart only, ignoring stats and move power (not a simulated ranking).">
+                  Type rank
+                </th>
                 <th>Boss HP</th>
                 <th>Sustained mean damage (TDO)</th>
                 <th>Mean survival</th>
@@ -868,20 +883,46 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
       </section>
 
       <CollapsibleSection id="species-report-known-caveats" heading="Known caveats" defaultOpen={false}>
-        <p className="caveats note-block">
+        <div className="note-block">
+        <details className="prose-details">
+          <summary>Scope &amp; boost attribution</summary>
+          <p>
           There's no "opening burst vs sustained" mode to pick here either — every per-boss run is one continuous
           simulation. This view models the selected species alone: it has no second party, so a mega/primal boost
           (if this species has one) is shown only as a plain informational badge above and in the table, never folded
           into a fabricated team-damage number the way the two-candidate comparator's "other trainers" party fields
           do — that requires a second party to attribute credit to, which doesn't exist here (see the design doc's
-          section 2). Every swept boss attacks with its own FIRST fast move and FIRST charged move only — unlike the
+          section 2).
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Boss movesets</summary>
+          <p>
+          Every swept boss attacks with its own FIRST fast move and FIRST charged move only — unlike the
           two-candidate comparator's dedicated boss-moveset sweep, there's no per-boss moveset selection here, so a
           boss whose real threat comes from a rarer second charged move will look easier in the "Mean survival" column
-          than it actually is. "Boss charged-move cadence model" above defaults to the fixed mean-interval model
+          than it actually is.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Boss charged-move cadence model</summary>
+          <p>
+          "Boss charged-move cadence model" above defaults to the fixed mean-interval model
           every number on this tab has always used; the experimental "Energy-driven" alternative instead derives
-          EVERY swept boss's timing from its own energy, independently per boss — see that control's own explanation
-          for what's sourced, what's this project's own reasoned inference, and what's simply unvalidated. Left off
-          by default so a shared link's meaning never silently changes. Scoped to the currently-active real raid bosses by default, per the live community raid
+          EVERY swept boss's timing from its own energy, independently per boss — see below for what's sourced,
+          what's this project's own reasoned inference, and what's simply unvalidated. Left off
+          by default so a shared link's meaning never silently changes.
+          </p>
+          <p>{BOSS_CADENCE_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Mega Level</summary>
+          <p>{MEGA_LEVEL_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Past/inactive raid data sourcing</summary>
+          <p>
+          Scoped to the currently-active real raid bosses by default, per the live community raid
           feed, plus past/inactive raids this pipeline has separately recorded when that toggle above is on — two real,
           sourced historical archives (pogoapi's previous-raids archive and Bulbapedia's raid-boss-change pages, both
           badged "past (archive)"), this pipeline's own live-feed sightings since 2026-09-07 (badged "past"), and a
@@ -894,15 +935,29 @@ export function SpeciesReportView({ onCompare }: { onCompare: (prefill: Comparat
           default, shown plainly in the "Boss HP" column with no provenance label — that number is implied by the
           row's raid tier either way, and any discrepancy is worth reporting rather than displaying inline. Either
           way it's display/simulation context only and never changes a row's damage/survival numbers, since this view
-          never fights a boss down to zero HP in the first place; a row's HP and its ranking are independent facts. Raid targets
+          never fights a boss down to zero HP in the first place; a row's HP and its ranking are independent facts.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Data quality flags</summary>
+          <p>
+          Raid targets
           marked "approximate" use a
           documented stand-in species' stats because no better data exists yet — treat those rows as directional, not
           exact. A row's tier label marked "fallback" means the feed/history's own tier string wasn't one this engine
           recognizes, so the simulation used this species' own rarity/boost/lastKnownRaidTier to guess instead — not
-          necessarily that raid's real current tier. Click "Compare vs. another attacker" on any row to hand this
+          necessarily that raid's real current tier.
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Compare vs. another attacker</summary>
+          <p>
+          Click "Compare vs. another attacker" on any row to hand this
           species, its selected moveset, and that boss off to the two-candidate comparator, leaving the second
           candidate for you to pick there.
-        </p>
+          </p>
+        </details>
+        </div>
       </CollapsibleSection>
     </>
   );
