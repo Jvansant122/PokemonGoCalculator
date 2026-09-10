@@ -1,5 +1,6 @@
 # Pogo-Researcher Memory Index
 
+- [**START HERE: curated source catalog**](reference_source_catalog.md) — per-source URL shape, unique coverage, reliability tier, failure modes, raid-vs-PvP scope, how to validate; read before any research pass
 - [Mega boost persists after faint](fact_mega_boost_persists_after_faint.md) — standard megas lose team boost on faint, Primals/Mega Rayquaza don't [community-consensus]
 - [Shadow Pokemon stats + mega-exclusivity](fact_shadow_pokemon_stats.md) — Atk x1.2/Def x0.83; Shadow can't Mega Evolve [community-consensus]
 - [Proposal: boost-persists-through-faint flag](proposal_boost_persists_through_faint.md) — **BUILT** (SpeciesDefinition.boost.persistsThroughFaint)
@@ -56,7 +57,8 @@
 - [Fact: no HP-threshold AI for normal bosses + Super Mega shields](fact_no_normal_raid_hp_threshold_ai.md) — normal bosses have no HP-triggered AI; Super Mega Raid shield/enrage is Teambuilding-Analyzer-adjacent — don't model here
 - [Fact: RAID_LEVEL_* identifiers mapped to RaidTier names](fact_raid_level_identifier_mapping.md) — EXTENDED_EGG=Elite (300s), COORDINATED=Unity, MEGA_ENHANCED=Super Mega Raid
 - [Fact: Super Mega Raid shield/enrage mechanic](fact_super_mega_raid_shield_enrage_mechanic.md) — trigger%/timer undocumented, shield mult unconfirmed; tier not solo/duoable (structural)
-- [Fact: Super Max extra charged move ("+" moves)](fact_super_max_extra_charged_move.md) — 13 species confirmed, re-verified round 3; SpeciesDefinition has no field for it
+- [Fact: Super Max extra charged move ("+" moves)](fact_super_max_extra_charged_move.md) — mechanic + Gym/GBL gating confirmed round 3; roster count superseded, see next entry
+- [Fact: Super Max "+" move energy/duration/scaling deep-dive](fact_super_max_plus_move_mechanics_detail.md) — round 3 (2026-09-09): 16 species total; PvPoke gives real PVP power+energy for 13; duration=base-move's-duration is 11/11-evidenced; **CORRECTED same-day**: raid energy is NOT unpublished — `db.pokemongohub.net`'s own per-move pages state it verbatim (Volt Tackle+/Zap Cannon+ = 100), see [[reference-source-catalog]]; the earlier "genuinely unpublished" call was a search-coverage miss, not a world fact; "+10%/Mega-Level-tier" formula is still 2 sites' shared template, not independent consensus
 - [Fact: Apex Lugia/Ho-Oh moves not modelled](fact_apex_lugia_hooh_not_modelled.md) — real `_PLUS`/`_PLUS_PLUS` templates exist, no species uses them
 - [Fact: 2026 content-sweep misc roundup](fact_2026_content_sweep_misc.md) — Mega Staraptor upcoming, Mega Garchomp Z is Legends Z-A only (do NOT allowlist), 1.3/1.1 boost split reverified unchanged
 - [Fact: friendship raid attack bonus, corrects prior note](fact_friendship_raid_attack_bonus_correction.md) — `attack_bonus_percentage` confirmed, multiplicative w/ weather/mega, Forever Friend 12%

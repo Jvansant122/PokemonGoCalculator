@@ -60,3 +60,14 @@ this engine's math).
 Fed into the multi-raid-optimizer research response (2026-09-08). Recommended: record as not
 modelled + UI caveat, not build — per-species Mega Energy/cooldown tracking across a 100-200
 roster is a real, separate subsystem, out of scope for a power-up-focused expansion.
+
+**Round 3 addendum (2026-09-09)**: Bulbapedia (`Mega_Evolution_(GO)`, fetched 2026-09-09) dates
+the "+" additional-Charged-Attack feature itself to **2026-08-31** — a distinct, later date from
+Super Max Level's own Feb 2026 launch (Super Max Level existed for ~6 months as a CP/cooldown/catch
+tier before any species got an extra move on top of it). States the "+" moves are "based off Plus
+Moves from Pokémon Legends: Z-A" in name/flavor only — Z-A's own Plus Move mechanic boosts *every*
+move a mega uses via a resource gauge, structurally unlike GO's one-fixed-extra-move
+implementation, so nothing numeric transfers. Full detail in
+[[fact-super-max-plus-move-mechanics-detail]]. **Re-confirmed again this round: the 1.3x team-wide
+mega/primal boost is untouched by any of this** — no source across 3 research rounds has ever
+described Mega Level, Super Max, or the "+" moves as affecting it.
