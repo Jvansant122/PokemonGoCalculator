@@ -5,3 +5,10 @@ dist/
 .DS_Store
 packages/web/test-results/
 packages/web/playwright-report/
+
+# Personal message logs used as feedback input — must never be committed.
+# The real files live OUTSIDE this repo (in the parent Documents folder) and
+# have never been tracked; these patterns are a guard in case a copy is ever
+# dropped in here. Deliberately name-free.
+*message*.txt
+*messages*.txt
