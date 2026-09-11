@@ -1725,10 +1725,34 @@ template combinations, 467 distinct pokemonId values, 45 of them regional forms*
 `SANDSHREW_ALOLA`/`SANDSHREW_ALOLA_NORMAL`. This is Niantic's own client-side claim that a species
 is shadow-capable, independent of whether it has ever actually appeared as a **Shadow Raid boss**
 (a separate, narrower thing — see the raid-specific entries below). Team GO Rocket **grunt**
-encounters are the other real route to a Shadow Pokémon in-game, and can produce a shadow-capable
-species this block names that has never raided as Shadow at all (Shadow Alolan Sandslash is the
-confirmed live case, raised by the field researcher 2026-09-09 — no live/historical Shadow Alolan
-Sandslash raid exists, only the grunt encounter).
+encounters are the other real route to a Shadow Pokémon in-game, and can in principle produce a
+shadow-capable species this block names that has never raided as Shadow at all.
+
+⚠️ **CORRECTED 2026-09-11 (`pogo-researcher` audit) — the example this entry used is no longer
+true.** This previously named Shadow Alolan Sandslash (raised by the field researcher 2026-09-09)
+as the confirmed live grunt-only case, stating no live/historical raid existed. Two days later that
+is false: Shadow Alolan Sandslash is a **currently active 3-Star Shadow Raid boss**
+`[community-consensus]` (`pokemongohub.net`/"Current Pokémon GO Raid Bosses" and
+`leekduck.com/raid-bosses/`, both independently checked 2026-09-11, agreeing) — and this project's
+own `data/normalized/raidHistory.json` already caught it independently (`sandslash-alola-shadow`,
+`source: "live-feed"`, `firstSeenAt: 2026-09-09T23:05:29.048Z`, i.e. within hours of the field
+researcher's original observation, `lastSeenAt: 2026-09-11T11:56:26.871Z`, still ongoing at the
+time of this correction). **This is a positive validation of the design, not a failure of it**:
+`sandslash-alola-shadow` was already synthesized via the first-party GAME_MASTER `shadow`-block
+anchor (IDEAS.md #15) before it ever became a raid boss, so the species didn't need to "catch up"
+— only the illustrative claim in this entry did. The mechanism remains true, and a correctly
+anchored grunt-only example is still in hand — see the resolution below.
+
+✅ **Resolved 2026-09-11 (overseer).** `CLAUDE.md`'s shadow-synthesis standing decision cites
+Shadow Alolan **Sandshrew** (the pre-evolution) rather than **Sandslash** (the evolved form) — two
+different real species, and `CLAUDE.md` is the one that is still correct. Verified against committed
+data this pass: `sandshrew-alola-shadow` exists as a species, is anchored by GAME_MASTER's
+first-party `shadow` block (`shadowFirstPartyAnchors.json`), and has **zero** rows in
+`raidHistory.json` — i.e. it is exactly the grunt-only case this entry needs, and is a *more*
+durable example than Sandslash ever was, because the thing that expired Sandslash (a raid row
+appearing) is the very thing Sandshrew still lacks. `npm run check-raid-history-sources` passes:
+520 shadow species, 108 anchored by a raid row, 412 anchored only by the first-party block.
+Use Shadow Alolan Sandshrew as this entry's example; do not re-narrow it back to Sandslash.
 
 Duplicate raw templates sharing one pokemonId (e.g. `BULBASAUR` bare, `BULBASAUR_NORMAL`,
 `BULBASAUR_FALL_2019` — all three carrying byte-identical `shadow` data) are not 1,015 distinct

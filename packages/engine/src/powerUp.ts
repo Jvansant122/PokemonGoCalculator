@@ -1324,6 +1324,25 @@ export interface PowerUpBudgetInputs extends PowerUpOptimizerInputs {
 export type PowerUpBudgetStopReason =
   /** No fielded slot has ANY useful level left below maxLevel — regardless of budget. */
   | "max-level-reached"
+  /**
+   * The search never ran at all: every entry in the candidate pool was
+   * excluded BEFORE evaluation (unresolvable candy family, unknown candy on
+   * hand, or evolution-blocked — see the caller-facing itemization on
+   * `excludedEntries`), leaving nothing to evaluate. Distinct from
+   * "max-level-reached," which means a NON-EMPTY pool was evaluated and
+   * genuinely has no useful levels left — conflating the two is a real bug
+   * this variant exists to prevent (an all-excluded pool would otherwise
+   * read as `[].every(...)` vacuously true and get mislabelled
+   * "max-level-reached," which reads as "you're already optimal" when the
+   * truth is "this never got evaluated"). Only reachable from
+   * `planRosterBudget` (roster scale, where candy resolution/evolution can
+   * exclude an entry from the pool entirely); `optimizePowerUps`'s
+   * single-raid `planPowerUpBudget` operates over a fixed slots array that
+   * `runTeamRaid`'s own `validateRoster` already guarantees has at least one
+   * fielded (non-null) slot before this stop-reason logic ever runs, so it
+   * cannot produce this reason.
+   */
+  | "no-eligible-entries"
   /** At least one useful level remains somewhere, but none is affordable against what's left of every resource. */
   | "budget-exhausted"
   /**

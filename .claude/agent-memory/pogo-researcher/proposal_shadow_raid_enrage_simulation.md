@@ -1,13 +1,23 @@
 ---
 name: proposal-shadow-raid-enrage-simulation
-description: proposed 2026-09-10 (ideation pass) — model the Shadow Raid 60%-to-15%-HP enrage window as a boss-side, HP-triggered stat escalation, since Shadow bosses today are simulated at flat tier-normal stats for the whole fight
+description: proposed 2026-09-10 (ideation pass) — model the Shadow Raid 60%-to-15%-HP enrage window as a boss-side, HP-triggered stat escalation, since Shadow bosses today are simulated at flat tier-normal stats for the whole fight. BUILT 2026-09-10/11 (IDEAS.md #17/#17b) — see status update below.
 metadata:
   type: project
 ---
 
-Status: proposed 2026-09-10. Not built. Confirmed via grep of `packages/engine/src`
-(2026-09-10) that no enrage/subdue logic exists anywhere in the engine today — this is a
-genuine gap, not a partially-built feature.
+**STATUS UPDATE 2026-09-11: BUILT.** `IDEAS.md`'s Shipped table, item #17: "Engine 2026-09-10, UI
+2026-09-11 (#17b). Comparator shows the per-run clock, Team Raid the raid-global one." Also
+surfaced and fixed a real bug in passing (`enragePhase` initialized wrong on multi-slot Team Raid
+runs). Confirmed built via MECHANICS.md's "Shadow raids" section, which now documents the shipped
+`shadow.ts`/`simulate.ts` implementation in detail. Do not re-propose; if extending this, read the
+"Enrage: implemented 2026-09-10" MECHANICS.md paragraph first for the exact stacking-order
+resolution and surfaced fields (`enragedAtSeconds`/`subduedAtSeconds` etc.).
+
+---
+
+Status (original, now superseded above): proposed 2026-09-10. Confirmed via grep of
+`packages/engine/src` (2026-09-10) that no enrage/subdue logic existed anywhere in the engine at
+proposal time — this was a genuine gap, not a partially-built feature.
 
 **The mechanic** (MECHANICS.md "Shadow raids" section, `[community-consensus]`,
 Bulbapedia `Shadow_Raid` + corroborating guides, 2026-09-09; re-examined 2026-09-09 in

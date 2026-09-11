@@ -553,22 +553,85 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
               {result.data.outcome === "cleared" ? "Cleared" : "Timer expired — raid failed"}
             </p>
             {bossMovesetSweep && (
-              <p className={`caveats ${bossMovesetSweep.verdictVaries ? "boss-moveset-risk" : ""}`} style={{ marginTop: -4, marginBottom: 12 }}>
-                {bossMovesetSweep.verdictVaries ? (
-                  <>
-                    Boss moveset risk: this roster{" "}
-                    <strong>clears against {bossMovesetSweep.results.filter((r) => r.clearsWithinTimer).map((r) => r.moveName).join(", ")}</strong>
-                    {" "}but{" "}
-                    <strong>fails against {bossMovesetSweep.results.filter((r) => !r.clearsWithinTimer).map((r) => r.moveName).join(", ")}</strong>
-                    {" "}— which charged move the boss actually rolls can flip this outcome. Same roster/assumptions throughout.
-                  </>
-                ) : (
-                  <>
-                    {result.data.outcome === "cleared" ? "Clears" : "Fails"} against all {bossMovesetSweep.results.length} of this boss's known
-                    charged moves, not just the one currently selected above.
-                  </>
+              <>
+                <p className={`caveats ${bossMovesetSweep.verdictVaries ? "boss-moveset-risk" : ""}`} style={{ marginTop: -4, marginBottom: 12 }}>
+                  {bossMovesetSweep.verdictVaries ? (
+                    <>
+                      Boss moveset risk: this roster{" "}
+                      <strong>
+                        clears against {bossMovesetSweep.results.filter((r) => r.clearsWithinTimer).length} of{" "}
+                        {bossMovesetSweep.results.length}
+                      </strong>{" "}
+                      possible boss movesets (fast + charged move combinations), but{" "}
+                      <strong>fails against the other {bossMovesetSweep.results.filter((r) => !r.clearsWithinTimer).length}</strong> — which
+                      moveset the boss actually rolls can flip this outcome. Same roster/assumptions throughout; see the breakdown below.
+                    </>
+                  ) : (
+                    <>
+                      {result.data.outcome === "cleared" ? "Clears" : "Fails"} against all {bossMovesetSweep.results.length} of this boss's
+                      possible movesets (fast + charged move combinations), not just the one currently selected above.
+                    </>
+                  )}
+                </p>
+                {bossMovesetSweep.verdictVaries && (
+                  <CollapsibleSection
+                    id="team-raid-boss-moveset-detail"
+                    heading={`Which movesets clear vs. fail (${bossMovesetSweep.results.length} total)`}
+                    headingLevel="h3"
+                    variant="subsection"
+                    defaultOpen={false}
+                  >
+                    <div className="table-scroll">
+                      <table className="time-series-table">
+                        <thead>
+                          <tr>
+                            <th>Boss fast move</th>
+                            <th>Boss charged move</th>
+                            <th>Verdict</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            // Grouped by fast move via rowSpan, same convention as
+                            // BossMovesetSweep.tsx — safe because the underlying
+                            // sweep's iteration order is fast-major/charged-minor
+                            // (a documented stable contract), so every row sharing
+                            // a fast move is already contiguous here. Maps a
+                            // group-starting row's index to its span; every other
+                            // row in the group renders no fast-move cell at all.
+                            const rows = bossMovesetSweep.results;
+                            const fastMoveRowSpans = new Map<number, number>();
+                            rows.forEach((r, i) => {
+                              if (i === 0 || rows[i - 1]!.fastMoveId !== r.fastMoveId) {
+                                let span = 1;
+                                while (rows[i + span] && rows[i + span]!.fastMoveId === r.fastMoveId) span++;
+                                fastMoveRowSpans.set(i, span);
+                              }
+                            });
+                            return rows.map((r, i) => {
+                              const groupSpan = fastMoveRowSpans.get(i);
+                              return (
+                                <tr key={`${r.fastMoveId}-${r.chargedMoveId}`}>
+                                  {groupSpan !== undefined && (
+                                    <td rowSpan={groupSpan} style={{ textAlign: "left", verticalAlign: "top" }}>
+                                      {r.fastMoveName}
+                                    </td>
+                                  )}
+                                  <td style={{ textAlign: "left" }}>{r.chargedMoveName}</td>
+                                  <td style={{ textAlign: "left" }} className={r.clearsWithinTimer ? "text-good" : "text-bad"}>
+                                    {r.clearsWithinTimer ? "Clears" : "Fails"}
+                                    {r.timeToClearSeconds !== null ? ` (${r.timeToClearSeconds.toFixed(1)}s)` : ""}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CollapsibleSection>
                 )}
-              </p>
+              </>
             )}
             <div className="result-card">
               <div className="stat-tile-headline">

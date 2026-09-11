@@ -92,8 +92,10 @@ export interface TeamRaidRunResult {
 }
 
 export interface TeamRaidBossMovesetResult {
-  moveId: string;
-  moveName: string;
+  fastMoveId: string;
+  fastMoveName: string;
+  chargedMoveId: string;
+  chargedMoveName: string;
   outcome: TeamRaidOutcome;
   clearsWithinTimer: boolean;
   timeToClearSeconds: number | null;
@@ -218,12 +220,20 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     ? buildTeamRaidReselector(rosterPool, bossSpecies)
     : undefined;
 
-  // Every field EXCEPT bossChargedMoveId/bossStartingEnergy — factored out so
-  // both the main (single-moveset) call below AND the boss-moveset sweep
-  // (IDEAS #18) build the identical roster/boss/timer configuration and can
-  // only ever differ in the one thing actually being swept, never drift into
-  // two subtly different simulations.
-  function buildTeamRaidInputs(bossChargedMoveId: string | null, bossStartingEnergyForMove: number): TeamRaidInputs {
+  // Every field EXCEPT bossFastMoveId/bossChargedMoveId/bossStartingEnergy —
+  // factored out so both the main (single-moveset) call below AND the
+  // boss-moveset sweep (IDEAS #18, widened 2026-09-11 to the full fast x
+  // charged cartesian product) build the identical roster/boss/timer
+  // configuration and can only ever differ in the two things actually being
+  // swept, never drift into two subtly different simulations.
+  // `bossFastMoveId` defaults to `a.bossFastMoveId` so the main call below
+  // (which only ever varies the charged move) doesn't need to pass it
+  // explicitly.
+  function buildTeamRaidInputs(
+    bossFastMoveId: string | null,
+    bossChargedMoveId: string | null,
+    bossStartingEnergyForMove: number,
+  ): TeamRaidInputs {
     return {
       // Each slot's species stays RAW everywhere else — the Shadow toggle
       // is applied ONLY here, at the boundary into runTeamRaid, same
@@ -252,7 +262,7 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
       boss: bossSpecies!,
       bossRaidTier,
       bossMaxHpOverride,
-      bossFastMoveId: a.bossFastMoveId,
+      bossFastMoveId,
       bossChargedMoveId,
       level: a.level,
       ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
@@ -274,40 +284,54 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
   let error: string | null = null;
   if (bossSpecies) {
     try {
-      data = runTeamRaid(buildTeamRaidInputs(a.bossChargedMoveId, bossStartingEnergy));
+      data = runTeamRaid(buildTeamRaidInputs(a.bossFastMoveId, a.bossChargedMoveId, bossStartingEnergy));
     } catch (err) {
       error = (err as Error).message;
     }
   }
 
   // IDEAS #18 — see TeamRaidRunResult.bossMovesetSweep's own doc comment.
-  // Only meaningful when the boss actually has 2+ known charged moves (same
-  // gate ComparatorView's bossMovesetSweep already uses). runTeamRaid is a
-  // single deterministic simulation (unlike runSustainedComparison's 200
-  // iterations), so re-running it once per boss charged move is cheap —
-  // see agent memory for the measured cost.
+  // Widened 2026-09-11 (user-requested) to the FULL cartesian product of the
+  // boss's known fast x charged moves, mirroring compareAcrossBossMovesets's
+  // own reversal in packages/engine (see that function's doc comment in
+  // comparison.ts) — the boss's fast move drives both incoming chip damage
+  // and its own energy/charged-move cadence, so holding it fixed silently
+  // held one of the two rolled axes fixed. Iteration order is FAST-MAJOR,
+  // CHARGED-MINOR, matching the engine's own documented stable contract, so
+  // a caller grouping rows by fast move (as TeamRaidView.tsx's summary does)
+  // can rely on same-fast-move rows being contiguous. Gate widened the same
+  // way: `fastMoves.length * chargedMoves.length >= 2`, not
+  // `chargedMoves.length >= 2` — a boss with 2 fast moves and only 1 charged
+  // move still has two genuinely different rolled movesets.
+  // runTeamRaid is a single deterministic simulation (unlike
+  // runSustainedComparison's 200 iterations), so re-running it once per
+  // fast+charged pair stays cheap even at the largest real combo count.
   let bossMovesetSweep: TeamRaidBossMovesetSweep | null = null;
-  if (bossSpecies && bossSpecies.chargedMoves.length >= 2) {
+  if (bossSpecies && bossSpecies.fastMoves.length * bossSpecies.chargedMoves.length >= 2) {
     const results: TeamRaidBossMovesetResult[] = [];
-    for (const move of bossSpecies.chargedMoves) {
-      const startingEnergyForMove = a.bossStartsPrimed ? a.bossStartingEnergyFraction * move.energyCost : 0;
-      try {
-        const r = runTeamRaid(buildTeamRaidInputs(move.id, startingEnergyForMove));
-        results.push({
-          moveId: move.id,
-          moveName: move.name,
-          outcome: r.outcome,
-          clearsWithinTimer: r.clearsWithinTimer,
-          timeToClearSeconds: r.timeToClearSeconds,
-          timerMarginSeconds: r.timerMarginSeconds,
-          wipeCount: r.wipeCount,
-          slotsUsed: r.slotsUsed,
-        });
-      } catch {
-        // Skip a moveset that fails to simulate for this roster (should be
-        // rare — the main call above already exercises the identical roster
-        // configuration successfully whenever `data` is non-null) rather
-        // than failing the whole sweep over one bad variant.
+    for (const fastMove of bossSpecies.fastMoves) {
+      for (const chargedMove of bossSpecies.chargedMoves) {
+        const startingEnergyForMove = a.bossStartsPrimed ? a.bossStartingEnergyFraction * chargedMove.energyCost : 0;
+        try {
+          const r = runTeamRaid(buildTeamRaidInputs(fastMove.id, chargedMove.id, startingEnergyForMove));
+          results.push({
+            fastMoveId: fastMove.id,
+            fastMoveName: fastMove.name,
+            chargedMoveId: chargedMove.id,
+            chargedMoveName: chargedMove.name,
+            outcome: r.outcome,
+            clearsWithinTimer: r.clearsWithinTimer,
+            timeToClearSeconds: r.timeToClearSeconds,
+            timerMarginSeconds: r.timerMarginSeconds,
+            wipeCount: r.wipeCount,
+            slotsUsed: r.slotsUsed,
+          });
+        } catch {
+          // Skip a moveset that fails to simulate for this roster (should be
+          // rare — the main call above already exercises the identical roster
+          // configuration successfully whenever `data` is non-null) rather
+          // than failing the whole sweep over one bad variant.
+        }
       }
     }
     if (results.length >= 2) {

@@ -3,7 +3,8 @@ import { MoveSelect } from "./MoveSelect.js";
 import { NumberField } from "./NumberField.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
-import { normalizeRosterEntryDraft, type RosterEntryDraft } from "./rosterEntryDraft.js";
+import { speciesRegistry } from "./registry.js";
+import { defaultCanMegaForSpecies, normalizeRosterEntryDraft, type RosterEntryDraft } from "./rosterEntryDraft.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
 
 interface Props {
@@ -45,13 +46,30 @@ export function RosterEntryForm({ idPrefix, draft, onChange, species, speciesOpt
         label="Pokémon"
         options={speciesOptions}
         value={draft.speciesId ?? ""}
-        onChange={(id) =>
+        onChange={(id) => {
           // A previously-picked move id almost certainly doesn't exist on
           // the new species — reset both back to "use first move" in the
           // same update, same convention as every other tab. The second
           // charged move state resets too, for the same reason.
-          set({ ...draft, speciesId: id, fastMoveId: null, chargedMoveId: null, knowsSecondChargedMove: false, secondChargedMoveId: null })
-        }
+          //
+          // canMega (eligibility to be fielded as the team's one mega slot)
+          // is NOT the same field as TeamAssumptions/PowerUpOptimizerAssumptions'
+          // `isMega` (exclusive per-raid selection, which clears every other
+          // slot when set) — see rosterEntryDraft.ts's normalizeRosterEntryDraft
+          // doc comment. Defaulting isMega on would fight that exclusivity
+          // invariant; defaulting eligibility on is correct and is the whole
+          // point of this fix, so don't "harmonise" the two later.
+          const newSpecies = speciesRegistry.has(id) ? speciesRegistry.get(id) : null;
+          set({
+            ...draft,
+            speciesId: id,
+            fastMoveId: null,
+            chargedMoveId: null,
+            knowsSecondChargedMove: false,
+            secondChargedMoveId: null,
+            canMega: defaultCanMegaForSpecies(newSpecies ?? null),
+          });
+        }}
       />
       {species && (
         <>

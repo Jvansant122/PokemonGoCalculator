@@ -7,7 +7,7 @@ import type { ChargedMove, FastMove } from "./types.js";
  * NOTE (2026-09-06 code-simplifier audit): simulateOpeningBurst/
  * AttackerProfile/BossProfile/OpeningBurstResult have zero production
  * callers — packages/web only drives runSustainedComparison/
- * compareAcrossBossChargedMoves/simulateStepwiseBattle (the Phase 5 stepwise
+ * compareAcrossBossMovesets/simulateStepwiseBattle (the Phase 5 stepwise
  * engine in simulate.ts). This is intentional, not dead code to delete: this
  * "Phase 1 opening burst" cluster is kept alive on purpose as a deterministic
  * acceptance-test harness that pins the core stats/damage/type-chart formula

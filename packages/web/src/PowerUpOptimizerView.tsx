@@ -490,10 +490,12 @@ function formatResourceSplit(ownSpent: number, sharedSpent: number, sharedLabel:
  * same `PowerUpBudgetStopReason` union and the same "noise floor" concept
  * even though everything else about the two plan shapes differs.
  */
-function budgetStopReasonSentence(stopReason: PowerUpBudgetStopReason, noiseFloorTeamDps: number): string {
+export function budgetStopReasonSentence(stopReason: PowerUpBudgetStopReason, noiseFloorTeamDps: number): string {
   switch (stopReason) {
     case "max-level-reached":
       return "Stopped because every fielded slot has already reached level 50 — there's no further power-up headroom left to spend on, regardless of budget.";
+    case "no-eligible-entries":
+      return "This plan never actually ran — every entry in your roster pool was excluded before evaluation, most commonly because candy on hand isn't filled in for any of them yet. See the \"Excluded from this plan\" table below for the specific reason per entry; filling in candy counts is usually the fastest way to make entries eligible.";
     case "budget-exhausted":
       return "Stopped because useful power-up headroom remains on at least one slot, but nothing left is affordable within the stardust/candy/XL you have on hand.";
     case "no-significant-candidate":

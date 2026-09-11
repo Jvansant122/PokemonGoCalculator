@@ -15,7 +15,7 @@
  */
 import {
   bossChargedMoveReadySeconds,
-  compareAcrossBossChargedMoves,
+  compareAcrossBossMovesets,
   findCrossoverPartySize,
   runSustainedComparison,
   type CrossoverPoint,
@@ -63,7 +63,7 @@ export interface ComparatorRunResult {
   bossReadySeconds: number | null;
   /**
    * The boss charged-move mean frequency actually fed into BOTH
-   * runSustainedComparison and (when applicable) compareAcrossBossChargedMoves
+   * runSustainedComparison and (when applicable) compareAcrossBossMovesets
    * for THIS run. Equal to the stored `a.bossChargedMoveFrequencySeconds`
    * when `a.showDetailedAssumptions` is true; otherwise derived from the
    * boss's own fast-move charge time — see effectiveBossChargedMoveFrequency.ts's
@@ -79,7 +79,7 @@ export interface ComparatorRunResult {
   naturalFightLengthSeconds: number | null;
   chartMaxSeconds: number;
   sensitivity: SensitivityCheck[];
-  bossMovesetSweep: ReturnType<typeof compareAcrossBossChargedMoves> | null;
+  bossMovesetSweep: ReturnType<typeof compareAcrossBossMovesets> | null;
   /**
    * IDEAS #19: sweeps party size itself (0-20, see PARTY_SIZE_RANGE above)
    * at the CURRENTLY configured other-assumptions, for where the ranking
@@ -150,7 +150,7 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
 
   // The boss charged-move mean frequency ACTUALLY fed into BOTH engine calls
   // below (runSustainedComparison and, when applicable,
-  // compareAcrossBossChargedMoves) for THIS run — equal to the stored
+  // compareAcrossBossMovesets) for THIS run — equal to the stored
   // a.bossChargedMoveFrequencySeconds when a.showDetailedAssumptions is
   // true, otherwise derived from the boss's own fast-move charge time.
   // Shared with run/runTeamRaid.ts's identical field via
@@ -231,18 +231,20 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     }
   }
 
-  // Only meaningful when the boss actually has 2+ known charged moves — see
-  // ComparatorView's own doc comment on bossMovesetSweep.
-  let bossMovesetSweep: ReturnType<typeof compareAcrossBossChargedMoves> | null = null;
-  if (shadowAdjustedCandidates && boss && boss.chargedMoves.length >= 2) {
+  // Only meaningful when the boss actually has 2+ distinct rollable movesets
+  // — fast moves x charged moves, NOT charged moves alone (see
+  // compareAcrossBossMovesets's own doc comment in comparison.ts: a boss with
+  // 2 fast moves and only 1 charged move still has two genuinely different
+  // rolled movesets). See ComparatorView's own doc comment on bossMovesetSweep.
+  let bossMovesetSweep: ReturnType<typeof compareAcrossBossMovesets> | null = null;
+  if (shadowAdjustedCandidates && boss && boss.fastMoves.length * boss.chargedMoves.length >= 2) {
     try {
-      bossMovesetSweep = compareAcrossBossChargedMoves({
+      bossMovesetSweep = compareAcrossBossMovesets({
         candidates: shadowAdjustedCandidates,
         candidateFastMoveIds: [a.candidateAFastMoveId, a.candidateBFastMoveId],
         candidateChargedMoveIds: [a.candidateAChargedMoveId, a.candidateBChargedMoveId],
         boss,
         bossRaidTier,
-        bossFastMoveId: a.bossFastMoveId,
         level: a.level,
         ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
         dodge: a.dodge,

@@ -33,6 +33,20 @@ export interface RosterEntryDraft {
   isShadow: boolean;
   isPurified: boolean;
   isLucky: boolean;
+  /**
+   * Eligibility — "this entry MAY be fielded as the team's one mega slot";
+   * the Lineup Builder decides which entry actually is. Defaults to
+   * `!!species.boost` whenever a species is freshly picked
+   * (RosterEntryForm.tsx's SpeciesPicker onChange), but stays a real,
+   * uncheckable control (e.g. owns the Pokémon but not its Mega Energy).
+   *
+   * Do NOT confuse this with `TeamAssumptions`/`PowerUpOptimizerAssumptions`'s
+   * `isMega` — that field is exclusive SELECTION for one specific raid (setting
+   * it on one slot clears every other slot's), never defaulted on by species
+   * pick, and never touched by this file. The two are similarly named on
+   * purpose (both gate the same boost mechanic) but answer different
+   * questions; don't "harmonise" them into one flag.
+   */
   canMega: boolean;
 }
 
@@ -52,6 +66,26 @@ export function emptyRosterEntryDraft(): RosterEntryDraft {
     isLucky: false,
     canMega: false,
   };
+}
+
+/**
+ * What a FRESHLY-picked species (RosterEntryForm.tsx's SpeciesPicker
+ * onChange, never an edit-in-place of an already-configured draft) should
+ * default `canMega` to. A species carrying a boost mechanic defaults to
+ * ELIGIBLE — the user can still uncheck it (owns the Pokémon but not its
+ * Mega Energy) — rather than the picker silently producing a mega species
+ * that isn't eligible to mega evolve, which used to happen because nothing
+ * ever defaulted this on (normalizeRosterEntryDraft below only ever forces
+ * it OFF for a non-boost species; it never turns it on). Extracted as its
+ * own pure function, rather than inlined in the component, purely so it's
+ * unit-testable the way this file's other draft logic already is.
+ *
+ * Do NOT confuse this with `TeamAssumptions`/`PowerUpOptimizerAssumptions`'s
+ * `isMega` — see `RosterEntryDraft.canMega`'s own doc comment above for why
+ * the two, despite gating the same boost mechanic, must stay separate.
+ */
+export function defaultCanMegaForSpecies(species: SpeciesDefinition | null): boolean {
+  return !!species?.boost;
 }
 
 /**

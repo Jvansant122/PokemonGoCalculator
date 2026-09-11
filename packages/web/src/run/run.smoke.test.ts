@@ -108,6 +108,37 @@ describe("runComparatorScenario (party-size ranking flip, IDEAS #19)", () => {
   });
 });
 
+describe("runComparatorScenario (boss moveset sweep, widened to fast x charged cartesian product 2026-09-11)", () => {
+  it("sweeps the full fast x charged product against the default scenario (latios-mega: 2 fast x 5 charged = 10)", () => {
+    const result = runComparatorScenario(COMPARATOR_DEFAULTS, speciesRegistry);
+    expect(result.bossMovesetSweep).not.toBeNull();
+    const sweep = result.bossMovesetSweep!;
+    expect(sweep.length).toBe(10);
+    // Fast-major, charged-minor — a documented stable contract on the engine
+    // side (compareAcrossBossMovesets's own doc comment) that BossMovesetSweep.tsx
+    // relies on for its rowSpan grouping; pin it here so a future engine
+    // reorder is caught by this seam, not discovered as a rendering bug.
+    for (let i = 1; i < sweep.length; i++) {
+      const prevFastIndex = result.boss!.fastMoves.findIndex((m) => m.id === sweep[i - 1]!.fastMoveId);
+      const curFastIndex = result.boss!.fastMoves.findIndex((m) => m.id === sweep[i]!.fastMoveId);
+      expect(curFastIndex).toBeGreaterThanOrEqual(prevFastIndex);
+    }
+  }, 20_000);
+
+  it("actually varies the boss's fast move (not just held fixed), the reversal this sweep exists to catch", () => {
+    const result = runComparatorScenario(COMPARATOR_DEFAULTS, speciesRegistry);
+    const sweep = result.bossMovesetSweep!;
+    const boss = result.boss!;
+    const chargedMoveId = boss.chargedMoves[0]!.id;
+    const rowsForFirstCharged = sweep.filter((v) => v.chargedMoveId === chargedMoveId);
+    // latios-mega has 2 fast moves, so the same charged move should appear
+    // paired with both of them.
+    expect(rowsForFirstCharged.length).toBe(boss.fastMoves.length);
+    const fastMoveIdsSeen = new Set(rowsForFirstCharged.map((r) => r.fastMoveId));
+    expect(fastMoveIdsSeen.size).toBe(boss.fastMoves.length);
+  }, 20_000);
+});
+
 describe("runComparatorScenario (showDetailedAssumptions derived-frequency fallback)", () => {
   it("derives effectiveBossChargedMoveFrequencySeconds from the boss's own fast-move charge time when showDetailedAssumptions is false", () => {
     const assumptions = { ...COMPARATOR_DEFAULTS, showDetailedAssumptions: false };
@@ -140,11 +171,12 @@ describe("runTeamRaidScenario (default scenario)", () => {
     expect(result.data!.slots.length).toBeGreaterThan(0);
     expectFiniteNumber(result.data!.wipeCount, "wipeCount");
     expectFiniteNumber(result.data!.slotsUsed, "slotsUsed");
-    // Default boss (tyranitar-mega) has 4 known charged moves — the sweep
-    // must actually run against the default scenario, not require a
+    // Default boss (tyranitar-mega) has 4 known fast moves x 4 known charged
+    // moves = 16 combinations — the sweep must actually run the full
+    // cartesian product against the default scenario, not require a
     // special-cased matchup to exercise at all.
     expect(result.bossMovesetSweep).not.toBeNull();
-    expect(result.bossMovesetSweep!.results.length).toBe(4);
+    expect(result.bossMovesetSweep!.results.length).toBe(16);
     // IDEAS #14/#12 — well-formed even though the default scenario has both
     // toggles off and (in this CLI/test context) an empty roster pool.
     expectFiniteNumber(result.rosterPoolSize, "rosterPoolSize");
@@ -154,12 +186,39 @@ describe("runTeamRaidScenario (default scenario)", () => {
 });
 
 describe("runTeamRaidScenario (boss moveset sweep, IDEAS #18)", () => {
-  it("agrees with the main (single-moveset) run for the boss's currently-selected charged move", () => {
+  it("agrees with the main (single-moveset) run for the boss's currently-selected fast+charged pair", () => {
     const result = runTeamRaidScenario(DEFAULT_TEAM_ASSUMPTIONS, speciesRegistry);
-    const sweepRowForSelectedMove = result.bossMovesetSweep!.results.find((r) => r.moveId === DEFAULT_TEAM_ASSUMPTIONS.bossChargedMoveId);
+    const sweepRowForSelectedMove = result.bossMovesetSweep!.results.find(
+      (r) => r.fastMoveId === DEFAULT_TEAM_ASSUMPTIONS.bossFastMoveId && r.chargedMoveId === DEFAULT_TEAM_ASSUMPTIONS.bossChargedMoveId,
+    );
     expect(sweepRowForSelectedMove).toBeDefined();
     expect(sweepRowForSelectedMove!.outcome).toBe(result.data!.outcome);
     expect(sweepRowForSelectedMove!.timeToClearSeconds).toBe(result.data!.timeToClearSeconds);
+  });
+
+  it("actually varies the boss FAST move, not just the charged move — the widened-sweep regression this reversal exists to catch", () => {
+    // Default scenario's boss fast move is SMACK_DOWN_FAST (power 13,
+    // duration 1s) paired with STONE_EDGE. Mega Tyranitar's BITE_FAST (power
+    // 6, duration 0.5s) is a materially weaker/faster fast move — if
+    // buildTeamRaidInputs silently dropped the swept fast move id (the exact
+    // bug this task's instructions warned about), every row for the same
+    // charged move would report byte-identical numbers regardless of which
+    // fast move the row claims to be testing.
+    const result = runTeamRaidScenario(DEFAULT_TEAM_ASSUMPTIONS, speciesRegistry);
+    const sweep = result.bossMovesetSweep!;
+    const smackDownStoneEdge = sweep.results.find((r) => r.fastMoveId === "SMACK_DOWN_FAST" && r.chargedMoveId === "STONE_EDGE");
+    const biteStoneEdge = sweep.results.find((r) => r.fastMoveId === "BITE_FAST" && r.chargedMoveId === "STONE_EDGE");
+    expect(smackDownStoneEdge).toBeDefined();
+    expect(biteStoneEdge).toBeDefined();
+    // Same charged move, different fast move -> not required to differ on
+    // EVERY field (both may still clear comfortably), but SOMETHING
+    // fight-shaped must differ, or the fast move id isn't reaching the sim.
+    const differs =
+      smackDownStoneEdge!.timeToClearSeconds !== biteStoneEdge!.timeToClearSeconds ||
+      smackDownStoneEdge!.wipeCount !== biteStoneEdge!.wipeCount ||
+      smackDownStoneEdge!.slotsUsed !== biteStoneEdge!.slotsUsed ||
+      smackDownStoneEdge!.timerMarginSeconds !== biteStoneEdge!.timerMarginSeconds;
+    expect(differs).toBe(true);
   });
 
   it("flags verdictVaries when a real boss/roster pairing clears against one charged move but not another", () => {
@@ -185,13 +244,14 @@ describe("runTeamRaidScenario (boss moveset sweep, IDEAS #18)", () => {
     expect(sweep.verdictVaries).toBe(true);
   });
 
-  it("returns null when the boss has fewer than 2 known charged moves", () => {
-    // magikarp is a real registry entry with exactly 1 known charged move —
-    // not a real raid boss, but runTeamRaidScenario resolves targetId
-    // straight off the registry with no raid-eligibility gate of its own, so
-    // it's a legitimate way to exercise the `chargedMoves.length >= 2` guard
-    // (same gate ComparatorView's own bossMovesetSweep uses) without a
-    // synthetic species fixture.
+  it("returns null when the boss has fewer than 2 distinct fast x charged moveset combinations", () => {
+    // magikarp is a real registry entry with exactly 1 known fast move and 1
+    // known charged move (1 x 1 = 1 combination) — not a real raid boss, but
+    // runTeamRaidScenario resolves targetId straight off the registry with no
+    // raid-eligibility gate of its own, so it's a legitimate way to exercise
+    // the `fastMoves.length * chargedMoves.length >= 2` guard (same gate
+    // ComparatorView's own bossMovesetSweep uses) without a synthetic species
+    // fixture.
     const oneMoveBoss = { ...DEFAULT_TEAM_ASSUMPTIONS, targetId: "magikarp" };
     const result = runTeamRaidScenario(oneMoveBoss, speciesRegistry);
     expect(result.error).toBeNull();

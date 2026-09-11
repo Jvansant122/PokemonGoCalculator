@@ -2150,7 +2150,12 @@ export interface RosterBudgetPlan {
   noiseFloorTeamDps: number;
   /** Total spend and what's left, broken out per resource — stardust and every candy pool kept strictly separate, never blended into one number (CLAUDE.md standing decision). */
   ledger: RosterBudgetLedger;
-  /** Why the search stopped — see powerUp.ts's PowerUpBudgetStopReason (reused, same four reasons, same meanings). */
+  /**
+   * Why the search stopped — see powerUp.ts's PowerUpBudgetStopReason
+   * (reused, same meanings). One variant, "no-eligible-entries," is only
+   * ever produced here, never by the single-raid `optimizePowerUps`/
+   * `planPowerUpBudget` path — see that variant's own doc comment for why.
+   */
   stopReason: PowerUpBudgetStopReason;
   /** "You're done" vs. "you're blocked" — see this interface's own top-level doc comment and RosterBudgetBlockedCandidate. Null means genuine convergence; non-null means a real, unaffordable gain exists. */
   bestBlockedCandidate: RosterBudgetBlockedCandidate | null;
@@ -2658,6 +2663,24 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     // module's top doc comment, "THE NOISE FLOOR IS PER-ROUND, NOT FIXED."
     const floorForThisRound = aggregateNoiseFloor;
     const perBossFloorsForThisRound = [...perBossNoiseFloors];
+
+    // Guard BEFORE the vacuous-truth check below: `eligiblePool` is built
+    // once, above this loop, and never changes round to round, so if it's
+    // empty here it was empty on round 0 too and every round from here on
+    // would re-derive the same (wrong) conclusion. An empty pool means every
+    // entry was excluded before evaluation ever ran (see `excludedEntries`
+    // for why each one) — that is NOT the same fact as "a non-empty pool was
+    // evaluated and has no useful levels left," which is what
+    // "max-level-reached" is documented to mean. `[...new Map().values()]
+    // .every(...)` on an empty pool returns `true` vacuously, so without this
+    // guard a totally-excluded pool (e.g. every entry's candy-on-hand is
+    // unknown) was silently mislabelled "max-level-reached" — read by a
+    // caller as "you're already optimal" when the truth is "this never got
+    // evaluated at all." See PowerUpBudgetStopReason's own doc comment.
+    if (eligiblePool.length === 0) {
+      stopReason = "no-eligible-entries";
+      break roundLoop;
+    }
 
     const perEntryUseful = new Map<string, number[]>();
     for (const entry of eligiblePool) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareAcrossBossChargedMoves, runSustainedComparison } from "../src/comparison.js";
+import { compareAcrossBossMovesets, runSustainedComparison } from "../src/comparison.js";
 import { calculateDamage } from "../src/damage.js";
 import { chargedMoveAtMegaLevel } from "../src/megaLevel.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
@@ -115,8 +115,8 @@ describe("runSustainedComparison", () => {
     expect(rainy[0]!.meanSecondsSurvived).toBeLessThanOrEqual(noWeather[0]!.meanSecondsSurvived);
   });
 
-  it("compareAcrossBossChargedMoves sweeps every one of the boss's known charged moves", () => {
-    const sweep = compareAcrossBossChargedMoves({
+  it("compareAcrossBossMovesets sweeps the full cartesian product of the boss's known fast x charged moves", () => {
+    const sweep = compareAcrossBossMovesets({
       candidates: [CANDIDATE_ALPHA, CANDIDATE_BETA],
       boss: BOSS_GALE,
       level: LEVEL,
@@ -127,13 +127,15 @@ describe("runSustainedComparison", () => {
       iterations: 30,
     });
 
-    // BOSS_GALE's fixture only has one charged move (Sky Crash) today, so
-    // this sweep is a single-entry array — still exercises the plumbing
-    // (id/name resolution, results shape) without depending on a second
-    // charged move existing on this hypothetical fixture.
-    expect(sweep.length).toBe(BOSS_GALE.chargedMoves.length);
+    // BOSS_GALE's fixture only has one fast move and one charged move today,
+    // so the cartesian product is a single-entry array — still exercises the
+    // plumbing (id/name resolution, results shape) without depending on a
+    // second move existing on this hypothetical fixture.
+    expect(sweep.length).toBe(BOSS_GALE.fastMoves.length * BOSS_GALE.chargedMoves.length);
     expect(sweep.length).toBeGreaterThan(0);
     for (const variant of sweep) {
+      expect(variant.fastMoveId).toBeTruthy();
+      expect(variant.fastMoveName).toBeTruthy();
       expect(variant.chargedMoveId).toBeTruthy();
       expect(variant.chargedMoveName).toBeTruthy();
       expect(variant.results.length).toBe(2);
@@ -141,10 +143,11 @@ describe("runSustainedComparison", () => {
         expect(result.meanSecondsSurvived).toBeGreaterThan(0);
       }
     }
+    expect(sweep[0]!.fastMoveId).toBe(BOSS_GALE.fastMoves[0]!.id);
     expect(sweep[0]!.chargedMoveId).toBe(BOSS_GALE.chargedMoves[0]!.id);
   });
 
-  it("compareAcrossBossChargedMoves sweeps a multi-move boss and produces one entry per charged move", () => {
+  it("compareAcrossBossMovesets sweeps a multi-charged-move boss and produces one entry per charged move (single fast move)", () => {
     // A synthetic boss with TWO charged moves of very different power, so the
     // sweep's per-variant results should differ meaningfully between entries
     // — proves each entry actually re-ran the comparison with that specific
@@ -163,7 +166,7 @@ describe("runSustainedComparison", () => {
       statsArePrecomputed: true,
     };
 
-    const sweep = compareAcrossBossChargedMoves({
+    const sweep = compareAcrossBossMovesets({
       candidates: [CANDIDATE_ALPHA],
       boss: multiMoveBoss,
       level: LEVEL,
@@ -175,10 +178,57 @@ describe("runSustainedComparison", () => {
     });
 
     expect(sweep.length).toBe(2);
+    expect(sweep[0]!.fastMoveId).toBe("boss-fast");
     expect(sweep[0]!.chargedMoveId).toBe("weak-charged");
+    expect(sweep[1]!.fastMoveId).toBe("boss-fast");
     expect(sweep[1]!.chargedMoveId).toBe("strong-charged");
     // The strong-charged-move variant should be at least as lethal (mean
     // survival no longer) as the weak-charged-move variant.
+    expect(sweep[1]!.results[0]!.meanSecondsSurvived).toBeLessThanOrEqual(sweep[0]!.results[0]!.meanSecondsSurvived);
+  });
+
+  it("compareAcrossBossMovesets sweeps a 2-fast x 1-charged boss, fast-major/charged-minor order (the case the old charged-only sweep could not express)", () => {
+    // A boss with TWO fast moves and only ONE charged move: the old
+    // charged-only sweep's gate (chargedMoves.length >= 2) would have
+    // reported "nothing to sweep" here despite two genuinely different
+    // rolled movesets existing. The gentleFast/harshFast pair differ enough
+    // in power that the resulting variants should differ measurably.
+    const gentleFast: FastMove = { id: "gentle-fast", name: "Gentle Fast", type: "normal", power: 3, energyGain: 8, durationSeconds: 1 };
+    const harshFast: FastMove = { id: "harsh-fast", name: "Harsh Fast", type: "normal", power: 18, energyGain: 8, durationSeconds: 1 };
+    const onlyCharged: ChargedMove = { id: "only-charged", name: "Only Charged", type: "normal", power: 80, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 };
+    const twoFastBoss: SpeciesDefinition = {
+      id: "two-fast-boss",
+      name: "Two Fast Boss",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 150,
+      baseStamina: 20000,
+      fastMoves: [gentleFast, harshFast],
+      chargedMoves: [onlyCharged],
+      statsArePrecomputed: true,
+    };
+
+    const sweep = compareAcrossBossMovesets({
+      candidates: [CANDIDATE_ALPHA],
+      boss: twoFastBoss,
+      level: LEVEL,
+      ivs: PERFECT_IVS,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 8,
+      maxSeconds: 60,
+      iterations: 40,
+    });
+
+    // fast-major, charged-minor: (gentle, only), (harsh, only) — every pair
+    // present exactly once.
+    expect(sweep.length).toBe(2);
+    expect(sweep[0]!.fastMoveId).toBe("gentle-fast");
+    expect(sweep[0]!.chargedMoveId).toBe("only-charged");
+    expect(sweep[1]!.fastMoveId).toBe("harsh-fast");
+    expect(sweep[1]!.chargedMoveId).toBe("only-charged");
+    // The harsh-fast-move variant should be at least as lethal (mean
+    // survival no longer) as the gentle-fast-move variant, since it deals
+    // more chip damage and grants energy just as fast.
     expect(sweep[1]!.results[0]!.meanSecondsSurvived).toBeLessThanOrEqual(sweep[0]!.results[0]!.meanSecondsSurvived);
   });
 

@@ -279,6 +279,39 @@ describe("planRosterBudget — unknown-candy families are excluded with a reason
   });
 });
 
+describe("planRosterBudget — stopReason: no-eligible-entries vs. max-level-reached (vacuous-truth regression)", () => {
+  it("reports 'no-eligible-entries', never 'max-level-reached', when EVERY pool entry is excluded before evaluation ever runs (unknown candy for the whole pool)", () => {
+    // None of these entries are anywhere near maxLevel (20 and 1) — if this
+    // regressed to the old vacuous `[].every(...)` behaviour, it would
+    // still (wrongly) report "max-level-reached", which reads to a caller
+    // as "you're already optimal" rather than "this never evaluated."
+    const pool = [...strongTeam(20), entry("weak-bench", WEAK_BENCH_SPECIES, 1)];
+    const plan = planRosterBudget({
+      ...baseInputs({ candyByFamilyId: {}, stardustOnHand: 2_000_000, screenIterations: 4, iterations: 5 }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+
+    expect(plan.excludedEntries.length).toBe(pool.length); // every entry excluded, none evaluated
+    expect(plan.steps).toHaveLength(0);
+    expect(plan.stopReason).toBe("no-eligible-entries");
+    expect(plan.stopReason).not.toBe("max-level-reached");
+  });
+
+  it("still reports 'max-level-reached' for a genuinely non-empty, fully-eligible pool that's simply already maxed — the fix must not swallow the real case", () => {
+    const pool = strongTeam(50); // already maxed, every entry has a known candy pool
+    const plan = planRosterBudget({
+      ...baseInputs({ candyByFamilyId: generousCandyFor(pool), stardustOnHand: 2_000_000, screenIterations: 4, iterations: 5 }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+
+    expect(plan.excludedEntries).toHaveLength(0); // nothing excluded — the pool WAS evaluated
+    expect(plan.steps).toHaveLength(0);
+    expect(plan.stopReason).toBe("max-level-reached");
+  });
+});
+
 describe("planRosterBudget — isFullyEvolved: undefined is eligible, === false is excluded (§3.6)", () => {
   it("never excludes STRONG_SPECIES (isFullyEvolved undefined, exactly like every real mega/primal SpeciesDefinition)", () => {
     expect(STRONG_SPECIES[0]!.isFullyEvolved).toBeUndefined();

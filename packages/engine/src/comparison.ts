@@ -25,7 +25,7 @@ import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
 /**
  * NOTE (2026-09-06 code-simplifier audit): runComparison/ComparisonInputs/
  * CandidateResult below have zero production callers — packages/web only
- * drives runSustainedComparison/compareAcrossBossChargedMoves further down in
+ * drives runSustainedComparison/compareAcrossBossMovesets further down in
  * this same file. This is intentional, not dead code: see combat.ts's
  * matching note at the top of that file for why this "Phase 1 opening burst"
  * cluster is kept as a deterministic acceptance-test harness (comparison.test.ts,
@@ -705,35 +705,77 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
   });
 }
 
-export interface BossChargedMoveVariantResult {
+export interface BossMovesetVariantResult {
+  fastMoveId: string;
+  fastMoveName: string;
   chargedMoveId: string;
   chargedMoveName: string;
   results: SustainedCandidateResult[];
 }
 
 /**
- * Runs runSustainedComparison once per each of the boss's known charged
- * moves (already present on SpeciesDefinition.chargedMoves — no new sourcing
+ * Runs runSustainedComparison once per combination in the FULL CARTESIAN
+ * PRODUCT of the boss's known fast moves x known charged moves (already
+ * present on SpeciesDefinition.fastMoves/.chargedMoves — no new sourcing
  * needed), so a caller can show whether the ranking between two candidates
- * depends on which charged-move variant the boss instance happens to have
- * rolled. A real raid boss instance is locked to ONE fixed charged move for
- * its whole lifetime, but different instances of "the same" boss (different
- * eggs/gyms) can roll different charged moves from its known movepool — a
- * player deciding which mega to bring can't know in advance which variant
- * they'll actually face.
+ * depends on which moveset variant the boss instance happens to have rolled.
+ * A real raid boss instance rolls BOTH a fast move and a charged move from
+ * its movepool and is locked to that exact pair for its whole lifetime, but
+ * different instances of "the same" boss (different eggs/gyms) can roll
+ * different pairs — a player deciding which mega to bring can't know in
+ * advance which pair they'll actually face.
  *
- * Scoped to charged moves only, per the originating proposal — this does NOT
- * also sweep the boss's fast moves. `inputs.bossChargedMoveId` is ignored if
- * supplied (each swept entry provides its own); every other input (dodge,
- * party assumptions passed through by the caller, weather, etc.) is held
- * fixed across the sweep so only the boss's moveset varies.
+ * REVERSAL (2026-09-11, user-requested): earlier versions of this function
+ * (then named compareAcrossBossChargedMoves) were deliberately scoped to
+ * charged moves only, holding the boss's fast move fixed at
+ * species.fastMoves[0]. That was wrong: the boss's fast move drives BOTH
+ * incoming chip damage AND the boss's own energy gain (hence its
+ * charged-move cadence), so a fast-move roll can flip a ranking just as
+ * readily as a charged-move roll can — sweeping only one of the two rolled
+ * axes silently held the other fixed. This now sweeps both.
+ *
+ * Iteration order is FAST-MAJOR, CHARGED-MINOR — `for (const f of
+ * boss.fastMoves) for (const c of boss.chargedMoves)` — and is a stable
+ * contract callers (packages/web) may rely on.
+ *
+ * Both `inputs.bossFastMoveId` and `inputs.bossChargedMoveId` are ignored if
+ * supplied (each swept entry provides its own pair) — note this means
+ * `bossFastMoveId` stops governing the SWEEP here even though it still
+ * governs runSustainedComparison's own non-swept result elsewhere; do not
+ * "fix" this back to honoring a fixed bossFastMoveId inside the sweep. Every
+ * other input (dodge, party assumptions passed through by the caller,
+ * weather, etc.) is held fixed across the sweep so only the boss's moveset
+ * varies.
+ *
+ * The meaningful-sweep gate a caller should use before presenting this is
+ * `boss.fastMoves.length * boss.chargedMoves.length >= 2`, NOT
+ * `boss.chargedMoves.length >= 2` — a boss with 2 fast moves and only 1
+ * charged move has two genuinely different rolled movesets and deserves a
+ * sweep despite failing the old charged-only gate. That gate itself lives in
+ * packages/web, not here; this comment is the one source of truth for the
+ * rule it should apply.
+ *
+ * Perf: measured against starmie-mega (4 fast x 9 charged, the highest-combo
+ * species across raidHistory.json's 771 recorded bosses) — 36 variants in
+ * ~157ms, vs. 9 variants/~64ms for the old charged-only sweep. p50 combo
+ * count across recorded bosses goes 4 -> 8. Well inside budget; no cap or
+ * guard was added on the strength of that measurement alone — re-measure via
+ * `npm run bench` before adding one.
  */
-export function compareAcrossBossChargedMoves(
-  inputs: Omit<SustainedComparisonInputs, "bossChargedMoveId">,
-): BossChargedMoveVariantResult[] {
-  return inputs.boss.chargedMoves.map((chargedMove: ChargedMove) => ({
-    chargedMoveId: chargedMove.id,
-    chargedMoveName: chargedMove.name,
-    results: runSustainedComparison({ ...inputs, bossChargedMoveId: chargedMove.id }),
-  }));
+export function compareAcrossBossMovesets(
+  inputs: Omit<SustainedComparisonInputs, "bossFastMoveId" | "bossChargedMoveId">,
+): BossMovesetVariantResult[] {
+  const results: BossMovesetVariantResult[] = [];
+  for (const fastMove of inputs.boss.fastMoves) {
+    for (const chargedMove of inputs.boss.chargedMoves as ChargedMove[]) {
+      results.push({
+        fastMoveId: fastMove.id,
+        fastMoveName: fastMove.name,
+        chargedMoveId: chargedMove.id,
+        chargedMoveName: chargedMove.name,
+        results: runSustainedComparison({ ...inputs, bossFastMoveId: fastMove.id, bossChargedMoveId: chargedMove.id }),
+      });
+    }
+  }
+  return results;
 }

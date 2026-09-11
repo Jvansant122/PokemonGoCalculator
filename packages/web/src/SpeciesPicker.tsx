@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface SpeciesPickerOption {
   id: string;
@@ -40,12 +40,36 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange, prima
   const selected = useMemo(() => options.find((o) => o.id === value), [options, value]);
   const [query, setQuery] = useState(selected?.label ?? "");
   const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Set by selectOption, consumed by the effect below — see its own comment
+  // for why re-selecting the text needs to happen there rather than inline.
+  const reselectAfterPickRef = useRef(false);
 
   // Keep the displayed text in sync when the selection changes from outside
   // (e.g. restoring a shared scenario URL, or the options list itself resyncing).
   useEffect(() => {
     setQuery(selected?.label ?? "");
   }, [selected?.id, selected?.label]);
+
+  // Re-select the input's full text after picking an option from the list,
+  // so the very next keystroke replaces it instead of appending. Can't do
+  // this inline in selectOption: the option button's onMouseDown calls
+  // preventDefault() (deliberately, so the click registers before the list
+  // unmounts on blur) which means the input NEVER loses focus during a
+  // pick, so the normal onFocus-driven select-all below never re-fires for
+  // the second+ pick in a row. This effect is the substitute "just picked"
+  // hook, and it must run after commit (not inline in the click handler) so
+  // it selects the NEW value rather than whatever stale text was in the DOM
+  // before this render. Reproduced live pre-fix: pick Bulbasaur, then type
+  // "mewtwo" with no re-click in between, and the box read "Bulbasaurmewtwo".
+  useEffect(() => {
+    if (reselectAfterPickRef.current) {
+      reselectAfterPickRef.current = false;
+      if (document.activeElement === inputRef.current) {
+        inputRef.current?.select();
+      }
+    }
+  }, [query]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -57,6 +81,7 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange, prima
     onChange(option.id);
     setQuery(option.label);
     setOpen(false);
+    reselectAfterPickRef.current = true;
   }
 
   const inputId = `${idPrefix}-input`;
@@ -68,6 +93,7 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange, prima
       <div className="species-picker-input-row">
         {selected?.imageUrl && <img src={selected.imageUrl} alt="" className="species-icon" />}
         <input
+          ref={inputRef}
           id={inputId}
           type="text"
           role="combobox"

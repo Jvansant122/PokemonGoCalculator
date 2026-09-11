@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SpeciesDefinition } from "@pogo-analyzer/engine";
 import {
+  defaultCanMegaForSpecies,
   draftToRosterEntry,
   emptyRosterEntryDraft,
   newHandEntryId,
@@ -198,6 +199,23 @@ describe("rosterEntryToDraft / draftToRosterEntry round trip", () => {
     expect(draft.secondChargedMoveId).toBe("CRUNCH");
     const rebuilt = draftToRosterEntry(draft, species, original.entryId);
     expect(rebuilt).toEqual(original);
+  });
+});
+
+describe("defaultCanMegaForSpecies", () => {
+  // The actual bug this guards: RosterEntryForm's SpeciesPicker onChange
+  // used to leave canMega untouched on a fresh species pick, so picking a
+  // mega species silently produced an ineligible roster entry.
+  it("defaults to eligible for a species with a boost mechanic (mega/primal)", () => {
+    expect(defaultCanMegaForSpecies(fakeMegaSpecies())).toBe(true);
+  });
+
+  it("defaults to ineligible for a species with no boost mechanic", () => {
+    expect(defaultCanMegaForSpecies(fakeSpecies())).toBe(false);
+  });
+
+  it("defaults to ineligible when no species is resolved yet", () => {
+    expect(defaultCanMegaForSpecies(null)).toBe(false);
   });
 });
 

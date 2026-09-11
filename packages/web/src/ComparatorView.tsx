@@ -710,14 +710,16 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           {bossMovesetSweep && bossMovesetSweep.length > 1 && species.candidates && (
             <CollapsibleSection
               id="comparator-boss-moveset-sweep"
-              heading="Does the winner depend on the boss's charged-move roll?"
+              heading="Does the winner depend on the boss's moveset roll?"
               defaultOpen={false}
             >
               <p className="caveats" style={{ marginBottom: 12 }}>
-                {boss!.name} knows {bossMovesetSweep.length} charged moves — a real raid instance is locked to
-                whichever ONE of them it rolled for its whole lifetime, so a player choosing which mega to bring can't
-                know in advance which variant they'll actually face. Every row below re-runs the full comparison above
-                holding every other assumption fixed, varying only the boss's charged move.
+                {boss!.name} can roll {bossMovesetSweep.length} distinct movesets (fast + charged move combinations) —
+                a real raid instance is locked to whichever ONE combination it rolled for its whole lifetime, so a
+                player choosing which mega to bring can't know in advance which fast and charged move pair they'll
+                actually face. Every row below re-runs the full comparison above holding every other assumption
+                fixed, varying only the boss's fast and charged move (rolled together, since a real instance always
+                picks both at once).
               </p>
               <BossMovesetSweep
                 variants={bossMovesetSweep}
