@@ -331,4 +331,83 @@ describe("isFullyEvolved / realEvolutionTargets", () => {
       { evolutionEnum: "CROCONAW", form: undefined, candyCost: 25, candyCostPurified: 22 },
     ]);
   });
+
+  // 2026-09-10, data-sync's "Normalize evolution candy costs" task — the
+  // item/lure/buddy/gender/time-of-day/quest requirement fields carried
+  // through verbatim, confirmed against the live 2026-09-10 GAME_MASTER dump
+  // (see RawGameMasterEvolutionBranchFull's own doc comment in rawShapes.ts).
+  it("realEvolutionTargets carries an item requirement through (Onix -> Steelix needs a Metal Coat)", () => {
+    const [, normalForm] = recordPair("ONIX", [
+      { evolution: "STEELIX", form: "STEELIX_NORMAL", candyCost: 50, candyCostPurified: 45, evolutionItemRequirement: "ITEM_METAL_COAT" },
+    ]);
+    expect(realEvolutionTargets(normalForm!)).toEqual([
+      {
+        evolutionEnum: "STEELIX",
+        form: "STEELIX_NORMAL",
+        candyCost: 50,
+        candyCostPurified: 45,
+        evolutionItemRequirement: "ITEM_METAL_COAT",
+      },
+    ]);
+  });
+
+  it("realEvolutionTargets carries buddy/gender/time-of-day/quest requirements through (Eevee -> Espeon)", () => {
+    const record: GameMasterPokemonRecord = {
+      pokemonId: "EEVEE",
+      baseAttack: 1,
+      baseDefense: 1,
+      baseStamina: 1,
+      quickMoves: [],
+      cinematicMoves: [],
+      eliteQuickMoves: [],
+      eliteCinematicMoves: [],
+      tempEvoOverrides: [],
+      evolutionBranch: [
+        {
+          evolution: "ESPEON",
+          form: "ESPEON_NORMAL",
+          candyCost: 25,
+          mustBeBuddy: true,
+          kmBuddyDistanceRequirement: 10,
+          onlyDaytime: true,
+          requiresQuest: true,
+        },
+      ],
+    };
+    expect(realEvolutionTargets(record)).toEqual([
+      {
+        evolutionEnum: "ESPEON",
+        form: "ESPEON_NORMAL",
+        candyCost: 25,
+        mustBeBuddy: true,
+        kmBuddyDistanceRequirement: 10,
+        onlyDaytime: true,
+        requiresQuest: true,
+      },
+    ]);
+  });
+
+  it("realEvolutionTargets returns no candyCost for the item-count-only branches (Gimmighoul -> Gholdengo)", () => {
+    const record: GameMasterPokemonRecord = {
+      pokemonId: "GIMMIGHOUL",
+      baseAttack: 1,
+      baseDefense: 1,
+      baseStamina: 1,
+      quickMoves: [],
+      cinematicMoves: [],
+      eliteQuickMoves: [],
+      eliteCinematicMoves: [],
+      tempEvoOverrides: [],
+      evolutionBranch: [
+        { evolution: "GHOLDENGO", evolutionItemRequirement: "ITEM_GIMMIGHOUL_COIN", evolutionItemRequirementCost: 999 },
+      ],
+    };
+    expect(realEvolutionTargets(record)).toEqual([
+      {
+        evolutionEnum: "GHOLDENGO",
+        evolutionItemRequirement: "ITEM_GIMMIGHOUL_COIN",
+        evolutionItemRequirementCost: 999,
+      },
+    ]);
+  });
 });

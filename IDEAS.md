@@ -45,10 +45,16 @@ Remaining ideas, in rough value order (none scheduled):
 3. **"Add a 7th" candidates.** Compare powering up an owned slot against replacing it with a
    hypothetical new catch at level 20/25 (raid catch levels) — the original idea's "5 + a
    hypothetical 6th" framing. Needs a roster-swap candidate type alongside the level-up one.
-4. **Per-species cost overrides.** GAME_MASTER carries an Eternatus-only 30× candy override
-   (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`); v1 ignores it, so Eternatus
-   candy costs are understated 30×. Small data-sync + engine change once a second such
-   override appears or someone actually optimizes an Eternatus.
+4. **Per-species cost overrides.** GAME_MASTER carries an Eternatus-only override
+   (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`) that replaces BOTH the
+   `candyCost` and `xlCandyCost` arrays with independent tables (not a flat multiplier —
+   drifts from ~30× at low levels to ~59× at the candy/XL crossover; see MECHANICS.md's
+   "Per-species cost overrides"). **Data-sync half done (2026-09-10):** raw override
+   template(s) are cached to `data/raw/game_master.json` and exposed raw/uninterpreted as
+   `data/normalized/powerUpCosts.json`'s `perSpeciesUpgradeOverrides`, matched by templateId
+   pattern so a future second override is picked up automatically. **Still open:**
+   `powerUpCostTableFromGameMaster` (engine) doesn't consume this field yet, so the Power-Up
+   Optimizer still prices Eternatus off the universal table alone.
 5. **Best Buddy +1 level** (`defaultCpBoostAdditionalLevel`) as a free, cost-less candidate.
 6. **More iterations / a Web Worker.** 3 paired seeds keep the tab responsive but small deltas
    are still noisy; the Species Report's rejected-for-now worker idea applies here too.
@@ -69,15 +75,11 @@ re-investigated from scratch. Do not re-add them here without the specific evide
 | Dodge damage scaling with remaining HP | One Silph Road observation, flagged by its own authors as needing confirmation, with **no formula**. reddit.com and thesilphroad.com are both hard-blocked to this tooling — a ceiling, not a research gap. | A formula from any reachable source. |
 | Super Mega Raids | Structurally group content: a fixed 7-10 shields with one break per trainer. Modelling it properly is multi-trainer, which is a standing-decision exclusion. | Nothing — this is a scope boundary, not missing evidence. The tier stays caveated. |
 | The 0.5s combat cycle | Nothing is mis-timed: 0.5 is exactly representable on our finer 0.1s tick. There is no error to fix. | A demonstrated case where the finer tick produces a wrong result. |
+| Asymmetric move delay (**removed 2026-09-10**) | MECHANICS.md's "Move delay is applied at different ends" entry has **no reliability tag and no traceable source** — unique among every other entry in that file, which follows a strict "cite, don't assert" rule. `engine-developer` checked before implementing per this task's own instruction and declined; the entry is now flagged `[UNCITED]` in MECHANICS.md rather than presented as settled. A fidelity change here would move the fine timing of every dodge/breakpoint interaction, which needs to be right, not just "more faithful in principle." | A real source (first-party or community-consensus, matching this file's own bar) establishing that fast/charged move delay placement actually differs, ideally with the same rigor as the adjacent (resolved) damage-window entry. |
 
 Ordered by how much they'd change results, not by effort.
 
-1. **Asymmetric move delay.** Fast moves apply their 1s/1.5s delay at the END of the animation;
-   charged moves at the BEGINNING. So the fast move following a boss's charged move arrives
-   quickly. All move durations are currently treated uniformly. This shifts the fine structure of
-   when damage lands, which matters most for dodge timing.
-
-2. **The 0.7s dodge window — RESOLVED 2026-09-10, nothing to build.** It is a different quantity
+1. **The 0.7s dodge window — RESOLVED 2026-09-10, nothing to build.** It is a different quantity
    from the first-party `dodgeDurationMs: 500` this engine models: 500 ms is the **invulnerability
    window once a dodge executes**, ~700 ms is the **human reaction window** to input one. This
    engine's dodge model is perfect-play and has no reaction window to attach it to. The adjacent
@@ -86,7 +88,7 @@ Ordered by how much they'd change results, not by effort.
    observes those timers, so `vulnerableWindowSeconds = durationSeconds` is correct, not a
    placeholder. Do not reopen either without a contradicting source.
 
-3. **The friendship attack bonus (3/5/7/10/12%).** A real raid multiplier, confirmed first-party,
+2. **The friendship attack bonus (3/5/7/10/12%).** A real raid multiplier, confirmed first-party,
    currently inert in `damage.ts` behind a `bestBuddy` field that is never set and a code comment
    that has the raid/PvP scope backwards. Single-trainer-scoped like weather — **not** a team-boost
    mechanic. Fix the wrong comment regardless of whether the feature ships.
@@ -118,12 +120,25 @@ as a bug. Nothing here is committed work.
     cheap TM would fix it. Correct for "what should I power up", wrong for "what should I invest
     in" — a toggle, not a default change.
 
-12. **Re-selecting a different six after a wipe.** `runTeamRaid` models the wipe/revive cost but
-    always re-fields the same roster; a real trainer with 164 Pokémon returns to the lobby and
-    picks a fresh six, with no documented cap on repeats. Newly meaningful only at pool scale.
-    **This is not the ruled-out Teambuilding Analyzer** — that exclusion is about *multi-trainer*
-    mega staggering across a lobby; this is one trainer sequentially re-selecting from their own
-    roster, the same framing the Team Raid Simulator already uses. Read this before dismissing it.
+12. **Re-selecting a different six after a wipe — ENGINE HALF DONE 2026-09-10.**
+    `teamRaid.ts`'s `runTeamRaid` gained an optional `reselectAfterWipe` hook
+    (`TeamRaidInputs.reselectAfterWipe`, typed `TeamRaidReselector`): called once per completed
+    wipe with a `TeamRaidReselectContext` (cycle/wipe index, the roster that just fainted out,
+    boss damage dealt so far, boss max HP, and the raid-global clock), returning the roster to
+    field for the next cycle. Omitted, it's byte-identical to before (always re-fields `slots`).
+    The engine deliberately implements NO selection heuristic itself — it has no I/O and doesn't
+    own a roster pool (`packages/web`'s `rosterPool.ts` does, ~200 entries at pool scale, which is
+    when this actually matters); a caller holding that pool supplies its own strategy as a plain
+    function. Also added `TeamRaidSlotInput.slotId`/`TeamRaidSlotResult.slotId` (falls back to the
+    stringified array position when unset, byte-identical for every existing caller) since a plain
+    `slotIndex` stops reliably naming "the same configured Pokémon" once a different roster can be
+    fielded each cycle — `TeamRaidResult.slotsUsed` now counts by `slotId`.
+    **UI wiring is NOT done**: no tab calls `reselectAfterWipe` yet, and no selection heuristic
+    (e.g. "best remaining score, avoid whoever just fainted") has been written — that's
+    `web-developer`'s call, reading `rosterPool.ts`. **This is not the ruled-out Teambuilding
+    Analyzer** — that exclusion is about *multi-trainer* mega staggering across a lobby; this is
+    one trainer sequentially re-selecting from their own roster, the same framing the Team Raid
+    Simulator already uses.
 
 13. **Real per-boss progress for the multi-raid sweep.** The worker reports coarse
     running/done/failed plus elapsed time; genuine progress needs an `onProgress` hook inside
@@ -145,13 +160,20 @@ as a bug. Nothing here is committed work.
     decision deliberately anchors shadows on recorded evidence, not on the live feed alone, so
     this is a scope change to make deliberately rather than a bug to patch.
 
-16. **Two tabs now model "show advanced assumptions" two different ways.** The Comparator's
-    `showDetailedAssumptions` is a real field on the engine's `Scenario` (added 2026-09-10); Team
-    Raid's identically-named field is a `packages/web`-only bolt-on on `TeamScenarioWithShadow`,
-    because `TeamScenario` in the engine never got one — its own comment says folding it in
-    properly was left as `engine-developer`'s call. Neither is broken and both round-trip, so this
-    is tidying, not a bug. Reconcile in one direction deliberately rather than letting a third tab
-    pick a third pattern.
+16. **Two tabs modelled "show advanced assumptions" two different ways — ENGINE HALF DONE
+    2026-09-10.** `teamScenario.ts`'s `TeamScenario` now carries its own real
+    `showDetailedAssumptions: boolean` field (required, plain `false` default on both directions
+    of the round trip — deliberately NOT the Comparator's inverted "absent decodes true" pattern,
+    since backward link compatibility is no longer a constraint and there was no previously-shipped
+    link with this field on the ENGINE type to preserve either way). **`packages/web` still needs
+    to actually consume it**: `TeamRaidView.tsx`'s `TeamScenarioWithShadow` currently redeclares its
+    own local, optional `showDetailedAssumptions?: boolean` bolt-on (see that interface, which
+    `extends Omit<TeamScenario, "slots">`) — that local field should be deleted so the type
+    inherits the real, required one from `TeamScenario` instead, and
+    `assumptionsToTeamScenario`/`teamScenarioToAssumptions` should stop treating it as optional
+    (keeping a defensive `?? false` at DECODE time is still fine/recommended, matching the
+    Comparator's own established precedent, since `decodeTeamScenario` does zero runtime
+    validation despite the compile-time-required type).
 
 17. **DONE (2026-09-10).** Shadow Raid enrage is now modelled — see MECHANICS.md's "Shadow raids"
     section ("Enrage: implemented 2026-09-10") and `packages/engine/src/shadow.ts`'s
@@ -176,16 +198,30 @@ as a bug. Nothing here is committed work.
     ("for FOUR teammates specifically… group size of 5"). Same crossing-detection shape, new
     axis, no new modelling. `pogo-player`'s top pick, and `hardcore-spender`'s too.
 
-20. **Surface the own-charged-move-cast vulnerability cost as its own line.** The engine already
-    computes it (`HOLD_CHARGED_MOVE_DODGE_ATTEMPTS × DODGE_COST_SECONDS`) but folds it into the
-    aggregate survivability number. The user named this gap unprompted in 2026-09-04 and excluded
-    it from their own hand-calc. **Only worth building if labelled as the unsourced placeholder it
-    is** — MECHANICS.md still has it as an open question, and this user distrusts numbers whose
-    error-bias direction they can't judge.
+20. **Surface the own-charged-move-cast vulnerability cost as its own line — ENGINE HALF DONE
+    2026-09-10.** `simulate.ts`'s `StepwiseRunResult` now carries
+    `holdChargedMoveDodgeCostEvents`/`holdChargedMoveDodgeCostSeconds` (per run) and
+    `DistributionSummary.meanHoldChargedMoveDodgeCostSeconds` (across a distribution), computed
+    exactly from `HOLD_CHARGED_MOVE_DODGE_ATTEMPTS × DODGE_COST_SECONDS` per triggered event —
+    both 0 whenever `holdChargedMoveUntilSafe` is off. **Still labelled as the unsourced
+    placeholder it is** (doc comments on both fields say so explicitly, and MECHANICS.md's
+    "OPEN QUESTION" entry is untouched) — surfacing it is not the same as sourcing it. **UI wiring
+    is NOT done**: no tab reads either field yet. Whichever tab surfaces this must caveat it as
+    resting on an unsourced assumption, per `pogo-player`'s original caution.
 
-21. **Dodge-execution-error sensitivity** — a swept "what if I miss N% of my dodges". The dodge
-    setting chooses *which* attacks to attempt and models no miss chance at all. Precedent: the
-    same user chose a nonzero wipe-and-rejoin default explicitly "to allow user error".
+21. **Dodge-execution-error sensitivity — ENGINE PRIMITIVE DONE 2026-09-10.**
+    `simulate.ts`'s `sweepDodgeExecutionError` sweeps the already-existing
+    `{kind:"percentage-missed", missedFraction}` `DodgeBehavior` (built for this exact axis but
+    never previously swept) across a caller-supplied or default set of missed-fractions, returning
+    an ARRAY of distributions (a band across the axis), not one blended number — matching this
+    project's crossing-detection discipline. It's a single-attacker-vs-boss primitive at the same
+    level `runStepwiseDistribution` already sits, so it does not itself thread into
+    comparison.ts's two-candidate ranking, teamRaid.ts, or powerUp.ts. **A separate, narrower
+    single-flip-point check already exists in `packages/web/src/sensitivity.ts` (its "Dodge
+    accuracy" check #4)** — that one answers "how far to the nearest ranking flip on the
+    Comparator specifically," which this new primitive doesn't replace; the two are
+    complementary, not duplicates. **UI wiring for the band view is NOT done** — no tab calls
+    `sweepDodgeExecutionError` yet.
 
 22. **APPROVED 2026-09-10 — use the first-party 1.0s swap cost.** The user chose the sourced
     value over the previously-shipped 0.5s. Engine default is currently `0`, web defaults `0.5`;

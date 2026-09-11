@@ -31,6 +31,9 @@ function baseTeamAssumptions(overrides: Partial<TeamAssumptions> = {}): TeamAssu
     swapCostSeconds: 0.5,
     reviveCostSeconds: 15,
     showDetailedAssumptions: false,
+    friendshipLevel: "none",
+    bossMaxHpOverrideEnabled: false,
+    reselectAfterWipeEnabled: false,
     ...overrides,
   };
 }

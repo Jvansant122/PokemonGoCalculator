@@ -3,6 +3,7 @@ import {
   buildTeamScenarioUrl,
   MAX_TEAM_RAID_SLOTS,
   parseTeamScenarioFromUrl,
+  type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
   type SpeciesDefinition,
@@ -11,6 +12,8 @@ import {
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
 import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { BOSS_CADENCE_HINT, type BossChargedMoveCadence } from "./bossCadence.js";
+import { FRIENDSHIP_HINT } from "./FriendshipSelect.js";
+import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { LineupBuilderPanel, type LineupBuilderPanelState } from "./LineupBuilderPanel.js";
 import { applyLineupSlotsToTeamAssumptions, runLineupBuilderForTeamRaid } from "./lineupBuilderAction.js";
@@ -77,6 +80,16 @@ import { buildPowerUpOptimizerScenarioUrl } from "./powerUpOptimizerScenario.js"
 // with no error; this is exactly the kind of silent fallback that made the
 // ORIGINAL wrong measurement plausible, so this slot's charged move id is set
 // explicitly and was confirmed present on the species before use.
+//
+// KEEP EMPTY (2026-09-10 correction, same day): this default roster was
+// briefly emptied, then explicitly restored per the user — "team raid can
+// have a team... i meant empty the 7th tab and have pokemon optimizer sweep
+// be empty before csv import." Only the Roster tab and the Power-Up
+// Optimizer's multi-raid sweep ship empty; this roster stays exactly as
+// verified above. The zero-fielded-slot render path below is kept anyway
+// (a trainer can still hand-clear every slot, a real legal roster state) so
+// that case reads as an invitation rather than a raw engine error, not
+// because this DEFAULT is expected to be empty.
 const DEFAULT_TARGET_ID = "tyranitar-mega";
 
 export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
@@ -107,6 +120,9 @@ export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   swapCostSeconds: 0.5,
   reviveCostSeconds: 15,
   showDetailedAssumptions: false,
+  friendshipLevel: "none",
+  bossMaxHpOverrideEnabled: false,
+  reselectAfterWipeEnabled: false,
 };
 
 /**
@@ -132,6 +148,8 @@ interface TeamScenarioSlotWithShadow {
   level?: number;
   /** See TeamAssumptionPanel.tsx's TeamSlotAssumption.ivs. */
   ivs?: IVSpread;
+  /** See TeamAssumptionPanel.tsx's TeamSlotAssumption.isBestBuddy — same "extend rather than edit packages/engine" reasoning as isShadow above. */
+  isBestBuddy?: boolean;
 }
 export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
   slots: TeamScenarioSlotWithShadow[];
@@ -143,15 +161,20 @@ export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
    * this type.
    */
   bossChargedMoveCadence?: BossChargedMoveCadence;
+  // showDetailedAssumptions no longer needs a local bolt-on field here — the
+  // engine's own TeamScenario folded it in directly (2026-09-10, REQUIRED
+  // boolean, see teamScenario.ts's own doc comment) exactly as this file
+  // used to flag as engine-developer's call. Inherited from
+  // `Omit<TeamScenario, "slots">` above with no redeclaration needed.
   /**
-   * Same extension pattern again. Decodes with the same plain `??
-   * DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions` fallback as every
-   * other optional field on this type — see teamScenarioToAssumptions
-   * below. (Used to invert to `true` so an old link's meaning never
-   * silently changed; that requirement is gone, see CLAUDE.md's "Backward
-   * compatibility with OLD share links is NOT required", 2026-09-10.)
+   * Same "extend rather than edit packages/engine" reasoning as isShadow —
+   * see TeamAssumptionPanel.tsx's TeamAssumptions.friendshipLevel/
+   * bossMaxHpOverrideEnabled/reselectAfterWipeEnabled. All optional so a link
+   * shared before these existed decodes via `??` below.
    */
-  showDetailedAssumptions?: boolean;
+  friendshipLevel?: FriendshipLevel;
+  bossMaxHpOverrideEnabled?: boolean;
+  reselectAfterWipeEnabled?: boolean;
 }
 
 export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
@@ -165,6 +188,7 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
       isShadow: s.isShadow,
       level: s.level,
       ivs: s.ivs,
+      isBestBuddy: s.isBestBuddy,
     })),
     target: a.targetId,
     bossFastMoveId: a.bossFastMoveId,
@@ -183,6 +207,9 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,
     showDetailedAssumptions: a.showDetailedAssumptions,
+    friendshipLevel: a.friendshipLevel,
+    bossMaxHpOverrideEnabled: a.bossMaxHpOverrideEnabled,
+    reselectAfterWipeEnabled: a.reselectAfterWipeEnabled,
   };
 }
 
@@ -209,6 +236,10 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     // e.g. swapCostSeconds below has to.
     level: slot.level,
     ivs: slot.ivs,
+    // `??` guards a scenario URL encoded before this field existed (it isn't
+    // even declared on the engine's own TeamScenarioSlot) rather than
+    // surfacing `undefined` into the checkbox below.
+    isBestBuddy: slot.isBestBuddy ?? false,
   }));
   // Defensive pad/truncate in case an older or hand-edited link has a
   // different slot count than MAX_TEAM_RAID_SLOTS.
@@ -246,10 +277,19 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     // as showDetailedAssumptions's inverted default below.
     swapCostSeconds: s.swapCostSeconds ?? 0,
     reviveCostSeconds: s.reviveCostSeconds ?? 0,
-    // Plain `??` default, same as every other field above — see
-    // TeamScenarioWithShadow's own doc comment for why this no longer needs
-    // to invert to `true`.
+    // Now a REQUIRED field on the engine's own TeamScenario, but the `??`
+    // fallback stays: TS's static requiredness doesn't survive JSON.parse
+    // any more than it does for StoredRosterEntry (rosterPool.ts) — a link
+    // built before this field folded into the engine can still decode to a
+    // real runtime `undefined` here despite the type's promise.
     showDetailedAssumptions: s.showDetailedAssumptions ?? DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions,
+    // `??` guards a scenario URL encoded before these three fields existed
+    // (none are declared on the engine's own TeamScenario — see
+    // TeamScenarioWithShadow above) rather than surfacing `undefined` into
+    // their controls.
+    friendshipLevel: s.friendshipLevel ?? DEFAULT_TEAM_ASSUMPTIONS.friendshipLevel,
+    bossMaxHpOverrideEnabled: s.bossMaxHpOverrideEnabled ?? DEFAULT_TEAM_ASSUMPTIONS.bossMaxHpOverrideEnabled,
+    reselectAfterWipeEnabled: s.reselectAfterWipeEnabled ?? DEFAULT_TEAM_ASSUMPTIONS.reselectAfterWipeEnabled,
   };
 }
 
@@ -460,12 +500,33 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
         bossReadySeconds={bossReadySeconds}
         bossHp={bossHp}
         effectiveBossChargedMoveFrequencySeconds={runResult.effectiveBossChargedMoveFrequencySeconds}
+        eraHpMatch={runResult.eraHpMatch}
+        rosterPoolSize={runResult.rosterPoolSize}
       />
 
-      {result.error && (
+      {rosterNames.length === 0 ? (
+        // The shipped default roster is populated (see
+        // DEFAULT_TEAM_ASSUMPTIONS's own doc comment) — this branch only
+        // fires once a trainer hand-clears every slot, a real legal roster
+        // state runTeamRaid's own validation still requires at least one
+        // fielded Pokémon for. Reads as an invitation, not the raw engine
+        // error ("Team raid requires at least one fielded Pokémon") that
+        // `result.error` below would otherwise surface verbatim. Points at
+        // both ways to refill it: the Lineup Builder just above (needs an
+        // imported roster) and the Roster tab (hand-entry/CSV import/save
+        // code).
         <section className="panel">
-          <p className="error-text">Could not compute this raid: {result.error}</p>
+          <p className="caveats">
+            No Pokémon fielded yet — build a lineup automatically with the Lineup Builder above, or add Pokémon on
+            the <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a>, then fill a slot below.
+          </p>
         </section>
+      ) : (
+        result.error && (
+          <section className="panel">
+            <p className="error-text">Could not compute this raid: {result.error}</p>
+          </section>
+        )
       )}
 
       {result.data && (
@@ -631,6 +692,41 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
         <details className="prose-details">
           <summary>Boss charged-move cadence model</summary>
           <p>{BOSS_CADENCE_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Friendship &amp; Best Buddy</summary>
+          <p>
+          {FRIENDSHIP_HINT} Shared across the whole roster (one assumption, not per-slot) — friendship is a property
+          of the SAME co-participating friend across the whole encounter, not of which of your own Pokémon happens
+          to be out. Best Buddy is a COMPLETELY SEPARATE, per-slot mechanic despite the name overlap — the CP Boost
+          (free +1 effective level while that specific Pokémon is your active buddy), unrelated to Mega Evolution,
+          applying to any species. {BEST_BUDDY_HINT}
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Historical raid HP override</summary>
+          <p>
+          Only offered when the currently-selected target matches a recorded past-raid encounter this project's data
+          layer has a real, sourced historical HP figure for (registry.ts's raidHistory.json, "eraHp") — most targets
+          have none (raid HP per tier has genuinely changed over time, and only a subset of archived encounters were
+          ever backfilled with a real HP number). Overrides ONLY the boss's max HP for this simulation; the tier's
+          own attack/defense multiplier is unaffected either way. A species can have more than one recorded past
+          encounter — this uses the first with a usable HP figure, not a picker for "which specific encounter."
+          </p>
+        </details>
+        <details className="prose-details">
+          <summary>Re-selecting a different six after a wipe</summary>
+          <p>
+          Off by default — the roster fielded in EVERY cycle is exactly the six slots configured above, unchanged.
+          When on, every wipe-and-revive after the first draws a fresh six from your imported roster pool (Roster
+          tab) instead, using a DELIBERATELY SIMPLE, non-simulated ranking (effective Attack stat x charged-move
+          power/duration x STAB x type-effectiveness against this specific boss x sqrt(effective Stamina) as a rough
+          bulk factor) — not a full re-simulation of every candidate, which would be far too expensive to run on
+          every wipe. Excludes only the six that JUST fainted from that ranking (not every entry ever fielded), so a
+          strong entry can return two wipes later. The very first wipe (cycle 0 into cycle 1) can't apply that
+          exclusion at all, since cycle 0's roster is whatever you hand-built above, not drawn from the pool — every
+          reselection after that first one excludes correctly.
+          </p>
         </details>
         <details className="prose-details">
           <summary>The "More detailed" toggle</summary>

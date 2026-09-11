@@ -1,6 +1,6 @@
 {
   "sourceUrl": "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json (POKEMON_UPGRADE_SETTINGS + LUCKY_POKEMON_SETTINGS templates)",
-  "fetchedAt": "2026-09-10T23:36:04.679Z",
+  "fetchedAt": "2026-09-11T02:59:52.111Z",
   "steps": [
     {
       "fromLevel": 1,
@@ -596,5 +596,736 @@
   "shadowCandyMultiplier": 1.2,
   "purifiedStardustMultiplier": 0.9,
   "purifiedCandyMultiplier": 0.9,
-  "luckyStardustMultiplier": 0.5
+  "luckyStardustMultiplier": 0.5,
+  "perSpeciesOverridesByPokemonId": {
+    "ETERNATUS": {
+      "steps": [
+        {
+          "fromLevel": 1,
+          "stardust": 200,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 1.5,
+          "stardust": 200,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 2,
+          "stardust": 200,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 2.5,
+          "stardust": 200,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 3,
+          "stardust": 400,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 3.5,
+          "stardust": 400,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 4,
+          "stardust": 400,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 4.5,
+          "stardust": 400,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 5,
+          "stardust": 600,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 5.5,
+          "stardust": 600,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 6,
+          "stardust": 600,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 6.5,
+          "stardust": 600,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 7,
+          "stardust": 800,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 7.5,
+          "stardust": 800,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 8,
+          "stardust": 800,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 8.5,
+          "stardust": 800,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 9,
+          "stardust": 1000,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 9.5,
+          "stardust": 1000,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 10,
+          "stardust": 1000,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 10.5,
+          "stardust": 1000,
+          "candy": 30,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 11,
+          "stardust": 1300,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 11.5,
+          "stardust": 1300,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 12,
+          "stardust": 1300,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 12.5,
+          "stardust": 1300,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 13,
+          "stardust": 1600,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 13.5,
+          "stardust": 1600,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 14,
+          "stardust": 1600,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 14.5,
+          "stardust": 1600,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 15,
+          "stardust": 1900,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 15.5,
+          "stardust": 1900,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 16,
+          "stardust": 1900,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 16.5,
+          "stardust": 1900,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 17,
+          "stardust": 2200,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 17.5,
+          "stardust": 2200,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 18,
+          "stardust": 2200,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 18.5,
+          "stardust": 2200,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 19,
+          "stardust": 2500,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 19.5,
+          "stardust": 2500,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 20,
+          "stardust": 2500,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 20.5,
+          "stardust": 2500,
+          "candy": 60,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 21,
+          "stardust": 3000,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 21.5,
+          "stardust": 3000,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 22,
+          "stardust": 3000,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 22.5,
+          "stardust": 3000,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 23,
+          "stardust": 3500,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 23.5,
+          "stardust": 3500,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 24,
+          "stardust": 3500,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 24.5,
+          "stardust": 3500,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 25,
+          "stardust": 4000,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 25.5,
+          "stardust": 4000,
+          "candy": 90,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 26,
+          "stardust": 4000,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 26.5,
+          "stardust": 4000,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 27,
+          "stardust": 4500,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 27.5,
+          "stardust": 4500,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 28,
+          "stardust": 4500,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 28.5,
+          "stardust": 4500,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 29,
+          "stardust": 5000,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 29.5,
+          "stardust": 5000,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 30,
+          "stardust": 5000,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 30.5,
+          "stardust": 5000,
+          "candy": 120,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 31,
+          "stardust": 6000,
+          "candy": 175,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 31.5,
+          "stardust": 6000,
+          "candy": 175,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 32,
+          "stardust": 6000,
+          "candy": 175,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 32.5,
+          "stardust": 6000,
+          "candy": 175,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 33,
+          "stardust": 7000,
+          "candy": 225,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 33.5,
+          "stardust": 7000,
+          "candy": 225,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 34,
+          "stardust": 7000,
+          "candy": 225,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 34.5,
+          "stardust": 7000,
+          "candy": 225,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 35,
+          "stardust": 8000,
+          "candy": 300,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 35.5,
+          "stardust": 8000,
+          "candy": 300,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 36,
+          "stardust": 8000,
+          "candy": 300,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 36.5,
+          "stardust": 8000,
+          "candy": 300,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 37,
+          "stardust": 9000,
+          "candy": 375,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 37.5,
+          "stardust": 9000,
+          "candy": 375,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 38,
+          "stardust": 9000,
+          "candy": 375,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 38.5,
+          "stardust": 9000,
+          "candy": 375,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 39,
+          "stardust": 10000,
+          "candy": 890,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 39.5,
+          "stardust": 10000,
+          "candy": 890,
+          "xlCandy": 0
+        },
+        {
+          "fromLevel": 40,
+          "stardust": 10000,
+          "candy": 0,
+          "xlCandy": 100
+        },
+        {
+          "fromLevel": 40.5,
+          "stardust": 10000,
+          "candy": 0,
+          "xlCandy": 100
+        },
+        {
+          "fromLevel": 41,
+          "stardust": 11000,
+          "candy": 0,
+          "xlCandy": 100
+        },
+        {
+          "fromLevel": 41.5,
+          "stardust": 11000,
+          "candy": 0,
+          "xlCandy": 100
+        },
+        {
+          "fromLevel": 42,
+          "stardust": 11000,
+          "candy": 0,
+          "xlCandy": 200
+        },
+        {
+          "fromLevel": 42.5,
+          "stardust": 11000,
+          "candy": 0,
+          "xlCandy": 200
+        },
+        {
+          "fromLevel": 43,
+          "stardust": 12000,
+          "candy": 0,
+          "xlCandy": 200
+        },
+        {
+          "fromLevel": 43.5,
+          "stardust": 12000,
+          "candy": 0,
+          "xlCandy": 200
+        },
+        {
+          "fromLevel": 44,
+          "stardust": 12000,
+          "candy": 0,
+          "xlCandy": 400
+        },
+        {
+          "fromLevel": 44.5,
+          "stardust": 12000,
+          "candy": 0,
+          "xlCandy": 400
+        },
+        {
+          "fromLevel": 45,
+          "stardust": 13000,
+          "candy": 0,
+          "xlCandy": 400
+        },
+        {
+          "fromLevel": 45.5,
+          "stardust": 13000,
+          "candy": 0,
+          "xlCandy": 400
+        },
+        {
+          "fromLevel": 46,
+          "stardust": 13000,
+          "candy": 0,
+          "xlCandy": 635
+        },
+        {
+          "fromLevel": 46.5,
+          "stardust": 13000,
+          "candy": 0,
+          "xlCandy": 635
+        },
+        {
+          "fromLevel": 47,
+          "stardust": 14000,
+          "candy": 0,
+          "xlCandy": 635
+        },
+        {
+          "fromLevel": 47.5,
+          "stardust": 14000,
+          "candy": 0,
+          "xlCandy": 635
+        },
+        {
+          "fromLevel": 48,
+          "stardust": 14000,
+          "candy": 0,
+          "xlCandy": 890
+        },
+        {
+          "fromLevel": 48.5,
+          "stardust": 14000,
+          "candy": 0,
+          "xlCandy": 890
+        },
+        {
+          "fromLevel": 49,
+          "stardust": 15000,
+          "candy": 0,
+          "xlCandy": 890
+        },
+        {
+          "fromLevel": 49.5,
+          "stardust": 15000,
+          "candy": 0,
+          "xlCandy": 890
+        }
+      ],
+      "maxLevel": 50,
+      "shadowStardustMultiplier": 1.2,
+      "shadowCandyMultiplier": 1.2,
+      "purifiedStardustMultiplier": 0.9,
+      "purifiedCandyMultiplier": 0.9,
+      "luckyStardustMultiplier": 0.5
+    }
+  },
+  "perSpeciesUpgradeOverrides": [
+    {
+      "pokemonId": "ETERNATUS",
+      "sourceTemplateId": "POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS",
+      "upgradesPerLevel": 2,
+      "allowedLevelsAbovePlayer": 10,
+      "candyCost": [
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        90,
+        90,
+        90,
+        90,
+        90,
+        120,
+        120,
+        120,
+        120,
+        120,
+        175,
+        175,
+        225,
+        225,
+        300,
+        300,
+        375,
+        375,
+        890,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stardustCost": [
+        200,
+        200,
+        400,
+        400,
+        600,
+        600,
+        800,
+        800,
+        1000,
+        1000,
+        1300,
+        1300,
+        1600,
+        1600,
+        1900,
+        1900,
+        2200,
+        2200,
+        2500,
+        2500,
+        3000,
+        3000,
+        3500,
+        3500,
+        4000,
+        4000,
+        4500,
+        4500,
+        5000,
+        5000,
+        6000,
+        6000,
+        7000,
+        7000,
+        8000,
+        8000,
+        9000,
+        9000,
+        10000,
+        10000,
+        11000,
+        11000,
+        12000,
+        12000,
+        13000,
+        13000,
+        14000,
+        14000,
+        15000
+      ],
+      "shadowStardustMultiplier": 1.2,
+      "shadowCandyMultiplier": 1.2,
+      "purifiedStardustMultiplier": 0.9,
+      "purifiedCandyMultiplier": 0.9,
+      "maxNormalUpgradeLevel": 50,
+      "defaultCpBoostAdditionalLevel": 1,
+      "xlCandyMinPlayerLevel": 31,
+      "xlCandyCost": [
+        100,
+        100,
+        200,
+        200,
+        400,
+        400,
+        635,
+        635,
+        890,
+        890
+      ],
+      "xlCandyMinPokemonLevel": 40
+    }
+  ]
 }

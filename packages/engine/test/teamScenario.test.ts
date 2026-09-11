@@ -34,6 +34,7 @@ const sampleTeamScenario: TeamScenario = {
   raidTimerSeconds: 300,
   swapCostSeconds: 0,
   reviveCostSeconds: 0,
+  showDetailedAssumptions: false,
 };
 
 describe("team scenario serialization", () => {
@@ -66,6 +67,19 @@ describe("team scenario serialization", () => {
     expect(
       parseTeamScenarioFromUrl(buildTeamScenarioUrl("https://pogo-analyzer.example/team", withRevive))!.reviveCostSeconds,
     ).toBe(13);
+  });
+
+  it("round-trips a non-default showDetailedAssumptions rather than silently reverting to the collapsed default", () => {
+    // Regression guard, same shape as reviveCostSeconds/swapCostSeconds above
+    // — folded onto TeamScenario 2026-09-10 (was a packages/web-only bolt-on
+    // before this). Plain false default, no inverted-decode trick.
+    const detailed: TeamScenario = { ...sampleTeamScenario, showDetailedAssumptions: true };
+    expect(decodeTeamScenario(encodeTeamScenario(detailed)).showDetailedAssumptions).toBe(true);
+    expect(
+      parseTeamScenarioFromUrl(buildTeamScenarioUrl("https://pogo-analyzer.example/team", detailed))!.showDetailedAssumptions,
+    ).toBe(true);
+    // And the default itself round-trips as false, not omitted.
+    expect(decodeTeamScenario(encodeTeamScenario(sampleTeamScenario)).showDetailedAssumptions).toBe(false);
   });
 
   it("round-trips a non-default swapCostSeconds independently of reviveCostSeconds", () => {

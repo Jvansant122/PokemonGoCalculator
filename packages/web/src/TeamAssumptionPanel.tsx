@@ -1,6 +1,7 @@
 import {
   MAX_POKEMON_POWER_UP_LEVEL,
   type DodgeBehavior,
+  type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
   type SpeciesDefinition,
@@ -13,6 +14,8 @@ import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { WeatherSelect } from "./WeatherSelect.js";
+import { FriendshipSelect } from "./FriendshipSelect.js";
+import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 
@@ -58,10 +61,20 @@ export interface TeamSlotAssumption {
   level?: number;
   /** Per-slot override for the shared IV spread — see `level` above for the same fallback convention and motivation. */
   ivs?: IVSpread;
+  /**
+   * This slot's own Best Buddy CP Boost (free +1 effective level, orthogonal
+   * to and gated independently of megaLevel above — see megaLevel.ts's
+   * BEST_BUDDY_EFFECTIVE_LEVEL_BONUS/effectiveLevelForBestBuddy) — mirrors
+   * teamRaid.ts's TeamRaidSlotInput.isBestBuddy exactly. `undefined`/`false`
+   * means no bonus (the default). Real Pokémon GO only allows one active
+   * buddy at a time; nothing here validates that only one slot sets this,
+   * same documented non-enforcement as the engine field itself.
+   */
+  isBestBuddy?: boolean;
 }
 
 export function emptyTeamSlot(): TeamSlotAssumption {
-  return { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false };
+  return { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isBestBuddy: false };
 }
 
 export interface TeamAssumptions {
@@ -121,6 +134,38 @@ export interface TeamAssumptions {
   swapCostSeconds: number;
   /** Seconds of raid clock a full-roster wipe-and-rejoin costs. No official fixed value exists — a community-sourced ~12-15s estimate exists as a labeled preset, and the default (15s) is chosen at the TOP of that window specifically to allow for user error, not because it's any more confirmed than the rest of the window. */
   reviveCostSeconds: number;
+  /**
+   * Friendship tier assumed for a co-participating friend, shared across the
+   * WHOLE roster — see FriendshipSelect.tsx's own doc comment for the real
+   * mechanic's scope (single-trainer-scoped, boosts only the active slot's
+   * own damage, never the boss's). Mirrors TeamRaidInputs.friendshipLevel
+   * exactly. Defaults to "none".
+   */
+  friendshipLevel: FriendshipLevel;
+  /**
+   * IDEAS #14 — when true AND the currently-selected target matches a
+   * recorded past-raid encounter (registry.ts's pastRaidBossOptions) with a
+   * real, sourced historical HP figure (eraHp), that HP is passed to
+   * runTeamRaid as TeamRaidInputs.bossMaxHpOverride instead of today's
+   * tier-based HP — see comparison.ts's bossMaxHpOverride doc comment: this
+   * changes ONLY the boss's max HP, never the tier's own attack/defense
+   * multiplier. No-op (and hidden in the panel) whenever no such recorded HP
+   * exists for the current target. Defaults to false — an archived boss
+   * simulates against TODAY's tier HP unless explicitly opted in, matching
+   * every other tab's existing behavior before this field existed.
+   */
+  bossMaxHpOverrideEnabled: boolean;
+  /**
+   * IDEAS #12 — when true, a wipe-and-revive re-selects a fresh six from the
+   * imported roster pool (Roster tab / rosterPool.ts) instead of always
+   * re-fielding the SAME six `slots` above — see
+   * run/teamRaidReselect.ts's own doc comment for the (deliberately simple,
+   * non-simulated) selection heuristic. No-op (and hidden) whenever the
+   * roster pool is empty, or the roster is never wiped in the first place.
+   * Defaults to false — byte-identical to this engine hook (TeamRaidInputs.
+   * reselectAfterWipe) being omitted entirely, matching every prior link.
+   */
+  reselectAfterWipeEnabled: boolean;
 }
 
 interface Props {
@@ -145,6 +190,10 @@ interface Props {
    * result.
    */
   effectiveBossChargedMoveFrequencySeconds: number;
+  /** IDEAS #14 — see run/runTeamRaid.ts's TeamRaidRunResult.eraHpMatch. `null` hides the bossMaxHpOverrideEnabled control entirely (nothing to offer). */
+  eraHpMatch: { eraHp: number; raidName: string; recordedTier: string } | null;
+  /** IDEAS #12 — see run/runTeamRaid.ts's TeamRaidRunResult.rosterPoolSize. Used to explain (not hide) the reselectAfterWipeEnabled control when it would currently be a no-op. */
+  rosterPoolSize: number;
 }
 
 /**
@@ -165,6 +214,8 @@ export function TeamAssumptionPanel({
   bossReadySeconds,
   bossHp,
   effectiveBossChargedMoveFrequencySeconds,
+  eraHpMatch,
+  rosterPoolSize,
 }: Props) {
   function set<K extends keyof TeamAssumptions>(key: K, next: TeamAssumptions[K]) {
     onChange({ ...value, [key]: next });
@@ -345,6 +396,15 @@ export function TeamAssumptionPanel({
                         </label>
                       );
                     })()}
+                    <label className="species-picker-hint">
+                      <input
+                        type="checkbox"
+                        checked={slot.isBestBuddy ?? false}
+                        onChange={(e) => updateSlot(i, { isBestBuddy: e.target.checked })}
+                        title={BEST_BUDDY_HINT}
+                      />{" "}
+                      Best Buddy (+1 effective level)
+                    </label>
                   </div>
                 </>
               )}
@@ -549,10 +609,22 @@ export function TeamAssumptionPanel({
         </div>
 
         <div className="field">
-          <label>Boss battle HP (this tier)</label>
+          <label>Boss battle HP {value.bossMaxHpOverrideEnabled && eraHpMatch ? "(recorded historical HP)" : "(this tier)"}</label>
           <p className="computed-value" title="A real boss's battle HP is a fixed per-tier pool (see raidBoss.ts's RAID_TIER_TABLE), not derived from its own baseStamina — this is the resource the roster's cumulative damage races against.">
             {bossHp === null ? "unknown" : bossHp.toLocaleString()}
           </p>
+          {eraHpMatch && (
+            <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+              <input
+                type="checkbox"
+                checked={value.bossMaxHpOverrideEnabled}
+                onChange={(e) => set("bossMaxHpOverrideEnabled", e.target.checked)}
+                title="Overrides this boss's HP only (never its attack/defense multiplier) with the real, sourced historical HP recorded for this specific past encounter — see 'Known caveats' below."
+              />{" "}
+              Use recorded historical HP ({eraHpMatch.raidName}, {eraHpMatch.recordedTier}: {eraHpMatch.eraHp.toLocaleString()} HP)
+              instead of today's tier HP
+            </label>
+          )}
         </div>
 
         <div className="field">
@@ -583,7 +655,31 @@ export function TeamAssumptionPanel({
 
         <WeatherSelect idPrefix="team" value={value.weather} onChange={(w) => set("weather", w)} />
 
+        <FriendshipSelect idPrefix="team" value={value.friendshipLevel} onChange={(f) => set("friendshipLevel", f)} />
+
         <BossCadenceSelect idPrefix="team" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
+
+        <div className="field">
+          <label htmlFor="team-reselectAfterWipe">Re-select a different six after a wipe?</label>
+          <select
+            id="team-reselectAfterWipe"
+            value={value.reselectAfterWipeEnabled ? "yes" : "no"}
+            onChange={(e) => set("reselectAfterWipeEnabled", e.target.value === "yes")}
+            title="Instead of always re-fielding the same 6 slots below after every full wipe, pick a fresh six from your imported roster pool (Roster tab) each time — see 'Known caveats' below for the selection strategy."
+          >
+            <option value="no">No — always re-field the same six above</option>
+            <option value="yes">Yes — re-select from the imported roster pool</option>
+          </select>
+          {value.reselectAfterWipeEnabled && rosterPoolSize === 0 && (
+            <p className="species-picker-hint">
+              No-op right now — the imported roster pool is empty. Import or hand-add Pokémon on the{" "}
+              <a href="?view=roster">Roster tab</a> first.
+            </p>
+          )}
+          {value.reselectAfterWipeEnabled && rosterPoolSize > 0 && (
+            <p className="species-picker-hint">Re-selecting from {rosterPoolSize} imported roster entries.</p>
+          )}
+        </div>
 
         {value.showDetailedAssumptions && (
           <div className="field">

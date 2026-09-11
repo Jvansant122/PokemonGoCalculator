@@ -43,6 +43,7 @@ import {
   defaultRaidTierForSpecies,
   planRosterBudget,
   runRosterPlanner,
+  type HypotheticalCatchCandidate,
   type RosterBudgetPlan,
   type RosterEntry as EngineRosterEntry,
   type RosterPlanResult,
@@ -51,7 +52,7 @@ import {
   type WeightedRaidTarget,
 } from "@pogo-analyzer/engine";
 import type { RosterEntry as ImportedRosterEntry } from "../import/pokeGenieMatch.js";
-import type { PowerUpOptimizerAssumptions } from "../PowerUpOptimizerAssumptionPanel.js";
+import type { HypotheticalCatchAssumption, PowerUpOptimizerAssumptions } from "../PowerUpOptimizerAssumptionPanel.js";
 import { activeRaidBossOptions, pastRaidBossOptions, powerUpCostTable, raidTierForSpeciesId, resolveMegaBaseCandyFamilyId } from "../registry.js";
 import { validEraHp } from "./runSpeciesReport.js";
 
@@ -238,6 +239,46 @@ export function toEngineRosterPool(pool: ImportedRosterEntry[], useBestAvailable
   });
 }
 
+/**
+ * Perfect IVs (15/15/15) for every hypothetical catch (IDEAS.md #3, "add a
+ * 7th") — a deliberate "best case for a fresh catch" modeling choice, NOT a
+ * user-facing setting: the question this feature answers is "would this
+ * species be worth fielding at ALL," and a real wild/raid-catch IV roll would
+ * just add noise to that yes/no read without changing which species clear
+ * the bar. See HypotheticalCatchAssumption's own doc comment.
+ */
+const HYPOTHETICAL_CATCH_IVS = { attack: 15, defense: 15, stamina: 15 };
+
+/**
+ * Turns `PowerUpOptimizerAssumptions.multiRaidHypotheticalCatches` (species +
+ * raid-catch level only) into engine `HypotheticalCatchCandidate[]` — REAL,
+ * already-synced species only (a row whose `speciesId` doesn't resolve in
+ * this registry, including a blank `null` row, is silently dropped, same
+ * "degrade a stale link instead of throwing" precedent as `resolveBossTarget`
+ * above). Fast/charged move ids are left `null` (defaults to the species' own
+ * first move — same "null = default" convention `emptyPowerUpSlot` already
+ * uses), and IVs are fixed at `HYPOTHETICAL_CATCH_IVS` — see that constant's
+ * own doc comment for why neither is a user-facing setting despite feeding a
+ * real engine call. `id` is index-qualified (`hypothetical:${i}:${speciesId}`)
+ * so two rows for the SAME species/level never collide (runRosterPlanner
+ * throws on a duplicate `HypotheticalCatchCandidate.id`).
+ */
+export function buildHypotheticalCatchCandidates(rows: HypotheticalCatchAssumption[], registry: SpeciesRegistry): HypotheticalCatchCandidate[] {
+  const candidates: HypotheticalCatchCandidate[] = [];
+  rows.forEach((row, i) => {
+    if (!row.speciesId || !registry.has(row.speciesId)) return;
+    candidates.push({
+      id: `hypothetical:${i}:${row.speciesId}`,
+      species: registry.get(row.speciesId),
+      level: row.level,
+      ivs: HYPOTHETICAL_CATCH_IVS,
+      fastMoveId: null,
+      chargedMoveId: null,
+    });
+  });
+  return candidates;
+}
+
 export interface RosterPlannerResolution {
   /** See RosterPlannerRunResult.targets — the SAME resolved target list either path (worker or synchronous) ends up simulating. */
   targets: WeightedRaidTarget[];
@@ -313,6 +354,12 @@ export function resolveRosterPlannerInputs(
     // disagree about what counts as significant.
     significanceMode: a.multiRaidSignificanceMode,
     iterations: ROSTER_PLANNER_ITERATIONS,
+    // Reported ONLY in RosterPlanResult.hypotheticalCatches (runRosterPlanner)
+    // — never priced, never part of the joint budget allocation. Handing this
+    // SAME `inputs` object to planRosterBudget (which structurally omits this
+    // field from RosterBudgetInputs — see rosterPlanner.ts's own doc comment)
+    // is harmless: the extra field is simply never read there.
+    hypotheticalCatches: buildHypotheticalCatchCandidates(a.multiRaidHypotheticalCatches, registry),
   };
   return { targets, blockedReason: null, inputs };
 }

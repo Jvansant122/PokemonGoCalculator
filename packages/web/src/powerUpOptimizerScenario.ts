@@ -29,6 +29,12 @@ export type PowerUpRankBy = "stardust" | "candy" | "xlCandy";
  */
 export type PowerUpOptimizerMode = "single-raid" | "multi-raid";
 
+/** One "what if I caught a fresh one" row — mirrors PowerUpOptimizerAssumptionPanel.tsx's HypotheticalCatchAssumption exactly (IDEAS.md #3, "add a 7th"). Multi-raid mode only. */
+export interface PowerUpHypotheticalCatchScenario {
+  speciesId: string | null;
+  level: 20 | 25;
+}
+
 /** One roster slot's own configuration — mirrors PowerUpSlotAssumption exactly, field for field. */
 export interface PowerUpScenarioSlot {
   speciesId: string | null;
@@ -171,6 +177,15 @@ export interface PowerUpOptimizerScenario {
    * shared before this field existed decodes cleanly.
    */
   multiRaidUseBestAvailableMoveset?: boolean;
+  /**
+   * Multi-raid mode only — IDEAS.md #3, "add a 7th": species/level rows to
+   * compare against a fresh raid catch. See
+   * PowerUpOptimizerAssumptions.multiRaidHypotheticalCatches for the full
+   * contract (never priced, never part of the fixed-budget plan). Optional/
+   * defaults to `[]` so a link shared before this field existed decodes
+   * cleanly.
+   */
+  multiRaidHypotheticalCatches?: PowerUpHypotheticalCatchScenario[];
   /**
    * TM inventory (PLAN_tm_move_change_optimizer.md web half) — account-wide,
    * like rareCandyOnHand/rareCandyXlOnHand, not per-slot. `null` (the

@@ -258,6 +258,7 @@ describe("teamDamageAtRaidSeconds", () => {
       wipeCount: 0,
       slots: trajectories.map((ownDamageTrajectory, i) => ({
         cycleIndex: 0,
+        slotId: String(i),
         slotIndex: i,
         speciesId: `s${i}`,
         speciesName: `S${i}`,

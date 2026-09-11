@@ -3,6 +3,7 @@ import {
   buildScenarioUrl,
   convertUptimeToTeamDamage,
   parseScenarioFromUrl,
+  type FriendshipLevel,
   type Scenario,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
@@ -12,6 +13,9 @@ import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BossMovesetSweep } from "./BossMovesetSweep.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { DamageOverTimeChart } from "./DamageOverTimeChart.js";
+import { DodgeExecutionErrorBand } from "./DodgeExecutionErrorBand.js";
+import { FRIENDSHIP_HINT } from "./FriendshipSelect.js";
+import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { PartySizeFlipView } from "./PartySizeFlipView.js";
@@ -29,6 +33,27 @@ import { resolveBoost, runComparatorScenario } from "./run/runComparator.js";
 const DEFAULT_CANDIDATE_A_ID = "kartana";
 const DEFAULT_CANDIDATE_B_ID = "rayquaza";
 const DEFAULT_TARGET_ID = "latios-mega";
+
+/**
+ * IDEAS.md #20 — the own-charged-move-cast vulnerability cost line's own
+ * tooltip. MUST read as an unsourced placeholder, because it is one:
+ * MECHANICS.md's 2026-09-09 "OPEN QUESTION" entry on holdChargedMoveUntilSafe
+ * still carries no source quantifying "how much of the attacker's own time
+ * is actually lost dodging around their own charged-move cast" — the engine
+ * (simulate.ts's HOLD_CHARGED_MOVE_DODGE_ATTEMPTS = 2, "dodge once before,
+ * once after") is this project's OWN labelled modelling assumption, not an
+ * observed game mechanic. Zero whenever holdChargedMoveUntilSafe is off (see
+ * the gate at this line's call site) — this is a no-op display addition for
+ * every scenario that hasn't opted into that setting.
+ */
+const OWN_CAST_DODGE_COST_HINT =
+  "UNSOURCED PLACEHOLDER, not a confirmed game mechanic: with \"hold charged move for a safer moment\" on, this " +
+  "engine models the attacker as dodging TWICE around each held cast (once before throwing it, once after) rather " +
+  "than the ordinary single dodge attempt, so each of the boss's charged hits attempted-to-dodge while holding " +
+  "costs 2x the usual dodge time instead of 1x. No source quantifies this sequence at all — it is this project's " +
+  "own labelled modelling assumption (simulate.ts's HOLD_CHARGED_MOVE_DODGE_ATTEMPTS), and MECHANICS.md still " +
+  "records it as an open question. \"Mean per run\" averages this candidate's own 200 simulated runs; the event " +
+  "count alongside it is from the one specific representative run the chart below draws.";
 
 export const DEFAULT_ASSUMPTIONS: Assumptions = {
   candidateAId: DEFAULT_CANDIDATE_A_ID,
@@ -61,6 +86,8 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   bossStartsPrimed: false,
   bossStartingEnergyFraction: 0.5,
   weather: "none",
+  friendshipLevel: "none",
+  candidateIsBestBuddy: [false, false],
   // The tidy default for a fresh scenario — hides the dodge group,
   // holdChargedMoveUntilSafe, minFightLengthSeconds, and
   // bossChargedMoveFrequencySeconds behind their own values (see
@@ -93,6 +120,14 @@ export interface ComparatorScenario extends Scenario {
    * discipline; this one doesn't need to repeat that).
    */
   bossChargedMoveCadence?: BossChargedMoveCadence;
+  /**
+   * Same "extend rather than edit packages/engine" reasoning as
+   * candidateShadow above — see AssumptionPanel.tsx's Assumptions.
+   * friendshipLevel/candidateIsBestBuddy. Optional for the same "old link
+   * predates this field" reason as bossChargedMoveCadence.
+   */
+  friendshipLevel?: FriendshipLevel;
+  candidateIsBestBuddy?: [boolean, boolean];
 }
 
 export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
@@ -122,6 +157,8 @@ export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
     bossStartsPrimed: a.bossStartsPrimed,
     bossStartingEnergyFraction: a.bossStartingEnergyFraction,
     weather: a.weather,
+    friendshipLevel: a.friendshipLevel,
+    candidateIsBestBuddy: a.candidateIsBestBuddy,
     showDetailedAssumptions: a.showDetailedAssumptions,
   };
 }
@@ -176,6 +213,11 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // `??` guards a scenario URL encoded before this field existed rather than
     // surfacing `undefined` into the weather <select> above.
     weather: s.weather ?? "none",
+    // `??` guards a scenario URL encoded before this field existed (it isn't
+    // even declared on the engine's own Scenario — see ComparatorScenario
+    // above) rather than surfacing `undefined` into the friendship <select>.
+    friendshipLevel: s.friendshipLevel ?? DEFAULT_ASSUMPTIONS.friendshipLevel,
+    candidateIsBestBuddy: s.candidateIsBestBuddy ?? DEFAULT_ASSUMPTIONS.candidateIsBestBuddy,
     // Plain `??` default, same as every other field above — old-link
     // preservation was the reason this used to invert to `true` (see
     // CLAUDE.md's "Backward compatibility with OLD share links is NOT
@@ -330,6 +372,7 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   const sensitivity = runResult.sensitivity;
   const bossMovesetSweep = runResult.bossMovesetSweep;
   const partySizeFlip = runResult.partySizeFlip;
+  const dodgeExecutionErrorBand = runResult.dodgeExecutionErrorBand;
 
   function handleShare() {
     // Also pins `view=comparator` so reloading/sharing this link doesn't land
@@ -477,6 +520,21 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                       </dd>
                       <dt>Own damage per second — DPS</dt>
                       <dd>{ownDps === null ? "-" : ownDps.toFixed(1)}</dd>
+                      {assumptions.holdChargedMoveUntilSafe && (
+                        <>
+                          <dt title={OWN_CAST_DODGE_COST_HINT}>
+                            Own-cast dodge-vulnerability cost{" "}
+                            <span className="badge badge-unsourced" title={OWN_CAST_DODGE_COST_HINT}>
+                              unsourced placeholder
+                            </span>
+                          </dt>
+                          <dd title={OWN_CAST_DODGE_COST_HINT}>
+                            ~{c.meanHoldChargedMoveDodgeCostSeconds.toFixed(2)}s/run (
+                            {c.representativeRun.holdChargedMoveDodgeCostEvents} event
+                            {c.representativeRun.holdChargedMoveDodgeCostEvents === 1 ? "" : "s"} in the charted run)
+                          </dd>
+                        </>
+                      )}
                       {hasBoost && (
                         <>
                           <dt>Other trainers' damage from this candidate's boost</dt>
@@ -616,6 +674,29 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
 
           <SensitivityView checks={sensitivity} />
 
+          {dodgeExecutionErrorBand && species.candidates && (
+            <CollapsibleSection
+              id="comparator-dodge-execution-error"
+              heading="Dodge-execution-error sensitivity (own total damage across a band of accuracy)"
+              defaultOpen={false}
+            >
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                Every result above assumes the dodge setting configured in Assumptions is executed exactly as
+                configured. Real dodge timing is a manual input a player can miss — this re-runs the fight at 6 fixed
+                accuracy points from 100% (every dodge attempt succeeds) down to 50% (half of every attempt still
+                gets hit), holding every other assumption fixed, and shows the whole curve rather than one blended
+                number. Complementary to the "Dodge accuracy" row in the sensitivity panel above: that finds the
+                single nearest ranking-flip point on a continuous scan; this shows the shape of both candidates' own
+                performance across a coarser, 6-point band. A real mechanic worth reading carefully here: 50% missed
+                is NOT the same as setting dodge to "None" in Assumptions above — both take identical incoming
+                damage at that point, but a missed dodge ATTEMPT still throws the dodge input and still pays its 0.5s
+                cost every time, so always attempting and always missing is strictly worse for a candidate's own
+                output than never attempting at all.
+              </p>
+              <DodgeExecutionErrorBand points={dodgeExecutionErrorBand} names={[results.candidates[0]!.name, results.candidates[1]!.name]} />
+            </CollapsibleSection>
+          )}
+
           {bossMovesetSweep && bossMovesetSweep.length > 1 && species.candidates && (
             <CollapsibleSection
               id="comparator-boss-moveset-sweep"
@@ -710,6 +791,14 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
         <details className="prose-details">
           <summary>Boss charged-move cadence model</summary>
           <p>{BOSS_CADENCE_HINT}</p>
+        </details>
+        <details className="prose-details">
+          <summary>Friendship &amp; Best Buddy</summary>
+          <p>
+          {FRIENDSHIP_HINT} Best Buddy is a COMPLETELY SEPARATE mechanic despite the name overlap — the CP Boost
+          (free +1 effective level while a Pokémon is your active buddy), unrelated to Mega Evolution, applying to
+          any species. {BEST_BUDDY_HINT}
+          </p>
         </details>
         <details className="prose-details">
           <summary>The "More detailed" toggle</summary>

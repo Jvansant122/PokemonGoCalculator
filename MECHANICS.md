@@ -791,7 +791,20 @@ charged moves apply it at the **beginning**. So the fast move following a
 charged move arrives quickly — for Kyogre, a Waterfall warning flashes
 immediately as the charged move lands, hitting ~1s later.
 
-**Engine: NOT MODELLED.** Move durations are treated uniformly.
+`[UNCITED — flagged 2026-09-10]`: unlike every other entry in this file, this
+claim carries no reliability tag and no traceable source in this doc's own
+history (`git log -S` on its introducing commit shows it landed with
+MECHANICS.md's initial creation, no citation attached). It also sits right
+next to a *resolved*, dated, first-party-adjacent finding (the "Damage window
+start/end" entry above, under "Dodging") that the September 2024 rework
+decoupled damage timing from per-move windows entirely — "damage is dealt at
+regular 0.5 second intervals," full stop. That resolution doesn't directly
+contradict THIS claim (windup-to-damage window vs. inter-move delay
+placement are different things), but it's close enough in subject matter that
+re-deriving this one from a real source rather than trusting the unattributed
+prose is worth doing before building on it. **Engine: NOT MODELLED**, and per
+`engine-developer`'s 2026-09-10 review this should stay that way until a real
+source is found — see IDEAS.md if this is ever re-proposed as a feature.
 
 ---
 
@@ -1472,10 +1485,67 @@ rule; Bulbapedia only states "rounded up" for Purified explicitly.
 ### Per-species cost overrides
 
 GAME_MASTER carries `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`
-— a 30× Candy override for Eternatus (same Stardust). Observed 2026-09-08.
+— a species-scoped override of the universal power-up cost table. Observed
+2026-09-08; re-verified and normalized 2026-09-10 (data-sync, direct
+inspection of the live dump — as of that date it is the ONLY entry matching
+the `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME>` pattern).
 
-**Engine: not modelled.** v1 of the Power-Up Optimizer uses the universal
-table for every species; Eternatus's candy costs are understated by 30×.
+Precise shape, confirmed by field-by-field comparison against the universal
+`POKEMON_UPGRADE_SETTINGS` template in the same dump:
+
+- **`candyCost` is a fully independent REPLACEMENT array, not a fixed
+  multiplier.** The oft-quoted "30×" only holds exactly at level 1 (universal
+  1 → override 30). It drifts level by level — ~29-31× through the low/mid
+  levels, but level 39→40 is universal 15 → override 890, a **~59.3×**
+  jump, the single largest step in the whole table.
+- **`xlCandyCost` is ALSO an independent replacement array**, not previously
+  documented at all: universal `[10,10,12,12,15,15,17,17,20,20]` → override
+  `[100,100,200,200,400,400,635,635,890,890]`, a ratio that itself ranges
+  ~10× (level 40) up to ~44.5× (level 49.5→50) — i.e. XL-candy-stage
+  power-ups are understated by a DIFFERENT factor than candy-stage ones,
+  not by "the same 30×" extended upward.
+- **`stardustCost` is byte-identical to the universal table** (both arrays
+  are the standard 200/200/400/400/.../15000 progression) — Stardust is
+  genuinely unaffected, confirming the "same Stardust" half of the original
+  observation.
+- Every other field the override entry carries (`upgradesPerLevel`,
+  `shadowStardustMultiplier`/`shadowCandyMultiplier`,
+  `purifiedStardustMultiplier`/`purifiedCandyMultiplier`,
+  `maxNormalUpgradeLevel`, `defaultCpBoostAdditionalLevel`,
+  `xlCandyMinPlayerLevel`, `xlCandyMinPokemonLevel`,
+  `allowedLevelsAbovePlayer`) is also byte-identical to the universal
+  template for this one example — only the two candy arrays actually differ.
+
+**Data: normalized as of 2026-09-10.** `data/raw/game_master.json` now
+carries every such override entry (matched by templateId PATTERN, never a
+hardcoded species — see `GameMasterUpgradeOverrideRecord` in
+`scripts/sync-data/rawShapes.ts`), and `data/normalized/powerUpCosts.json`
+exposes them **twice, deliberately**: verbatim as `perSpeciesUpgradeOverrides`
+(the raw source arrays, kept for auditability) and interpreted as
+`perSpeciesOverridesByPokemonId` (a complete, standalone `PowerUpCostTable`
+per overriding species — what the engine actually reads).
+
+**Engine: implemented 2026-09-10.** `powerUpCostTableFromGameMaster`
+(`packages/engine/src/powerUp.ts`) takes an optional third argument and feeds
+each override record back through itself — each is a complete, standalone
+upgrade record in its own right — keying the result by RAW `pokemonId`.
+`powerUpCostTableFor(table, species)` resolves it at every lookup (reversing
+this project's own pokemonId→display-name title-casing), rather than at build
+time, because the full species list isn't available when the table is built.
+Every cost call site in `powerUp.ts` and `rosterPlanner.ts` goes through it.
+
+⚠️ **The shipped-but-inert gap is the part worth remembering.** The raw
+records were extracted, normalized, committed, and pinned by a golden
+sentinel test on 2026-09-10 — and consumed by nothing, because
+`scripts/sync-data.ts` never passed the new third argument. Raw presence in
+`data/normalized/` is not evidence that anything reads it, and a passing
+sentinel over the raw field proved only that the field existed. The guard
+now is a second sentinel over the INTERPRETED table
+(`scripts/sync-data/test/normalizedGolden.test.ts`), which asserts the real
+per-level candy/XL divergence and that stardust stayed byte-identical at
+every level. Regenerated values, universal → Eternatus: level 1 candy 1 → 30,
+level 25 candy 3 → 90, level 39 candy 15 → 890, level 40 XL 10 → 100,
+level 49 XL 20 → 890.
 
 ### Fungible candy currencies (Rare Candy, Rare Candy XL, Candy → XL conversion)
 

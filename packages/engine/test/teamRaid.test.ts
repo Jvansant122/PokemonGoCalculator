@@ -825,3 +825,147 @@ describe("TeamRaidInputs.friendshipLevel", () => {
     expect(forever.slots[0]!.faintedAtSeconds).toBe(none.slots[0]!.faintedAtSeconds);
   });
 });
+
+// --- TeamRaidInputs.reselectAfterWipe (IDEAS.md #12) --------------------
+//
+// "A real trainer with 164 Pokémon returns to the lobby and picks a fresh
+// six" — these tests prove the hook actually lets a DIFFERENT roster clear a
+// boss the originally-fielded roster structurally never could, that the
+// context object handed to the callback is accurate, that the returned
+// roster is re-validated the same way the initial one is, and that
+// TeamRaidSlotResult.slotId/TeamRaidResult.slotsUsed correctly track
+// identity once the fielded roster changes across cycles. Every number below
+// was confirmed by actually running runTeamRaid in a throwaway scratch
+// script (not hand arithmetic) before being pinned here.
+
+describe("TeamRaidInputs.reselectAfterWipe", () => {
+  // Same boss shape as "attributes the finishing blow..." above (100 HP,
+  // 150/100 atk/def) — FRAGILE tops out around ~2 damage per fight against
+  // it before fainting; HARD_HITTER can solo most of a 100 HP pool.
+  const boss: SpeciesDefinition = {
+    id: "two-slot-boss",
+    name: "Two Slot Boss",
+    types: ["normal"],
+    baseAttack: 150,
+    baseDefense: 100,
+    baseStamina: 100,
+    fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal", power: 15, energyGain: 0, durationSeconds: 0.5 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function fragileOnlyInputs(overrides: Partial<TeamRaidInputs> = {}): TeamRaidInputs {
+    return baseInputs({
+      slots: [makeSlot(FRAGILE), makeSlot(FRAGILE)],
+      boss,
+      raidTimerSeconds: 40,
+      reviveCostSeconds: 5,
+      swapCostSeconds: 0,
+      ...overrides,
+    });
+  }
+
+  it("omitted: re-fields the identical roster forever, never clearing this boss within the timer (baseline)", () => {
+    const result = runTeamRaid(fragileOnlyInputs());
+    expect(result.outcome).toBe("timerExpired");
+    expect(result.wipeCount).toBeGreaterThan(1);
+    // Every fight in every cycle is the same two FRAGILE slots.
+    expect(result.slots.every((s) => s.speciesId === "fragile")).toBe(true);
+  });
+
+  it("supplied: swapping to a stronger roster after the first wipe clears a boss the original roster alone never could", () => {
+    const reselectCalls: unknown[] = [];
+    const result = runTeamRaid(
+      fragileOnlyInputs({
+        reselectAfterWipe: (context) => {
+          reselectCalls.push(context);
+          return [makeSlot(HARD_HITTER, { slotId: "hard-hitter-pool-1" })];
+        },
+      }),
+    );
+
+    expect(result.outcome).toBe("cleared");
+    expect(result.clearsWithinTimer).toBe(true);
+    // Exactly one wipe happened (cycle 0's two FRAGILEs both faint), then the
+    // reselected HARD_HITTER finishes the boss off in cycle 1.
+    expect(result.wipeCount).toBe(1);
+    expect(reselectCalls).toHaveLength(1);
+    expect(result.slots.map((s) => s.speciesId)).toEqual(["fragile", "fragile", "hard-hitter"]);
+  });
+
+  it("the context object handed to the callback accurately reports cycle/wipe/boss-progress/clock state", () => {
+    let capturedContext: Parameters<NonNullable<TeamRaidInputs["reselectAfterWipe"]>>[0] | null = null;
+    runTeamRaid(
+      fragileOnlyInputs({
+        reselectAfterWipe: (context) => {
+          capturedContext = context;
+          return [makeSlot(HARD_HITTER)];
+        },
+      }),
+    );
+
+    expect(capturedContext).not.toBeNull();
+    const context = capturedContext!;
+    expect(context.cycleIndex).toBe(1);
+    expect(context.wipeCount).toBe(1);
+    // Both original FRAGILE slots, still the pre-reselection roster.
+    expect(context.previousSlots).toHaveLength(2);
+    expect(context.previousSlots.every((s) => s.species?.id === "fragile")).toBe(true);
+    // Cycle 0's two FRAGILE fights combined deal 2 + 2 = 4 damage (verified via scratch run).
+    expect(context.bossDamageDealt).toBe(4);
+    expect(context.bossMaxHp).toBe(100);
+    expect(context.raidTimerSeconds).toBe(40);
+    // Two near-instant 1s FRAGILE fights (swapCostSeconds pinned to 0) + the
+    // 5s reviveCostSeconds this wipe just paid = 7s of raid clock elapsed.
+    expect(context.raidClockSeconds).toBe(7);
+  });
+
+  it("re-validates the returned roster exactly like the initial one — an all-empty reselected roster throws", () => {
+    expect(() =>
+      runTeamRaid(
+        fragileOnlyInputs({
+          reselectAfterWipe: () => [{ species: null, fastMoveId: null, chargedMoveId: null, isMega: false }],
+        }),
+      ),
+    ).toThrow(/at least one fielded Pokémon/);
+  });
+
+  it("re-validates the returned roster's isMega constraint too — more than one mega slot throws", () => {
+    const megaSpecies: SpeciesDefinition = { ...HARD_HITTER, id: "mega-hard-hitter", boost: { boostedType: "normal", multiplier: 1.3 } };
+    expect(() =>
+      runTeamRaid(
+        fragileOnlyInputs({
+          reselectAfterWipe: () => [makeSlot(megaSpecies, { isMega: true }), makeSlot(megaSpecies, { isMega: true })],
+        }),
+      ),
+    ).toThrow(/at most one team-raid slot may be flagged isMega/i);
+  });
+
+  it("TeamRaidSlotResult.slotId falls back to the stringified slotIndex when the caller doesn't set one, and slotsUsed counts distinct slotIds across a reselection", () => {
+    const result = runTeamRaid(
+      fragileOnlyInputs({
+        reselectAfterWipe: () => [makeSlot(HARD_HITTER)], // no slotId set
+      }),
+    );
+    expect(result.slots[0]!.slotId).toBe("0"); // cycle 0, position 0 — same as slotIndex, stringified
+    expect(result.slots[1]!.slotId).toBe("1");
+    expect(result.slots[2]!.slotId).toBe("0"); // cycle 1's own array position 0 — collides with cycle 0's slot 0 by array-position identity, since no caller slotId was supplied
+    // Distinct slotIds seen: "0" (fragile, then hard-hitter — SAME id since
+    // both are array-position "0" and no caller slotId disambiguates them)
+    // and "1" (fragile only) => 2 distinct ids, even though 3 fights ran and
+    // 2 distinct SPECIES were fielded. This is the documented tradeoff of
+    // not supplying slotId — see TeamRaidSlotInput.slotId's own doc comment.
+    expect(result.slotsUsed).toBe(2);
+  });
+
+  it("a caller-supplied slotId disambiguates identity across a reselection, giving the accurate slotsUsed count", () => {
+    const result = runTeamRaid(
+      fragileOnlyInputs({
+        slots: [makeSlot(FRAGILE, { slotId: "pool-fragile-a" }), makeSlot(FRAGILE, { slotId: "pool-fragile-b" })],
+        reselectAfterWipe: () => [makeSlot(HARD_HITTER, { slotId: "pool-hard-hitter" })],
+      }),
+    );
+    expect(result.slots.map((s) => s.slotId)).toEqual(["pool-fragile-a", "pool-fragile-b", "pool-hard-hitter"]);
+    expect(result.slotsUsed).toBe(3);
+  });
+});

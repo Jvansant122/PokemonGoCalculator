@@ -1,6 +1,6 @@
 {
   "sourceUrl": "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json",
-  "fetchedAt": "2026-09-10T23:35:58.488Z",
+  "fetchedAt": "2026-09-11T02:59:47.390Z",
   "pokemon": [
     {
       "pokemonId": "BULBASAUR",
@@ -5053,7 +5053,8 @@
           "evolution": "BELLOSSOM",
           "form": "BELLOSSOM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -5091,7 +5092,8 @@
           "evolution": "BELLOSSOM",
           "form": "BELLOSSOM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -5990,7 +5992,8 @@
         {
           "evolution": "ANNIHILAPE",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -6027,7 +6030,8 @@
           "evolution": "ANNIHILAPE",
           "form": "ANNIHILAPE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -6309,7 +6313,8 @@
           "evolution": "POLITOED",
           "form": "POLITOED_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_KINGS_ROCK"
         }
       ],
       "formChange": []
@@ -6348,7 +6353,8 @@
           "evolution": "POLITOED",
           "form": "POLITOED_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_KINGS_ROCK"
         }
       ],
       "formChange": []
@@ -6504,7 +6510,8 @@
           "evolution": "ALAKAZAM",
           "form": "ALAKAZAM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -6535,7 +6542,8 @@
           "evolution": "ALAKAZAM",
           "form": "ALAKAZAM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -6713,7 +6721,8 @@
           "evolution": "MACHAMP",
           "form": "MACHAMP_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -6746,7 +6755,8 @@
           "evolution": "MACHAMP",
           "form": "MACHAMP_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -7268,7 +7278,8 @@
           "evolution": "GOLEM",
           "form": "GOLEM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -7300,7 +7311,8 @@
           "evolution": "GOLEM",
           "form": "GOLEM_ALOLA",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -7335,7 +7347,8 @@
           "evolution": "GOLEM",
           "form": "GOLEM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -7639,7 +7652,8 @@
           "evolution": "SLOWKING",
           "form": "SLOWKING_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_KINGS_ROCK"
         }
       ],
       "formChange": []
@@ -7677,7 +7691,8 @@
           "evolution": "SLOWKING",
           "form": "SLOWKING_2022",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_KINGS_ROCK"
         }
       ],
       "formChange": []
@@ -7708,13 +7723,15 @@
           "evolution": "SLOWBRO",
           "form": "SLOWBRO_GALARIAN",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "requiresQuest": true
         },
         {
           "evolution": "SLOWKING",
           "form": "SLOWKING_GALARIAN",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -7752,7 +7769,8 @@
           "evolution": "SLOWKING",
           "form": "SLOWKING_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_KINGS_ROCK"
         }
       ],
       "formChange": []
@@ -8005,7 +8023,8 @@
         {
           "evolution": "MAGNEZONE",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -8041,7 +8060,8 @@
           "evolution": "MAGNEZONE",
           "form": "MAGNEZONE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -8098,7 +8118,8 @@
           "evolution": "SIRFETCHD",
           "form": "SIRFETCHD_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -8780,7 +8801,8 @@
           "evolution": "GENGAR",
           "form": "GENGAR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -8816,7 +8838,8 @@
           "evolution": "GENGAR",
           "form": "GENGAR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -8988,7 +9011,8 @@
           "evolution": "STEELIX",
           "form": "STEELIX_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_METAL_COAT"
         }
       ],
       "formChange": []
@@ -9024,7 +9048,8 @@
           "evolution": "STEELIX",
           "form": "STEELIX_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_METAL_COAT"
         }
       ],
       "formChange": []
@@ -9867,7 +9892,8 @@
       "evolutionBranch": [
         {
           "evolution": "LICKILICKY",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -9900,7 +9926,8 @@
         {
           "evolution": "LICKILICKY",
           "form": "LICKILICKY_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -10136,7 +10163,8 @@
           "evolution": "RHYPERIOR",
           "form": "RHYPERIOR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -10171,7 +10199,8 @@
           "evolution": "RHYPERIOR",
           "form": "RHYPERIOR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -10262,7 +10291,8 @@
           "evolution": "TANGROWTH",
           "form": "TANGROWTH_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -10295,7 +10325,8 @@
           "evolution": "TANGROWTH",
           "form": "TANGROWTH_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -10465,7 +10496,8 @@
           "evolution": "KINGDRA",
           "form": "KINGDRA_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_DRAGON_SCALE"
         }
       ],
       "formChange": []
@@ -10498,7 +10530,8 @@
           "evolution": "KINGDRA",
           "form": "KINGDRA_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_DRAGON_SCALE"
         }
       ],
       "formChange": []
@@ -10884,7 +10917,8 @@
           "evolution": "SCIZOR",
           "form": "SCIZOR_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_METAL_COAT"
         }
       ],
       "formChange": []
@@ -10921,7 +10955,8 @@
           "evolution": "SCIZOR",
           "form": "SCIZOR_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_METAL_COAT"
         }
       ],
       "formChange": []
@@ -11010,7 +11045,8 @@
           "evolution": "ELECTIVIRE",
           "form": "ELECTIVIRE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -11041,7 +11077,8 @@
           "evolution": "ELECTIVIRE",
           "form": "ELECTIVIRE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -11072,7 +11109,8 @@
           "evolution": "MAGMORTAR",
           "form": "MAGMORTAR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -11104,7 +11142,8 @@
           "evolution": "MAGMORTAR",
           "form": "MAGMORTAR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -11681,27 +11720,38 @@
         {
           "evolution": "ESPEON",
           "form": "ESPEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "mustBeBuddy": true,
+          "kmBuddyDistanceRequirement": 10,
+          "onlyDaytime": true,
+          "requiresQuest": true
         },
         {
           "evolution": "UMBREON",
           "form": "UMBREON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "mustBeBuddy": true,
+          "kmBuddyDistanceRequirement": 10,
+          "onlyNighttime": true,
+          "requiresQuest": true
         },
         {
           "evolution": "LEAFEON",
           "form": "LEAFEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "lureItemRequirement": "ITEM_TROY_DISK_MOSSY"
         },
         {
           "evolution": "GLACEON",
           "form": "GLACEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "lureItemRequirement": "ITEM_TROY_DISK_GLACIAL"
         },
         {
           "evolution": "SYLVEON",
           "form": "SYLVEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -11800,27 +11850,38 @@
         {
           "evolution": "ESPEON",
           "form": "ESPEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "mustBeBuddy": true,
+          "kmBuddyDistanceRequirement": 10,
+          "onlyDaytime": true,
+          "requiresQuest": true
         },
         {
           "evolution": "UMBREON",
           "form": "UMBREON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "mustBeBuddy": true,
+          "kmBuddyDistanceRequirement": 10,
+          "onlyNighttime": true,
+          "requiresQuest": true
         },
         {
           "evolution": "LEAFEON",
           "form": "LEAFEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "lureItemRequirement": "ITEM_TROY_DISK_MOSSY"
         },
         {
           "evolution": "GLACEON",
           "form": "GLACEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "lureItemRequirement": "ITEM_TROY_DISK_GLACIAL"
         },
         {
           "evolution": "SYLVEON",
           "form": "SYLVEON_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -12018,7 +12079,8 @@
           "evolution": "PORYGON2",
           "form": "PORYGON2_NORMAL",
           "candyCost": 25,
-          "candyCostPurified": 22
+          "candyCostPurified": 22,
+          "evolutionItemRequirement": "ITEM_UP_GRADE"
         }
       ],
       "formChange": []
@@ -12056,7 +12118,8 @@
           "evolution": "PORYGON2",
           "form": "PORYGON2_NORMAL",
           "candyCost": 25,
-          "candyCostPurified": 22
+          "candyCostPurified": 22,
+          "evolutionItemRequirement": "ITEM_UP_GRADE"
         }
       ],
       "formChange": []
@@ -14696,7 +14759,8 @@
       "evolutionBranch": [
         {
           "evolution": "TOGEKISS",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -14734,7 +14798,8 @@
         {
           "evolution": "TOGEKISS",
           "form": "TOGEKISS_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -15570,7 +15635,8 @@
           "evolution": "AMBIPOM",
           "form": "AMBIPOM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -15601,7 +15667,8 @@
           "evolution": "AMBIPOM",
           "form": "AMBIPOM_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -15629,7 +15696,8 @@
       "evolutionBranch": [
         {
           "evolution": "SUNFLORA",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -15659,7 +15727,8 @@
         {
           "evolution": "SUNFLORA",
           "form": "SUNFLORA_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -15737,7 +15806,8 @@
       "evolutionBranch": [
         {
           "evolution": "YANMEGA",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -15768,7 +15838,8 @@
         {
           "evolution": "YANMEGA",
           "form": "YANMEGA_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -16112,7 +16183,8 @@
           "evolution": "HONCHKROW",
           "form": "HONCHKROW_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -16144,7 +16216,8 @@
           "evolution": "HONCHKROW",
           "form": "HONCHKROW_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -16287,7 +16360,8 @@
         {
           "evolution": "MISMAGIUS",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -16319,7 +16393,8 @@
           "evolution": "MISMAGIUS",
           "form": "MISMAGIUS_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -17245,7 +17320,8 @@
           "evolution": "GLISCOR",
           "form": "GLISCOR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -17277,7 +17353,8 @@
           "evolution": "GLISCOR",
           "form": "GLISCOR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -17527,7 +17604,8 @@
         {
           "evolution": "OVERQWIL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -17793,7 +17871,8 @@
           "evolution": "WEAVILE",
           "form": "WEAVILE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -17824,7 +17903,9 @@
         {
           "evolution": "SNEASLER",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "onlyDaytime": true,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -17857,7 +17938,8 @@
           "evolution": "WEAVILE",
           "form": "WEAVILE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -17954,7 +18036,8 @@
         {
           "evolution": "URSALUNA",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "onlyFullMoon": true
         }
       ],
       "formChange": []
@@ -17987,7 +18070,8 @@
         {
           "evolution": "URSALUNA",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "onlyFullMoon": true
         }
       ],
       "formChange": []
@@ -18194,7 +18278,8 @@
           "evolution": "MAMOSWINE",
           "form": "MAMOSWINE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -18228,7 +18313,8 @@
           "evolution": "MAMOSWINE",
           "form": "MAMOSWINE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -18993,7 +19079,8 @@
           "evolution": "PORYGON_Z",
           "form": "PORYGON_Z_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -19026,7 +19113,8 @@
           "evolution": "PORYGON_Z",
           "form": "PORYGON_Z_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -22077,7 +22165,9 @@
           "evolution": "GALLADE",
           "form": "GALLADE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE",
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "GARDEVOIR",
@@ -22118,7 +22208,9 @@
           "evolution": "GALLADE",
           "form": "GALLADE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE",
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "GARDEVOIR",
@@ -23136,7 +23228,8 @@
         {
           "evolution": "PROBOPASS",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -23167,7 +23260,8 @@
           "evolution": "PROBOPASS",
           "form": "PROBOPASS_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -24175,7 +24269,8 @@
       "evolutionBranch": [
         {
           "evolution": "ROSERADE",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -24207,7 +24302,8 @@
         {
           "evolution": "ROSERADE",
           "form": "ROSERADE_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -26652,7 +26748,9 @@
         {
           "evolution": "MILOTIC",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "kmBuddyDistanceRequirement": 20,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -26681,7 +26779,9 @@
           "evolution": "MILOTIC",
           "form": "MILOTIC_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "kmBuddyDistanceRequirement": 20,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -27130,7 +27230,8 @@
           "evolution": "DUSKNOIR",
           "form": "DUSKNOIR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -27162,7 +27263,8 @@
           "evolution": "DUSKNOIR",
           "form": "DUSKNOIR_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -27418,7 +27520,9 @@
         {
           "evolution": "FROSLASS",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE",
+          "genderRequirement": "FEMALE"
         },
         {
           "evolution": "GLALIE",
@@ -27454,7 +27558,9 @@
           "evolution": "FROSLASS",
           "form": "FROSLASS_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN4_EVOLUTION_STONE",
+          "genderRequirement": "FEMALE"
         },
         {
           "evolution": "GLALIE",
@@ -30701,11 +30807,13 @@
         {
           "evolution": "WORMADAM",
           "form": "WORMADAM_PLANT",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         },
         {
           "evolution": "MOTHIM",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         }
       ],
       "formChange": []
@@ -30733,11 +30841,13 @@
         {
           "evolution": "WORMADAM",
           "form": "WORMADAM_PLANT",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         },
         {
           "evolution": "MOTHIM",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         }
       ],
       "formChange": []
@@ -30765,11 +30875,13 @@
         {
           "evolution": "WORMADAM",
           "form": "WORMADAM_SANDY",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         },
         {
           "evolution": "MOTHIM",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         }
       ],
       "formChange": []
@@ -30797,11 +30909,13 @@
         {
           "evolution": "WORMADAM",
           "form": "WORMADAM_TRASH",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         },
         {
           "evolution": "MOTHIM",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         }
       ],
       "formChange": []
@@ -30978,7 +31092,8 @@
       "evolutionBranch": [
         {
           "evolution": "VESPIQUEN",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -31006,7 +31121,8 @@
         {
           "evolution": "VESPIQUEN",
           "form": "VESPIQUEN_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -32353,7 +32469,9 @@
       "evolutionBranch": [
         {
           "evolution": "SUDOWOODO",
-          "candyCost": 50
+          "candyCost": 50,
+          "kmBuddyDistanceRequirement": 15,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -32383,7 +32501,9 @@
         {
           "evolution": "SUDOWOODO",
           "form": "SUDOWOODO_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "kmBuddyDistanceRequirement": 15,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -32412,7 +32532,9 @@
       "evolutionBranch": [
         {
           "evolution": "MR_MIME",
-          "candyCost": 50
+          "candyCost": 50,
+          "kmBuddyDistanceRequirement": 15,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -32443,7 +32565,9 @@
         {
           "evolution": "MR_MIME",
           "form": "MR_MIME_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "kmBuddyDistanceRequirement": 15,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -32470,7 +32594,9 @@
         {
           "evolution": "CHANSEY",
           "form": "CHANSEY_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "kmBuddyDistanceRequirement": 15,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -32498,7 +32624,9 @@
         {
           "evolution": "CHANSEY",
           "form": "CHANSEY_NORMAL",
-          "candyCost": 25
+          "candyCost": 25,
+          "kmBuddyDistanceRequirement": 15,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -37195,7 +37323,8 @@
       "evolutionBranch": [
         {
           "evolution": "SIMISAGE",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37225,7 +37354,8 @@
         {
           "evolution": "SIMISAGE",
           "form": "SIMISAGE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37300,7 +37430,8 @@
       "evolutionBranch": [
         {
           "evolution": "SIMISEAR",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37330,7 +37461,8 @@
         {
           "evolution": "SIMISEAR",
           "form": "SIMISEAR_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37405,7 +37537,8 @@
       "evolutionBranch": [
         {
           "evolution": "SIMIPOUR",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37435,7 +37568,8 @@
         {
           "evolution": "SIMIPOUR",
           "form": "SIMIPOUR_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37510,7 +37644,8 @@
       "evolutionBranch": [
         {
           "evolution": "MUSHARNA",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37540,7 +37675,8 @@
         {
           "evolution": "MUSHARNA",
           "form": "MUSHARNA_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -37956,7 +38092,8 @@
         {
           "evolution": "GIGALITH",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -37987,7 +38124,8 @@
           "evolution": "GIGALITH",
           "form": "GIGALITH_NORMAL",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -38071,7 +38209,9 @@
       "evolutionBranch": [
         {
           "evolution": "SWOOBAT",
-          "candyCost": 50
+          "candyCost": 50,
+          "kmBuddyDistanceRequirement": 1,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -38102,7 +38242,9 @@
         {
           "evolution": "SWOOBAT",
           "form": "SWOOBAT_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "kmBuddyDistanceRequirement": 1,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -38433,7 +38575,8 @@
         {
           "evolution": "CONKELDURR",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -38464,7 +38607,8 @@
           "evolution": "CONKELDURR",
           "form": "CONKELDURR_NORMAL",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -39167,7 +39311,8 @@
       "evolutionBranch": [
         {
           "evolution": "WHIMSICOTT",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -39198,7 +39343,8 @@
         {
           "evolution": "WHIMSICOTT",
           "form": "WHIMSICOTT_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -39278,7 +39424,8 @@
       "evolutionBranch": [
         {
           "evolution": "LILLIGANT",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -39307,7 +39454,8 @@
         {
           "evolution": "LILLIGANT",
           "form": "LILLIGANT_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -40256,7 +40404,8 @@
           "evolution": "RUNERIGUS",
           "form": "RUNERIGUS_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -40863,7 +41012,8 @@
       "evolutionBranch": [
         {
           "evolution": "CINCCINO",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -40893,7 +41043,8 @@
         {
           "evolution": "CINCCINO",
           "form": "CINCCINO_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -41932,7 +42083,8 @@
         {
           "evolution": "ESCAVALIER",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -41964,7 +42116,8 @@
           "evolution": "ESCAVALIER",
           "form": "ESCAVALIER_NORMAL",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -42828,7 +42981,8 @@
       "evolutionBranch": [
         {
           "evolution": "EELEKTROSS",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -42858,7 +43012,8 @@
         {
           "evolution": "EELEKTROSS",
           "form": "EELEKTROSS_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -43112,7 +43267,8 @@
         {
           "evolution": "CHANDELURE",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -43144,7 +43300,8 @@
           "evolution": "CHANDELURE",
           "form": "CHANDELURE_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "evolutionItemRequirement": "ITEM_GEN5_EVOLUTION_STONE"
         }
       ],
       "formChange": []
@@ -43616,7 +43773,8 @@
         {
           "evolution": "ACCELGOR",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -43647,7 +43805,8 @@
           "evolution": "ACCELGOR",
           "form": "ACCELGOR_NORMAL",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -44148,7 +44307,8 @@
       "evolutionBranch": [
         {
           "evolution": "KINGAMBIT",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -44180,7 +44340,8 @@
         {
           "evolution": "KINGAMBIT",
           "form": "KINGAMBIT_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -48544,12 +48705,14 @@
         {
           "evolution": "PYROAR",
           "form": "PYROAR_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "PYROAR",
           "form": "PYROAR_FEMALE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -48582,12 +48745,14 @@
         {
           "evolution": "PYROAR",
           "form": "PYROAR_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "PYROAR",
           "form": "PYROAR_FEMALE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -48878,7 +49043,8 @@
         {
           "evolution": "FLORGES",
           "form": "FLORGES_RED",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -48908,7 +49074,8 @@
         {
           "evolution": "FLORGES",
           "form": "FLORGES_BLUE",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -48938,7 +49105,8 @@
         {
           "evolution": "FLORGES",
           "form": "FLORGES_ORANGE",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -48968,7 +49136,8 @@
         {
           "evolution": "FLORGES",
           "form": "FLORGES_RED",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -48998,7 +49167,8 @@
         {
           "evolution": "FLORGES",
           "form": "FLORGES_WHITE",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -49028,7 +49198,8 @@
         {
           "evolution": "FLORGES",
           "form": "FLORGES_YELLOW",
-          "candyCost": 100
+          "candyCost": 100,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -49342,7 +49513,8 @@
       "evolutionBranch": [
         {
           "evolution": "PANGORO",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -49372,7 +49544,8 @@
         {
           "evolution": "PANGORO",
           "form": "PANGORO_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -49741,12 +49914,14 @@
         {
           "evolution": "MEOWSTIC",
           "form": "MEOWSTIC_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "MEOWSTIC",
           "form": "MEOWSTIC_FEMALE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -49776,12 +49951,14 @@
         {
           "evolution": "MEOWSTIC",
           "form": "MEOWSTIC_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "MEOWSTIC",
           "form": "MEOWSTIC_FEMALE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -50075,7 +50252,8 @@
       "evolutionBranch": [
         {
           "evolution": "AROMATISSE",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -50104,7 +50282,8 @@
         {
           "evolution": "AROMATISSE",
           "form": "AROMATISSE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -50183,7 +50362,8 @@
       "evolutionBranch": [
         {
           "evolution": "SLURPUFF",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -50211,7 +50391,8 @@
         {
           "evolution": "SLURPUFF",
           "form": "SLURPUFF_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -50292,7 +50473,8 @@
         {
           "evolution": "MALAMAR",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "onlyUpsideDown": true
         }
       ],
       "formChange": []
@@ -50324,7 +50506,8 @@
           "evolution": "MALAMAR",
           "form": "MALAMAR_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "onlyUpsideDown": true
         }
       ],
       "formChange": []
@@ -50772,7 +50955,8 @@
         {
           "evolution": "HELIOLISK",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -50804,7 +50988,8 @@
           "evolution": "HELIOLISK",
           "form": "HELIOLISK_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "evolutionItemRequirement": "ITEM_SUN_STONE"
         }
       ],
       "formChange": []
@@ -50890,7 +51075,8 @@
         {
           "evolution": "TYRANTRUM",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "onlyDaytime": true
         }
       ],
       "formChange": []
@@ -50923,7 +51109,8 @@
           "evolution": "TYRANTRUM",
           "form": "TYRANTRUM_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "onlyDaytime": true
         }
       ],
       "formChange": []
@@ -51011,7 +51198,8 @@
         {
           "evolution": "AURORUS",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "onlyNighttime": true
         }
       ],
       "formChange": []
@@ -51044,7 +51232,8 @@
           "evolution": "AURORUS",
           "form": "AURORUS_NORMAL",
           "candyCost": 50,
-          "candyCostPurified": 45
+          "candyCostPurified": 45,
+          "onlyNighttime": true
         }
       ],
       "formChange": []
@@ -51396,7 +51585,8 @@
       "evolutionBranch": [
         {
           "evolution": "GOODRA",
-          "candyCost": 100
+          "candyCost": 100,
+          "lureItemRequirement": "ITEM_TROY_DISK_RAINY"
         }
       ],
       "formChange": []
@@ -51429,7 +51619,8 @@
         {
           "evolution": "GOODRA",
           "form": "GOODRA_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "lureItemRequirement": "ITEM_TROY_DISK_RAINY"
         }
       ],
       "formChange": []
@@ -51565,7 +51756,8 @@
         {
           "evolution": "TREVENANT",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -51597,7 +51789,8 @@
           "evolution": "TREVENANT",
           "form": "TREVENANT_NORMAL",
           "candyCost": 200,
-          "candyCostPurified": 180
+          "candyCostPurified": 180,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -51676,7 +51869,8 @@
         {
           "evolution": "GOURGEIST",
           "form": "GOURGEIST_SMALL",
-          "candyCost": 200
+          "candyCost": 200,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -51707,7 +51901,8 @@
         {
           "evolution": "GOURGEIST",
           "form": "GOURGEIST_AVERAGE",
-          "candyCost": 200
+          "candyCost": 200,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -51738,7 +51933,8 @@
         {
           "evolution": "GOURGEIST",
           "form": "GOURGEIST_LARGE",
-          "candyCost": 200
+          "candyCost": 200,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -51769,7 +51965,8 @@
         {
           "evolution": "GOURGEIST",
           "form": "GOURGEIST_SMALL",
-          "candyCost": 200
+          "candyCost": 200,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -51800,7 +51997,8 @@
         {
           "evolution": "GOURGEIST",
           "form": "GOURGEIST_SUPER",
-          "candyCost": 200
+          "candyCost": 200,
+          "noCandyCostViaTrade": true
         }
       ],
       "formChange": []
@@ -52345,7 +52543,9 @@
       "evolutionBranch": [
         {
           "evolution": "ZYGARDE",
-          "form": "ZYGARDE_FIFTY_PERCENT"
+          "form": "ZYGARDE_FIFTY_PERCENT",
+          "evolutionItemRequirement": "ITEM_BEANS",
+          "evolutionItemRequirementCost": 50
         }
       ],
       "formChange": []
@@ -52466,7 +52666,9 @@
       "evolutionBranch": [
         {
           "evolution": "ZYGARDE",
-          "form": "ZYGARDE_COMPLETE"
+          "form": "ZYGARDE_COMPLETE",
+          "evolutionItemRequirement": "ITEM_BEANS",
+          "evolutionItemRequirementCost": 200
         }
       ],
       "formChange": []
@@ -52500,7 +52702,9 @@
       "evolutionBranch": [
         {
           "evolution": "ZYGARDE",
-          "form": "ZYGARDE_FIFTY_PERCENT"
+          "form": "ZYGARDE_FIFTY_PERCENT",
+          "evolutionItemRequirement": "ITEM_BEANS",
+          "evolutionItemRequirementCost": 50
         }
       ],
       "formChange": []
@@ -53480,7 +53684,8 @@
       "evolutionBranch": [
         {
           "evolution": "GUMSHOOS",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDaytime": true
         }
       ],
       "formChange": []
@@ -53510,7 +53715,8 @@
         {
           "evolution": "GUMSHOOS",
           "form": "GUMSHOOS_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDaytime": true
         }
       ],
       "formChange": []
@@ -53649,7 +53855,8 @@
         {
           "evolution": "VIKAVOLT",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -53683,7 +53890,8 @@
           "evolution": "VIKAVOLT",
           "form": "VIKAVOLT_NORMAL",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -53717,7 +53925,8 @@
           "evolution": "VIKAVOLT",
           "form": "VIKAVOLT_WINTER_2025",
           "candyCost": 100,
-          "candyCostPurified": 90
+          "candyCostPurified": 90,
+          "lureItemRequirement": "ITEM_TROY_DISK_MAGNETIC"
         }
       ],
       "formChange": []
@@ -53832,7 +54041,8 @@
       "evolutionBranch": [
         {
           "evolution": "CRABOMINABLE",
-          "candyCost": 50
+          "candyCost": 50,
+          "lureItemRequirement": "ITEM_TROY_DISK_GLACIAL"
         }
       ],
       "formChange": []
@@ -53863,7 +54073,8 @@
         {
           "evolution": "CRABOMINABLE",
           "form": "CRABOMINABLE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "lureItemRequirement": "ITEM_TROY_DISK_GLACIAL"
         }
       ],
       "formChange": []
@@ -54179,12 +54390,14 @@
         {
           "evolution": "LYCANROC",
           "form": "LYCANROC_MIDDAY",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDaytime": true
         },
         {
           "evolution": "LYCANROC",
           "form": "LYCANROC_MIDNIGHT",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyNighttime": true
         }
       ],
       "formChange": []
@@ -54215,7 +54428,8 @@
         {
           "evolution": "LYCANROC",
           "form": "LYCANROC_DUSK",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDuskPeriod": true
         }
       ],
       "formChange": []
@@ -54246,12 +54460,14 @@
         {
           "evolution": "LYCANROC",
           "form": "LYCANROC_MIDDAY",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDaytime": true
         },
         {
           "evolution": "LYCANROC",
           "form": "LYCANROC_MIDNIGHT",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyNighttime": true
         }
       ],
       "formChange": []
@@ -54784,7 +55000,8 @@
       "evolutionBranch": [
         {
           "evolution": "LURANTIS",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDaytime": true
         }
       ],
       "formChange": []
@@ -54816,7 +55033,8 @@
         {
           "evolution": "LURANTIS",
           "form": "LURANTIS_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "onlyDaytime": true
         }
       ],
       "formChange": []
@@ -55003,7 +55221,8 @@
       "evolutionBranch": [
         {
           "evolution": "SALAZZLE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -55034,7 +55253,8 @@
         {
           "evolution": "SALAZZLE",
           "form": "SALAZZLE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -57476,11 +57696,13 @@
       "evolutionBranch": [
         {
           "evolution": "SOLGALEO",
-          "candyCost": 100
+          "candyCost": 100,
+          "onlyDaytime": true
         },
         {
           "evolution": "LUNALA",
-          "candyCost": 100
+          "candyCost": 100,
+          "onlyNighttime": true
         }
       ],
       "formChange": []
@@ -57508,12 +57730,14 @@
         {
           "evolution": "SOLGALEO",
           "form": "SOLGALEO_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "onlyDaytime": true
         },
         {
           "evolution": "LUNALA",
           "form": "LUNALA_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "onlyNighttime": true
         }
       ],
       "formChange": []
@@ -58340,7 +58564,8 @@
       "evolutionBranch": [
         {
           "evolution": "NAGANADEL",
-          "candyCost": 200
+          "candyCost": 200,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -58371,7 +58596,8 @@
         {
           "evolution": "NAGANADEL",
           "form": "NAGANADEL_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -60355,17 +60581,23 @@
         {
           "evolution": "APPLETUN",
           "form": "APPLETUN_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_MAPLE_A",
+          "evolutionItemRequirementCost": 20
         },
         {
           "evolution": "FLAPPLE",
           "form": "FLAPPLE_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_MAPLE_B",
+          "evolutionItemRequirementCost": 20
         },
         {
           "evolution": "DIPPLIN",
           "form": "DIPPLIN_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_MAPLE_C",
+          "evolutionItemRequirementCost": 20
         }
       ],
       "formChange": []
@@ -60393,17 +60625,23 @@
         {
           "evolution": "APPLETUN",
           "form": "APPLETUN_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_MAPLE_A",
+          "evolutionItemRequirementCost": 20
         },
         {
           "evolution": "FLAPPLE",
           "form": "FLAPPLE_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_MAPLE_B",
+          "evolutionItemRequirementCost": 20
         },
         {
           "evolution": "DIPPLIN",
           "form": "DIPPLIN_NORMAL",
-          "candyCost": 200
+          "candyCost": 200,
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_MAPLE_C",
+          "evolutionItemRequirementCost": 20
         }
       ],
       "formChange": []
@@ -62283,7 +62521,9 @@
       "evolutionBranch": [
         {
           "evolution": "FROSMOTH",
-          "candyCost": 400
+          "candyCost": 400,
+          "onlyNighttime": true,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -62313,7 +62553,9 @@
         {
           "evolution": "FROSMOTH",
           "form": "FROSMOTH_NORMAL",
-          "candyCost": 400
+          "candyCost": 400,
+          "onlyNighttime": true,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -63592,12 +63834,14 @@
         {
           "evolution": "URSHIFU",
           "form": "URSHIFU_SINGLE_STRIKE",
-          "candyCost": 200
+          "candyCost": 200,
+          "requiresQuest": true
         },
         {
           "evolution": "URSHIFU",
           "form": "URSHIFU_RAPID_STRIKE",
-          "candyCost": 200
+          "candyCost": 200,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -63628,12 +63872,14 @@
         {
           "evolution": "URSHIFU",
           "form": "URSHIFU_SINGLE_STRIKE",
-          "candyCost": 200
+          "candyCost": 200,
+          "requiresQuest": true
         },
         {
           "evolution": "URSHIFU",
           "form": "URSHIFU_RAPID_STRIKE",
-          "candyCost": 200
+          "candyCost": 200,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -64987,12 +65233,14 @@
         {
           "evolution": "OINKOLOGNE",
           "form": "OINKOLOGNE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "OINKOLOGNE",
           "form": "OINKOLOGNE_FEMALE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -65022,12 +65270,14 @@
         {
           "evolution": "OINKOLOGNE",
           "form": "OINKOLOGNE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "MALE"
         },
         {
           "evolution": "OINKOLOGNE",
           "form": "OINKOLOGNE_FEMALE",
-          "candyCost": 50
+          "candyCost": 50,
+          "genderRequirement": "FEMALE"
         }
       ],
       "formChange": []
@@ -65415,7 +65665,9 @@
       "evolutionBranch": [
         {
           "evolution": "PAWMOT",
-          "candyCost": 100
+          "candyCost": 100,
+          "kmBuddyDistanceRequirement": 25,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -65448,7 +65700,9 @@
         {
           "evolution": "PAWMOT",
           "form": "PAWMOT_NORMAL",
-          "candyCost": 100
+          "candyCost": 100,
+          "kmBuddyDistanceRequirement": 25,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -66255,11 +66509,13 @@
       "evolutionBranch": [
         {
           "evolution": "ARMAROUGE",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         },
         {
           "evolution": "CERULEDGE",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -66289,12 +66545,14 @@
         {
           "evolution": "ARMAROUGE",
           "form": "ARMAROUGE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         },
         {
           "evolution": "CERULEDGE",
           "form": "CERULEDGE_NORMAL",
-          "candyCost": 50
+          "candyCost": 50,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -69702,7 +69960,9 @@
       "familyId": "FAMILY_GIMMIGHOUL",
       "evolutionBranch": [
         {
-          "evolution": "GHOLDENGO"
+          "evolution": "GHOLDENGO",
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_A",
+          "evolutionItemRequirementCost": 999
         }
       ],
       "formChange": []
@@ -69769,7 +70029,9 @@
       "familyId": "FAMILY_GIMMIGHOUL",
       "evolutionBranch": [
         {
-          "evolution": "GHOLDENGO"
+          "evolution": "GHOLDENGO",
+          "evolutionItemRequirement": "ITEM_OTHER_EVOLUTION_STONE_A",
+          "evolutionItemRequirementCost": 999
         }
       ],
       "formChange": []
@@ -70337,7 +70599,8 @@
         {
           "evolution": "HYDRAPPLE",
           "form": "HYDRAPPLE_NORMAL",
-          "candyCost": 400
+          "candyCost": 400,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -70369,7 +70632,8 @@
         {
           "evolution": "HYDRAPPLE",
           "form": "HYDRAPPLE_NORMAL",
-          "candyCost": 400
+          "candyCost": 400,
+          "requiresQuest": true
         }
       ],
       "formChange": []
@@ -73464,5 +73728,136 @@
     "purifiedStardustMultiplier": 0.9,
     "purifiedCandyMultiplier": 0.9
   },
-  "luckyStardustDiscountPercent": 0.5
+  "luckyStardustDiscountPercent": 0.5,
+  "perSpeciesUpgradeOverrides": [
+    {
+      "pokemonId": "ETERNATUS",
+      "sourceTemplateId": "POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS",
+      "upgradesPerLevel": 2,
+      "allowedLevelsAbovePlayer": 10,
+      "candyCost": [
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        30,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        60,
+        90,
+        90,
+        90,
+        90,
+        90,
+        120,
+        120,
+        120,
+        120,
+        120,
+        175,
+        175,
+        225,
+        225,
+        300,
+        300,
+        375,
+        375,
+        890,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stardustCost": [
+        200,
+        200,
+        400,
+        400,
+        600,
+        600,
+        800,
+        800,
+        1000,
+        1000,
+        1300,
+        1300,
+        1600,
+        1600,
+        1900,
+        1900,
+        2200,
+        2200,
+        2500,
+        2500,
+        3000,
+        3000,
+        3500,
+        3500,
+        4000,
+        4000,
+        4500,
+        4500,
+        5000,
+        5000,
+        6000,
+        6000,
+        7000,
+        7000,
+        8000,
+        8000,
+        9000,
+        9000,
+        10000,
+        10000,
+        11000,
+        11000,
+        12000,
+        12000,
+        13000,
+        13000,
+        14000,
+        14000,
+        15000
+      ],
+      "shadowStardustMultiplier": 1.2,
+      "shadowCandyMultiplier": 1.2,
+      "purifiedStardustMultiplier": 0.9,
+      "purifiedCandyMultiplier": 0.9,
+      "maxNormalUpgradeLevel": 50,
+      "defaultCpBoostAdditionalLevel": 1,
+      "xlCandyMinPlayerLevel": 31,
+      "xlCandyCost": [
+        100,
+        100,
+        200,
+        200,
+        400,
+        400,
+        635,
+        635,
+        890,
+        890
+      ],
+      "xlCandyMinPokemonLevel": 40
+    }
+  ]
 }

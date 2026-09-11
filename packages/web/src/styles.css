@@ -1217,6 +1217,20 @@ label.species-picker-hint {
 }
 
 /*
+ * IDEAS.md #20 — the own-charged-move-cast vulnerability cost line
+ * (ComparatorView.tsx). Reuses .badge-approximate's hue/semantics ("no
+ * better data exists yet") rather than inventing a third meaning for
+ * "speculative" — this figure is this project's OWN unsourced modelling
+ * assumption, not even a documented stand-in for real data, but the same
+ * "distrust this number, it's flagged for a reason" visual language applies.
+ */
+.badge-unsourced {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
+/*
  * Species Report "past/inactive raid" badges. Deliberately NOT reusing
  * .badge-hypothetical for the researched variant: in this project that orange
  * badge means "this species' data itself is speculative," and every past-raid

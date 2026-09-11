@@ -239,7 +239,14 @@ npm workspaces monorepo, two packages:
   and a per-species fallback. `data/normalized/powerUpCosts.json` (2026-09-08) is the universal
   power-up stardust/candy/XL table from the same dump's `POKEMON_UPGRADE_SETTINGS` +
   `LUCKY_POKEMON_SETTINGS` templates, interpreted ONLY by the engine's
-  `powerUpCostTableFromGameMaster` (see MECHANICS.md's "Power-up (level-up) costs").
+  `powerUpCostTableFromGameMaster` (see MECHANICS.md's "Power-up (level-up) costs"). It also
+  carries **per-species cost overrides** (2026-09-10) in two forms that are easy to confuse:
+  `perSpeciesUpgradeOverrides` is the RAW source record, kept for auditability and read by
+  nothing; `perSpeciesOverridesByPokemonId` is the interpreted table the engine actually uses,
+  via `powerUpCostTableFor(table, species)` at every cost lookup. Those raw records shipped for a
+  while with nothing consuming them, because `sync-data.ts` never passed the engine's new third
+  argument — so **presence of a field in `data/normalized/` is not evidence anything reads it**,
+  and a golden sentinel over the raw field proves only that the field exists.
   `scripts/sync-data.ts`'s own header comment is the authoritative
   description of that split — read it before assuming where a field comes from.
   `data/normalized/raidHistory.json` (added 2026-09-07) is an accumulate-only log of every raid

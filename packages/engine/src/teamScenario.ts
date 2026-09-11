@@ -94,6 +94,33 @@ export interface TeamScenario {
    * That figure must not be hardcoded here as a confirmed constant.
    */
   reviveCostSeconds: number;
+  /**
+   * Whether the UI's "more detailed assumptions" panel is expanded — folded
+   * onto this type 2026-09-10 so the Team Raid tab works the same way as the
+   * Comparator's own `Scenario.showDetailedAssumptions`, instead of Team
+   * Raid growing a second, `packages/web`-only bolt-on shape for an
+   * identical concept (see `TeamScenarioWithShadow`'s previous local
+   * `showDetailedAssumptions?: boolean` field in `TeamRaidView.tsx`, which
+   * this replaces — that file's own comment flagged folding it into the
+   * engine as this agent's call).
+   *
+   * REQUIRED, not optional, matching `Scenario`'s established convention for
+   * every late-added field even though `decodeTeamScenario` does zero
+   * runtime validation — see scenario.ts's `showDetailedAssumptions` for the
+   * precedent this mirrors.
+   *
+   * Defaults to a single plain `false` on both directions of the round trip
+   * (`packages/web`'s own `DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions`
+   * was already `false`, so this is byte-identical to today's behavior) —
+   * deliberately NOT the inverted "absent decodes true" pattern the
+   * Comparator's sibling field used, per CLAUDE.md's 2026-09-10 standing
+   * decision that backward compatibility with old share links is no longer
+   * required and that pattern should not be reintroduced. There was never a
+   * previously-shipped Team Raid share link with this field on the ENGINE
+   * type at all (it only ever existed as web's own bolt-on), so there is no
+   * history to preserve either way.
+   */
+  showDetailedAssumptions: boolean;
 }
 
 export interface TeamScenarioSlot {

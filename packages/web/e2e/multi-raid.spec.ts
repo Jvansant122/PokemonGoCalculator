@@ -255,6 +255,58 @@ test("power-up-optimizer multi-raid: a share link opened in a fresh browser cont
 });
 
 /**
+ * Hypothetical catches (IDEAS.md #3, "add a 7th") — a real species at a real
+ * raid-catch level, compared against the whole boss set WITHOUT being priced
+ * or entering the fixed-budget plan. Adding one must visibly produce its own
+ * "What if you caught a fresh one?" section with real numbers, never a blank
+ * placeholder — the section is entirely absent before any row is added.
+ */
+test("power-up-optimizer multi-raid: adding a hypothetical catch produces its own section with real per-boss numbers", async ({ page }) => {
+  const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+  await importSampleRosterViaRosterTab(page);
+
+  await page.goto("/?view=power-up-optimizer");
+  await expandAssumptions(page);
+  await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
+  await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Add hypothetical catch" }).click();
+  const pickerInput = page.locator("#pu-hypothetical-0-input");
+  await pickerInput.click();
+  await pickerInput.fill("dragonite");
+  const firstOption = page.locator("#pu-hypothetical-0-listbox li").first();
+  await expect(firstOption).toBeVisible();
+  await firstOption.locator("button").click();
+
+  const runSweepButton = page.getByRole("button", { name: "Run sweep" });
+  await expect(runSweepButton).toBeEnabled({ timeout: 10_000 });
+  await runSweepButton.click();
+  await expect(page.getByRole("heading", { name: "Ranked candidates" })).toBeVisible({ timeout: 20_000 });
+
+  const hypotheticalSection = page
+    .getByRole("heading", { name: /What if you caught a fresh one\?/ })
+    .locator("xpath=ancestor::details[1]");
+  await expect(hypotheticalSection).toBeVisible();
+  await expect(hypotheticalSection.locator("tbody tr").first()).toContainText("Dragonite");
+  // Level 20 (the row's default) rendered in its own column, not left blank.
+  await expect(hypotheticalSection.locator("tbody tr").first()).toContainText("20");
+
+  // Never priced, never part of the fixed-budget plan — the plan's own
+  // section must render normally with no mention of this species being
+  // "planned," proving the two computations stayed genuinely separate.
+  const budgetSection = page.getByRole("heading", { name: "Fixed-budget plan" }).locator("xpath=ancestor::details[1]");
+  await expect(budgetSection.getByText("Steps committed")).toBeVisible();
+
+  const bodyText = await page.locator("body").innerText();
+  expect(bodyText, "rendered page text").not.toMatch(/\bNaN\b/);
+  expect(bodyText, "rendered page text").not.toMatch(/\bInfinity\b/);
+
+  expect(consoleErrors, "console.error calls").toEqual([]);
+  expect(pageErrors, "uncaught page errors").toEqual([]);
+});
+
+/**
  * Per-boss hand-picking in BossSetPanel.tsx (2026-09-10) — the single-boss
  * case is the headline (a user hand-picking exactly the one raid they're
  * attending tonight, bench included), so this drives THAT path end to end:

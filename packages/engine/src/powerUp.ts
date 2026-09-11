@@ -80,10 +80,21 @@ import { isWeatherBoosted } from "./weather.js";
  * Bulbapedia only states "rounded up" explicitly for Purified; stardust
  * values are all multiples of 100 so this only ever actually bites candy.
  *
- * KNOWN GAP (deliberate, v1): an Eternatus-specific override template
- * (POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS, 30x candy)
- * exists upstream. This module does not model per-species overrides at
- * all — every species uses the one shared PowerUpCostTable.
+ * PER-SPECIES OVERRIDES (fixed 2026-09-10, was a known v1 gap): a small
+ * number of species (currently just Eternatus, via
+ * `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`) carry a
+ * COMPLETE replacement of `candyCost`/`xlCandyCost` — NOT a flat multiplier.
+ * Measured against the universal table: at level 1 the ratio happens to be
+ * exactly 30x (universal `1` -> override `30`), but by 39->40 it's 15 -> 890,
+ * ~59.3x, and `xlCandyCost` (previously undocumented entirely) ranges ~10x
+ * to ~44.5x. `stardustCost` and every OTHER field (multipliers,
+ * `maxNormalUpgradeLevel`, XL gates) are byte-identical to universal — only
+ * the two candy arrays differ. Ignoring this understated Eternatus's real
+ * candy cost by roughly 30-59x. See `perSpeciesOverridesByPokemonId`/
+ * `powerUpCostTableFor` below for how this is now modelled — DESIGNED FOR N
+ * overrides, not just the one that exists today (data-sync reads these by
+ * TEMPLATE PATTERN, not a hardcoded Eternatus special-case, so a second one
+ * appearing upstream needs zero further engine change).
  */
 
 /** One power-up: fromLevel -> fromLevel + 0.5, at BASE (unmodified — no Shadow/Purified/Lucky) cost. */
@@ -105,6 +116,30 @@ export interface PowerUpCostTable {
   purifiedCandyMultiplier: number;
   /** Already the MULTIPLIER (0.5), not the raw "discount percent" fraction the GAME_MASTER field is misleadingly named after — see powerUpCostTableFromGameMaster. */
   luckyStardustMultiplier: number;
+  /**
+   * Per-species FULL cost-table overrides (see this module's top doc
+   * comment) — keyed by the raw GAME_MASTER `pokemonId` enum value (e.g.
+   * "ETERNATUS"), NOT this engine's own `SpeciesDefinition.id`. Each value
+   * is itself a COMPLETE, independently-valid `PowerUpCostTable` (built by
+   * recursively calling `powerUpCostTableFromGameMaster` on the override's
+   * own record — it carries every field a normal upgrade-settings record
+   * does) — an override's own `perSpeciesOverridesByPokemonId` is always
+   * undefined, never nested.
+   *
+   * KEYED BY RAW pokemonId, NOT species id, DELIBERATELY: resolving
+   * pokemonId -> this engine's `SpeciesDefinition.id` needs the FULL synced
+   * species list, which isn't available at the point
+   * `powerUpCostTableFromGameMaster` runs (scripts/sync-data.ts builds
+   * `data/normalized/powerUpCosts.json` and `data/normalized/species.json`
+   * as separate, unordered outputs — this module has no I/O and cannot
+   * assume one exists before the other). Resolving in the OTHER direction
+   * instead — `species.name` -> a pokemonId-shaped key, done fresh at
+   * lookup time by `powerUpCostTableFor` below, needing only the ONE
+   * species already being priced — sidesteps that ordering dependency
+   * entirely. Never read this map directly at a call site; always go
+   * through `powerUpCostTableFor(table, species)`.
+   */
+  perSpeciesOverridesByPokemonId?: Record<string, PowerUpCostTable>;
 }
 
 /** The subset of GAME_MASTER's POKEMON_UPGRADE_SETTINGS -> data.pokemonUpgrades this module actually consumes — see this module's top doc comment for the full raw shape and sourcing. */
@@ -121,6 +156,28 @@ export interface GameMasterPokemonUpgradeSettings {
   purifiedCandyMultiplier: number;
 }
 
+/**
+ * One `POKEMON_UPGRADE_OVERRIDE_SETTINGS_*` record — the raw GAME_MASTER
+ * `pokemonId` enum value it targets (e.g. "ETERNATUS", extracted by
+ * data-sync from the template id pattern —
+ * `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS`) plus WHICHEVER
+ * `GameMasterPokemonUpgradeSettings` fields this specific override record
+ * actually sets. Every field but `pokemonId` is OPTIONAL, deliberately
+ * mirroring data-sync's own defensively-typed raw extraction
+ * (`GameMasterUpgradeOverrideRecord`, `scripts/sync-data/rawShapes.ts`) —
+ * the live dump's one real example (Eternatus) happens to set every field,
+ * but nothing GUARANTEES a future override does; any field this record
+ * OMITS falls back to the universal `upgrades` record's own value (see
+ * `powerUpCostTableFromGameMaster`'s merge below), never a hardcoded
+ * default. data-sync reads these by TEMPLATE PATTERN (any
+ * `POKEMON_UPGRADE_OVERRIDE_SETTINGS_*` record), not a hardcoded species
+ * list, so this array may hold more than one entry in the future without
+ * any further change here.
+ */
+export interface GameMasterPerSpeciesUpgradeOverride extends Partial<GameMasterPokemonUpgradeSettings> {
+  pokemonId: string;
+}
+
 function assertFiniteNonNegative(value: number, label: string): void {
   if (!Number.isFinite(value) || value < 0) {
     throw new Error(`${label} must be a finite, non-negative number — got ${value}.`);
@@ -133,10 +190,20 @@ function assertFiniteNonNegative(value: number, label: string): void {
  * fromGameMasterMove. scripts/sync-data.ts is expected to import and call
  * this directly; don't grow a second interpretation of pokemonUpgrades
  * anywhere else.
+ *
+ * `perSpeciesUpgradeOverrides` (optional, 2026-09-10): every entry is
+ * recursively fed back through THIS SAME function (each is a complete,
+ * standalone `GameMasterPokemonUpgradeSettings` record in its own right) to
+ * build its own independent `PowerUpCostTable`, keyed by raw `pokemonId`
+ * into the returned table's `perSpeciesOverridesByPokemonId` — see that
+ * field's own doc comment for why raw pokemonId rather than a resolved
+ * species id. Omitted/empty is byte-identical to before this parameter
+ * existed.
  */
 export function powerUpCostTableFromGameMaster(
   upgrades: GameMasterPokemonUpgradeSettings,
   luckyStardustDiscountPercent: number,
+  perSpeciesUpgradeOverrides?: GameMasterPerSpeciesUpgradeOverride[],
 ): PowerUpCostTable {
   const {
     upgradesPerLevel,
@@ -231,6 +298,25 @@ export function powerUpCostTableFromGameMaster(
     });
   }
 
+  let perSpeciesOverridesByPokemonId: Record<string, PowerUpCostTable> | undefined;
+  if (perSpeciesUpgradeOverrides && perSpeciesUpgradeOverrides.length > 0) {
+    perSpeciesOverridesByPokemonId = {};
+    for (const override of perSpeciesUpgradeOverrides) {
+      const { pokemonId, ...overrideFields } = override;
+      // MERGE onto the universal record first — every field the override
+      // record itself OMITS falls back to the universal value (see
+      // GameMasterPerSpeciesUpgradeOverride's own doc comment for why every
+      // field but pokemonId is optional there). Recursive call — the merged
+      // record is a complete GameMasterPokemonUpgradeSettings, so it goes
+      // through EXACTLY the same interpretation/validation above
+      // (whole-level anchoring, XL exclusivity, etc.) as the universal
+      // table itself. Its own perSpeciesUpgradeOverrides is always omitted
+      // (undefined), so this never recurses more than one level deep.
+      const merged: GameMasterPokemonUpgradeSettings = { ...upgrades, ...overrideFields };
+      perSpeciesOverridesByPokemonId[pokemonId] = powerUpCostTableFromGameMaster(merged, luckyStardustDiscountPercent);
+    }
+  }
+
   return {
     steps,
     maxLevel: maxNormalUpgradeLevel,
@@ -239,7 +325,54 @@ export function powerUpCostTableFromGameMaster(
     purifiedStardustMultiplier,
     purifiedCandyMultiplier,
     luckyStardustMultiplier: 1 - luckyStardustDiscountPercent,
+    perSpeciesOverridesByPokemonId,
   };
+}
+
+/**
+ * Reverses this project's OWN pokemonId -> display-name derivation (see
+ * `scripts/sync-data/gameMasterMatching.ts`'s identical title-casing logic
+ * for turning a raw GAME_MASTER enum like "MR_MIME" into "Mr Mime") to
+ * rebuild the raw pokemonId key a per-species upgrade override is stored
+ * under — "Eternatus" -> "ETERNATUS". This is a best-effort reconstruction,
+ * not a guaranteed-correct one for every real species name (a name with
+ * internal punctuation, e.g. "Mr. Mime", won't round-trip through this exact
+ * transform) — acceptable here because a per-species upgrade override has
+ * only ever been observed on a plain, single/multi-word catchable species
+ * name with no punctuation (Eternatus), and `powerUpCostTableFor` below
+ * simply falls back to the unmodified table on a miss, never throws or
+ * guesses further.
+ */
+function speciesNameToPokemonId(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/**
+ * Resolves which `PowerUpCostTable` actually applies to `species` — the
+ * override in `table.perSpeciesOverridesByPokemonId` if one matches, else
+ * `table` itself unchanged. EVERY call site in this engine that prices a
+ * SPECIFIC species (powerUpCost/powerUpStepCost/usefulPowerUpLevelsAbove/
+ * powerUpDamageLadder, and rosterPlanner.ts's own candidate pricing) must
+ * route through this before using a caller-supplied `PowerUpCostTable` —
+ * see this module's top doc comment ("PER-SPECIES OVERRIDES") for why
+ * skipping this silently understated Eternatus's real candy cost by
+ * roughly 30-59x.
+ *
+ * Deliberately does NOT attempt to match a mega/primal or Shadow form — no
+ * known per-species upgrade override targets one (a mega/primal has no
+ * movepool or candy family of its own either, and a Shadow's own multiplier
+ * already applies ON TOP of whatever base table resolves here, override or
+ * not), so this always resolves against `species.name` as given, without
+ * stripping a form suffix.
+ */
+export function powerUpCostTableFor(table: PowerUpCostTable, species: SpeciesDefinition): PowerUpCostTable {
+  const overrides = table.perSpeciesOverridesByPokemonId;
+  if (!overrides) return table;
+  const pokemonId = speciesNameToPokemonId(species.name);
+  return overrides[pokemonId] ?? table;
 }
 
 // --- Modifiers and costs (Part B) -----------------------------------------
@@ -414,11 +547,17 @@ export function powerUpDamageLadder(params: {
     bossDefenseStat,
     fastMoveDamageModifiers,
     chargedMoveDamageModifiers,
-    table,
+    table: rawTable,
     modifiers,
-    maxLevel = table.maxLevel,
     megaLevel,
   } = params;
+  // See powerUpCostTableFor — resolves Eternatus (or any future per-species
+  // upgrade override) to its OWN real cost table before anything below
+  // reads a cost value off it (including the maxLevel default just below,
+  // in case a future override's maxNormalUpgradeLevel ever legitimately
+  // differs from the universal one — Eternatus's own doesn't today).
+  const table = powerUpCostTableFor(rawTable, species);
+  const maxLevel = params.maxLevel ?? table.maxLevel;
 
   // Resolved ONCE (species.boost gate + "+" move power scaling) — the same
   // pattern comparison.ts/teamRaid.ts already use, just applied to every
@@ -840,11 +979,14 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
   const candidates: PowerUpCandidate[] = [];
   slots.forEach((slot, slotIndex) => {
     if (!slot.species) return;
+    // See powerUpCostTableFor — resolves Eternatus (or any future
+    // per-species upgrade override) before pricing this slot.
+    const table = powerUpCostTableFor(costTable, slot.species);
     const ladder = ladders[slotIndex] ?? null;
-    const levels = powerUpLevelsAbove(costTable, slot.level).filter((lvl) => lvl <= maxLevel);
+    const levels = powerUpLevelsAbove(table, slot.level).filter((lvl) => lvl <= maxLevel);
 
     for (const toLevel of levels) {
-      const cost = powerUpCost(costTable, slot.level, toLevel, slot.costModifiers);
+      const cost = powerUpCost(table, slot.level, toLevel, slot.costModifiers);
       // Each candidate is priced as if it were the ONLY thing bought — see
       // PowerUpCandidate.affordable. The shared Rare Candy pools count toward
       // a candidate's own affordability (a slot holding 10 Candy CAN reach a
@@ -1496,7 +1638,13 @@ export interface UsefulPowerUpLevelsParams extends Omit<PowerUpLevelMetricsParam
  * closed during development).
  */
 export function usefulPowerUpLevelsAbove(params: UsefulPowerUpLevelsParams): number[] {
-  const { table, fromLevel, maxLevel = table.maxLevel, ...metricsParams } = params;
+  const { table: rawTable, fromLevel, maxLevel: requestedMaxLevel, ...metricsParams } = params;
+  // See powerUpCostTableFor. This function's own OUTPUT doesn't currently
+  // depend on cost VALUES (only powerUpLevelsAbove's .maxLevel read below),
+  // but resolving here anyway keeps this correct even if a future override
+  // ever carries a genuinely different maxNormalUpgradeLevel.
+  const table = powerUpCostTableFor(rawTable, metricsParams.species);
+  const maxLevel = requestedMaxLevel ?? table.maxLevel;
   let previous = powerUpLevelMetrics({ ...metricsParams, level: fromLevel });
   const useful: number[] = [];
   for (const level of powerUpLevelsAbove(table, fromLevel).filter((l) => l <= maxLevel)) {
@@ -1773,10 +1921,14 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
       const fromLevel = currentLevels[slotIndex]!;
       const maxSpendableCandy = remainingOwnCandy[slotIndex]! + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
       const maxSpendableXl = remainingOwnXl[slotIndex]! + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+      // See powerUpCostTableFor. usefulLevels is already [] for an empty
+      // (species-less) slot, so this is never actually consulted in that
+      // case — the fallback is just to satisfy the type.
+      const table = slot.species ? powerUpCostTableFor(costTable, slot.species) : costTable;
 
       const affordable: RawPowerUpBudgetCandidate[] = [];
       for (const toLevel of usefulLevels) {
-        const cost = powerUpCost(costTable, fromLevel, toLevel, slot.costModifiers);
+        const cost = powerUpCost(table, fromLevel, toLevel, slot.costModifiers);
         if (cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl) break;
         affordable.push({ slotIndex, toLevel, cost });
         if (affordable.length >= candidateLevelsPerSlotPerRound) break;
@@ -1897,12 +2049,16 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
     const fromLevel = currentLevels[slotIndex]!;
     const usefulLevels = usefulLevelsForSlot(slotIndex, fromLevel);
     if (usefulLevels.length === 0) return [];
+    // Non-null: usefulLevelsForSlot already returns [] for a species-less
+    // slot (see its own guard), so a non-empty usefulLevels here guarantees
+    // slot.species is set.
+    const table = powerUpCostTableFor(costTable, slot.species!);
 
     const maxSpendableCandy = remainingOwnCandy[slotIndex]! + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
     const maxSpendableXl = remainingOwnXl[slotIndex]! + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
 
     const firstUnaffordableIndex = usefulLevels.findIndex((toLevel) => {
-      const cost = powerUpCost(costTable, fromLevel, toLevel, slot.costModifiers);
+      const cost = powerUpCost(table, fromLevel, toLevel, slot.costModifiers);
       return cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl;
     });
     if (firstUnaffordableIndex === -1) return []; // every useful level left here is actually affordable — nothing "blocked" about this slot.
@@ -1910,7 +2066,7 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
     return usefulLevels.slice(firstUnaffordableIndex, firstUnaffordableIndex + blockedCandidateLevelsPerSlot).map((toLevel) => ({
       slotIndex,
       toLevel,
-      cost: powerUpCost(costTable, fromLevel, toLevel, slot.costModifiers),
+      cost: powerUpCost(table, fromLevel, toLevel, slot.costModifiers),
     }));
   });
 

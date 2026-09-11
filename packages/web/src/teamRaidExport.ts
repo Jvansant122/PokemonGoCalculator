@@ -136,6 +136,7 @@ export function teamAssumptionsToPowerUpOptimizerAssumptions(team: TeamAssumptio
     multiRaidMegaLevel: null,
     multiRaidSignificanceMode: "aggregate-only",
     multiRaidUseBestAvailableMoveset: false,
+    multiRaidHypotheticalCatches: [],
     // Destination-tab-only setting — Team Raid has no TM-inventory concept
     // at all, so there's nothing to map; unknown, same as a fresh page load.
     fastTmOnHand: null,

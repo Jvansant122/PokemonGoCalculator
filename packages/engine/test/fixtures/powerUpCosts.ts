@@ -1,4 +1,4 @@
-import type { GameMasterPokemonUpgradeSettings } from "../../src/powerUp.js";
+import type { GameMasterPerSpeciesUpgradeOverride, GameMasterPokemonUpgradeSettings } from "../../src/powerUp.js";
 
 /**
  * TEST-ONLY fixture: the raw GAME_MASTER POKEMON_UPGRADE_SETTINGS ->
@@ -33,5 +33,48 @@ export const RAW_POKEMON_UPGRADE_SETTINGS: GameMasterPokemonUpgradeSettings = {
 
 /** LUCKY_POKEMON_SETTINGS -> data.luckyPokemonSettings.powerUpStardustDiscountPercent — a fraction, not a multiplier; see powerUp.ts's top doc comment. */
 export const RAW_LUCKY_STARDUST_DISCOUNT_PERCENT = 0.5;
+
+/**
+ * TEST-ONLY fixture: the REAL raw
+ * `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS` record, as
+ * verified live 2026-09-10 straight off `data/normalized/powerUpCosts.json`'s
+ * `perSpeciesUpgradeOverrides[0]` (data-sync's own extraction). `stardustCost`
+ * is byte-identical to `RAW_POKEMON_UPGRADE_SETTINGS.stardustCost` above (the
+ * override only actually changes `candyCost`/`xlCandyCost`) — kept explicit
+ * here anyway rather than inherited, so this fixture is a genuinely complete,
+ * standalone record matching what the live dump contains, and so the "merge
+ * falls back to universal for an OMITTED field" behavior is exercised by a
+ * SEPARATE, deliberately-partial fixture below rather than by this one.
+ */
+export const RAW_ETERNATUS_UPGRADE_OVERRIDE: GameMasterPerSpeciesUpgradeOverride = {
+  pokemonId: "ETERNATUS",
+  upgradesPerLevel: 2,
+  maxNormalUpgradeLevel: 50,
+  xlCandyMinPokemonLevel: 40,
+  stardustCost: RAW_POKEMON_UPGRADE_SETTINGS.stardustCost,
+  candyCost: [
+    30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 60, 60, 60, 60, 60, 60, 60, 60, 60, 60, 90, 90, 90, 90, 90, 120, 120, 120, 120, 120,
+    175, 175, 225, 225, 300, 300, 375, 375, 890, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  ],
+  xlCandyCost: [100, 100, 200, 200, 400, 400, 635, 635, 890, 890],
+  shadowStardustMultiplier: 1.2,
+  shadowCandyMultiplier: 1.2,
+  purifiedStardustMultiplier: 0.9,
+  purifiedCandyMultiplier: 0.9,
+};
+
+/**
+ * A deliberately PARTIAL override — only `candyCost` set, every other field
+ * omitted — to exercise `powerUpCostTableFromGameMaster`'s "merge onto the
+ * universal record" fallback for whichever fields a real future override
+ * DOESN'T set (data-sync's own raw extraction type,
+ * `GameMasterUpgradeOverrideRecord`, marks every field but `pokemonId`/
+ * `sourceTemplateId` optional — nothing guarantees a future override sets
+ * them all, the way Eternatus's happens to).
+ */
+export const RAW_PARTIAL_UPGRADE_OVERRIDE: GameMasterPerSpeciesUpgradeOverride = {
+  pokemonId: "TESTMON",
+  candyCost: RAW_ETERNATUS_UPGRADE_OVERRIDE.candyCost,
+};
 
 export const NO_MODIFIERS = { isShadow: false, isPurified: false, isLucky: false } as const;

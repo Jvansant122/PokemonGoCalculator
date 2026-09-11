@@ -46,6 +46,27 @@ interface NormalizedMove {
   plusMovePowerConfidence?: string;
 }
 
+interface NormalizedEvolutionCandyCostEntry {
+  toId: string;
+  form?: string;
+  candyCost?: number;
+  candyCostPurified?: number;
+  requiresItem?: string;
+  requiresItemCount?: number;
+  requiresLureItem?: string;
+  requiresBuddy?: boolean;
+  requiresBuddyDistanceKm?: number;
+  requiresGender?: string;
+  requiresDaytime?: boolean;
+  requiresNighttime?: boolean;
+  requiresDuskPeriod?: boolean;
+  requiresFullMoon?: boolean;
+  requiresUpsideDown?: boolean;
+  requiresQuest?: boolean;
+  noCandyCostViaTrade?: boolean;
+  candyCostOnly: boolean;
+}
+
 interface NormalizedSpecies {
   id: string;
   name: string;
@@ -60,6 +81,8 @@ interface NormalizedSpecies {
   rarity?: string;
   lastKnownRaidTier?: string;
   kmBuddyDistance?: number;
+  isFullyEvolved?: boolean;
+  evolutionCandyCosts?: NormalizedEvolutionCandyCostEntry[];
 }
 
 interface ActiveRaidEntry {
@@ -77,6 +100,14 @@ interface RaidHistoryEntry {
   eraHp?: number;
 }
 
+interface PowerUpCostOverride {
+  pokemonId: string;
+  sourceTemplateId: string;
+  candyCost?: number[];
+  stardustCost?: number[];
+  xlCandyCost?: number[];
+}
+
 interface PowerUpCosts {
   maxLevel: number;
   shadowStardustMultiplier: number;
@@ -84,6 +115,8 @@ interface PowerUpCosts {
   purifiedStardustMultiplier: number;
   purifiedCandyMultiplier: number;
   steps: { fromLevel: number; stardust: number; candy: number; xlCandy: number }[];
+  perSpeciesUpgradeOverrides: PowerUpCostOverride[];
+  perSpeciesOverridesByPokemonId?: Record<string, Omit<PowerUpCosts, "perSpeciesUpgradeOverrides" | "perSpeciesOverridesByPokemonId">>;
 }
 
 const species: NormalizedSpecies[] = loadJson<NormalizedSpecies[]>("species.json");
@@ -404,6 +437,106 @@ describe("species.json sentinels", () => {
   });
 });
 
+// evolutionCandyCosts (2026-09-10, data-sync's "Normalize evolution candy
+// costs" task — data half of IDEAS.md #9, "evolve then power up to L" as one
+// priced candidate; see EvolutionCandyCostEntry's own doc comment in
+// scripts/sync-data.ts). Sentinels below are cited to real, well-known
+// Pokémon GO evolution costs/gates (Niantic's own values, as mirrored by
+// GAME_MASTER and cross-checked against community references), same
+// discipline as the rest of this file.
+describe("evolutionCandyCosts sentinels", () => {
+  // A plain 3-stage candy-only line — Bulbasaur -25c-> Ivysaur -100c->
+  // Venusaur are this project's own oldest, most load-bearing pinned
+  // species, so this doubles as the deepest-chain sentinel (2 hops).
+  it("Bulbasaur -> Ivysaur: 25 candy, candyCostOnly (no item/lure/buddy/gender/time-of-day/quest gate)", () => {
+    expect(speciesById.get("bulbasaur")!.evolutionCandyCosts).toEqual([
+      { toId: "ivysaur", form: "IVYSAUR_NORMAL", candyCost: 25, candyCostPurified: 22, candyCostOnly: true },
+    ]);
+  });
+
+  it("Ivysaur -> Venusaur: 100 candy, candyCostOnly", () => {
+    expect(speciesById.get("ivysaur")!.evolutionCandyCosts).toEqual([
+      { toId: "venusaur", form: "VENUSAUR_NORMAL", candyCost: 100, candyCostPurified: 90, candyCostOnly: true },
+    ]);
+  });
+
+  it("Venusaur: already fully evolved, evolutionCandyCosts is [] (same as evolvesToIds, never undefined)", () => {
+    expect(speciesById.get("venusaur")!.evolutionCandyCosts).toEqual([]);
+    expect(speciesById.get("venusaur")!.isFullyEvolved).toBe(true);
+  });
+
+  // Onix -> Steelix needs a real held item (Metal Coat) beyond its 50 candy —
+  // exactly the "misleading number" class of branch this field exists to
+  // flag: candyCostOnly must be false here.
+  it("Onix -> Steelix: needs a Metal Coat beyond its 50 candy, candyCostOnly is false", () => {
+    expect(speciesById.get("onix")!.evolutionCandyCosts).toEqual([
+      {
+        toId: "steelix",
+        form: "STEELIX_NORMAL",
+        candyCost: 50,
+        candyCostPurified: 45,
+        requiresItem: "ITEM_METAL_COAT",
+        candyCostOnly: false,
+      },
+    ]);
+  });
+
+  // Eevee: the real branching case (8 targets, one species) — Vaporeon/
+  // Jolteon/Flareon are plain 25-candy random evolutions (candyCostOnly);
+  // Espeon/Umbreon need buddy + walking distance + time of day + a quest;
+  // Leafeon/Glaceon need a specific Lure Module active nearby; Sylveon needs
+  // its own quest on top of 25 candy. Confirmed live 2026-09-10.
+  it("Eevee: 8 branches, each requirement type represented at least once", () => {
+    const entries = speciesById.get("eevee")!.evolutionCandyCosts!;
+    expect(entries.map((e) => e.toId)).toEqual([
+      "vaporeon",
+      "jolteon",
+      "flareon",
+      "espeon",
+      "umbreon",
+      "leafeon",
+      "glaceon",
+      "sylveon",
+    ]);
+    expect(entries.every((e) => e.candyCost === 25)).toBe(true);
+    expect(entries.filter((e) => e.candyCostOnly).map((e) => e.toId)).toEqual(["vaporeon", "jolteon", "flareon"]);
+    const espeon = entries.find((e) => e.toId === "espeon")!;
+    expect(espeon).toMatchObject({ requiresBuddy: true, requiresBuddyDistanceKm: 10, requiresDaytime: true, requiresQuest: true, candyCostOnly: false });
+    const umbreon = entries.find((e) => e.toId === "umbreon")!;
+    expect(umbreon).toMatchObject({ requiresBuddy: true, requiresBuddyDistanceKm: 10, requiresNighttime: true, requiresQuest: true, candyCostOnly: false });
+    const leafeon = entries.find((e) => e.toId === "leafeon")!;
+    expect(leafeon).toMatchObject({ requiresLureItem: "ITEM_TROY_DISK_MOSSY", candyCostOnly: false });
+    const sylveon = entries.find((e) => e.toId === "sylveon")!;
+    expect(sylveon).toMatchObject({ requiresQuest: true, candyCostOnly: false });
+  });
+
+  // Gimmighoul -> Gholdengo has NO candy cost at all — gated purely on 999
+  // Gimmighoul Coins (an item count, not candy). candyCostOnly must be false
+  // and candyCost must stay undefined, never fabricated as 0.
+  it("Gimmighoul -> Gholdengo: no candyCost at all, item-count-gated only", () => {
+    const entries = speciesById.get("gimmighoul")!.evolutionCandyCosts!;
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.candyCost).toBeUndefined();
+    expect(entries[0]!.candyCostOnly).toBe(false);
+    expect(entries[0]!.requiresItemCount).toBe(999);
+  });
+
+  // Metagross: THE trap this whole field's sibling isFullyEvolved exists to
+  // avoid (see gameMasterMatching.ts) — its real evolutionBranch is entirely
+  // a mega-only entry, so its NORMAL evolution is correctly empty, same as
+  // evolvesToIds.
+  it("Metagross: evolutionCandyCosts is [] (mega-only branch doesn't count as a real evolution)", () => {
+    expect(speciesById.get("metagross")!.evolutionCandyCosts).toEqual([]);
+  });
+
+  // Same population gap as candyFamilyId/dexNumber/isFullyEvolved/
+  // kmBuddyDistance: mega/primal species never go through either
+  // GAME_MASTER-matched build loop that sets this field.
+  it("Mega Charizard X: evolutionCandyCosts is undefined (mega/primal species never get one)", () => {
+    expect(speciesById.get("charizard-mega-x")!.evolutionCandyCosts).toBeUndefined();
+  });
+});
+
 describe("activeRaids.json / raidHistory.json sentinels", () => {
   // A currently-active raid boss row with a parenthetical-form + Shadow
   // species — exercises both the "Shadow " prefix handling and the
@@ -490,6 +623,71 @@ describe("powerUpCosts.json sentinels", () => {
     expect(powerUpCosts.purifiedStardustMultiplier).toBe(0.9);
     expect(powerUpCosts.purifiedCandyMultiplier).toBe(0.9);
     expect(powerUpCosts.maxLevel).toBe(50);
+  });
+
+  // Eternatus's per-species power-up cost override (2026-09-10, data-sync's
+  // "per-species power-up cost overrides" task — see MECHANICS.md's
+  // "Per-species cost overrides"). Raw/uninterpreted pass-through: this pins
+  // the SOURCE arrays this pipeline emits. The INTERPRETED form is pinned
+  // separately by the next test — both are checked, because the raw records
+  // shipped for a while with nothing consuming them.
+  it("carries Eternatus's POKEMON_UPGRADE_OVERRIDE_SETTINGS entry with independent candy/XL-candy tables and unchanged stardust", () => {
+    const override = powerUpCosts.perSpeciesUpgradeOverrides.find((o) => o.pokemonId === "ETERNATUS");
+    expect(override).toBeDefined();
+    expect(override!.sourceTemplateId).toBe("POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS");
+    // Level 1 candy cost: universal table is 1, this override is 30 (the
+    // "30x" figure that's only exactly true at this one level).
+    expect(override!.candyCost?.[0]).toBe(30);
+    // Level 39->40 (index 38): universal table is 15, override is 890 —
+    // NOT a fixed multiplier of level 1's ratio (30x would be 450).
+    expect(override!.candyCost?.[38]).toBe(890);
+    // XL candy is ALSO overridden, independently of candy.
+    expect(override!.xlCandyCost?.[0]).toBe(100);
+    // Stardust is genuinely unaffected — byte-identical to the universal
+    // table's own level-1 value.
+    expect(override!.stardustCost?.[0]).toBe(200);
+  });
+
+  // The INTERPRETED half of the same override, and the regression guard for
+  // the bug this pins: `powerUpCostTableFromGameMaster` grew an optional
+  // third parameter for these overrides, and scripts/sync-data.ts did not
+  // pass it — so the raw records above round-tripped into this file while
+  // every actual cost lookup still read the universal table, understating
+  // Eternatus by up to ~59x. Raw presence is NOT evidence of consumption;
+  // this test is what makes the difference visible.
+  it("interprets Eternatus's override into its own complete cost table (candy/XL only, stardust untouched)", () => {
+    const byId = powerUpCosts.perSpeciesOverridesByPokemonId;
+    expect(byId, "perSpeciesOverridesByPokemonId missing — is sync-data.ts still passing the 3rd argument?").toBeDefined();
+    // Non-null after the assertion below; TS does not narrow through expect().
+    const eternatus = byId!.ETERNATUS!;
+    expect(eternatus, "ETERNATUS override present in raw records but not interpreted").toBeDefined();
+
+    // Keyed by RAW pokemonId, resolved against a species at lookup time by
+    // the engine's powerUpCostTableFor — not by this project's own id.
+    expect(Object.keys(byId!)).toEqual(["ETERNATUS"]);
+
+    const step = (table: { steps: PowerUpCosts["steps"] }, fromLevel: number) =>
+      table.steps.find((s) => s.fromLevel === fromLevel);
+
+    // Candy diverges hard and NON-proportionally (30x at level 1, ~59x at 39).
+    expect(step(eternatus, 1)!.candy).toBe(30);
+    expect(step(eternatus, 25)!.candy).toBe(90);
+    expect(step(eternatus, 39)!.candy).toBe(890);
+    // XL candy is overridden independently of candy.
+    expect(step(eternatus, 40)!.xlCandy).toBe(100);
+    expect(step(eternatus, 49)!.xlCandy).toBe(890);
+
+    // Stardust is byte-identical to the universal table at every single
+    // level — the override is a candy override, and a regression that
+    // scaled stardust too would be invisible to a spot-check.
+    for (const universal of powerUpCosts.steps) {
+      const scoped = step(eternatus, universal.fromLevel);
+      expect(scoped, `Eternatus table missing level ${universal.fromLevel}`).toBeDefined();
+      expect(scoped!.stardust, `stardust diverged at level ${universal.fromLevel}`).toBe(universal.stardust);
+    }
+
+    // A species with no override still reads the universal table.
+    expect(byId!.BULBASAUR).toBeUndefined();
   });
 });
 

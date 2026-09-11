@@ -216,11 +216,37 @@ export interface RawGameMasterTempEvoOverrideFull {
  * (confirmed for Venusaur/Charizard/Blastoise/Beedrill/Metagross among 123 of
  * 1107 templates carrying a branch at all in the 2026-09-06 audit), so
  * `evolutionBranch.length > 0` alone is NOT "has a real evolution left."
+ *
+ * Widened again 2026-09-10 (data-sync's "Normalize evolution candy costs"
+ * task) with the full set of REAL requirement-gating fields a live branch can
+ * carry beyond `candyCost` — confirmed by direct inspection of the live
+ * 2026-09-10 dump (fetched fresh from PokeMiners, not this project's own
+ * narrowed `data/raw/game_master.json` cache, which never carried these
+ * fields to begin with): 84 branches need an `evolutionItemRequirement`
+ * (Gloom -> Bellossom needs a Sun Stone; Onix -> Steelix needs a Metal Coat;
+ * 5 of those 84 — Zygarde's two form branches, Gimmighoul -> Gholdengo —
+ * carry NO `candyCost` at all, gated on item count alone), 15 need a
+ * `lureItemRequirement` (Magneton -> Magnezone needs a Magnetic Lure Module
+ * active on a nearby Pokéstop), 4 need `mustBeBuddy`/`kmBuddyDistanceRequirement`
+ * (Eevee -> Espeon/Umbreon), 28 carry a `genderRequirement` (Kirlia -> Gallade
+ * needs a male Kirlia), and a further ~26 are time/event-gated
+ * (`onlyDaytime`/`onlyNighttime`/`onlyDuskPeriod`/`onlyFullMoon`/
+ * `onlyUpsideDown`). `questDisplay` marks a branch gated behind a special-
+ * research-style quest (e.g. Sylveon's own quest, on top of its plain 25
+ * candy) — this project only records WHETHER one is present, never the quest
+ * template's own content (no source for that here). `noCandyCostViaTrade` is
+ * the one real exception to "these only ever ADD a requirement": Kadabra ->
+ * Alakazam and the 3 other real GO trade-evolution species (a real, live GO
+ * mechanic — trading a Pokémon and then evolving it waives the candy cost)
+ * can only ever make a branch CHEAPER than its stated `candyCost`, never
+ * pricier or blocked, so data-sync's `candyCostOnly` derivation (see
+ * sync-data.ts's evolution-resolution pass) deliberately does NOT treat it as
+ * a non-candy requirement — see that derivation's own doc comment.
  */
 export interface RawGameMasterEvolutionBranchFull {
   /** The pokemonId enum this branch evolves into, e.g. "METANG" — present only on a REAL evolution branch, never a temporaryEvolution one. */
   evolution?: string;
-  /** Candy cost of this real evolution (e.g. 25 for Beldum -> Metang). Undefined on a temporaryEvolution branch. */
+  /** Candy cost of this real evolution (e.g. 25 for Beldum -> Metang). Undefined on a temporaryEvolution branch AND on the handful of real branches gated on a non-candy item count instead (Zygarde's own forms, Gimmighoul -> Gholdengo). */
   candyCost?: number;
   /** Purified-Pokémon candy cost for this same real evolution (Bulbapedia: ×0.8 discount — NOT the ×0.9 this project's power-up cost table uses for power-ups, see MECHANICS.md). Undefined on a temporaryEvolution branch. */
   candyCostPurified?: number;
@@ -229,6 +255,32 @@ export interface RawGameMasterEvolutionBranchFull {
   temporaryEvolution?: string;
   temporaryEvolutionEnergyCost?: number;
   temporaryEvolutionEnergyCostSubsequent?: number;
+  /** e.g. "ITEM_SUN_STONE", "ITEM_METAL_COAT" — an evolution item the trainer must hold, beyond candy. */
+  evolutionItemRequirement?: string;
+  /** How many of `evolutionItemRequirement` are consumed (e.g. Gimmighoul Coins) — only meaningful alongside that field; most item-gated branches consume exactly 1 and omit this. */
+  evolutionItemRequirementCost?: number;
+  /** e.g. "ITEM_TROY_DISK_MAGNETIC" — must be evolved while this specific Lure Module is active on a nearby Pokéstop. */
+  lureItemRequirement?: string;
+  /** True only for Eevee -> Espeon/Umbreon: the evolving Pokémon must currently be the trainer's set buddy. */
+  mustBeBuddy?: boolean;
+  /** Cumulative buddy-walking km required alongside `mustBeBuddy` (Eevee -> Espeon/Umbreon: 10). */
+  kmBuddyDistanceRequirement?: number;
+  /** "MALE" or "FEMALE" — the evolving individual's gender must match (e.g. Kirlia -> Gallade: MALE only). */
+  genderRequirement?: string;
+  /** Must be evolved during real-world daytime (local device clock) — Eevee -> Espeon. */
+  onlyDaytime?: boolean;
+  /** Must be evolved during real-world nighttime — Eevee -> Umbreon. */
+  onlyNighttime?: boolean;
+  /** Must be evolved during the dusk window (Rockruff's one-time Dusk-form Lycanroc pick). */
+  onlyDuskPeriod?: boolean;
+  /** Must be evolved during a real-world full moon (Ursaring -> Ursaluna). */
+  onlyFullMoon?: boolean;
+  /** Must be evolved with the device held upside-down (Inkay -> Malamar). */
+  onlyUpsideDown?: boolean;
+  /** Present (any non-empty array) marks a branch gated behind a special-research-style quest on top of its stated candyCost (e.g. Sylveon) — only presence is recorded, never the quest template's own content. */
+  questDisplay?: unknown[];
+  /** Real GO mechanic (not a mainline-only vestige): waives the candy cost entirely if the evolving Pokémon was received via an in-game trade (Kadabra/Machoke/Graveler/Haunter and a few others). Never makes a branch MORE expensive — see this interface's own doc comment for why `candyCostOnly` ignores it. */
+  noCandyCostViaTrade?: boolean;
 }
 
 /**
@@ -347,11 +399,27 @@ export interface RawGameMasterMoveSettingsFull {
  * decides whether a parsed instance is usable (see GameMasterUpgradeSettingsRecord
  * below) — never assume this template is well-formed just because it's present.
  * `xlCandyCost`/`xlCandyMinPlayerLevel`/`xlCandyMinPokemonLevel` govern XL candy,
- * only relevant above `maxNormalUpgradeLevel`. Deliberately NOT modeled here:
- * a per-species override block (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
- * POKEMON_ETERNATUS`, 30x candy) — v1 of this pipeline's power-up cost table
- * is universal-only, see fetchGameMasterData's doc comment for why that
- * override is deliberately ignored rather than modeled.
+ * only relevant above `maxNormalUpgradeLevel`.
+ *
+ * Also reused verbatim (same field shape) as the raw type for a per-species
+ * OVERRIDE entry (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME>`,
+ * e.g. `..._V0890_POKEMON_ETERNATUS`) — see
+ * RawGameMasterPokemonUpgradeOverrideFull/GameMasterUpgradeOverrideRecord
+ * below. As of 2026-09-10 this data IS extracted (data-sync's "per-species
+ * power-up cost overrides" task) into
+ * GameMasterFetchResult.perSpeciesUpgradeOverrides and
+ * data/normalized/powerUpCosts.json's `perSpeciesUpgradeOverrides`, RAW and
+ * uninterpreted — see that field's own doc comment. The universal-vs-override
+ * disambiguation is now by exact `templateId` match
+ * (`=== "POKEMON_UPGRADE_SETTINGS"`), NOT merely "this entry has a
+ * `data.pokemonUpgrades` object" — an override entry's `data.pokemonUpgrades`
+ * has the exact same shape and would otherwise satisfy the old, looser check
+ * too (confirmed 2026-09-10: in a live dump the Eternatus override entry
+ * happens to precede the universal template by one array position, so the
+ * old loose check was overwritten back to the universal table by the time
+ * the loop finished and never actually corrupted output — but this was
+ * ordering-dependent luck, not a guarantee, so the guard was tightened as
+ * part of this same change rather than left latent).
  */
 export interface RawGameMasterPokemonUpgradeSettingsFull {
   upgradesPerLevel?: number;
@@ -369,6 +437,9 @@ export interface RawGameMasterPokemonUpgradeSettingsFull {
   xlCandyMinPokemonLevel?: number;
 }
 
+/** Alias — see RawGameMasterPokemonUpgradeSettingsFull's doc comment for why this is the identical shape reused for a per-species override entry's `data.pokemonUpgrades`. */
+export type RawGameMasterPokemonUpgradeOverrideFull = RawGameMasterPokemonUpgradeSettingsFull;
+
 /** Raw shape of the SINGLE `templateId: "LUCKY_POKEMON_SETTINGS"` entry in GAME_MASTER — only `powerUpStardustDiscountPercent` (a Lucky Pokémon's power-up Stardust discount) is consumed by this pipeline. */
 export interface RawGameMasterLuckyPokemonSettingsFull {
   powerUpStardustDiscountPercent?: number;
@@ -379,7 +450,7 @@ export interface RawGameMasterFullEntry {
   data?: {
     pokemonSettings?: RawGameMasterPokemonSettingsFull;
     moveSettings?: RawGameMasterMoveSettingsFull;
-    pokemonUpgrades?: RawGameMasterPokemonUpgradeSettingsFull;
+    pokemonUpgrades?: RawGameMasterPokemonUpgradeSettingsFull | RawGameMasterPokemonUpgradeOverrideFull;
     luckyPokemonSettings?: RawGameMasterLuckyPokemonSettingsFull;
   };
 }
@@ -428,6 +499,20 @@ export interface GameMasterEvolutionBranchRecord {
   form?: string;
   candyCost?: number;
   candyCostPurified?: number;
+  /** See RawGameMasterEvolutionBranchFull's own field-by-field doc comment — these 12 fields are passed through verbatim by fetchGameMasterData's extraction (./fetchCache.ts), added 2026-09-10 for data-sync's "Normalize evolution candy costs" task. */
+  evolutionItemRequirement?: string;
+  evolutionItemRequirementCost?: number;
+  lureItemRequirement?: string;
+  mustBeBuddy?: boolean;
+  kmBuddyDistanceRequirement?: number;
+  genderRequirement?: string;
+  onlyDaytime?: boolean;
+  onlyNighttime?: boolean;
+  onlyDuskPeriod?: boolean;
+  onlyFullMoon?: boolean;
+  onlyUpsideDown?: boolean;
+  requiresQuest?: boolean;
+  noCandyCostViaTrade?: boolean;
 }
 
 /** Compact echo of RawGameMasterMoveReassignmentGroupFull, cached verbatim as part of GameMasterFormChangeEntryRecord below. */
@@ -563,4 +648,58 @@ export interface GameMasterUpgradeSettingsRecord {
   shadowCandyMultiplier: number;
   purifiedStardustMultiplier: number;
   purifiedCandyMultiplier: number;
+}
+
+/**
+ * One species-scoped power-up cost override — a
+ * `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME>` GAME_MASTER entry
+ * (e.g. `..._V0890_POKEMON_ETERNATUS`), extracted by TEMPLATE-ID PATTERN
+ * (`^POKEMON_UPGRADE_OVERRIDE_SETTINGS_V\d+_POKEMON_(.+)$`), never a
+ * hardcoded species name — see fetchGameMasterData's doc comment
+ * (./fetchCache.ts) — so a second one appearing in a future dump is picked
+ * up automatically. `pokemonId` is that pattern's captured `<NAME>` group,
+ * confirmed 2026-09-10 to match `GameMasterPokemonRecord.pokemonId`
+ * byte-for-byte for the one live example (Eternatus) with no form
+ * component; a future override scoped to a specific FORM rather than a
+ * whole pokemonId is not representable by this pattern as observed and
+ * would need this shape (and the pattern) extended — none seen as of this
+ * extraction (exactly 1 `*_UPGRADE_OVERRIDE_*`-pattern template in the
+ * 2026-09-10 dump, Eternatus).
+ *
+ * Every field below is OPTIONAL and passed through VERBATIM/RAW (never
+ * defaulted, never merged with the universal table's values, never
+ * interpreted) — deliberately unlike GameMasterUpgradeSettingsRecord above,
+ * so a consumer can tell "this override doesn't mention the field" (should
+ * fall back to the universal table) apart from "this override explicitly
+ * repeats the universal value." Confirmed live 2026-09-10 for the one real
+ * example (Eternatus): `candyCost` and `xlCandyCost` are each an
+ * INDEPENDENT REPLACEMENT ARRAY, NOT a fixed multiplier of the universal
+ * table (the oft-quoted "30x candy" only holds exactly at level 1; by
+ * level 39->40 it's ~59x, and XL candy ranges ~10x-44.5x across its table) —
+ * while `stardustCost` and every multiplier/threshold field this override
+ * entry carries are BYTE-IDENTICAL to the universal template. See
+ * MECHANICS.md's "Per-species cost overrides" for the full comparison and
+ * data-sync's report for this task. This project does NOT interpret this
+ * data into an actual cost table — `powerUpCostTableFromGameMaster`
+ * (packages/engine/src/powerUp.ts) is the sole interpreter, and does not
+ * yet consume this field at all (engine-developer's call, see CLAUDE.md's
+ * "When the schema itself needs to change").
+ */
+export interface GameMasterUpgradeOverrideRecord {
+  pokemonId: string;
+  /** The full source templateId this override was extracted from, e.g. `"POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_POKEMON_ETERNATUS"` — kept for auditability. */
+  sourceTemplateId: string;
+  upgradesPerLevel?: number;
+  allowedLevelsAbovePlayer?: number;
+  candyCost?: number[];
+  stardustCost?: number[];
+  shadowStardustMultiplier?: number;
+  shadowCandyMultiplier?: number;
+  purifiedStardustMultiplier?: number;
+  purifiedCandyMultiplier?: number;
+  maxNormalUpgradeLevel?: number;
+  defaultCpBoostAdditionalLevel?: number;
+  xlCandyMinPlayerLevel?: number;
+  xlCandyCost?: number[];
+  xlCandyMinPokemonLevel?: number;
 }

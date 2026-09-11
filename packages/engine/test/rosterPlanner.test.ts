@@ -106,6 +106,7 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "ownDamageDealt",
         "ownDamageTrajectory",
         "secondsActive",
+        "slotId",
         "slotIndex",
         "speciesId",
         "speciesName",
@@ -158,6 +159,7 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "bossChargedMoveCadenceClamped",
         "bossChargedMoveEffectiveMinIntervalSeconds",
         "dodgeFastAttacksLockout",
+        "meanHoldChargedMoveDodgeCostSeconds",
         "representativeRun",
       ].sort(),
     );

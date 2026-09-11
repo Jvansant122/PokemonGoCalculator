@@ -50,7 +50,14 @@ export function isFullyEvolved(candidatesForEnum: readonly GameMasterPokemonReco
   return !candidatesForEnum.some((c) => c.evolutionBranch.length > 0);
 }
 
-/** One resolved (deduped) real evolution target off a specific matched GameMasterPokemonRecord — see realEvolutionTargets. */
+/**
+ * One resolved (deduped) real evolution target off a specific matched
+ * GameMasterPokemonRecord — see realEvolutionTargets. The requirement fields
+ * below (added 2026-09-10, data-sync's "Normalize evolution candy costs"
+ * task) are passed through verbatim from GameMasterEvolutionBranchRecord —
+ * see RawGameMasterEvolutionBranchFull's doc comment (rawShapes.ts) for what
+ * each one means.
+ */
 export interface EvolutionTarget {
   /** The pokemonId enum this branch evolves into, e.g. "METANG". */
   evolutionEnum: string;
@@ -58,6 +65,19 @@ export interface EvolutionTarget {
   form?: string;
   candyCost?: number;
   candyCostPurified?: number;
+  evolutionItemRequirement?: string;
+  evolutionItemRequirementCost?: number;
+  lureItemRequirement?: string;
+  mustBeBuddy?: boolean;
+  kmBuddyDistanceRequirement?: number;
+  genderRequirement?: string;
+  onlyDaytime?: boolean;
+  onlyNighttime?: boolean;
+  onlyDuskPeriod?: boolean;
+  onlyFullMoon?: boolean;
+  onlyUpsideDown?: boolean;
+  requiresQuest?: boolean;
+  noCandyCostViaTrade?: boolean;
 }
 
 /**
@@ -93,6 +113,19 @@ export function realEvolutionTargets(record: GameMasterPokemonRecord): Evolution
       form: branch.form,
       candyCost: branch.candyCost,
       candyCostPurified: branch.candyCostPurified,
+      evolutionItemRequirement: branch.evolutionItemRequirement,
+      evolutionItemRequirementCost: branch.evolutionItemRequirementCost,
+      lureItemRequirement: branch.lureItemRequirement,
+      mustBeBuddy: branch.mustBeBuddy,
+      kmBuddyDistanceRequirement: branch.kmBuddyDistanceRequirement,
+      genderRequirement: branch.genderRequirement,
+      onlyDaytime: branch.onlyDaytime,
+      onlyNighttime: branch.onlyNighttime,
+      onlyDuskPeriod: branch.onlyDuskPeriod,
+      onlyFullMoon: branch.onlyFullMoon,
+      onlyUpsideDown: branch.onlyUpsideDown,
+      requiresQuest: branch.requiresQuest,
+      noCandyCostViaTrade: branch.noCandyCostViaTrade,
     });
   }
   return targets;

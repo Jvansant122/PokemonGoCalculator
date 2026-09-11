@@ -55,6 +55,14 @@ describe("runComparatorScenario (default scenario)", () => {
     // axis is reported as inapplicable (null), same gate AssumptionPanel.tsx
     // uses to hide the party-size controls entirely in this case.
     expect(result.partySizeFlip).toBeNull();
+    // IDEAS #21 — a band, not one blended number, see
+    // run/dodgeExecutionErrorSweep.ts's own doc comment.
+    expect(result.dodgeExecutionErrorBand).not.toBeNull();
+    expect(result.dodgeExecutionErrorBand).toHaveLength(6);
+    for (const p of result.dodgeExecutionErrorBand!) {
+      expectFiniteNumber(p.a.meanTotalDamage, "dodgeExecutionErrorBand a.meanTotalDamage");
+      expectFiniteNumber(p.b.meanTotalDamage, "dodgeExecutionErrorBand b.meanTotalDamage");
+    }
   }, 20_000);
 });
 
@@ -136,6 +144,11 @@ describe("runTeamRaidScenario (default scenario)", () => {
     // special-cased matchup to exercise at all.
     expect(result.bossMovesetSweep).not.toBeNull();
     expect(result.bossMovesetSweep!.results.length).toBe(4);
+    // IDEAS #14/#12 — well-formed even though the default scenario has both
+    // toggles off and (in this CLI/test context) an empty roster pool.
+    expectFiniteNumber(result.rosterPoolSize, "rosterPoolSize");
+    expect(result.rosterPoolSize).toBe(0);
+    expect(result.eraHpMatch === null || typeof result.eraHpMatch.eraHp === "number").toBe(true);
   }, 20_000);
 });
 

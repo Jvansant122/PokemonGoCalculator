@@ -15,11 +15,15 @@ import {
   type SpeciesRegistry,
   type TeamRaidInputs,
   type TeamRaidOutcome,
+  type TeamRaidReselector,
 } from "@pogo-analyzer/engine";
 import type { TeamAssumptions } from "../TeamAssumptionPanel.js";
 import { applyShadowToggle } from "../shadowToggle.js";
-import { raidTierForSpeciesId } from "../registry.js";
+import { pastRaidBossOptions, raidTierForSpeciesId, type PastRaidBossOption } from "../registry.js";
+import { hydrateRosterPool, loadRosterPool } from "../rosterPool.js";
 import { deriveEffectiveBossChargedMoveFrequencySeconds } from "./effectiveBossChargedMoveFrequency.js";
+import { validEraHp } from "./runSpeciesReport.js";
+import { buildTeamRaidReselector } from "./teamRaidReselect.js";
 
 export interface TeamRaidRunResult {
   slotSpecies: (SpeciesDefinition | null)[];
@@ -67,6 +71,24 @@ export interface TeamRaidRunResult {
    * gating on this field.
    */
   bossMovesetSweep: TeamRaidBossMovesetSweep | null;
+  /**
+   * IDEAS #14 — the recorded past-raid encounter (registry.ts's
+   * pastRaidBossOptions) matching the current target with a usable eraHp,
+   * regardless of whether TeamAssumptions.bossMaxHpOverrideEnabled is
+   * actually on — so the panel can show/offer the toggle (and the real
+   * historical figure it would apply) even before the user opts in. `null`
+   * when no such recorded encounter exists for this target (the common
+   * case: most targets are today's live tier, with no archived HP to show).
+   */
+  eraHpMatch: { eraHp: number; raidName: string; recordedTier: string } | null;
+  /**
+   * IDEAS #12 — how many entries are currently in the imported roster pool
+   * (Roster tab / rosterPool.ts), read fresh on every call — so the panel
+   * can explain why "re-select after a wipe" is a no-op (or hide it) when
+   * the pool is empty, the same "empty roster, explicit note" convention
+   * used elsewhere (Lineup Builder, Power-Up Optimizer's multi-raid mode).
+   */
+  rosterPoolSize: number;
 }
 
 export interface TeamRaidBossMovesetResult {
@@ -146,7 +168,28 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     bossReadySeconds = bossChargedMoveReadySeconds(bossFastMove, selectedBossChargedMove, bossStartingEnergy);
   }
 
-  const bossHp = bossSpecies ? bossEffectiveHp(bossSpecies, bossRaidTier) : null;
+  // IDEAS #14 — see TeamAssumptions.bossMaxHpOverrideEnabled's own doc
+  // comment. `pastMatch` is found regardless of the toggle (so the panel can
+  // show/hide the control and its historical HP figure even before it's
+  // enabled); `bossMaxHpOverride` below is only actually applied when the
+  // toggle is on. `validEraHp` guards registry.ts's raw, unvalidated
+  // PastRaidBossOption.eraHp against the engine's actual contract (throws on
+  // a non-finite/non-positive value) — same reuse as run/runSpeciesReport.ts.
+  // A species can have more than one recorded past-raid row (different
+  // tiers/sources over time); this takes the first with a usable eraHp,
+  // documented as a deliberate simplification rather than exposing a second
+  // picker for "which encounter."
+  const pastMatch: PastRaidBossOption | undefined = pastRaidBossOptions().find(
+    (r) => r.id === a.targetId && validEraHp(r.eraHp) !== undefined,
+  );
+  const eraHp = pastMatch ? validEraHp(pastMatch.eraHp) : undefined;
+  const bossMaxHpOverride = a.bossMaxHpOverrideEnabled ? eraHp : undefined;
+
+  // Reflects whatever HP value is ACTUALLY fed to runTeamRaid below — the
+  // override when active, else the ordinary tier-based figure — so the
+  // "Boss battle HP" display in the assumptions panel never silently
+  // disagrees with what the simulation used.
+  const bossHp = bossSpecies ? (bossMaxHpOverride ?? bossEffectiveHp(bossSpecies, bossRaidTier)) : null;
 
   // See effectiveBossChargedMoveFrequency.ts's own doc comment for the full
   // derivation this stands in for while showDetailedAssumptions is false —
@@ -159,6 +202,21 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     bossChargedMove: selectedBossChargedMove,
     stored: a.bossChargedMoveFrequencySeconds,
   });
+
+  // IDEAS #12 — see TeamAssumptions.reselectAfterWipeEnabled's own doc
+  // comment and run/teamRaidReselect.ts's own top doc comment for the
+  // (deliberately simple, non-simulated) selection heuristic. Built once per
+  // scenario evaluation (not per-wipe) from a fresh read of the roster pool
+  // — rosterPool.ts's loadRosterPool already degrades to an empty pool
+  // rather than throwing when localStorage is unavailable (SSR/CLI/private
+  // browsing), so this is safe to call unconditionally. `undefined` (rather
+  // than a reselector that immediately no-ops) whenever the toggle is off OR
+  // the pool is empty OR no boss resolved — byte-identical to
+  // reselectAfterWipe being omitted entirely, per that field's own contract.
+  const rosterPool = hydrateRosterPool(loadRosterPool(), registry).entries;
+  const reselectAfterWipe: TeamRaidReselector | undefined = a.reselectAfterWipeEnabled
+    ? buildTeamRaidReselector(rosterPool, bossSpecies)
+    : undefined;
 
   // Every field EXCEPT bossChargedMoveId/bossStartingEnergy — factored out so
   // both the main (single-moveset) call below AND the boss-moveset sweep
@@ -188,9 +246,12 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
         // doc comment for why this exists (the lineup builder).
         level: s.level,
         ivs: s.ivs,
+        isBestBuddy: s.isBestBuddy,
       })),
+      reselectAfterWipe,
       boss: bossSpecies!,
       bossRaidTier,
+      bossMaxHpOverride,
       bossFastMoveId: a.bossFastMoveId,
       bossChargedMoveId,
       level: a.level,
@@ -202,6 +263,7 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
       bossChargedMoveCadence: a.bossChargedMoveCadence,
       bossStartingEnergy: bossStartingEnergyForMove,
       weather: a.weather,
+      friendshipLevel: a.friendshipLevel,
       raidTimerSeconds: a.raidTimerSeconds,
       swapCostSeconds: a.swapCostSeconds,
       reviveCostSeconds: a.reviveCostSeconds,
@@ -293,5 +355,7 @@ export function runTeamRaidScenario(a: TeamAssumptions, registry: SpeciesRegistr
     error,
     failureSummary,
     bossMovesetSweep,
+    eraHpMatch: pastMatch && eraHp !== undefined ? { eraHp, raidName: pastMatch.raidName, recordedTier: pastMatch.recordedTier } : null,
+    rosterPoolSize: rosterPool.length,
   };
 }

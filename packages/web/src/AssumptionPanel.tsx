@@ -1,5 +1,7 @@
 import { MAX_POKEMON_POWER_UP_LEVEL } from "@pogo-analyzer/engine";
-import type { DodgeBehavior, MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
+import type { DodgeBehavior, FriendshipLevel, MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
+import { FriendshipSelect } from "./FriendshipSelect.js";
+import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { NumberField } from "./NumberField.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
@@ -132,6 +134,25 @@ export interface Assumptions {
    * — see ComparatorView's `scenarioToAssumptions` for why.
    */
   showDetailedAssumptions: boolean;
+  /**
+   * Friendship tier assumed for a co-participating friend in this raid — see
+   * FriendshipSelect.tsx's own doc comment for the mechanic's real scope
+   * (single-trainer-scoped, boosts only the candidates' own damage, never
+   * the boss's). Mirrors Scenario.friendshipLevel/SustainedComparisonInputs.
+   * friendshipLevel exactly. Defaults to "none" (today's implicit behavior —
+   * this mechanic was previously wired into the engine but reachable from
+   * nothing in the UI at all).
+   */
+  friendshipLevel: FriendshipLevel;
+  /**
+   * Per-candidate Best Buddy CP Boost (a free +1 effective level, unrelated
+   * to and gated independently of Mega Level — see megaLevel.ts's
+   * BEST_BUDDY_EFFECTIVE_LEVEL_BONUS/effectiveLevelForBestBuddy), matched by
+   * index to [candidateAId, candidateBId]. Mirrors
+   * Scenario.candidateIsBestBuddy/SustainedComparisonInputs.candidateIsBestBuddy
+   * exactly. Defaults to [false, false].
+   */
+  candidateIsBestBuddy: [boolean, boolean];
 }
 
 interface Props {
@@ -479,6 +500,15 @@ export function AssumptionPanel({
                 value={value.candidateMegaLevel[0]}
                 onChange={(level) => onChange({ ...value, candidateMegaLevel: [level, value.candidateMegaLevel[1]] })}
               />
+              <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={value.candidateIsBestBuddy[0]}
+                  onChange={(e) => onChange({ ...value, candidateIsBestBuddy: [e.target.checked, value.candidateIsBestBuddy[1]] })}
+                  title={BEST_BUDDY_HINT}
+                />{" "}
+                Best Buddy (+1 effective level)
+              </label>
               {(() => {
                 const shadowState = shadowToggleUiState(candidateSpecies[0]);
                 return (
@@ -553,6 +583,15 @@ export function AssumptionPanel({
                 value={value.candidateMegaLevel[1]}
                 onChange={(level) => onChange({ ...value, candidateMegaLevel: [value.candidateMegaLevel[0], level] })}
               />
+              <label className="species-picker-hint" style={{ display: "block", marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={value.candidateIsBestBuddy[1]}
+                  onChange={(e) => onChange({ ...value, candidateIsBestBuddy: [value.candidateIsBestBuddy[0], e.target.checked] })}
+                  title={BEST_BUDDY_HINT}
+                />{" "}
+                Best Buddy (+1 effective level)
+              </label>
               {(() => {
                 const shadowState = shadowToggleUiState(candidateSpecies[1]);
                 return (
@@ -782,6 +821,8 @@ export function AssumptionPanel({
         )}
 
         <WeatherSelect idPrefix="candidate" value={value.weather} onChange={(w) => set("weather", w)} />
+
+        <FriendshipSelect idPrefix="candidate" value={value.friendshipLevel} onChange={(f) => set("friendshipLevel", f)} />
 
         <BossCadenceSelect idPrefix="candidate" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 

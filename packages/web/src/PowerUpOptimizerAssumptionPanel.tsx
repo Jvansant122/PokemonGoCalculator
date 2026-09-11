@@ -79,6 +79,30 @@ export function emptyPowerUpSlot(): PowerUpSlotAssumption {
   };
 }
 
+/**
+ * One "what if I caught a fresh one instead" comparison (IDEAS.md #3, "add a
+ * 7th") — multi-raid mode only. Mirrors engine's `HypotheticalCatchCandidate`
+ * but WITHOUT its `id`/`ivs`/`fastMoveId`/`chargedMoveId` fields: this tab
+ * fixes those at the run/runRosterPlanner.ts boundary (perfect 15/15/15 IVs,
+ * the species' own default moveset — a deliberate "best case for a fresh
+ * catch" simplification, not a fabricated stat line) so the UI only ever
+ * needs a species and a raid-catch level. `speciesId: null` means this row is
+ * blank and contributes nothing. MUST be a REAL, already-synced species —
+ * `slotOptions`/`candidatePickerOptions()` is the SAME catalog every other
+ * species picker on this tab already draws from, never a hand-typed entry
+ * (see CLAUDE.md's standing rule against fabricated species reaching a live
+ * picker).
+ */
+export interface HypotheticalCatchAssumption {
+  speciesId: string | null;
+  /** A real, achievable raid-catch level — 20 (ordinary) or 25 (weather-boosted). Not a general level field: this models "if I caught one today," not "if I invested to any level." */
+  level: 20 | 25;
+}
+
+export function emptyHypotheticalCatch(): HypotheticalCatchAssumption {
+  return { speciesId: null, level: 20 };
+}
+
 export interface PowerUpOptimizerAssumptions {
   /** Which of the tab's two computations is active — see powerUpOptimizerScenario.ts's PowerUpOptimizerMode. */
   mode: PowerUpOptimizerMode;
@@ -164,6 +188,17 @@ export interface PowerUpOptimizerAssumptions {
    * function has no call site there.
    */
   multiRaidUseBestAvailableMoveset: boolean;
+  /**
+   * Multi-raid mode only — IDEAS.md #3 "add a 7th": species/level rows to
+   * compare against a fresh catch, never priced (a fresh catch has no
+   * stardust/candy cost, so it never competes for `planRosterBudget`'s joint
+   * allocation — see rosterPlanner.ts's own `HypotheticalCatchCandidate` doc
+   * comment). Kept as its OWN array rather than folded into `slots` (that
+   * shape is single-raid-only and carries per-slot cost fields that make no
+   * sense for something never owned). A row with `speciesId: null` is blank
+   * and contributes nothing.
+   */
+  multiRaidHypotheticalCatches: HypotheticalCatchAssumption[];
   /** TM inventory — see powerUpOptimizerScenario.ts's own field doc comment. `null` = unknown, never gates candidate generation (single-raid mode only computes these candidates today; see run/runPowerUpOptimizer.ts). */
   fastTmOnHand: number | null;
   chargedTmOnHand: number | null;
@@ -179,6 +214,8 @@ interface Props {
   unmatchedRaids: { raidName: string; tier: string }[];
   /** Resolved species per slot (same index as value.slots) — RAW, never toggle-applied, see shadowToggle.ts's file doc comment. */
   slotSpecies: (SpeciesDefinition | null)[];
+  /** Resolved species per value.multiRaidHypotheticalCatches row (same index), same RAW convention as slotSpecies — used only for the badge/name preview next to each row's picker. */
+  hypotheticalCatchSpecies: (SpeciesDefinition | null)[];
   bossSpecies: SpeciesDefinition | null;
   bossReadySeconds: number | null;
   bossHp: number | null;
@@ -198,6 +235,7 @@ export function PowerUpOptimizerAssumptionPanel({
   value,
   onChange,
   slotOptions,
+  hypotheticalCatchSpecies,
   targetOptions,
   unmatchedRaids,
   slotSpecies,
@@ -348,6 +386,79 @@ export function PowerUpOptimizerAssumptionPanel({
               &ldquo;what&rsquo;s worth investing in&rdquo; (don&rsquo;t penalize a guess). An entry you&rsquo;ve
               fixed by hand on the Roster tab is never affected either way.
             </p>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <p className="field-group-label">What if you caught a fresh one? (IDEAS.md #3)</p>
+            <p className="species-picker-hint">
+              Compares a REAL species at a REAL raid-catch level against your whole boss set — never fabricated
+              stats. Assumes PERFECT 15/15/15 IVs and this species&rsquo; own default moveset (the best case for a
+              fresh catch, not a guarantee). Purely informational: never priced, never part of the fixed-budget
+              plan below — a fresh catch has no stardust/candy cost to weigh against the entries you already own.
+            </p>
+            {value.multiRaidHypotheticalCatches.map((catchRow, i) => {
+              const species = hypotheticalCatchSpecies[i] ?? null;
+              return (
+                <div key={i} className="team-slot-row" style={{ marginTop: 8 }}>
+                  <div className="team-slot-header">
+                    <strong>
+                      Hypothetical catch {i + 1}
+                      {species && <SpeciesBadges isHypothetical={species.isHypothetical} isShadow={species.isShadow} />}
+                    </strong>
+                    <div className="team-slot-order-buttons">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          set(
+                            "multiRaidHypotheticalCatches",
+                            value.multiRaidHypotheticalCatches.filter((_, j) => j !== i),
+                          )
+                        }
+                      >
+                        remove
+                      </button>
+                    </div>
+                  </div>
+                  <SpeciesPicker
+                    idPrefix={`pu-hypothetical-${i}`}
+                    label={`Hypothetical catch ${i + 1} species`}
+                    options={slotOptions}
+                    value={catchRow.speciesId ?? ""}
+                    onChange={(id) =>
+                      set(
+                        "multiRaidHypotheticalCatches",
+                        value.multiRaidHypotheticalCatches.map((c, j) => (j === i ? { ...c, speciesId: id } : c)),
+                      )
+                    }
+                  />
+                  <div className="field">
+                    <label htmlFor={`pu-hypothetical-${i}-level`}>Raid-catch level</label>
+                    <select
+                      id={`pu-hypothetical-${i}-level`}
+                      value={catchRow.level}
+                      onChange={(e) =>
+                        set(
+                          "multiRaidHypotheticalCatches",
+                          value.multiRaidHypotheticalCatches.map((c, j) =>
+                            j === i ? { ...c, level: Number(e.target.value) as 20 | 25 } : c,
+                          ),
+                        )
+                      }
+                    >
+                      <option value={20}>20 (ordinary raid catch)</option>
+                      <option value={25}>25 (weather-boosted raid catch)</option>
+                    </select>
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              style={{ marginTop: 8 }}
+              onClick={() => set("multiRaidHypotheticalCatches", [...value.multiRaidHypotheticalCatches, emptyHypotheticalCatch()])}
+            >
+              Add hypothetical catch
+            </button>
           </div>
 
           <div style={{ marginTop: 12 }}>

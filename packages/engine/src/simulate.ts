@@ -431,6 +431,40 @@ export interface StepwiseRunResult {
    */
   diedDuringOwnChargedMoveAnimation: boolean;
   bossChargedHitsTaken: number;
+  /**
+   * How many of this run's dodge attempts were the EXTRA "protect the held
+   * cast" ones — i.e. `attacker.holdChargedMoveUntilSafe` was on AND the hit
+   * being dodged was one of the boss's CHARGED attacks (see
+   * StepwiseAttacker.holdChargedMoveUntilSafe's "TIME COST" doc comment).
+   * Each such event costs `HOLD_CHARGED_MOVE_DODGE_ATTEMPTS *
+   * DODGE_COST_SECONDS` instead of the ordinary single `DODGE_COST_SECONDS`
+   * — this count times that per-event cost is exactly
+   * `holdChargedMoveDodgeCostSeconds` below. Always 0 when
+   * `holdChargedMoveUntilSafe` is falsy, or when no charged dodge is ever
+   * actually attempted (`dodge.kind === "none"`, or every such hit landed
+   * mid the attacker's own animation, where no dodge is attempted at all).
+   */
+  holdChargedMoveDodgeCostEvents: number;
+  /**
+   * IDEAS.md #20 — surfaces `HOLD_CHARGED_MOVE_DODGE_ATTEMPTS *
+   * DODGE_COST_SECONDS` PER "protect the held cast" event, summed over this
+   * whole run, as its OWN reported value instead of leaving it silently
+   * folded into `nextAttackerFastMoveAt`'s internal bookkeeping (previously
+   * the only place this cost was ever computed) and thus into the aggregate
+   * survivability numbers with no way to see it separately.
+   *
+   * **THIS IS THIS PROJECT'S OWN UNSOURCED PLACEHOLDER MODELLING ASSUMPTION,
+   * NOT A CONFIRMED GAME MECHANIC** — see StepwiseAttacker.
+   * holdChargedMoveUntilSafe's doc comment and MECHANICS.md's 2026-09-09
+   * "OPEN QUESTION" entry under "Dodging", which is still open as of this
+   * field's addition. A caller surfacing this number to a user MUST label it
+   * as resting on that placeholder (e.g. "~Xs of this run's timeline is an
+   * ASSUMED cost with no confirmed source — see MECHANICS.md"), not present
+   * it as a measured fact the way `totalDamageTaken` or `bossChargedHitsTaken`
+   * are. Always 0 under the same conditions as
+   * `holdChargedMoveDodgeCostEvents` above.
+   */
+  holdChargedMoveDodgeCostSeconds: number;
   /** Combined fast+charged cumulative own damage over time — see OpeningBurstResult.ownDamageTrajectory (combat.ts) for the exact shape/semantics. */
   ownDamageTrajectory: DamageTrajectoryPoint[];
   /**
@@ -648,6 +682,8 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   let totalFastMoveDamage = 0;
   let bossChargedHitsTaken = 0;
   let chargedHitIndex = 0;
+  let holdChargedMoveDodgeCostEvents = 0;
+  let holdChargedMoveDodgeCostSeconds = 0;
   let faintedAtSeconds: number | null = null;
   let diedDuringOwnChargedMoveAnimation = false;
   const ownDamageTrajectory: DamageTrajectoryPoint[] = [{ atSeconds: 0, cumulativeDamage: 0 }];
@@ -988,9 +1024,15 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       // dodging off (attemptingDodge already covers dodge.kind === "none")
       // and never for a boss fast hit.
       if (attemptingDodge) {
-        const dodgeAttempts =
-          attacker.holdChargedMoveUntilSafe && isBossChargedHit ? HOLD_CHARGED_MOVE_DODGE_ATTEMPTS : 1;
+        const isHoldCastProtectionDodge = attacker.holdChargedMoveUntilSafe && isBossChargedHit;
+        const dodgeAttempts = isHoldCastProtectionDodge ? HOLD_CHARGED_MOVE_DODGE_ATTEMPTS : 1;
         nextAttackerFastMoveAt += dodgeAttempts * DODGE_COST_SECONDS;
+        // IDEAS.md #20 — surface this placeholder cost as its own value; see
+        // StepwiseRunResult.holdChargedMoveDodgeCostSeconds's doc comment.
+        if (isHoldCastProtectionDodge) {
+          holdChargedMoveDodgeCostEvents += 1;
+          holdChargedMoveDodgeCostSeconds += dodgeAttempts * DODGE_COST_SECONDS;
+        }
       }
     }
 
@@ -1065,6 +1107,8 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
     totalDamageTaken,
     diedDuringOwnChargedMoveAnimation,
     bossChargedHitsTaken,
+    holdChargedMoveDodgeCostEvents,
+    holdChargedMoveDodgeCostSeconds,
     ownDamageTrajectory,
     damageTakenTrajectory,
     bossChargedMoveResidualSeconds,
@@ -1121,6 +1165,17 @@ export interface DistributionSummary {
    */
   dodgeFastAttacksLockout: boolean;
   /**
+   * Mean, across every run in this distribution, of
+   * StepwiseRunResult.holdChargedMoveDodgeCostSeconds — IDEAS.md #20's
+   * "surface the own-charged-move-cast vulnerability cost as its own line."
+   * **STILL AN UNSOURCED PLACEHOLDER, NOT A CONFIRMED MECHANIC** — see that
+   * field's own doc comment and MECHANICS.md's 2026-09-09 "OPEN QUESTION"
+   * entry. Always 0 when `attacker.holdChargedMoveUntilSafe` is falsy (the
+   * default), so this is a no-op addition for every existing caller that
+   * hasn't opted into that setting.
+   */
+  meanHoldChargedMoveDodgeCostSeconds: number;
+  /**
    * The first iteration's full run (seed = baseSeed), exposed so callers have
    * one concrete, reproducible ownDamageTrajectory to chart even though the
    * underlying phase is randomized — not a claim that this run is typical,
@@ -1172,6 +1227,79 @@ export function runStepwiseDistribution(
     bossChargedMoveCadenceClamped: runs.some((r) => r.bossChargedMoveCadenceClamped),
     bossChargedMoveEffectiveMinIntervalSeconds,
     dodgeFastAttacksLockout: runs.some((r) => r.dodgeFastAttacksLockout),
+    meanHoldChargedMoveDodgeCostSeconds: runs.reduce((sum, r) => sum + r.holdChargedMoveDodgeCostSeconds, 0) / iterations,
     representativeRun: runs[0]!,
   };
+}
+
+/**
+ * IDEAS.md #21 — "dodge-execution-error sensitivity." Today's `DodgeBehavior`
+ * only ever chooses WHICH of the boss's charged attacks the attacker
+ * attempts to dodge; once an attempt happens, `{kind:"perfect"}` always
+ * succeeds and models zero execution error. This sweeps the ALREADY-EXISTING
+ * `{kind:"percentage-missed", missedFraction}` variant (breakpoints.ts) —
+ * built for exactly this axis but never previously swept anywhere in this
+ * codebase — across a caller-supplied (or default) set of missed-fractions,
+ * running a full `runStepwiseDistribution` at each point.
+ *
+ * Deliberately returns an ARRAY of distributions, one per missed-fraction,
+ * rather than a single blended number — this project's standing discipline
+ * (see CLAUDE.md's product thesis and IDEAS.md #19's identical framing for
+ * the party-size crossover) is to show WHERE a conclusion moves as an
+ * assumption is varied, not collapse it into one figure. A caller (e.g. a
+ * web chart) renders this as a band across the swept axis: each point's
+ * `distribution.p10TotalDamage`/`p90TotalDamage` (or its own
+ * `meanSecondsSurvived`, for a survivability-flavored chart) traces the
+ * width of that band at that execution-error level.
+ *
+ * `missedFraction` sits on the same 0-1 axis `dodgeMultiplierForHit`
+ * documents: 0 = every dodge attempt lands (byte-identical to
+ * `{kind:"perfect"}` — both are RNG-free, so with matching seeds the two
+ * produce IDENTICAL distributions, not just similar ones). The 1 endpoint is
+ * NOT byte-identical to `{kind:"none"}`, and this is a real, deliberate
+ * distinction rather than a bug: `{kind:"none"}` never attempts a dodge at
+ * all against a charged hit (`attemptingDodge` is false, so no
+ * `DODGE_COST_SECONDS` is ever spent), whereas `{missedFraction:1}` still
+ * throws a dodge input every time — it's just guaranteed to whiff — so it
+ * still pays the ordinary attempt cost per simulate.ts's "every dodge
+ * attempt, hit or miss, costs time" rule. Both endpoints deal identical
+ * FULL per-hit damage (multiplier 1 either way), so a caller charting
+ * incoming damage sees the two endpoints agree; a caller charting the
+ * attacker's own fast-move output sees `missedFraction:1` strictly worse
+ * than `{kind:"none"}`, since it wastes attempt time for zero benefit — the
+ * worst realistic point on this axis is genuinely worse than simply not
+ * trying, which is itself a useful thing for this sweep to surface. `params.dodge` is deliberately excluded from the input type — this
+ * function OWNS the dodge axis for the sweep; a caller wanting to hold
+ * `dodgeFastAttacks` or anything else fixed still can, via the rest of
+ * `params`.
+ *
+ * This is a single-attacker-vs-boss primitive, the same level
+ * `runStepwiseDistribution` already operates at — it does not itself thread
+ * through comparison.ts's two-candidate ranking, teamRaid.ts's roster
+ * orchestration, or powerUp.ts's cost ladder. A caller in one of those
+ * higher layers builds its own band by calling this once per candidate/slot
+ * it cares about.
+ */
+export const DEFAULT_DODGE_ERROR_MISSED_FRACTIONS: number[] = [0, 0.1, 0.2, 0.3, 0.4, 0.5];
+
+export interface DodgeErrorSweepPoint {
+  /** Fraction of the attacker's dodge ATTEMPTS (against the boss's CHARGED attacks) that fail to reduce damage this run — see the function doc comment above for the 0/1 endpoints' equivalence to {kind:"perfect"}/{kind:"none"}. */
+  missedFraction: number;
+  distribution: DistributionSummary;
+}
+
+export function sweepDodgeExecutionError(
+  params: Omit<StepwiseSimulationParams, "dodge" | "seed">,
+  missedFractions: number[] = DEFAULT_DODGE_ERROR_MISSED_FRACTIONS,
+  iterations = 200,
+  baseSeed = 1,
+): DodgeErrorSweepPoint[] {
+  return missedFractions.map((missedFraction) => ({
+    missedFraction,
+    distribution: runStepwiseDistribution(
+      { ...params, dodge: { kind: "percentage-missed", missedFraction } },
+      iterations,
+      baseSeed,
+    ),
+  }));
 }

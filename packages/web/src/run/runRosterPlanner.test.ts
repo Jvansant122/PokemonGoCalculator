@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SpeciesDefinition } from "@pogo-analyzer/engine";
 import type { RosterEntry } from "../import/pokeGenieMatch.js";
 import { activeRaidBossOptions, pastRaidBossOptions, speciesRegistry } from "../registry.js";
-import { effectiveMoveIds, resolveBossTarget, toEngineRosterPool } from "./runRosterPlanner.js";
+import { buildHypotheticalCatchCandidates, effectiveMoveIds, resolveBossTarget, toEngineRosterPool } from "./runRosterPlanner.js";
 
 /** A species with a movepool wide enough to have a genuine "best by power/duration" answer, unlike fakeSpecies' single-move pools below. */
 function fakeSpeciesWithMoveChoices(id: string): SpeciesDefinition {
@@ -189,6 +189,41 @@ describe("toEngineRosterPool", () => {
     const [result] = toEngineRosterPool([entry], true);
     expect(result!.fastMoveId).toBe("TACKLE");
     expect(result!.chargedMoveId).toBe("HYPER_BEAM");
+  });
+});
+
+describe("buildHypotheticalCatchCandidates", () => {
+  it("resolves a real species into a HypotheticalCatchCandidate with perfect IVs and default moves", () => {
+    const real = speciesRegistry.all()[0]!;
+    const [candidate] = buildHypotheticalCatchCandidates([{ speciesId: real.id, level: 20 }], speciesRegistry);
+    expect(candidate).toBeDefined();
+    expect(candidate!.species.id).toBe(real.id);
+    expect(candidate!.level).toBe(20);
+    expect(candidate!.ivs).toEqual({ attack: 15, defense: 15, stamina: 15 });
+    expect(candidate!.fastMoveId).toBeNull();
+    expect(candidate!.chargedMoveId).toBeNull();
+    expect(candidate!.id).toContain(real.id);
+  });
+
+  it("silently drops a blank (speciesId: null) row — never throws, never fabricates a species", () => {
+    expect(buildHypotheticalCatchCandidates([{ speciesId: null, level: 20 }], speciesRegistry)).toEqual([]);
+  });
+
+  it("silently drops a row whose speciesId no longer resolves in this registry — degrades a stale link instead of throwing", () => {
+    expect(buildHypotheticalCatchCandidates([{ speciesId: "not-a-real-species-id", level: 25 }], speciesRegistry)).toEqual([]);
+  });
+
+  it("index-qualifies ids so two rows for the SAME species/level never collide", () => {
+    const real = speciesRegistry.all()[0]!;
+    const candidates = buildHypotheticalCatchCandidates(
+      [
+        { speciesId: real.id, level: 20 },
+        { speciesId: real.id, level: 20 },
+      ],
+      speciesRegistry,
+    );
+    expect(candidates).toHaveLength(2);
+    expect(candidates[0]!.id).not.toBe(candidates[1]!.id);
   });
 });
 

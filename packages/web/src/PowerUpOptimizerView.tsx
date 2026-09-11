@@ -12,8 +12,10 @@ import {
   type PowerUpCandidate,
   type RosterBudgetBlockedCandidate,
   type RosterBudgetStep,
+  type RosterHypotheticalCatchImpact,
   type RosterNeverCompetitiveEntry,
   type RosterPerBossImpact,
+  type RosterPlannerProgressEvent,
   type RosterPowerUpCandidate,
   type RosterSignificanceMode,
   type SpeciesDefinition,
@@ -82,6 +84,11 @@ import { assumptionsToTeamScenario } from "./TeamRaidView.js";
 // 20 seeds, mean 111.5s of the 300s timer, baseline 32.5 team DPS against
 // this 3600 HP boss — replaces an earlier default (vs. tyranitar-mega,
 // 9000 HP) that failed outright (0% clear rate, 7.1 team DPS).
+//
+// This SINGLE-RAID default stays populated (2026-09-10 correction) — only
+// the ROSTER TAB and this tab's own MULTI-RAID sweep ship empty before an
+// import; the user's own words: "team raid can have a team. i meant empty
+// the 7th tab and have pokemon optimizer sweep be empty before csv import."
 const DEFAULT_TARGET_ID = "tyranitar";
 
 function defaultSlot(
@@ -172,6 +179,9 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   // player actually has) is the tidy default for a fresh scenario — see
   // PowerUpOptimizerAssumptions.multiRaidUseBestAvailableMoveset.
   multiRaidUseBestAvailableMoveset: false,
+  // Empty by default — a fresh page load has no idea what "a fresh catch" of
+  // interest would even be. See PowerUpOptimizerAssumptions.multiRaidHypotheticalCatches.
+  multiRaidHypotheticalCatches: [],
   // Unknown, not zero — see powerUpOptimizerScenario.ts's own field doc
   // comment. A fresh page load has no way to know a real player's TM
   // inventory, and second-charged-move/Elite TM candidates are still
@@ -225,6 +235,7 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     multiRaidMegaLevel: a.multiRaidMegaLevel,
     multiRaidSignificanceMode: a.multiRaidSignificanceMode,
     multiRaidUseBestAvailableMoveset: a.multiRaidUseBestAvailableMoveset,
+    multiRaidHypotheticalCatches: a.multiRaidHypotheticalCatches,
     fastTmOnHand: a.fastTmOnHand,
     chargedTmOnHand: a.chargedTmOnHand,
     eliteFastTmOnHand: a.eliteFastTmOnHand,
@@ -306,6 +317,7 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     // longer inverts to "aggregate-or-per-boss".
     multiRaidSignificanceMode: s.multiRaidSignificanceMode ?? DEFAULT_ASSUMPTIONS.multiRaidSignificanceMode,
     multiRaidUseBestAvailableMoveset: s.multiRaidUseBestAvailableMoveset ?? DEFAULT_ASSUMPTIONS.multiRaidUseBestAvailableMoveset,
+    multiRaidHypotheticalCatches: s.multiRaidHypotheticalCatches ?? DEFAULT_ASSUMPTIONS.multiRaidHypotheticalCatches,
     // `?? null` (not `?? DEFAULT_ASSUMPTIONS...`, though they're the same
     // value here) — an explicitly-shared `null` ("unknown") and an absent
     // field from an old link both mean the same thing for these fields, so
@@ -709,6 +721,56 @@ function MultiRaidCandidateRow({
   );
 }
 
+const MULTI_RAID_HYPOTHETICAL_CATCH_COLUMN_COUNT = 6;
+
+/**
+ * One row of the "hypothetical catches" table (IDEAS.md #3, "add a 7th") —
+ * `RosterHypotheticalCatchImpact`, NOT a `RosterPowerUpCandidate`: no cost
+ * columns at all (never priced — see `HypotheticalCatchCandidate`'s own doc
+ * comment in rosterPlanner.ts), so this is its OWN row component rather than
+ * a reuse of `MultiRaidCandidateRow` with blanked-out cost cells. Same
+ * expandable-per-boss-breakdown convention via `MultiRaidPerBossTable`.
+ */
+function MultiRaidHypotheticalCatchRow({ impact }: { impact: RosterHypotheticalCatchImpact }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <tr style={{ opacity: impact.exceedsNoise ? 1 : 0.6 }}>
+        <td>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title="Show the per-boss breakdown — where this hypothetical catch would actually help."
+            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+          >
+            {expanded ? "▾" : "▸"} {impact.speciesName}
+          </button>
+        </td>
+        <td>{impact.level}</td>
+        <td>
+          {impact.exceedsNoise ? (
+            <>
+              {impact.meanDeltaTeamDps >= 0 ? "+" : ""}
+              {impact.meanDeltaTeamDps.toFixed(3)}
+            </>
+          ) : (
+            "≈0 (no measurable change)"
+          )}
+        </td>
+        <td>
+          {impact.bestBossDeltaTeamDps === null
+            ? "—"
+            : `${impact.bestBossDeltaTeamDps >= 0 ? "+" : ""}${impact.bestBossDeltaTeamDps.toFixed(3)} vs ${impact.perBoss.find((p) => p.bossId === impact.bestBossId)?.bossName ?? impact.bestBossId}`}
+        </td>
+        <td>{impact.significantBossCount}</td>
+        <td>{impact.bossesNewlyFielded.length}</td>
+      </tr>
+      {expanded && <MultiRaidPerBossTable perBoss={impact.perBoss} columnCount={MULTI_RAID_HYPOTHETICAL_CATCH_COLUMN_COUNT} />}
+    </>
+  );
+}
+
 /**
  * A "not silently dropped" table for `RosterNeverCompetitiveEntry[]` —
  * shared by the ranked sweep's `neverCompetitive` (Phase 3b) AND the
@@ -840,6 +902,31 @@ function MultiRaidCandidateTableHead({ withTooltips }: { withTooltips: boolean }
   );
 }
 
+/**
+ * A short, honest sentence for ONE `RosterPlannerProgressEvent` (IDEAS.md
+ * #13) — never a fabricated percentage, and stages are named rather than
+ * blended into one bar (see that type's own doc comment for why: a baseline
+ * unit and a candidate-simulation unit cost wildly different amounts of real
+ * work). `total` for the "rounds" stage is `maxRounds`, an upper bound the
+ * search usually stops well short of — worded as "round N" rather than
+ * "N / total" for that one stage so it doesn't read as stalled at, say,
+ * "4 / 200".
+ */
+function rosterProgressSentence(event: RosterPlannerProgressEvent): string {
+  switch (event.stage) {
+    case "baseline":
+      return `Establishing baseline teams: ${event.completed} / ${event.total} bosses${event.bossName ? ` (${event.bossName})` : ""}`;
+    case "candidates":
+      return `Simulating power-up candidates: ${event.completed} / ${event.total}`;
+    case "hypotheticalCatches":
+      return `Evaluating hypothetical catches: ${event.completed} / ${event.total}`;
+    case "rounds":
+      return `Building plan: round ${event.completed}${event.bossName ? ` (committed against ${event.bossName})` : ""}`;
+    default:
+      return "Working…";
+  }
+}
+
 interface MultiRaidResultsSectionProps {
   hydratedPoolCount: number;
   /** entryId -> a short human identity (IV spread) for the ranked tables — see MultiRaidCandidateRow's `identity`. */
@@ -858,6 +945,8 @@ interface MultiRaidResultsSectionProps {
   /** null before any sweep has completed, or when the most recent one was blocked before an engine call was even attempted. */
   ranOn: "worker" | "main-thread-fallback" | null;
   elapsedMs: number;
+  /** Most recent REAL progress event from this run, or null before one has arrived (or once the run finishes/is idle — see rosterProgressSentence). IDEAS.md #13. */
+  progress: RosterPlannerProgressEvent | null;
   onRunSweep: () => void;
   /** Same selector single-raid mode already exposes — sorts the ranked table client-side by the chosen resource's efficiency, same as single-raid's own sortedCandidates (CLAUDE.md standing decision: never blended into one score). */
   rankBy: PowerUpRankBy;
@@ -890,6 +979,7 @@ function MultiRaidResultsSection({
   isStale,
   ranOn,
   elapsedMs,
+  progress,
   onRunSweep,
   rankBy,
   significanceMode,
@@ -963,7 +1053,11 @@ function MultiRaidResultsSection({
         <button type="button" onClick={onRunSweep} disabled={isRunning || hydratedPoolCount === 0 || bossCount === 0}>
           {isRunning ? "Running sweep…" : run ? "Run sweep again" : "Run sweep"}
         </button>
-        {isRunning && <span className="species-picker-hint">{(elapsedMs / 1000).toFixed(1)}s elapsed</span>}
+        {isRunning && (
+          <span className="species-picker-hint">
+            {(elapsedMs / 1000).toFixed(1)}s elapsed{progress ? ` — ${rosterProgressSentence(progress)}` : ""}
+          </span>
+        )}
         {!isRunning && run && ranOn && (
           <span
             className="species-picker-hint"
@@ -1001,11 +1095,17 @@ function MultiRaidResultsSection({
 
       {!run && !isRunning && (
         <p className="caveats">
-          {hydratedPoolCount === 0
-            ? "No roster imported in this browser yet — import a Poke Genie CSV export (or hand-add Pokémon) on the Roster tab, then come back and click “Run sweep”."
-            : bossCount === 0
-              ? "No bosses selected — pick at least one under “Boss set” above, then click “Run sweep”."
-              : "Click “Run sweep” to rank power-ups across this roster and boss set."}
+          {hydratedPoolCount === 0 ? (
+            <>
+              No roster imported in this browser yet — import a Poke Genie CSV export (or hand-add Pokémon) on the{" "}
+              <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a>, then come back and click &ldquo;Run
+              sweep&rdquo;.
+            </>
+          ) : bossCount === 0 ? (
+            "No bosses selected — pick at least one under “Boss set” above, then click “Run sweep”."
+          ) : (
+            "Click “Run sweep” to rank power-ups across this roster and boss set."
+          )}
         </p>
       )}
 
@@ -1017,8 +1117,9 @@ function MultiRaidResultsSection({
         <p className="caveats">
           No roster imported in this browser yet — this shared link carries every SETTING (boss set, budgets,
           dodge/weather/timer) but never the roster itself (see the note under &ldquo;Share this scenario&rdquo;).
-          Import a Poke Genie CSV export (or hand-add Pokémon) on the Roster tab, then come back and click
-          &ldquo;Run sweep&rdquo; again.
+          Import a Poke Genie CSV export (or hand-add Pokémon) on the{" "}
+          <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a>, then come back and click &ldquo;Run sweep&rdquo;
+          again.
         </p>
       )}
 
@@ -1117,6 +1218,43 @@ function MultiRaidResultsSection({
                         identity={entryIdentities.get(group.representative.entryId)}
                         movesetBadge={entryMovesetBadges.get(group.representative.entryId)}
                       />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {run.data.hypotheticalCatches.length > 0 && (
+            <CollapsibleSection
+              id="pu-multi-hypothetical-catches"
+              heading={`What if you caught a fresh one? — ${run.data.hypotheticalCatches.length} row${run.data.hypotheticalCatches.length === 1 ? "" : "s"}`}
+              headingLevel="h3"
+              defaultOpen
+              variant="subsection"
+            >
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                Real species at a real raid-catch level, perfect 15/15/15 IVs, default moveset — never priced, never
+                part of the fixed-budget plan (a fresh catch has no ledger cost). Purely "is this even worth
+                fielding."
+              </p>
+              <div className="table-scroll">
+                <table className="time-series-table">
+                  <thead>
+                    <tr>
+                      <th>Species</th>
+                      <th>Level</th>
+                      <th title="Weighted mean across every swept boss">Mean Δ team DPS</th>
+                      <th title="The single largest-magnitude per-boss effect">Best boss Δ</th>
+                      <th title="Bosses where this catch's own effect clears THAT boss's own noise floor">Significant bosses</th>
+                      <th title="Bosses where this catch would newly enter the team, displacing the lowest-ranked fielded entry">
+                        Newly fielded
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {run.data.hypotheticalCatches.map((impact) => (
+                      <MultiRaidHypotheticalCatchRow key={impact.id} impact={impact} />
                     ))}
                   </tbody>
                 </table>
@@ -1237,6 +1375,8 @@ interface MultiRaidBudgetPlanSectionProps {
   isStale: boolean;
   ranOn: "worker" | "main-thread-fallback" | null;
   elapsedMs: number;
+  /** See MultiRaidResultsSectionProps.progress — the SAME real-progress convention, for this section's own (separate) engine call. */
+  progress: RosterPlannerProgressEvent | null;
 }
 
 /**
@@ -1260,6 +1400,7 @@ function MultiRaidBudgetPlanSection({
   isStale,
   ranOn,
   elapsedMs,
+  progress,
 }: MultiRaidBudgetPlanSectionProps) {
   const familyLabel = (familyId: string) => rosterFamilyOptions.find((f) => f.familyId === familyId)?.label ?? familyId;
 
@@ -1277,7 +1418,11 @@ function MultiRaidBudgetPlanSection({
         sweep above, by that same &ldquo;Run sweep&rdquo; click, off the main thread.
       </p>
 
-      {isRunning && <p className="species-picker-hint">{(elapsedMs / 1000).toFixed(1)}s elapsed</p>}
+      {isRunning && (
+        <p className="species-picker-hint">
+          {(elapsedMs / 1000).toFixed(1)}s elapsed{progress ? ` — ${rosterProgressSentence(progress)}` : ""}
+        </p>
+      )}
       {!isRunning && run && ranOn && (
         <p
           className="species-picker-hint"
@@ -1481,8 +1626,11 @@ function runMultiRaidTrackedComputation<TData>(
   setIsRunning: (v: boolean) => void,
   setElapsedMs: (v: number) => void,
   onFinish: (result: MultiRaidTrackedResult<TData>, ranOn: "worker" | "main-thread-fallback" | null) => void,
+  /** Reset to null at the start of this run — see MultiRaidResultsSectionProps.progress (IDEAS.md #13). The LAST real event is left in place after finish (the component only renders it while isRunning is true), never cleared to hide it prematurely. */
+  setProgress?: (v: RosterPlannerProgressEvent | null) => void,
 ): void {
   setIsRunning(true);
+  setProgress?.(null);
   const startedAt = performance.now();
   setElapsedMs(0);
   const tick = window.setInterval(() => setElapsedMs(performance.now() - startedAt), 200);
@@ -1807,7 +1955,11 @@ function SingleRaidResultsSection({
 
       {bossSpecies && !hasFieldedSlot && (
         <section className="panel">
-          <p className="caveats">Add at least one Pokémon to the roster above to see ranked power-up candidates.</p>
+          <p className="caveats">
+            Add at least one Pokémon to the roster above to see ranked power-up candidates — or switch to Multi-raid
+            mode (in Assumptions) to rank your whole imported roster instead, built on the{" "}
+            <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a>.
+          </p>
         </section>
       )}
 
@@ -2116,9 +2268,11 @@ function SingleRaidResultsSection({
           slots behind it for no compensating survival benefit — it's the revive cost above (15s by default) that makes
           a slot's extra bulk pay for itself by avoiding a paid full-roster wipe. The power-up cost table (universal
           levels 1-50,
-          fetched {powerUpCostsFetchedAt.slice(0, 10)} from GAME_MASTER) ignores Eternatus's known per-species
-          candy-cost override — this tool does not special-case it. Best Buddy status (a real +1 level beyond the
-          normal level-50 cap) is not modelled at all. The Shadow-side
+          fetched {powerUpCostsFetchedAt.slice(0, 10)} from GAME_MASTER) DOES apply Eternatus's known per-species
+          candy-cost override (candy/XL-candy only — stardust is genuinely unchanged at every level) via a generic
+          per-species override mechanism; Eternatus is the only entry the live GAME_MASTER dump carries one for, so
+          this mechanism is untested against a second overridden species. Best Buddy status (a real +1 level beyond
+          the normal level-50 cap) is not modelled in this tab. The Shadow-side
           candy rounding rule is [inferred from the Purified rule, not independently confirmed] — see powerUp.ts's own
           top doc comment. Stardust and candy/XL-candy efficiency are kept as two separate numbers on purpose (see the
           "Rank by" control) — they are not fungible resources for a real player, so this tool never blends them into
@@ -2262,6 +2416,10 @@ export function PowerUpOptimizerView() {
   const unmatchedRaids = useMemo(() => unmatchedActiveRaids(), []);
 
   const slotSpecies = useMemo(() => assumptions.slots.map((s) => resolveSpecies(s.speciesId)), [assumptions.slots]);
+  const hypotheticalCatchSpecies = useMemo(
+    () => assumptions.multiRaidHypotheticalCatches.map((h) => resolveSpecies(h.speciesId)),
+    [assumptions.multiRaidHypotheticalCatches],
+  );
   const bossSpecies = useMemo(() => resolveSpecies(assumptions.targetId), [assumptions.targetId]);
   const bossRaidTier = useMemo(() => raidTierForSpeciesId(assumptions.targetId) ?? undefined, [assumptions.targetId]);
 
@@ -2338,6 +2496,7 @@ export function PowerUpOptimizerView() {
       multiRaidMegaLevel: null,
       multiRaidSignificanceMode: "aggregate-only",
       multiRaidUseBestAvailableMoveset: false,
+      multiRaidHypotheticalCatches: [],
       // Placeholders — runPowerUpOptimizerScenario never reads TM inventory
       // (it's purely a render-layer "within your stock" framing, see
       // PowerUpOptimizerAssumptions' own field doc comments), so these
@@ -2432,6 +2591,7 @@ export function PowerUpOptimizerView() {
       multiRaidMegaLevel: assumptions.multiRaidMegaLevel,
       multiRaidSignificanceMode: assumptions.multiRaidSignificanceMode,
       multiRaidUseBestAvailableMoveset: assumptions.multiRaidUseBestAvailableMoveset,
+      multiRaidHypotheticalCatches: assumptions.multiRaidHypotheticalCatches,
       stardustOnHand: assumptions.stardustOnHand,
       rareCandyOnHand: assumptions.rareCandyOnHand,
       rareCandyXlOnHand: assumptions.rareCandyXlOnHand,
@@ -2454,6 +2614,7 @@ export function PowerUpOptimizerView() {
       assumptions.multiRaidMegaLevel,
       assumptions.multiRaidSignificanceMode,
       assumptions.multiRaidUseBestAvailableMoveset,
+      assumptions.multiRaidHypotheticalCatches,
       assumptions.stardustOnHand,
       assumptions.rareCandyOnHand,
       assumptions.rareCandyXlOnHand,
@@ -2488,15 +2649,16 @@ export function PowerUpOptimizerView() {
     ranOn: "worker" | "main-thread-fallback" | null;
   } | null>(null);
   const [isRunningMultiRaidSweep, setIsRunningMultiRaidSweep] = useState(false);
-  // Coarse progress ONLY — running/done/failed, plus elapsed wall-clock time.
-  // Deliberately NOT a fabricated percentage: runRosterPlanner has no yield
-  // points of its own inside the worker (a genuine per-boss progress event
-  // needs an onProgress hook inside packages/engine/src/rosterPlanner.ts —
-  // out of scope here, see rosterPlanner.worker.ts's own doc comment).
-  // Ticks every 200ms while running via a plain setInterval in the EVENT
-  // HANDLER below (not a useEffect — no react-hooks/set-state-in-effect
-  // concern), then set once more precisely on completion.
+  // Elapsed wall-clock time ticks every 200ms while running via a plain
+  // setInterval in the EVENT HANDLER below (not a useEffect — no
+  // react-hooks/set-state-in-effect concern), then set once more precisely on
+  // completion. `sweepProgress` is now REAL per-event progress (IDEAS.md #13,
+  // engine's `RosterPlannerInputs.onProgress` — see rosterPlanner.worker.ts's
+  // own doc comment for how a callback crosses the postMessage boundary),
+  // never a fabricated percentage — each event corresponds to one genuinely
+  // completed unit of work.
   const [sweepElapsedMs, setSweepElapsedMs] = useState(0);
+  const [sweepProgress, setSweepProgress] = useState<RosterPlannerProgressEvent | null>(null);
   const isMultiRaidStale = multiRaidRun !== null && (multiRaidRun.inputs !== multiRaidInputs || multiRaidRun.pool !== hydratedPool);
 
   // Phase 4's fixed-budget plan — SAME (inputs, pool)-snapshot/staleness
@@ -2512,6 +2674,7 @@ export function PowerUpOptimizerView() {
   } | null>(null);
   const [isRunningMultiRaidBudget, setIsRunningMultiRaidBudget] = useState(false);
   const [budgetElapsedMs, setBudgetElapsedMs] = useState(0);
+  const [budgetProgress, setBudgetProgress] = useState<RosterPlannerProgressEvent | null>(null);
   const isMultiRaidBudgetStale =
     multiRaidBudgetRun !== null && (multiRaidBudgetRun.inputs !== multiRaidInputs || multiRaidBudgetRun.pool !== hydratedPool);
 
@@ -2530,18 +2693,20 @@ export function PowerUpOptimizerView() {
 
     runMultiRaidTrackedComputation(
       resolution,
-      () => runRosterPlannerOffMainThread(resolution.inputs!),
+      () => runRosterPlannerOffMainThread(resolution.inputs!, setSweepProgress),
       setIsRunningMultiRaidSweep,
       setSweepElapsedMs,
       (result, ranOn) => setMultiRaidRun({ inputs: snapshotInputs, pool: snapshotPool, result, ranOn }),
+      setSweepProgress,
     );
 
     runMultiRaidTrackedComputation(
       resolution,
-      () => runRosterBudgetOffMainThread(resolution.inputs!),
+      () => runRosterBudgetOffMainThread(resolution.inputs!, setBudgetProgress),
       setIsRunningMultiRaidBudget,
       setBudgetElapsedMs,
       (result, ranOn) => setMultiRaidBudgetRun({ inputs: snapshotInputs, pool: snapshotPool, result, ranOn }),
+      setBudgetProgress,
     );
   }
 
@@ -2641,6 +2806,7 @@ export function PowerUpOptimizerView() {
         targetOptions={targetOptions}
         unmatchedRaids={unmatchedRaids}
         slotSpecies={slotSpecies}
+        hypotheticalCatchSpecies={hypotheticalCatchSpecies}
         bossSpecies={bossSpecies}
         bossReadySeconds={bossReadySeconds}
         bossHp={bossHp}
@@ -2684,6 +2850,7 @@ export function PowerUpOptimizerView() {
             isStale={isMultiRaidStale}
             ranOn={multiRaidRun?.ranOn ?? null}
             elapsedMs={sweepElapsedMs}
+            progress={sweepProgress}
             onRunSweep={handleRunMultiRaidSweep}
             rankBy={assumptions.rankBy}
             significanceMode={assumptions.multiRaidSignificanceMode}
@@ -2697,6 +2864,7 @@ export function PowerUpOptimizerView() {
             isStale={isMultiRaidBudgetStale}
             ranOn={multiRaidBudgetRun?.ranOn ?? null}
             elapsedMs={budgetElapsedMs}
+            progress={budgetProgress}
           />
 
           <CollapsibleSection id="pu-known-caveats-multi" heading="Known caveats" defaultOpen={false}>
@@ -2803,12 +2971,13 @@ export function PowerUpOptimizerView() {
           {hydratedPool.length > 0
             ? `${hydratedPool.length} Pokémon in your roster.`
             : "No roster yet."}{" "}
-          Import a CSV, hand-add Pokémon, edit entries, or save a code on the Roster tab.
+          Import a CSV, hand-add Pokémon, edit entries, or save a code on the{" "}
+          <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a>.
         </p>
         {rosterDroppedCount > 0 && (
           <p className="caveats">
             {rosterDroppedCount} stored entr{rosterDroppedCount === 1 ? "y" : "ies"} reference a species this data
-            layer no longer has — visit the Roster tab to re-import.
+            layer no longer has — visit the <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a> to re-import.
           </p>
         )}
       </section>

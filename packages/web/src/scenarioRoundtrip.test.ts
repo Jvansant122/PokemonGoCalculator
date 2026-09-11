@@ -100,6 +100,8 @@ describe("ComparatorScenario round-trip", () => {
     bossStartsPrimed: true,
     bossStartingEnergyFraction: 0.75,
     weather: "rainy",
+    friendshipLevel: "best",
+    candidateIsBestBuddy: [true, false],
     // Non-default: DEFAULT_ASSUMPTIONS's own value is `false` (the tidy
     // default for a fresh scenario) — see the dedicated absent-decode test
     // below for the plain-default fallback this field now shares with every
@@ -186,12 +188,13 @@ describe("TeamScenario round-trip", () => {
         // (which leave it undefined, i.e. "use the shared spread").
         level: 42,
         ivs: { attack: 10, defense: 11, stamina: 12 },
+        isBestBuddy: true,
       },
-      { speciesId: "kartana", fastMoveId: "air-slash", chargedMoveId: "leaf-blade", isMega: false, megaLevel: null, isShadow: false },
-      { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: "super-max", isShadow: false },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
-      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false },
+      { speciesId: "kartana", fastMoveId: "air-slash", chargedMoveId: "leaf-blade", isMega: false, megaLevel: null, isShadow: false, isBestBuddy: false },
+      { speciesId: "latios-mega", fastMoveId: null, chargedMoveId: null, isMega: true, megaLevel: "super-max", isShadow: false, isBestBuddy: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isBestBuddy: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isBestBuddy: false },
+      { speciesId: null, fastMoveId: null, chargedMoveId: null, isMega: false, megaLevel: null, isShadow: false, isBestBuddy: false },
     ],
     targetId: "kyogre-primal",
     bossFastMoveId: "waterfall",
@@ -212,6 +215,9 @@ describe("TeamScenario round-trip", () => {
     swapCostSeconds: 3,
     reviveCostSeconds: 13,
     showDetailedAssumptions: true,
+    friendshipLevel: "great",
+    bossMaxHpOverrideEnabled: true,
+    reselectAfterWipeEnabled: true,
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -254,6 +260,7 @@ describe("TeamScenario round-trip", () => {
         isMega: false,
         megaLevel: null,
         isShadow: false,
+        isBestBuddy: false,
       })),
       targetId: "tyranitar-mega",
       // A link this minimal has no boss-move fields at all — decodes to
@@ -481,6 +488,11 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     multiRaidSignificanceMode: "aggregate-or-per-boss",
     // Non-default: PU_DEFAULTS is false (IDEAS.md #11).
     multiRaidUseBestAvailableMoveset: true,
+    // Non-default: PU_DEFAULTS is [] (IDEAS.md #3, "add a 7th").
+    multiRaidHypotheticalCatches: [
+      { speciesId: "dragonite", level: 25 },
+      { speciesId: null, level: 20 },
+    ],
     // Non-default: PU_DEFAULTS has all four TM counts as null (unknown).
     fastTmOnHand: 3,
     chargedTmOnHand: 1,

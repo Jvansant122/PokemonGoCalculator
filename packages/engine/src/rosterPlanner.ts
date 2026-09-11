@@ -6,6 +6,7 @@ import {
   RARE_CANDY_XL_TO_XL_CANDY_RATIO,
   noiseFloorFor,
   powerUpCost,
+  powerUpCostTableFor,
   powerUpLevelMetrics,
   shortfallsForCandidate,
   summarizeResults,
@@ -22,7 +23,7 @@ import {
 import type { SpeciesReportBossTarget } from "./speciesReport.js";
 import { DEFAULT_SWAP_COST_SECONDS, MAX_TEAM_RAID_SLOTS, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "./teamRaid.js";
 import { typeEffectiveness } from "./typeChart.js";
-import type { ChargedMove, FastMove, IVSpread, SpeciesDefinition } from "./types.js";
+import type { ChargedMove, FastMove, GatedEvolutionOption, IVSpread, SpeciesDefinition } from "./types.js";
 import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
 
 /**
@@ -245,6 +246,26 @@ export interface RosterEntry {
   /** See ivsAreApproximate — same convention for a defaulted (blank in the import) moveset. */
   movesetIsDefaulted: boolean;
   /**
+   * The charged move id(s) this entry is KNOWN (never guessed/defaulted) to
+   * currently have — added 2026-09-10 for `rosterMoveChange.ts`'s
+   * second-charged-move candidate eligibility
+   * (PLAN_tm_move_change_optimizer.md). 1 entry means a single charged move
+   * (eligible for a second-charged-move unlock); 2 means it already knows
+   * both (that action doesn't apply — nothing left to buy); `undefined`
+   * means UNKNOWN, which excludes this entry from second-charged-move
+   * candidates entirely (never guessed from `movesetIsDefaulted` alone,
+   * since a KNOWN single active `chargedMoveId` can't by itself distinguish
+   * "this Pokémon knows only this one move" from "this Pokémon knows this
+   * move plus a second one we just don't have on record" — the reason this
+   * is a SEPARATE field from `chargedMoveId`/`movesetIsDefaulted` rather
+   * than derived from them).
+   *
+   * Irrelevant to (and never consumed by) any power-up combat math — this
+   * engine still only ever simulates ONE active charged move per slot via
+   * `chargedMoveId`, exactly as before this field existed.
+   */
+  knownChargedMoveIds?: string[];
+  /**
    * The candy-pool key this entry's power-up candy is drawn from — see
    * RosterPlannerInputs.candyByFamilyId. Defaults to species.candyFamilyId
    * when omitted.
@@ -260,6 +281,38 @@ export interface RosterEntry {
    * non-fabricating default rather than silently pooling a mega's candy
    * against nothing or guessing a base species.
    */
+  candyFamilyId?: string;
+}
+
+/**
+ * One "what if I caught a fresh one of this at a raid-catch level instead"
+ * comparison (IDEAS.md #3, "add a 7th"). MUST be a REAL, already-synced
+ * species/form at a REAL, achievable level — this package's own standing
+ * rule (see CLAUDE.md: four hand-authored species were deleted 2026-09-06
+ * specifically because fabricated stats reached a live picker). This is a
+ * real species at a hypothetical LEVEL, never invented base stats. This
+ * engine has no I/O and cannot verify `species` came from a real sync, so
+ * enforcing that boundary is the CALLER's responsibility — `packages/web`
+ * must only ever build this from the same species catalog every other
+ * picker in this project already draws from, never a hand-typed stat line.
+ *
+ * Purely informational (see RosterPlannerInputs.hypotheticalCatches): a
+ * fresh catch has no stardust/candy cost this planner's resource ledger
+ * tracks, so it is never priced and never competes for a `planRosterBudget`
+ * commit — only "would it be worth fielding at all."
+ */
+export interface HypotheticalCatchCandidate {
+  /** Stable id for this comparison, e.g. "hypothetical:dragonite-25". Must not collide with any RosterEntry.entryId (or any other HypotheticalCatchCandidate.id) — runRosterPlanner throws if it does. */
+  id: string;
+  species: SpeciesDefinition;
+  /** A real, achievable raid-catch level — typically 20 (ordinary) or 25 (weather-boosted encounter). Not validated against that specific list (a caller may have a real reason to check another one), but see this field's own name: never a fabricated level either. */
+  level: number;
+  ivs: IVSpread;
+  /** Omit/null defaults to species.fastMoves[0] — see RosterEntry.fastMoveId. */
+  fastMoveId: string | null;
+  /** See fastMoveId. */
+  chargedMoveId: string | null;
+  /** See RosterEntry.candyFamilyId — irrelevant to THIS comparison (never priced), kept only so a caller chaining this into a real roster entry later doesn't need to re-resolve it. */
   candyFamilyId?: string;
 }
 
@@ -400,7 +453,69 @@ export interface RosterPlannerInputs {
   maxLevelsPerEntry?: number;
   /** See RosterSignificanceMode. Defaults to "aggregate-or-per-boss" (the pre-existing behavior) — NOT the web UI's chosen default; see that type's own doc comment for why the two defaults deliberately differ. */
   significanceMode?: RosterSignificanceMode;
+  /**
+   * Optional "add a 7th" comparisons (IDEAS.md #3) — see
+   * HypotheticalCatchCandidate's own doc comment for the "real species, real
+   * level, never fabricated stats" boundary. Reported ONLY in
+   * `RosterPlanResult.hypotheticalCatches`, never folded into
+   * `candidates`/`benchedButPromising`/`neverCompetitive` (a fresh catch
+   * isn't a power-up on an owned entry) and never available on
+   * `RosterBudgetInputs` (a fresh catch has no resource cost the budget
+   * ledger tracks — see that type's own Omit list). Defaults to `[]`.
+   */
+  hypotheticalCatches?: HypotheticalCatchCandidate[];
+  /**
+   * Reports genuine, real per-boss/per-candidate progress during the sweep
+   * (IDEAS.md #13) — the multi-raid worker previously had no signal finer
+   * than coarse running/done/failed, and a web-developer correctly declined
+   * to fake a percentage rather than report one. See
+   * RosterPlannerProgressEvent's own doc comment for the event shape and why
+   * stages don't share one combined total. Never called for
+   * `hypotheticalCatches` work when that input is empty/omitted (there is
+   * nothing to report). Purely a side channel — has no effect on the
+   * returned `RosterPlanResult`.
+   */
+  onProgress?: RosterPlannerProgressCallback;
 }
+
+/**
+ * One real, completed unit of work during a `runRosterPlanner`/
+ * `planRosterBudget` sweep (IDEAS.md #13) — see RosterPlannerInputs.onProgress.
+ * Each event corresponds to REAL completed work (one boss's baseline
+ * established, one candidate's Stage 4 simulation finished, one greedy round
+ * either committed a step or determined it couldn't — never a fabricated
+ * fraction), so a caller can build a genuine progress indicator by dividing
+ * `completed`/`total` PER STAGE. Stages deliberately do NOT share one
+ * combined running total — their unit costs are wildly different (one boss's
+ * baseline costs roughly `pool.length` cheap screen simulations; one Stage 4
+ * candidate costs `iterations` full team-raid simulations, but only across
+ * its own touched bosses) — so a caller wanting one overall bar should weight
+ * stages itself rather than assume this type does it for them.
+ */
+export interface RosterPlannerProgressEvent {
+  stage: "baseline" | "candidates" | "hypotheticalCatches" | "rounds";
+  /** Work units of THIS stage completed so far. */
+  completed: number;
+  /**
+   * Total work units of this stage, known up front. For "rounds" (
+   * `planRosterBudget` only), this is `maxRounds` — an UPPER BOUND, since the
+   * search usually stops well before it (see RosterBudgetPlan.stopReason),
+   * so `completed` reaching `total` is not guaranteed.
+   */
+  total: number;
+  /**
+   * The boss this event is about — for "baseline" (that boss's screen +
+   * team selection just finished) and "rounds" (the boss this round's
+   * committed step mattered most for, i.e. its `bestBossId`, when a step
+   * committed). Undefined for "candidates"/"hypotheticalCatches" (one unit of
+   * work can touch several bosses at once, so no single boss applies) and for
+   * a "rounds" event where the round didn't commit a step.
+   */
+  bossId?: string;
+  bossName?: string;
+}
+
+export type RosterPlannerProgressCallback = (event: RosterPlannerProgressEvent) => void;
 
 /** One boss's real, computed effect of ONE candidate power-up — always present for every target in RosterPowerUpCandidate.perBoss, whether or not this boss was actually simulated for this candidate. */
 export interface RosterPerBossImpact {
@@ -489,16 +604,98 @@ export interface RosterPowerUpCandidate {
    * single-boss-only signal as sufficient.
    */
   exceedsNoise: boolean;
+  /**
+   * Set only when this candidate is an "evolve, then power up to L" row
+   * (IDEAS.md #9) — the REAL owned entry it originated from, the species it
+   * would evolve FROM, and that evolution step's one-time candy cost
+   * (already folded into `cost.candy` above; this field exists purely so a
+   * caller can attribute/display it separately, never an extra charge on top
+   * of `cost`). `entryId`/`speciesId`/`speciesName` above already describe
+   * the EVOLVED (post-evolution, to-be-powered-up) side — see
+   * `fromEntryId`/`fromSpeciesId`/`fromSpeciesName` here for the owned side.
+   * Undefined for an ordinary already-evolved candidate.
+   *
+   * `entryId` on THIS candidate is deliberately a SYNTHETIC id (never the
+   * real owned entry's `RosterEntry.entryId` — see `fromEntryId` for that),
+   * because the real owned entry can ALSO independently appear on a
+   * baseline team in its own (unevolved) form; reusing its real id here
+   * would collide with that row and silently simulate the wrong (still
+   * unevolved) species for this candidate. See this module's own real-bug
+   * note in runRosterPlanner's top doc comment addendum for why this matters.
+   */
+  viaEvolution?: {
+    fromEntryId: string;
+    fromSpeciesId: string;
+    fromSpeciesName: string;
+    /** Regular candy only — evolution never costs stardust or XL Candy (MECHANICS.md: "Evolution: candy-only"). */
+    evolutionCandyCost: number;
+    /**
+     * Every OTHER branch this species has that this planner can't price
+     * (SpeciesDefinition.gatedEvolutions) — e.g. this row prices "evolve
+     * into Vaporeon," but this field still names Espeon/Umbreon/Leafeon/
+     * Glaceon/Sylveon as real options gated on requirements this tool has no
+     * model for. `[]`/undefined when there are none or the data isn't
+     * resolved yet — see gatedEvolutionNotices' own doc comment for why this
+     * is never omitted just because a priced sibling exists.
+     */
+    otherGatedOptions?: GatedEvolutionNotice[];
+  };
 }
 
 export interface RosterNeverCompetitiveEntry {
   entryId: string;
   speciesId: string;
   speciesName: string;
-  /** Human-readable reason — see runRosterPlanner's three cases (evolution-blocked, no affordable level, no level makes it competitive). */
+  /** Human-readable reason — see runRosterPlanner's/planRosterBudget's cases (evolution-blocked with no usable evolution data, evolution-blocked with no competitive evolve+power-up option found, no affordable level, no level makes it competitive, unresolved candy family). */
   reason: string;
   /** Present (possibly empty — see types.ts's isFullyEvolved doc comment on the Zygarde/Farfetch'd-family gap) only for the evolution-blocked case. */
   evolvesToIds?: string[];
+  /**
+   * Set only when this row is evolution-blocked AND `SpeciesDefinition.evolutions`
+   * data was available (data-sync does not populate it yet for real species
+   * as of this field's introduction — see MECHANICS.md's "Evolution:
+   * candy-only" entry) — the single best "evolve, then power up" option this
+   * planner found, reported here as INFORMATION regardless of which function
+   * produced it:
+   *
+   * - `runRosterPlanner`: this is redundant with — but consistent with — the
+   *   real priced candidate already offered in `candidates`/
+   *   `benchedButPromising` for this same entry (see
+   *   RosterPowerUpCandidate.viaEvolution); it's populated here too only
+   *   when NO evolution endpoint touched any boss (the entry still lands in
+   *   `neverCompetitive`), so the reason it failed is visible even then.
+   * - `planRosterBudget`: this planner does NOT commit an evolution step
+   *   (see this module's "planRosterBudget" doc comment for why — briefly,
+   *   every per-entryId cache in that function's greedy search assumes a
+   *   FIXED species for the whole search, and correctly handling a
+   *   mid-search species change needs new-entryId-plus-full-reselection
+   *   machinery out of scope for this pass). This field is the budget
+   *   planner's only visibility into the opportunity: a REAL one-shot
+   *   `evaluateCandidate` simulation (not a proxy) of the single best
+   *   (endpoint, level) pair found, reported for information only — a caller
+   *   wanting to actually COMMIT it should run `runRosterPlanner` on this
+   *   entry instead.
+   */
+  evolutionRecommendation?: {
+    toSpeciesId: string;
+    toSpeciesName: string;
+    toLevel: number;
+    evolutionCandyCost: number;
+    /** A REAL simulated weighted-mean team-DPS delta (same units/computation as RosterPowerUpCandidate.meanDeltaTeamDps), never a cheap proxy. */
+    meanDeltaTeamDps: number;
+  };
+  /**
+   * Every branch of this species' evolution this planner CANNOT price
+   * (SpeciesDefinition.gatedEvolutions — an item, a lure, buddy distance,
+   * gender, time-of-day, a quest) — populated whenever this row is
+   * evolution-blocked AND that data is available, REGARDLESS of whether a
+   * usable candy-only endpoint also exists (`evolutionRecommendation` above
+   * or a real priced candidate elsewhere). Never omit this just because a
+   * candy-only alternative was already found — see `gatedEvolutionNotices`'s
+   * own doc comment for why (Eevee: Vaporeon is priceable, Espeon still
+   * deserves to be shown even though it can't be).
+   */
+  gatedEvolutions?: GatedEvolutionNotice[];
 }
 
 export interface RosterBaselineBossSummary {
@@ -532,6 +729,31 @@ export interface RosterPlanResult {
   benchedButPromising: RosterPowerUpCandidate[];
   /** Pool entries excluded from candidate generation entirely, with why — never silently hidden. See this module's top doc comment for the three cases. */
   neverCompetitive: RosterNeverCompetitiveEntry[];
+  /** One row per RosterPlannerInputs.hypotheticalCatches, in the same order — `[]` when that input was omitted/empty. See RosterHypotheticalCatchImpact. */
+  hypotheticalCatches: RosterHypotheticalCatchImpact[];
+}
+
+/**
+ * One HypotheticalCatchCandidate's real, computed effect (IDEAS.md #3) —
+ * same per-boss/aggregate shape as RosterPowerUpCandidate, minus every
+ * cost-related field (a fresh catch is never priced — see
+ * HypotheticalCatchCandidate's own doc comment).
+ */
+export interface RosterHypotheticalCatchImpact {
+  /** The HypotheticalCatchCandidate.id this row evaluates. */
+  id: string;
+  speciesId: string;
+  speciesName: string;
+  level: number;
+  /** One entry per RosterPlannerInputs.targets — `rankBefore` is always `null` (a hypothetical catch is, by definition, never on a baseline team). */
+  perBoss: RosterPerBossImpact[];
+  meanDeltaTeamDps: number;
+  bestBossDeltaTeamDps: number | null;
+  bestBossId: string | null;
+  significantBossCount: number;
+  /** Boss ids where this hypothetical catch would newly enter that boss's team (displacing whichever entry currently holds the lowest-ranked fielded slot) — empty means this species/level wouldn't make ANY evaluated boss's team. */
+  bossesNewlyFielded: string[];
+  exceedsNoise: boolean;
 }
 
 // --- Team selection -----------------------------------------------------------
@@ -552,8 +774,17 @@ function selectTeam(scored: { entry: RosterEntry; score: number }[]): RosterEntr
   return team;
 }
 
-/** `megaLevel` is the roster-wide RosterPlannerInputs.megaLevel setting, forwarded unchanged onto TeamRaidSlotInput.megaLevel for every entry — runTeamRaid's own resolveCandidateMegaLevel gate silently no-ops it for an entry whose species has no `.boost`, so this never needs a per-entry check here. */
-function toSlotInput(entry: RosterEntry, megaLevel: MegaLevel | undefined): TeamRaidSlotInput {
+/**
+ * `megaLevel` is the roster-wide RosterPlannerInputs.megaLevel setting, forwarded unchanged onto TeamRaidSlotInput.megaLevel for every entry — runTeamRaid's own resolveCandidateMegaLevel gate silently no-ops it for an entry whose species has no `.boost`, so this never needs a per-entry check here.
+ *
+ * Exported (2026-09-10) so `rosterMoveChange.ts` can build the exact same
+ * `TeamRaidSlotInput` shape this module uses for its own Stage 4 — the
+ * roster-mode TM move-change sweep needs to construct/mutate a boss's
+ * fielded team the same way, and duplicating this mapping would risk the
+ * two silently drifting apart (e.g. a future field added here but not
+ * mirrored there).
+ */
+export function toSlotInput(entry: RosterEntry, megaLevel: MegaLevel | undefined): TeamRaidSlotInput {
   return {
     species: entry.species,
     fastMoveId: entry.fastMoveId,
@@ -759,8 +990,95 @@ function entryBossMetricsInputs(
   };
 }
 
-function resolveCandyFamilyId(entry: RosterEntry): string | undefined {
+/** Exported (2026-09-10) — `rosterMoveChange.ts` needs the SAME family resolution for a second-charged-move candidate's stardust/candy pricing (it draws from the same pool a power-up does, per PLAN_tm_move_change_optimizer.md's "Hard constraints"). */
+export function resolveCandyFamilyId(entry: RosterEntry): string | undefined {
   return entry.candyFamilyId ?? entry.species.candyFamilyId;
+}
+
+/** See SpeciesDefinition.evolutions — one endpoint reachable by ordinary evolution, paired with the TOTAL candy cost of every hop along the path to it (see evolutionEndpoints below). */
+export interface EvolutionEndpoint {
+  to: SpeciesDefinition;
+  candyCost: number;
+}
+
+/**
+ * Every FULLY-EVOLVED endpoint reachable from `species` by ordinary
+ * evolution, each paired with the TOTAL candy cost of every hop along its
+ * path — walks `SpeciesDefinition.evolutions` recursively so a multi-stage
+ * line (Bulbasaur -> Ivysaur -> Venusaur) or a branching one (Eevee's
+ * eeveelutions) both resolve to their real terminal form(s), never an
+ * intermediate still-unevolved one. This matters because MECHANICS.md's
+ * "never power up before evolving" rule applies at EVERY stage, not just the
+ * first — "evolve once, power up, evolve again" would waste stardust exactly
+ * like "power up, then evolve" does.
+ *
+ * Returns `[]` (never a partial/guessed chain) whenever the walk runs off the
+ * end of what data-sync has populated — `species.evolutions` undefined/empty
+ * on `species` itself, or on ANY intermediate species the chain passes
+ * through. Callers should fall back to a plain "evolve first" advisory
+ * (using `evolvesToIds`) rather than pricing a chain this function can't
+ * fully resolve. Also returns `[]` for a species that's already fully
+ * evolved (nothing to walk).
+ */
+export function evolutionEndpoints(species: SpeciesDefinition): EvolutionEndpoint[] {
+  const walk = (current: SpeciesDefinition, candyCostSoFar: number, seen: ReadonlySet<string>): EvolutionEndpoint[] => {
+    if (current.isFullyEvolved !== false) {
+      return candyCostSoFar > 0 ? [{ to: current, candyCost: candyCostSoFar }] : [];
+    }
+    const options = current.evolutions;
+    if (!options || options.length === 0 || seen.has(current.id)) return [];
+    const nextSeen = new Set(seen);
+    nextSeen.add(current.id);
+    const endpoints: EvolutionEndpoint[] = [];
+    for (const option of options) {
+      endpoints.push(...walk(option.to, candyCostSoFar + option.candyCost, nextSeen));
+    }
+    return endpoints;
+  };
+  return walk(species, 0, new Set());
+}
+
+/** One evolution branch this planner CANNOT price, reported so it's never silently absent — see SpeciesDefinition.GatedEvolutionOption's doc comment and gatedEvolutionNotices below. */
+export interface GatedEvolutionNotice {
+  toSpeciesId: string;
+  toSpeciesName: string;
+  /** Human-readable summary of every known requirement beyond (or instead of) candy — e.g. "needs Metal Coat, 50 candy" or "needs to be your buddy for 10km, daytime only, a field quest". Never invents a requirement this engine wasn't told about. */
+  requirementSummary: string;
+}
+
+function describeEvolutionRequirement(g: GatedEvolutionOption): string {
+  const parts: string[] = [];
+  if (g.requiresItem) parts.push(`needs ${g.requiresItem}${g.requiresItemCount ? ` x${g.requiresItemCount}` : ""}`);
+  if (g.requiresLureItem) parts.push(`needs ${g.requiresLureItem} active nearby`);
+  if (g.requiresBuddy) parts.push(`needs to be your buddy${g.requiresBuddyDistanceKm ? ` for ${g.requiresBuddyDistanceKm}km` : ""}`);
+  if (g.requiresGender) parts.push(`must be ${g.requiresGender}`);
+  if (g.requiresDaytime) parts.push("daytime only");
+  if (g.requiresNighttime) parts.push("nighttime only");
+  if (g.requiresDuskPeriod) parts.push("dusk only");
+  if (g.requiresFullMoon) parts.push("full moon only");
+  if (g.requiresUpsideDown) parts.push("device upside-down");
+  if (g.requiresQuest) parts.push("a field/special research quest");
+  if (g.candyCost !== undefined) parts.push(`${g.candyCost} candy`);
+  return parts.length > 0 ? parts.join(", ") : "an unspecified additional requirement";
+}
+
+/**
+ * Every evolution branch of `species` this planner CANNOT price as a
+ * committable candidate (SpeciesDefinition.gatedEvolutions — an item, a lure,
+ * buddy distance, gender, time-of-day, a quest) — `[]` when there are none
+ * or the data isn't resolved yet. Consumed wherever an unevolved entry is
+ * reported (both `RosterNeverCompetitiveEntry.gatedEvolutions` and
+ * `RosterPowerUpCandidate.viaEvolution.otherGatedOptions`) so a gated branch
+ * is always SHOWN with why it can't be priced, never silently dropped —
+ * CLAUDE.md's standing "an exclusion gets shown, not quietly dropped" rule,
+ * same reasoning as `neverCompetitive` itself.
+ */
+export function gatedEvolutionNotices(species: SpeciesDefinition): GatedEvolutionNotice[] {
+  return (species.gatedEvolutions ?? []).map((g) => ({
+    toSpeciesId: g.to.id,
+    toSpeciesName: g.to.name,
+    requirementSummary: describeEvolutionRequirement(g),
+  }));
 }
 
 interface PricedCandidate {
@@ -780,8 +1098,21 @@ function priceCandidate(
   candyByFamilyId: Record<string, { candy: number; xlCandy: number } | undefined>,
   rareCandyOnHand: number,
   rareCandyXlOnHand: number,
+  /**
+   * Extra regular candy required BEFORE this power-up even begins, folded
+   * straight into the returned `cost.candy` — used for an "evolve, then
+   * power up" candidate's one-time evolution candy cost (IDEAS.md #9). 0 for
+   * an ordinary already-evolved candidate. Always drawn from the SAME family
+   * pool as the power-up itself (MECHANICS.md: candy is shared per
+   * evolutionary family, and evolution/power-up candy are the same
+   * currency), so no separate accounting is needed beyond this addition.
+   */
+  extraCandy = 0,
 ): PricedCandidate {
-  const cost = powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers);
+  // See powerUp.ts's powerUpCostTableFor — resolves Eternatus (or any
+  // future per-species upgrade override) before pricing this entry.
+  const powerUpOnlyCost = powerUpCost(powerUpCostTableFor(costTable, entry.species), fromLevel, toLevel, entry.costModifiers);
+  const cost: PowerUpResourceCost = { ...powerUpOnlyCost, candy: powerUpOnlyCost.candy + extraCandy };
   const familyId = resolveCandyFamilyId(entry);
   const pool = familyId !== undefined ? candyByFamilyId[familyId] : undefined;
   const costUnverified = pool === undefined;
@@ -891,6 +1222,17 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     }
   }
 
+  const hypotheticalCatchInputs = rest.hypotheticalCatches ?? [];
+  const seenHypotheticalIds = new Set<string>();
+  for (const hc of hypotheticalCatchInputs) {
+    if (seenEntryIds.has(hc.id) || seenHypotheticalIds.has(hc.id)) {
+      throw new Error(
+        `HypotheticalCatchCandidate.id "${hc.id}" collides with a RosterEntry.entryId or another hypothetical catch's id — every id in this sweep must be unique.`,
+      );
+    }
+    seenHypotheticalIds.add(hc.id);
+  }
+
   const shared: SharedAssumptions = {
     dodge: rest.dodge,
     dodgeFastAttacks: rest.dodgeFastAttacks,
@@ -905,6 +1247,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     maxSecondsPerSlot: rest.maxSecondsPerSlot,
   };
 
+  const onProgress = rest.onProgress;
   const evalSeeds = Array.from({ length: iterations }, (_, i) => seed + i * 7919);
 
   const screenScoreCache = new Map<string, number>();
@@ -961,6 +1304,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
   const baselinePerBoss: RosterBaselineBossSummary[] = targets.map((target, ti) => {
     const team = baselineTeamsByTarget[ti]!;
     const summary = runFullRosterCached(team, ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache);
+    onProgress?.({ stage: "baseline", completed: ti + 1, total: targets.length, bossId: target.species.id, bossName: target.species.name });
     return { bossId: target.species.id, bossName: target.species.name, team: team.map((e) => e.entryId), summary };
   });
 
@@ -990,6 +1334,89 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
         )
       : 0;
 
+  // --- "Add a 7th" (IDEAS.md #3): optional hypothetical-catch comparisons ---
+  // Purely informational — see RosterPlannerInputs.hypotheticalCatches and
+  // RosterHypotheticalCatchImpact's own doc comments. Reuses the exact same
+  // "would this not-currently-real entry enter a boss's team" logic as a
+  // BENCHED candidate below, just without any priced power-up levels (a
+  // hypothetical catch is evaluated at exactly ONE level: whatever the
+  // caller supplied).
+  const hypotheticalCatches: RosterHypotheticalCatchImpact[] = hypotheticalCatchInputs.map((hc, hcIndex) => {
+    const virtualEntry: RosterEntry = {
+      entryId: hc.id,
+      species: hc.species,
+      fastMoveId: hc.fastMoveId,
+      chargedMoveId: hc.chargedMoveId,
+      level: hc.level,
+      ivs: hc.ivs,
+      costModifiers: { isShadow: false, isPurified: false, isLucky: false },
+      canMega: false,
+      ivsAreApproximate: false,
+      levelIsApproximate: false,
+      movesetIsDefaulted: false,
+      candyFamilyId: hc.candyFamilyId,
+    };
+
+    const perBoss: RosterPerBossImpact[] = targets.map((target, ti) => {
+      const team = baselineTeamsByTarget[ti]!;
+      const measuredScore = getScreenScore(virtualEntry, hc.level, target, ti);
+      const sixthPlace =
+        team.length >= MAX_TEAM_RAID_SLOTS
+          ? Math.min(...team.map((e) => scoredAllByTarget[ti]!.find((s) => s.entry.entryId === e.entryId)!.score))
+          : -Infinity;
+      const touched = measuredScore > sixthPlace;
+
+      if (!touched) {
+        return { bossId: target.species.id, bossName: target.species.name, deltaTeamDps: 0, rankBefore: null, rankAfter: null, simulated: false };
+      }
+
+      const candidateTeam = selectTeam([...scoredAllByTarget[ti]!, { entry: virtualEntry, score: measuredScore }]);
+      const candidateSummary = runFullRosterCached(candidateTeam, ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache);
+      const baseline = baselinePerBoss[ti]!;
+      const deltaTeamDps = candidateSummary.teamDps - baseline.summary.teamDps;
+      const rankAfterIdx = candidateTeam.findIndex((e) => e.entryId === virtualEntry.entryId);
+      const rankAfter = rankAfterIdx >= 0 ? rankAfterIdx + 1 : null;
+      return { bossId: target.species.id, bossName: target.species.name, deltaTeamDps, rankBefore: null, rankAfter, simulated: true };
+    });
+
+    const meanDeltaTeamDps =
+      totalTargetWeight > 0 ? targets.reduce((sum, t, ti) => sum + (t.weight ?? 1) * perBoss[ti]!.deltaTeamDps, 0) / totalTargetWeight : 0;
+
+    let bestBossDeltaTeamDps: number | null = null;
+    let bestBossId: string | null = null;
+    let significantBossCount = 0;
+    for (let ti = 0; ti < targets.length; ti++) {
+      const delta = perBoss[ti]!.deltaTeamDps;
+      if (bestBossDeltaTeamDps === null || Math.abs(delta) > Math.abs(bestBossDeltaTeamDps)) {
+        bestBossDeltaTeamDps = delta;
+        bestBossId = targets[ti]!.species.id;
+      }
+      if (Math.abs(delta) > perBossNoiseFloors[ti]!) significantBossCount++;
+    }
+    if (bestBossDeltaTeamDps === 0) {
+      bestBossDeltaTeamDps = null;
+      bestBossId = null;
+    }
+
+    const bossesNewlyFielded = perBoss.filter((p) => p.rankAfter !== null).map((p) => p.bossId);
+
+    onProgress?.({ stage: "hypotheticalCatches", completed: hcIndex + 1, total: hypotheticalCatchInputs.length });
+
+    return {
+      id: hc.id,
+      speciesId: hc.species.id,
+      speciesName: hc.species.name,
+      level: hc.level,
+      perBoss,
+      meanDeltaTeamDps,
+      bestBossDeltaTeamDps,
+      bestBossId,
+      significantBossCount,
+      bossesNewlyFielded,
+      exceedsNoise: Math.abs(meanDeltaTeamDps) > noiseFloorTeamDps || (significanceMode === "aggregate-or-per-boss" && significantBossCount > 0),
+    };
+  });
+
   // --- Stage 3: candidate generation -----------------------------------------
   interface Draft {
     entry: RosterEntry;
@@ -997,63 +1424,77 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     priced: PricedCandidate;
     touchedTargetIndices: number[];
     rankProxy: number;
+    /** See RosterPowerUpCandidate.viaEvolution — set only for an "evolve, then power up" draft (IDEAS.md #9). */
+    viaEvolution?: {
+      fromEntryId: string;
+      fromSpeciesId: string;
+      fromSpeciesName: string;
+      evolutionCandyCost: number;
+      otherGatedOptions?: GatedEvolutionNotice[];
+    };
   }
 
   const neverCompetitive: RosterNeverCompetitiveEntry[] = [];
   const drafts: Draft[] = [];
 
-  for (const entry of pool) {
-    if (entry.species.isFullyEvolved === false) {
-      const evolvesToIds = entry.species.evolvesToIds ?? [];
-      neverCompetitive.push({
-        entryId: entry.entryId,
-        speciesId: entry.species.id,
-        speciesName: entry.species.name,
-        reason:
-          evolvesToIds.length > 0
-            ? `Evolve first (into ${evolvesToIds.join(", ")}) before powering up — evolution costs candy only, preserves level/IVs exactly, and always buys more team DPS per stardust afterward.`
-            : "This species has a further evolution on record (though the specific target isn't) — evolve first before powering up.",
-        evolvesToIds,
-      });
-      continue;
-    }
-
+  /**
+   * Builds every (toLevel) Draft for ONE combat-relevant entry — either a
+   * real, already-evolved pool entry, or a VIRTUAL post-evolution entry (see
+   * the evolve-then-power-up branch in the main loop below) — and pushes
+   * them onto `drafts`. `extraCandy` folds a one-time evolution candy cost
+   * into every resulting Draft's priced cost (0 for an ordinary
+   * already-evolved entry); `viaEvolution` is attached to every Draft
+   * unchanged, for RosterPowerUpCandidate's own field of the same name.
+   * Returns how many affordable levels existed at all and whether ANY of
+   * them touched a boss, so the caller can report the right
+   * `neverCompetitive` message (this module's own two pre-existing, distinct
+   * messages for an ordinary entry are preserved verbatim via these two
+   * counts — see the main loop below).
+   */
+  function generateDraftsForEntry(
+    effectiveEntry: RosterEntry,
+    extraCandy: number,
+    viaEvolution?: Draft["viaEvolution"],
+  ): { affordableLevelCount: number; anyTouched: boolean } {
+    // See powerUp.ts's powerUpCostTableFor — resolves Eternatus (or any
+    // future per-species upgrade override) once for this entry's species.
+    const table = powerUpCostTableFor(costTable, effectiveEntry.species);
     const levelsUnion = new Set<number>();
     for (let ti = 0; ti < targets.length; ti++) {
-      const metricsInputs = getMetricsInputs(entry, targets[ti]!, ti);
-      for (const lvl of usefulPowerUpLevelsAbove({ ...metricsInputs, table: costTable, fromLevel: entry.level, maxLevel })) {
+      const metricsInputs = getMetricsInputs(effectiveEntry, targets[ti]!, ti);
+      for (const lvl of usefulPowerUpLevelsAbove({ ...metricsInputs, table, fromLevel: effectiveEntry.level, maxLevel })) {
         levelsUnion.add(lvl);
       }
     }
     const affordableLevels = [...levelsUnion]
       .sort((a, b) => a - b)
-      .filter((lvl) => powerUpCost(costTable, entry.level, lvl, entry.costModifiers).stardust <= stardustOnHand);
-
-    if (affordableLevels.length === 0) {
-      neverCompetitive.push({
-        entryId: entry.entryId,
-        speciesId: entry.species.id,
-        speciesName: entry.species.name,
-        reason: "No affordable power-up level within stardustOnHand (or already at maxLevel).",
-      });
-      continue;
-    }
+      .filter((lvl) => powerUpCost(table, effectiveEntry.level, lvl, effectiveEntry.costModifiers).stardust <= stardustOnHand);
 
     let anyTouched = false;
     for (const toLevel of affordableLevels) {
-      const priced = priceCandidate(costTable, entry, entry.level, toLevel, stardustOnHand, candyByFamilyId, rareCandyOnHand, rareCandyXlOnHand);
+      const priced = priceCandidate(
+        costTable,
+        effectiveEntry,
+        effectiveEntry.level,
+        toLevel,
+        stardustOnHand,
+        candyByFamilyId,
+        rareCandyOnHand,
+        rareCandyXlOnHand,
+        extraCandy,
+      );
       const touchedTargetIndices: number[] = [];
       let weightedImpact = 0;
 
       for (let ti = 0; ti < targets.length; ti++) {
         const target = targets[ti]!;
-        const fieldedNow = baselineTeamsByTarget[ti]!.some((e) => e.entryId === entry.entryId);
-        const currentScore = getScreenScore(entry, entry.level, target, ti);
+        const fieldedNow = baselineTeamsByTarget[ti]!.some((e) => e.entryId === effectiveEntry.entryId);
+        const currentScore = getScreenScore(effectiveEntry, effectiveEntry.level, target, ti);
         let touched = fieldedNow;
         let estimated = currentScore;
 
         if (!fieldedNow) {
-          estimated = estimateOrMeasureScreenScore(entry, toLevel, target, ti, currentScore);
+          estimated = estimateOrMeasureScreenScore(effectiveEntry, toLevel, target, ti, currentScore);
 
           const team = baselineTeamsByTarget[ti]!;
           const sixthPlace =
@@ -1072,10 +1513,90 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
 
       anyTouched = anyTouched || touchedTargetIndices.length > 0;
       const rankProxy = (weightedImpact / Math.max(priced.cost.stardust, 1)) * 1000;
-      drafts.push({ entry, toLevel, priced, touchedTargetIndices, rankProxy });
+      drafts.push({ entry: effectiveEntry, toLevel, priced, touchedTargetIndices, rankProxy, viaEvolution });
     }
 
-    if (!anyTouched) {
+    return { affordableLevelCount: affordableLevels.length, anyTouched };
+  }
+
+  for (const entry of pool) {
+    if (entry.species.isFullyEvolved === false) {
+      const evolvesToIds = entry.species.evolvesToIds ?? [];
+      const endpoints = evolutionEndpoints(entry.species);
+      // Real branches this planner structurally cannot price (an item,
+      // buddy distance, time-of-day, a quest, ...) — computed REGARDLESS of
+      // whether a candy-only endpoint also exists, and attached to whichever
+      // output row this entry actually lands in below, so a gated option
+      // NEVER goes unmentioned (CLAUDE.md's standing "shown, not quietly
+      // dropped" rule — see GatedEvolutionOption's own doc comment).
+      const gated = gatedEvolutionNotices(entry.species);
+
+      if (endpoints.length === 0) {
+        neverCompetitive.push({
+          entryId: entry.entryId,
+          speciesId: entry.species.id,
+          speciesName: entry.species.name,
+          reason:
+            gated.length > 0
+              ? `Evolves only via requirement(s) this planner can't price: ${gated.map((g) => `${g.toSpeciesName} (${g.requirementSummary})`).join("; ")} — evolve manually, then power up.`
+              : evolvesToIds.length > 0
+                ? `Evolve first (into ${evolvesToIds.join(", ")}) before powering up — evolution costs candy only, preserves level/IVs exactly, and always buys more team DPS per stardust afterward.`
+                : "This species has a further evolution on record (though the specific target isn't) — evolve first before powering up.",
+          evolvesToIds,
+          gatedEvolutions: gated.length > 0 ? gated : undefined,
+        });
+        continue;
+      }
+
+      // "Evolve, then power up to L" as ONE priced candidate (IDEAS.md #9) —
+      // every reachable fully-evolved endpoint is its own candidate line,
+      // reusing every existing mechanism (screen score, Stage 4 simulation,
+      // priceCandidate) unchanged via a VIRTUAL post-evolution entry. That
+      // virtual entry uses a SYNTHETIC entryId, never the real owned entry's
+      // id — the real (still-unevolved) entry can independently already be
+      // on a baseline team in its own unevolved form, and reusing its id
+      // here would collide with that row, silently simulating the WRONG
+      // (still-unevolved) species for this candidate. See
+      // RosterPowerUpCandidate.viaEvolution's own doc comment.
+      let anyEndpointTouched = false;
+      for (const endpoint of endpoints) {
+        const evolvedEntry: RosterEntry = {
+          ...entry,
+          entryId: `${entry.entryId}::evolve->${endpoint.to.id}`,
+          species: endpoint.to,
+          candyFamilyId: resolveCandyFamilyId(entry),
+        };
+        const { anyTouched } = generateDraftsForEntry(evolvedEntry, endpoint.candyCost, {
+          fromEntryId: entry.entryId,
+          fromSpeciesId: entry.species.id,
+          fromSpeciesName: entry.species.name,
+          evolutionCandyCost: endpoint.candyCost,
+          otherGatedOptions: gated.length > 0 ? gated : undefined,
+        });
+        anyEndpointTouched = anyEndpointTouched || anyTouched;
+      }
+      if (!anyEndpointTouched) {
+        neverCompetitive.push({
+          entryId: entry.entryId,
+          speciesId: entry.species.id,
+          speciesName: entry.species.name,
+          reason: `Evolving (into ${endpoints.map((e) => e.to.name).join(", ")}) and powering up doesn't make this competitive against any evaluated boss at any affordable level.`,
+          evolvesToIds,
+          gatedEvolutions: gated.length > 0 ? gated : undefined,
+        });
+      }
+      continue;
+    }
+
+    const { affordableLevelCount, anyTouched } = generateDraftsForEntry(entry, 0);
+    if (affordableLevelCount === 0) {
+      neverCompetitive.push({
+        entryId: entry.entryId,
+        speciesId: entry.species.id,
+        speciesName: entry.species.name,
+        reason: "No affordable power-up level within stardustOnHand (or already at maxLevel).",
+      });
+    } else if (!anyTouched) {
       neverCompetitive.push({
         entryId: entry.entryId,
         speciesId: entry.species.id,
@@ -1201,11 +1722,17 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
       deltaPerXlCandy: d.priced.cost.xlCandy > 0 ? meanDeltaTeamDps / d.priced.cost.xlCandy : null,
       exceedsNoise:
         Math.abs(meanDeltaTeamDps) > noiseFloorTeamDps || (significanceMode === "aggregate-or-per-boss" && significantBossCount > 0),
+      viaEvolution: d.viaEvolution,
     };
   };
 
   const simulatedByKey = new Map<string, RosterPowerUpCandidate>();
-  for (const [key, d] of toSimulate) simulatedByKey.set(key, simulateDraft(d));
+  const candidatesToSimulate = [...toSimulate];
+  for (let i = 0; i < candidatesToSimulate.length; i++) {
+    const [key, d] = candidatesToSimulate[i]!;
+    simulatedByKey.set(key, simulateDraft(d));
+    onProgress?.({ stage: "candidates", completed: i + 1, total: candidatesToSimulate.length });
+  }
 
   const candidates = capped
     .map((d) => simulatedByKey.get(`${d.entry.entryId}@${d.toLevel}`)!)
@@ -1220,6 +1747,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     candidates,
     benchedButPromising,
     neverCompetitive,
+    hypotheticalCatches,
   };
 }
 
@@ -1369,7 +1897,8 @@ export function candidateClearsBudgetFloor(
   return evalResult.perBoss.some((p, ti) => p.deltaTeamDps > perBossFloors[ti]!);
 }
 
-export interface RosterBudgetInputs extends Omit<RosterPlannerInputs, "maxCandidates" | "maxLevelsPerEntry"> {
+export interface RosterBudgetInputs
+  extends Omit<RosterPlannerInputs, "maxCandidates" | "maxLevelsPerEntry" | "hypotheticalCatches"> {
   /**
    * Pure engineering safety cap on greedy rounds (each round commits at most
    * one step) — same role as `powerUp.ts`'s `PowerUpBudgetInputs.maxRounds`/
@@ -1640,6 +2169,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     maxSecondsPerSlot: rest.maxSecondsPerSlot,
   };
 
+  const onProgress = rest.onProgress;
   const evalSeeds = Array.from({ length: iterations }, (_, i) => seed + i * 7919);
 
   // Caches persist across the WHOLE search (every round), not just one call —
@@ -1669,6 +2199,15 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
   // selection below still sees the FULL pool; only Stage-3-style candidate
   // generation is restricted to what's left. ------------------------------
   const excludedEntries: RosterNeverCompetitiveEntry[] = [];
+  // Real evolution-blocked pool entries, tracked separately from
+  // `excludedEntries` (which owns the CALLER-facing shape) so the
+  // "evolutionRecommendation" pass below — which needs `evaluateCandidate`,
+  // defined much later in this function — can find its way back to the
+  // right `excludedEntries` row without re-deriving `isFullyEvolved ===
+  // false` a second time. See this module's "planRosterBudget" top doc
+  // comment for why this planner reports an evolution opportunity as
+  // INFORMATION rather than committing it, unlike runRosterPlanner.
+  const evolutionBlockedEntries: RosterEntry[] = [];
   const eligiblePool: RosterEntry[] = [];
   const entryFamilyId = new Map<string, string>();
   const remainingCandyByFamilyId = new Map<string, { candy: number; xlCandy: number }>();
@@ -1676,16 +2215,25 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
   for (const entry of pool) {
     if (entry.species.isFullyEvolved === false) {
       const evolvesToIds = entry.species.evolvesToIds ?? [];
+      // See runRosterPlanner's identical computation — a gated branch (item/
+      // lure/buddy-distance/gender/time-of-day/quest) must be named here too,
+      // never silently absent just because this planner also can't commit it.
+      const gated = gatedEvolutionNotices(entry.species);
+      const hasPriceableEndpoint = evolutionEndpoints(entry.species).length > 0;
       excludedEntries.push({
         entryId: entry.entryId,
         speciesId: entry.species.id,
         speciesName: entry.species.name,
         reason:
-          evolvesToIds.length > 0
-            ? `Evolve first (into ${evolvesToIds.join(", ")}) before budgeting for a power-up — evolution costs candy only, preserves level/IVs exactly, and always buys more team DPS per stardust afterward.`
-            : "This species has a further evolution on record (though the specific target isn't) — evolve first before budgeting for a power-up.",
+          gated.length > 0 && !hasPriceableEndpoint
+            ? `Evolves only via requirement(s) this planner can't price: ${gated.map((g) => `${g.toSpeciesName} (${g.requirementSummary})`).join("; ")} — evolve manually, then power up.`
+            : evolvesToIds.length > 0
+              ? `Evolve first (into ${evolvesToIds.join(", ")}) before budgeting for a power-up — evolution costs candy only, preserves level/IVs exactly, and always buys more team DPS per stardust afterward.`
+              : "This species has a further evolution on record (though the specific target isn't) — evolve first before budgeting for a power-up.",
         evolvesToIds,
+        gatedEvolutions: gated.length > 0 ? gated : undefined,
       });
+      evolutionBlockedEntries.push(entry);
       continue;
     }
 
@@ -1733,9 +2281,11 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     return level === entry.level ? entry : { ...entry, level };
   };
 
-  const currentTeamSummaryByTarget: PowerUpEncounterSummary[] = targets.map((target, ti) =>
-    runFullRosterCached(currentTeamsByTarget[ti]!.map(liveEntry), ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache),
-  );
+  const currentTeamSummaryByTarget: PowerUpEncounterSummary[] = targets.map((target, ti) => {
+    const summary = runFullRosterCached(currentTeamsByTarget[ti]!.map(liveEntry), ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache);
+    onProgress?.({ stage: "baseline", completed: ti + 1, total: targets.length, bossId: target.species.id, bossName: target.species.name });
+    return summary;
+  });
 
   const baselinePerBoss: RosterBaselineBossSummary[] = targets.map((target, ti) => ({
     bossId: target.species.id,
@@ -1940,6 +2490,87 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     return { perBoss, meanDeltaTeamDps, bestBossDeltaTeamDps, bestBossId, significantBossCount, touchedTargetIndices };
   };
 
+  // --- Evolution recommendation (informational only, IDEAS.md #9) ---------
+  // See RosterNeverCompetitiveEntry.evolutionRecommendation's own doc
+  // comment for WHY this planner reports rather than commits: every
+  // per-entryId cache above (screenScoreCache/metricsInputsCache/
+  // teamSummaryCache) assumes a FIXED species for the whole search, and a
+  // mid-search species change needs new-entryId-plus-full-reselection
+  // machinery this pass deliberately does not build. What it DOES do: for
+  // each evolution-blocked entry with real SpeciesDefinition.evolutions data,
+  // cheaply screen every reachable endpoint's single best affordable level,
+  // then confirm the best one with ONE real evaluateCandidate simulation
+  // (never a proxy value reported as if it were simulated) via a
+  // SYNTHETIC entryId — never the real owned entry's id, for the exact same
+  // collision reason runRosterPlanner's own evolve-then-power-up drafts use
+  // one (see RosterPowerUpCandidate.viaEvolution's doc comment).
+  for (const entry of evolutionBlockedEntries) {
+    const endpoints = evolutionEndpoints(entry.species);
+    if (endpoints.length === 0) continue;
+
+    let best: { virtualEntry: RosterEntry; toLevel: number; evolutionCandyCost: number; screenGain: number } | null = null;
+    for (const endpoint of endpoints) {
+      const virtualEntry: RosterEntry = {
+        ...entry,
+        entryId: `${entry.entryId}::evolve-recommendation->${endpoint.to.id}`,
+        species: endpoint.to,
+        candyFamilyId: resolveCandyFamilyId(entry),
+      };
+      // See powerUp.ts's powerUpCostTableFor — the ENDPOINT's species (the
+      // evolved form), not the original entry's, is what gets priced here.
+      const table = powerUpCostTableFor(costTable, virtualEntry.species);
+      const levelsUnion = new Set<number>();
+      for (let ti = 0; ti < targets.length; ti++) {
+        const metricsInputs = getMetricsInputs(virtualEntry, targets[ti]!, ti);
+        for (const lvl of usefulPowerUpLevelsAbove({ ...metricsInputs, table, fromLevel: virtualEntry.level, maxLevel })) {
+          levelsUnion.add(lvl);
+        }
+      }
+      // Only the HIGHEST affordable level is considered per endpoint — a
+      // cheap, one-shot informational estimate (never a full per-level
+      // sweep; that's runRosterPlanner's job).
+      const toLevel = [...levelsUnion]
+        .sort((a, b) => a - b)
+        .filter((lvl) => powerUpCost(table, virtualEntry.level, lvl, virtualEntry.costModifiers).stardust <= stardustOnHand)
+        .at(-1);
+      if (toLevel === undefined) continue;
+
+      // Cheap screen-score-based proxy, ONLY to pick which endpoint is worth
+      // a real simulation below — never itself reported as a team-DPS value.
+      let screenGain = 0;
+      for (let ti = 0; ti < targets.length; ti++) {
+        const target = targets[ti]!;
+        const currentScore = getScreenScore(virtualEntry, virtualEntry.level, target, ti);
+        const estimated = estimateOrMeasureScore(getMetricsInputs(virtualEntry, target, ti), virtualEntry.level, toLevel, currentScore, () =>
+          getScreenScore(virtualEntry, toLevel, target, ti),
+        );
+        screenGain += (target.weight ?? 1) * Math.max(0, estimated - currentScore);
+      }
+      if (!best || screenGain > best.screenGain) {
+        best = { virtualEntry, toLevel, evolutionCandyCost: endpoint.candyCost, screenGain };
+      }
+    }
+
+    if (!best) continue;
+
+    // ONE real Stage-4-style simulation for the single best (endpoint,
+    // level) found above — same "cheap screen, then confirm with a real
+    // sim" pattern as everywhere else in this module, so the reported
+    // number is a real simulated team-DPS delta, never a proxy dressed up
+    // as one.
+    const evalResult = evaluateCandidate(best.virtualEntry, best.virtualEntry.level, best.toLevel, perBossNoiseFloors);
+    const row = excludedEntries.find((e) => e.entryId === entry.entryId);
+    if (row) {
+      row.evolutionRecommendation = {
+        toSpeciesId: best.virtualEntry.species.id,
+        toSpeciesName: best.virtualEntry.species.name,
+        toLevel: best.toLevel,
+        evolutionCandyCost: best.evolutionCandyCost,
+        meanDeltaTeamDps: evalResult.meanDeltaTeamDps,
+      };
+    }
+  }
+
   // --- Ledger state, mutated as steps commit -------------------------------
   let remainingStardust = stardustOnHand;
   let remainingSharedCandy = rareCandyOnHand;
@@ -1979,6 +2610,8 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
       const familyPool = remainingCandyByFamilyId.get(familyId)!;
       const maxSpendableCandy = familyPool.candy + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
       const maxSpendableXl = familyPool.xlCandy + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+      // See powerUp.ts's powerUpCostTableFor.
+      const table = powerUpCostTableFor(costTable, entry.species);
 
       // Every AFFORDABLE useful level, full stop — no early break by depth
       // here (see RosterBudgetInputs.candidateLevelsPerEntryPerRound's doc
@@ -1988,7 +2621,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
       // ONLY place this entry's candidate count actually gets reduced.
       const affordable: RawRosterBudgetCandidate[] = [];
       for (const toLevel of perEntryUseful.get(entry.entryId)!) {
-        const cost = powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers);
+        const cost = powerUpCost(table, fromLevel, toLevel, entry.costModifiers);
         if (cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl) break;
         affordable.push({ entry, fromLevel, toLevel, cost, familyId });
       }
@@ -2084,6 +2717,14 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
       bossesNewlyFielded,
       perBoss: evalResult.perBoss,
     });
+
+    onProgress?.({
+      stage: "rounds",
+      completed: round + 1,
+      total: maxRounds,
+      bossId: evalResult.bestBossId ?? undefined,
+      bossName: evalResult.bestBossId ? targets.find((t) => t.species.id === evalResult.bestBossId)?.species.name : undefined,
+    });
   }
 
   // --- Best blocked candidate (one-time, post-search only) ------------------
@@ -2109,9 +2750,11 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     const familyPool = remainingCandyByFamilyId.get(familyId)!;
     const maxSpendableCandy = familyPool.candy + remainingSharedCandy * RARE_CANDY_TO_CANDY_RATIO;
     const maxSpendableXl = familyPool.xlCandy + remainingSharedXl * RARE_CANDY_XL_TO_XL_CANDY_RATIO;
+    // See powerUp.ts's powerUpCostTableFor.
+    const table = powerUpCostTableFor(costTable, entry.species);
 
     const firstUnaffordableIndex = usefulLevels.findIndex((toLevel) => {
-      const cost = powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers);
+      const cost = powerUpCost(table, fromLevel, toLevel, entry.costModifiers);
       return cost.stardust > remainingStardust || cost.candy > maxSpendableCandy || cost.xlCandy > maxSpendableXl;
     });
     if (firstUnaffordableIndex === -1) return [];
@@ -2120,7 +2763,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
       entry,
       fromLevel,
       toLevel,
-      cost: powerUpCost(costTable, fromLevel, toLevel, entry.costModifiers),
+      cost: powerUpCost(table, fromLevel, toLevel, entry.costModifiers),
       familyId,
     }));
   });

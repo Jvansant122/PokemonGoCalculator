@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import { simulateOpeningBurst } from "../src/combat.js";
 import {
   boundedJitteredChargedMoveInterval,
+  DEFAULT_DODGE_ERROR_MISSED_FRACTIONS,
+  HOLD_CHARGED_MOVE_DODGE_ATTEMPTS,
   isTickAlignedDuration,
   runStepwiseDistribution,
   simulateStepwiseBattle,
+  sweepDodgeExecutionError,
 } from "../src/simulate.js";
+import { DODGE_COST_SECONDS } from "../src/breakpoints.js";
 import { typeEffectiveness } from "../src/typeChart.js";
 import {
   ARC_SPARK,
@@ -326,6 +330,20 @@ describe("simulateStepwiseBattle", () => {
       // ever push the attacker's own fast-move cadence LATER, never earlier
       // — so strictly fewer (or equal, never more) fast-move damage lands.
       expect(held.totalFastMoveDamage).toBeLessThan(notHeld.totalFastMoveDamage);
+
+      // IDEAS.md #20 — the placeholder cost is now surfaced as its own
+      // value, not just baked into the fast-move-cadence effect above. Every
+      // boss charged hit here is dodged (dodge:"perfect", attacker never
+      // mid-own-animation since its own charged move is unreachable), so
+      // every one of them is a hold-cast-protection event.
+      expect(held.holdChargedMoveDodgeCostEvents).toBe(held.bossChargedHitsTaken);
+      expect(held.holdChargedMoveDodgeCostSeconds).toBeCloseTo(
+        held.bossChargedHitsTaken * HOLD_CHARGED_MOVE_DODGE_ATTEMPTS * DODGE_COST_SECONDS,
+      );
+      // notHeld never engages the placeholder at all (holdChargedMoveUntilSafe
+      // is false), so both fields stay at their zero default.
+      expect(notHeld.holdChargedMoveDodgeCostEvents).toBe(0);
+      expect(notHeld.holdChargedMoveDodgeCostSeconds).toBe(0);
     });
 
     it("does NOT add the extra dodge-cost time when dodge.kind is \"none\" — a charged hit that isn't actually dodged costs the ordinary single DODGE_COST_SECONDS (zero here, since no dodge is attempted at all)", () => {
@@ -371,6 +389,118 @@ describe("simulateStepwiseBattle", () => {
 
       expect(held.bossChargedHitsTaken).toBeGreaterThan(0);
       expect(held).toEqual(notHeld);
+    });
+  });
+
+  describe("meanHoldChargedMoveDodgeCostSeconds (DistributionSummary)", () => {
+    it("is 0 by default and positive once holdChargedMoveUntilSafe actually triggers the placeholder", () => {
+      const attacker = {
+        hp: 1_000_000,
+        defenseStat: 100,
+        attackStat: 100,
+        fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 5, energyGain: 0, durationSeconds: 1 },
+        chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 10, energyCost: 99999, durationSeconds: 1, vulnerableWindowSeconds: 1 },
+        fastDamageOut: { stab: false },
+        chargedDamageOut: { stab: false },
+      };
+      const boss = {
+        attackStat: 100,
+        defenseStat: 100,
+        fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 1, energyGain: 0, durationSeconds: 1000 },
+        damageOut: { stab: false },
+        chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 1, energyCost: 9999, durationSeconds: 0.5, vulnerableWindowSeconds: 0.5 },
+        chargedMoveDamageOut: { stab: false },
+        chargedMoveMeanIntervalSeconds: 3,
+        chargedMoveWarmupSeconds: 1,
+      };
+
+      const notHeldDist = runStepwiseDistribution(
+        { attacker: { ...attacker, holdChargedMoveUntilSafe: false }, boss, dodge: { kind: "perfect" }, maxSeconds: 30 },
+        20,
+      );
+      const heldDist = runStepwiseDistribution(
+        { attacker: { ...attacker, holdChargedMoveUntilSafe: true }, boss, dodge: { kind: "perfect" }, maxSeconds: 30 },
+        20,
+      );
+
+      expect(notHeldDist.meanHoldChargedMoveDodgeCostSeconds).toBe(0);
+      expect(heldDist.meanHoldChargedMoveDodgeCostSeconds).toBeGreaterThan(0);
+    });
+  });
+
+  describe("sweepDodgeExecutionError (IDEAS.md #21)", () => {
+    // A synthetic matchup where the boss's charged move is both survivable
+    // and worth dodging, so execution error actually moves the numbers.
+    const attacker = {
+      hp: 400,
+      defenseStat: 100,
+      attackStat: 120,
+      fastMove: { id: "fast", name: "Fast", type: "normal" as const, power: 8, energyGain: 10, durationSeconds: 1 },
+      chargedMove: { id: "charged", name: "Charged", type: "normal" as const, power: 60, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+      fastDamageOut: { stab: false },
+      chargedDamageOut: { stab: false },
+    };
+    const boss = {
+      attackStat: 150,
+      defenseStat: 100,
+      fastMove: { id: "boss-fast", name: "Boss Fast", type: "normal" as const, power: 6, energyGain: 6, durationSeconds: 1.5 },
+      damageOut: { stab: false },
+      chargedMove: { id: "boss-charged", name: "Boss Charged", type: "normal" as const, power: 90, energyCost: 50, durationSeconds: 2.5, vulnerableWindowSeconds: 2.5 },
+      chargedMoveDamageOut: { stab: false },
+      chargedMoveMeanIntervalSeconds: 5,
+      chargedMoveWarmupSeconds: 3,
+    };
+
+    it("returns one point per requested missedFraction, in the same order", () => {
+      const sweep = sweepDodgeExecutionError({ attacker, boss, maxSeconds: 30 }, [0, 0.2, 0.5], 30);
+      expect(sweep.map((p) => p.missedFraction)).toEqual([0, 0.2, 0.5]);
+      expect(sweep).toHaveLength(3);
+    });
+
+    it("defaults to DEFAULT_DODGE_ERROR_MISSED_FRACTIONS when no explicit list is given", () => {
+      const sweep = sweepDodgeExecutionError({ attacker, boss, maxSeconds: 30 }, undefined, 10);
+      expect(sweep.map((p) => p.missedFraction)).toEqual(DEFAULT_DODGE_ERROR_MISSED_FRACTIONS);
+    });
+
+    it("the missedFraction=0 endpoint is BYTE-IDENTICAL to dodge:{kind:\"perfect\"} at a matching seed — both are RNG-free on the dodge axis", () => {
+      const perfect = runStepwiseDistribution({ attacker, boss, dodge: { kind: "perfect" }, maxSeconds: 30 }, 30);
+      const [zeroMissedPoint] = sweepDodgeExecutionError({ attacker, boss, maxSeconds: 30 }, [0], 30);
+      expect(zeroMissedPoint!.distribution).toEqual(perfect);
+    });
+
+    it("the missedFraction=1 endpoint deals identical incoming damage to dodge:{kind:\"none\"} (both always full-damage), but is NOT byte-identical overall — it still THROWS a dodge input every time, wasting DODGE_COST_SECONDS the {kind:\"none\"} run never spends, so its own fast-move output is strictly worse", () => {
+      const none = runStepwiseDistribution({ attacker, boss, dodge: { kind: "none" }, maxSeconds: 30 }, 30);
+      const [oneMissedPoint] = sweepDodgeExecutionError({ attacker, boss, maxSeconds: 30 }, [1], 30);
+      const always = oneMissedPoint!.distribution;
+
+      // The boss's own hit schedule here is "fixed-interval" (independent of
+      // the attacker) and dodgeFastAttacks is off, so every incoming hit in
+      // BOTH runs lands at full (undodged) damage at the same simulated
+      // times — the representative run's total damage taken is a pure
+      // function of the boss's own timeline, with no dependence on the
+      // attacker's dodge setting at all.
+      expect(always.representativeRun.totalDamageTaken).toBe(none.representativeRun.totalDamageTaken);
+      // But every one of those charged hits still costs an attempt under
+      // percentage-missed (it just always misses) — {kind:"none"} never
+      // attempts at all — so the attacker's own fast-move cadence slips
+      // later under missedFraction:1, landing strictly less fast-move
+      // damage over the same window. This is the concrete case backing the
+      // function doc comment's claim that missedFraction:1 is measurably
+      // WORSE than {kind:"none"}, not a redundant alias for it.
+      expect(always.meanFastMoveDamage).toBeLessThan(none.meanFastMoveDamage);
+    });
+
+    it("renders a band: worse execution (higher missedFraction) never makes mean survival BETTER than perfect execution", () => {
+      // Not asserting strict monotonicity at every step (a percentage-missed
+      // interleaving isn't guaranteed to be perfectly monotonic run-to-run
+      // for every possible cadence — see dodgeMultiplierForHit's own
+      // deterministic-period model), just the band's overall direction: the
+      // worst end (never dodges) must not outlive the best end (always
+      // dodges).
+      const sweep = sweepDodgeExecutionError({ attacker, boss, maxSeconds: 60 }, [0, 0.25, 0.5, 0.75, 1], 100);
+      const perfectEnd = sweep[0]!.distribution.meanSecondsSurvived;
+      const worstEnd = sweep[sweep.length - 1]!.distribution.meanSecondsSurvived;
+      expect(worstEnd).toBeLessThanOrEqual(perfectEnd);
     });
   });
 

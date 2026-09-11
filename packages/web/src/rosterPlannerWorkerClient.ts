@@ -4,6 +4,7 @@ import {
   type RosterBudgetInputs,
   type RosterBudgetPlan,
   type RosterPlannerInputs,
+  type RosterPlannerProgressCallback,
   type RosterPlanResult,
 } from "@pogo-analyzer/engine";
 import type { RosterPlannerWorkerRequest, RosterPlannerWorkerResponse } from "./rosterPlanner.worker.js";
@@ -38,6 +39,17 @@ import type { RosterPlannerWorkerRequest, RosterPlannerWorkerResponse } from "./
  * message) is NOT treated as a worker-infrastructure failure — it's surfaced
  * as a rejection directly, since re-running the same bad `inputs`
  * synchronously would just throw the identical error again.
+ *
+ * PROGRESS (IDEAS.md #13): both functions take an optional `onProgress`
+ * callback. On the worker path it's invoked from `{ type: "progress" }`
+ * messages (rosterPlanner.worker.ts builds its own closure inside the worker
+ * and posts one message per real engine-reported event — see that file's own
+ * doc comment; the callback itself never crosses the postMessage boundary,
+ * only already-serialized `RosterPlannerProgressEvent` payloads do). On the
+ * main-thread-fallback path there's no serialization boundary at all, so
+ * `onProgress` is simply spread into `inputs` and handed to the synchronous
+ * engine call directly — same real per-event callback either way, not a
+ * fallback-only no-op.
  */
 export interface RosterPlannerWorkerRunOutcome {
   data: RosterPlanResult;
@@ -81,6 +93,7 @@ function runOnWorker<TData>(
   request: RosterPlannerWorkerRequest,
   isSuccess: (msg: RosterPlannerWorkerResponse) => msg is Extract<RosterPlannerWorkerResponse, { data: TData }>,
   fallback: () => TData,
+  onProgress?: RosterPlannerProgressCallback,
 ): Promise<{ data: TData; ranOn: "worker" | "main-thread-fallback" }> {
   return new Promise((resolve, reject) => {
     const worker = createWorker();
@@ -113,7 +126,15 @@ function runOnWorker<TData>(
     }
 
     function onMessage(event: MessageEvent<RosterPlannerWorkerResponse>) {
-      if (settled || event.data.requestId !== request.requestId) return;
+      if (event.data.requestId !== request.requestId) return;
+      // Progress messages keep arriving after settlement is impossible (the
+      // terminal reply always comes last), but guard anyway in case a stale
+      // worker somehow outlives its own terminal reply.
+      if (event.data.type === "progress") {
+        onProgress?.(event.data.event);
+        return;
+      }
+      if (settled) return;
       settled = true;
       cleanup();
       if (isSuccess(event.data)) resolve({ data: event.data.data, ranOn: "worker" });
@@ -143,14 +164,20 @@ function isPlanResult(msg: RosterPlannerWorkerResponse): msg is { type: "planRes
   return msg.type === "planResult";
 }
 
-/** The ranked, whole-pool sweep (`runRosterPlanner`) — Phase 3b. See this module's own top doc comment. */
-export function runRosterPlannerOffMainThread(inputs: RosterPlannerInputs): Promise<RosterPlannerWorkerRunOutcome> {
+/** The ranked, whole-pool sweep (`runRosterPlanner`) — Phase 3b. See this module's own top doc comment, including the PROGRESS section for `onProgress`. */
+export function runRosterPlannerOffMainThread(
+  inputs: RosterPlannerInputs,
+  onProgress?: RosterPlannerProgressCallback,
+): Promise<RosterPlannerWorkerRunOutcome> {
   const requestId = `roster-${++requestCounter}`;
-  return runOnWorker({ type: "run", requestId, inputs }, isRunResult, () => runRosterPlanner(inputs));
+  return runOnWorker({ type: "run", requestId, inputs }, isRunResult, () => runRosterPlanner({ ...inputs, onProgress }), onProgress);
 }
 
-/** The fixed-budget joint plan (`planRosterBudget`) — Phase 4. See this module's own top doc comment. */
-export function runRosterBudgetOffMainThread(inputs: RosterBudgetInputs): Promise<RosterBudgetWorkerRunOutcome> {
+/** The fixed-budget joint plan (`planRosterBudget`) — Phase 4. See this module's own top doc comment, including the PROGRESS section for `onProgress`. */
+export function runRosterBudgetOffMainThread(
+  inputs: RosterBudgetInputs,
+  onProgress?: RosterPlannerProgressCallback,
+): Promise<RosterBudgetWorkerRunOutcome> {
   const requestId = `roster-budget-${++requestCounter}`;
-  return runOnWorker({ type: "plan", requestId, inputs }, isPlanResult, () => planRosterBudget(inputs));
+  return runOnWorker({ type: "plan", requestId, inputs }, isPlanResult, () => planRosterBudget({ ...inputs, onProgress }), onProgress);
 }

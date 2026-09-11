@@ -28,6 +28,7 @@ import { applyShadowToggle } from "../shadowToggle.js";
 import { computeSensitivity, type SensitivityCheck } from "../sensitivity.js";
 import { raidTierForSpeciesId } from "../registry.js";
 import { deriveEffectiveBossChargedMoveFrequencySeconds } from "./effectiveBossChargedMoveFrequency.js";
+import { runDodgeExecutionErrorBand, type DodgeExecutionErrorBandPoint } from "./dodgeExecutionErrorSweep.js";
 
 const MAX_ENERGY = 100;
 
@@ -97,6 +98,14 @@ export interface ComparatorRunResult {
    * trivial "no flip found" that's really "this axis does nothing here."
    */
   partySizeFlip: CrossoverPoint | null;
+  /**
+   * IDEAS #21 — see dodgeExecutionErrorSweep.ts's own top doc comment. A
+   * BAND across the 0-50% missed-dodge-attempt axis for both candidates,
+   * never collapsed to one number. `null` whenever it can't be computed
+   * (species/boss unresolved, or the underlying sweep throws — same
+   * degrade-quietly convention as sensitivity/bossMovesetSweep above).
+   */
+  dodgeExecutionErrorBand: DodgeExecutionErrorBandPoint[] | null;
 }
 
 export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry): ComparatorRunResult {
@@ -190,8 +199,10 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
         bossChargedMoveCadence: a.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: a.weather,
+        friendshipLevel: a.friendshipLevel,
         candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
         candidateMegaLevel: a.candidateMegaLevel,
+        candidateIsBestBuddy: a.candidateIsBestBuddy,
       });
     } catch (err) {
       resultsError = (err as Error).message;
@@ -243,8 +254,10 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
         bossChargedMoveCadence: a.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: a.weather,
+        friendshipLevel: a.friendshipLevel,
         candidateMegaBoostDisabled: a.candidateMegaBoostDisabled,
         candidateMegaLevel: a.candidateMegaLevel,
+        candidateIsBestBuddy: a.candidateIsBestBuddy,
       });
     } catch {
       bossMovesetSweep = null;
@@ -300,6 +313,57 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     }
   }
 
+  // IDEAS #21 — see dodgeExecutionErrorSweep.ts's own top doc comment and
+  // ComparatorRunResult.dodgeExecutionErrorBand above. Independent of (and
+  // deliberately not gated by) a.dodge.kind — this sweep OWNS the dodge axis
+  // for its own 6-point scan, overriding whatever the shared/per-candidate
+  // dodge settings currently are, exactly like sweepDodgeExecutionError's own
+  // doc comment describes.
+  let dodgeExecutionErrorBand: DodgeExecutionErrorBandPoint[] | null = null;
+  if (shadowAdjustedCandidates && boss) {
+    try {
+      const shared = {
+        boss,
+        bossRaidTier,
+        bossFastMoveId: a.bossFastMoveId,
+        bossChargedMoveId: a.bossChargedMoveId,
+        bossChargedMoveCadence: a.bossChargedMoveCadence,
+        bossChargedMoveMeanIntervalSeconds: effectiveBossChargedMoveFrequencySeconds,
+        bossStartingEnergy,
+        weather: a.weather,
+        friendshipLevel: a.friendshipLevel,
+        dodgeFastAttacks: a.dodgeFastAttacks,
+        holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
+      };
+      dodgeExecutionErrorBand = runDodgeExecutionErrorBand(
+        {
+          ...shared,
+          species: shadowAdjustedCandidates[0],
+          fastMoveId: a.candidateAFastMoveId,
+          chargedMoveId: a.candidateAChargedMoveId,
+          level: a.level,
+          ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
+          megaLevel: a.candidateMegaLevel[0],
+          isBestBuddy: a.candidateIsBestBuddy[0],
+          megaBoostDisabled: a.candidateMegaBoostDisabled[0] ?? false,
+        },
+        {
+          ...shared,
+          species: shadowAdjustedCandidates[1],
+          fastMoveId: a.candidateBFastMoveId,
+          chargedMoveId: a.candidateBChargedMoveId,
+          level: a.level,
+          ivs: { attack: a.ivAttack, defense: a.ivDefense, stamina: a.ivStamina },
+          megaLevel: a.candidateMegaLevel[1],
+          isBestBuddy: a.candidateIsBestBuddy[1],
+          megaBoostDisabled: a.candidateMegaBoostDisabled[1] ?? false,
+        },
+      );
+    } catch {
+      dodgeExecutionErrorBand = null;
+    }
+  }
+
   return {
     candidates,
     boss,
@@ -315,5 +379,6 @@ export function runComparatorScenario(a: Assumptions, registry: SpeciesRegistry)
     sensitivity,
     bossMovesetSweep,
     partySizeFlip,
+    dodgeExecutionErrorBand,
   };
 }

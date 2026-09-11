@@ -31,7 +31,11 @@
  *   - raidHistory.json: added rows, and any REMOVED row flagged as a bug (see
  *     --strict above) — this file only ever grows.
  *   - powerUpCosts.json: top-level scalar fields (multipliers, maxLevel) plus
- *     the `steps` array, diffed by `fromLevel`.
+ *     the `steps` array (diffed by `fromLevel`), the RAW
+ *     `perSpeciesUpgradeOverrides` array and the INTERPRETED
+ *     `perSpeciesOverridesByPokemonId` map (both keyed by `pokemonId`,
+ *     2026-09-10). Any top-level key it recognizes in NEITHER list is
+ *     reported as unrecognized rather than skipped.
  *   - any other *.json file present: falls back to a generic array diff keyed
  *     on whichever of `id`/`speciesId`/`raidName` is present, or a whole-file
  *     equality check if it's not a recognizable keyed array.
@@ -50,7 +54,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
@@ -227,17 +231,74 @@ const POWER_UP_TOP_LEVEL_FIELDS = [
   "shadowCandyMultiplier",
   "purifiedStardustMultiplier",
   "purifiedCandyMultiplier",
+  "luckyStardustMultiplier",
   "sourceUrl",
 ];
 
-function diffPowerUpCostsFile(prev, next) {
+/**
+ * Top-level keys of powerUpCosts.json that a dedicated branch below already
+ * reports on, plus the pure-metadata one. Anything in the file that is in
+ * NEITHER this list nor POWER_UP_TOP_LEVEL_FIELDS is reported as unrecognized
+ * rather than silently skipped.
+ *
+ * Why the guard exists (2026-09-10): this file grew
+ * `perSpeciesOverridesByPokemonId` — the interpreted per-species cost tables
+ * the engine reads for EVERY price it quotes — and this diff reported only
+ * "+1 override" on the raw array beside it, because the field enumeration
+ * above is hand-maintained. `luckyStardustMultiplier` had likewise been
+ * missing from POWER_UP_TOP_LEVEL_FIELDS since it was added, so a change to
+ * the Lucky discount would not have shown up here at all. A hand-maintained
+ * allowlist silently under-reports; it must say so when it doesn't recognize
+ * something.
+ */
+const POWER_UP_STRUCTURED_FIELDS = ["steps", "perSpeciesUpgradeOverrides", "perSpeciesOverridesByPokemonId", "fetchedAt"];
+
+/** Which levels' step costs differ between two PowerUpCostTable-shaped objects. */
+function changedStepLevels(prevTable, nextTable) {
+  const d = diffByKey(prevTable?.steps ?? [], nextTable?.steps ?? [], "fromLevel");
+  return [...d.added, ...d.removed, ...d.changed].sort((a, b) => a - b);
+}
+
+export function diffPowerUpCostsFile(prev, next) {
   const changedTop = POWER_UP_TOP_LEVEL_FIELDS.filter((f) => !deepEqual(prev[f], next[f]));
   const stepsDiff = diffByKey(prev.steps ?? [], next.steps ?? [], "fromLevel");
+  // Per-species power-up cost overrides (2026-09-10) — keyed by pokemonId,
+  // same diffByKey shape as steps above. Reported separately from
+  // changedTop since it's an array of records, not a scalar.
+  const overridesDiff = diffByKey(prev.perSpeciesUpgradeOverrides ?? [], next.perSpeciesUpgradeOverrides ?? [], "pokemonId");
+
+  // The INTERPRETED per-species tables (2026-09-10) — an object map keyed by
+  // raw pokemonId, not an array, so diffByKey doesn't apply. This is the half
+  // the engine actually prices against (powerUpCostTableFor), so a change here
+  // moves real numbers in the app; the raw array above only moves provenance.
+  const prevInterp = prev.perSpeciesOverridesByPokemonId ?? {};
+  const nextInterp = next.perSpeciesOverridesByPokemonId ?? {};
+  const prevIds = Object.keys(prevInterp);
+  const nextIds = Object.keys(nextInterp);
+  const interpretedAdded = nextIds.filter((id) => !(id in prevInterp));
+  const interpretedRemoved = prevIds.filter((id) => !(id in nextInterp));
+  const interpretedChanged = nextIds
+    .filter((id) => id in prevInterp && !deepEqual(prevInterp[id], nextInterp[id]))
+    .map((id) => ({ pokemonId: id, levels: changedStepLevels(prevInterp[id], nextInterp[id]) }));
+
+  // Anything this handler doesn't know about at all.
+  const known = new Set([...POWER_UP_TOP_LEVEL_FIELDS, ...POWER_UP_STRUCTURED_FIELDS]);
+  const unrecognized = [...new Set([...Object.keys(prev), ...Object.keys(next)])]
+    .filter((k) => !known.has(k))
+    .filter((k) => !deepEqual(prev[k], next[k]));
+
   return {
     changedTop,
+    interpretedAdded,
+    interpretedRemoved,
+    interpretedChanged,
+    unrecognized,
     stepsAdded: stepsDiff.added,
     stepsRemoved: stepsDiff.removed,
     changedSteps: stepsDiff.changed.map((lvl) => ({ fromLevel: lvl, before: stepsDiff.prevMap.get(lvl), after: stepsDiff.nextMap.get(lvl) })),
+    overridesAdded: overridesDiff.added.map((id) => ({ pokemonId: id, sourceTemplateId: overridesDiff.nextMap.get(id).sourceTemplateId })),
+    overridesRemoved: overridesDiff.removed,
+    changedOverrides: overridesDiff.changed.map((id) => ({ pokemonId: id, before: overridesDiff.prevMap.get(id), after: overridesDiff.nextMap.get(id) })),
   };
 }
 
@@ -307,6 +368,24 @@ function printFileResult(filename, result) {
     if (result.changedTop.length > 0) console.log(`  top-level changed: ${result.changedTop.join(", ")}`);
     console.log(`  steps: +${result.stepsAdded.length} -${result.stepsRemoved.length} ~${result.changedSteps.length}`);
     printClipped(result.changedSteps, (e) => `  ~ level ${e.fromLevel}: ${JSON.stringify(e.before)} -> ${JSON.stringify(e.after)}`);
+    console.log(`  perSpeciesUpgradeOverrides: +${result.overridesAdded.length} -${result.overridesRemoved.length} ~${result.changedOverrides.length}`);
+    printClipped(result.overridesAdded, (e) => `  + ${e.pokemonId} (${e.sourceTemplateId})`);
+    printClipped(result.overridesRemoved, (id) => `  - ${id}`);
+    printClipped(result.changedOverrides, (e) => `  ~ ${e.pokemonId}: ${JSON.stringify(e.before)} -> ${JSON.stringify(e.after)}`);
+    console.log(
+      `  perSpeciesOverridesByPokemonId (INTERPRETED — what the engine prices against): ` +
+        `+${result.interpretedAdded.length} -${result.interpretedRemoved.length} ~${result.interpretedChanged.length}`,
+    );
+    printClipped(result.interpretedAdded, (id) => `  + ${id}`);
+    printClipped(result.interpretedRemoved, (id) => `  - ${id}`);
+    printClipped(
+      result.interpretedChanged,
+      (e) => `  ~ ${e.pokemonId}: ${e.levels.length} level(s) changed${e.levels.length > 0 ? ` (from ${e.levels[0]})` : ""}`,
+    );
+    if (result.unrecognized.length > 0) {
+      console.log(`  !! unrecognized top-level field(s) CHANGED and were not diffed: ${result.unrecognized.join(", ")}`);
+      console.log(`     add them to POWER_UP_TOP_LEVEL_FIELDS or POWER_UP_STRUCTURED_FIELDS in scripts/diff-normalized.mjs`);
+    }
   } else if (result.note) {
     console.log(`  ${result.note}`);
     if ("prevCount" in result) console.log(`  prev count: ${result.prevCount}, next count: ${result.nextCount}`);
@@ -376,4 +455,8 @@ function main() {
   }
 }
 
-main();
+// Only run the CLI when invoked directly — scripts/sync-data/test/diff.test.ts
+// imports diffPowerUpCostsFile from here, and importing must not diff the repo.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

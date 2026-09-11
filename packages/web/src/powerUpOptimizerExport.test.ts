@@ -44,6 +44,7 @@ function baseAssumptions(overrides: Partial<PowerUpOptimizerAssumptions> = {}): 
     multiRaidMegaLevel: null,
     multiRaidSignificanceMode: "aggregate-only",
     multiRaidUseBestAvailableMoveset: false,
+    multiRaidHypotheticalCatches: [],
     fastTmOnHand: null,
     chargedTmOnHand: null,
     eliteFastTmOnHand: null,

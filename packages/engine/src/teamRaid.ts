@@ -107,6 +107,21 @@ export const MAX_TEAM_RAID_CYCLES = 1000;
 export const DEFAULT_SWAP_COST_SECONDS = 1.0;
 
 export interface TeamRaidSlotInput {
+  /**
+   * Caller-supplied stable identity for this roster entry (e.g. a roster
+   * pool's own entry id), independent of this slot's position in whichever
+   * array it's fielded in. Optional and inert for every caller that never
+   * uses `TeamRaidInputs.reselectAfterWipe` — `slotIndex`-based identity
+   * (this field's fallback, see `TeamRaidSlotResult.slotId`) is exactly
+   * "which position in the fielded array," which only stays a stable
+   * cross-cycle identity while the SAME array is re-fielded every cycle
+   * (today's default behavior). Once `reselectAfterWipe` can field a
+   * DIFFERENT roster per cycle, "slot 2" no longer reliably names the same
+   * configured Pokémon across cycles, so a caller using reselection should
+   * set this to something that does (its own pool entry id) if it wants
+   * `TeamRaidResult.slotsUsed`/per-fight identity to be meaningful.
+   */
+  slotId?: string;
   /** The species fielded in this slot, or null/undefined for an empty slot that never enters the fight. */
   species: SpeciesDefinition | null | undefined;
   /** Fast-move override for this slot — same convention as comparison.ts's candidateFastMoveIds: null/omitted defaults to species.fastMoves[0]. */
@@ -173,9 +188,68 @@ export interface TeamRaidSlotInput {
   isBestBuddy?: boolean;
 }
 
+/**
+ * Context handed to `TeamRaidInputs.reselectAfterWipe` right after a full
+ * roster wipe (every fielded slot in the current cycle has fainted) and
+ * `reviveCostSeconds` has been paid, so a caller can pick a fresh six for
+ * the cycle about to start. See IDEAS.md #12: "re-selecting a different six
+ * after a wipe" — a real trainer with a large roster returns to the lobby
+ * and can re-pick, not just re-send the same team.
+ */
+export interface TeamRaidReselectContext {
+  /** The cycle about to start (matches the cycleIndex the returned roster's fights will be reported under). Always >= 1 — reselection never runs before the very first cycle. */
+  cycleIndex: number;
+  /** How many full wipes have occurred so far, including the one that just triggered this call. Equal to cycleIndex. */
+  wipeCount: number;
+  /** The roster array that was actually fielded in the cycle that just fainted out completely. */
+  previousSlots: TeamRaidSlotInput[];
+  /** Combined team damage already dealt to the boss across every prior cycle. */
+  bossDamageDealt: number;
+  /** The boss's real effective max HP for this encounter (see bossEffectiveHp) — bossDamageDealt / bossMaxHp is how far the fight has progressed so far. */
+  bossMaxHp: number;
+  /** Raid-global clock seconds elapsed so far (already includes every swapCostSeconds and this wipe's reviveCostSeconds). Compare against raidTimerSeconds to gauge remaining time. */
+  raidClockSeconds: number;
+  /** Same value as TeamRaidInputs.raidTimerSeconds, passed through for convenience. */
+  raidTimerSeconds: number;
+}
+
+/**
+ * A caller-supplied roster-selection strategy, called once per completed
+ * wipe. Must return 1..MAX_TEAM_RAID_SLOTS entries satisfying the same
+ * constraints `TeamRaidInputs.slots` itself must satisfy (runTeamRaid
+ * re-validates the returned roster with the same `validateRoster` check used
+ * on the initial one — an empty return, a >6-entry return, or a return with
+ * more than one `isMega: true` slot throws).
+ *
+ * This module has no I/O and does not own a roster pool
+ * (`packages/web`'s `rosterPool.ts` does, and can hold ~200 entries — far
+ * more than the 6 a single cycle fields) — this hook exists so a caller
+ * holding that larger pool can implement its own selection heuristic (best
+ * remaining 6 by score, avoiding whoever just fainted, always re-fielding
+ * the identical six, etc.) without this module needing to know anything
+ * about scoring, candy costs, or where the pool comes from. There is
+ * deliberately no default heuristic implemented here — see
+ * `rosterPlanner.ts`'s own `selectTeam` for the kind of greedy-selection
+ * logic a caller might reuse, which is Lane A's file, not this one's.
+ */
+export type TeamRaidReselector = (context: TeamRaidReselectContext) => TeamRaidSlotInput[];
+
 export interface TeamRaidInputs {
-  /** Up to MAX_TEAM_RAID_SLOTS entries, in fight order. A team can field fewer than 6 by leaving trailing/interior entries with species: null. */
+  /**
+   * Up to MAX_TEAM_RAID_SLOTS entries, in fight order. A team can field
+   * fewer than 6 by leaving trailing/interior entries with species: null.
+   * This is the roster fielded in cycle 0 (and every subsequent cycle too,
+   * unless `reselectAfterWipe` is supplied — see that field).
+   */
   slots: TeamRaidSlotInput[];
+  /**
+   * Optional hook letting the caller field a DIFFERENT roster for each
+   * wipe-and-revive cycle instead of always re-fielding `slots` unchanged
+   * (the default when this is omitted — byte-identical to before this field
+   * existed). See `TeamRaidReselector`/`TeamRaidReselectContext` above.
+   * IDEAS.md #12.
+   */
+  reselectAfterWipe?: TeamRaidReselector;
   boss: SpeciesDefinition;
   /**
    * Which real raid tier the boss counts as, for real (non-precomputed)
@@ -298,8 +372,27 @@ export interface TeamRaidInputs {
 export interface TeamRaidSlotResult {
   /** 0 = the first pass through the fielded roster; 1 = after the first full wipe-and-revive; 2 = after the second; etc. */
   cycleIndex: number;
-  /** Index into the original TeamRaidInputs.slots array (stable across cycles — the same configured slot can appear here more than once, once per cycle it's fielded in). */
+  /**
+   * Index into the roster array actually fielded THIS CYCLE — `slots` for
+   * cycle 0, or whatever `reselectAfterWipe` returned for a later cycle.
+   * Stable cross-cycle identity ONLY while every cycle fields the same array
+   * (`reselectAfterWipe` omitted — today's default, and the previous,
+   * unconditional meaning of this field before reselection existed): "slot
+   * 2" then reliably names the same configured Pokémon every cycle it
+   * appears in. Once a caller supplies `reselectAfterWipe`, a DIFFERENT
+   * roster can be fielded each cycle, so this index alone no longer proves
+   * cross-cycle identity — use `slotId` instead.
+   */
   slotIndex: number;
+  /**
+   * `TeamRaidSlotInput.slotId` for the entry fielded in this fight, or
+   * `String(slotIndex)` (this cycle's own array position, stringified) when
+   * the caller never set one — the same fallback identity `slotIndex` alone
+   * already provided before this field existed, so every existing caller
+   * (not using `reselectAfterWipe`) sees byte-identical `TeamRaidResult.
+   * slotsUsed` counting either way.
+   */
+  slotId: string;
   speciesId: string;
   speciesName: string;
   /** Seconds into this fight (this cycle's own local clock) this slot fainted — null if it survived to the end of the whole encounter (clear or timer expiry) without fainting in this fight. */
@@ -386,9 +479,17 @@ export interface TeamRaidResult {
   timerMarginSeconds: number | null;
   /** Which CYCLE's fight landed the finishing blow — null if it never happened in this run. Pairs with clearingSlotIndex. */
   clearingCycleIndex: number | null;
-  /** Which configured slot (index into the original `slots` input) landed the finishing blow — null if it never happened in this run. */
+  /** Which slot (index into whichever cycle's own fielded array landed it — see TeamRaidSlotResult.slotIndex) landed the finishing blow — null if it never happened in this run. */
   clearingSlotIndex: number | null;
-  /** How many distinct configured slots were sent out at least once across the whole encounter (<= slots.length) — cycle-invariant, unlike slotsFainted below. */
+  /**
+   * How many distinct `TeamRaidSlotResult.slotId` values were sent out at
+   * least once across the whole encounter — cycle-invariant, unlike
+   * slotsFainted below. Counted by `slotId`, not `slotIndex`, so this stays
+   * meaningful once `reselectAfterWipe` fields a different roster per cycle
+   * (a caller not using reselection sees byte-identical counting either way,
+   * since `slotId` falls back to the stringified array position — see that
+   * field's own doc comment).
+   */
   slotsUsed: number;
   /**
    * Total FAINT EVENTS across every cycle, not distinct slots — a roster
@@ -489,9 +590,18 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
   const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
 
-  const activeEntries = slots
-    .map((slot, slotIndex) => ({ slot, slotIndex }))
-    .filter((entry): entry is { slot: TeamRaidSlotInput & { species: SpeciesDefinition }; slotIndex: number } => entry.slot.species != null);
+  function activeEntriesFor(rosterSlots: TeamRaidSlotInput[]) {
+    return rosterSlots
+      .map((slot, slotIndex) => ({ slot, slotIndex }))
+      .filter((entry): entry is { slot: TeamRaidSlotInput & { species: SpeciesDefinition }; slotIndex: number } => entry.slot.species != null);
+  }
+
+  // The roster fielded THIS cycle — starts as `slots` and is replaced after
+  // each full wipe when `reselectAfterWipe` is supplied (see below).
+  // Byte-identical to before this existed for every caller that never sets
+  // `reselectAfterWipe`: this is reassigned to the SAME reference every time
+  // in that case, so `activeEntriesFor` recomputes identically each cycle.
+  let currentSlots = slots;
 
   const slotResults: TeamRaidSlotResult[] = [];
 
@@ -541,6 +651,10 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   let fightIndex = 0; // strictly increasing across every (cycle, slot) fight, used only for seed offsetting
 
   cycleLoop: for (let cycleIndex = 0; cycleIndex < MAX_TEAM_RAID_CYCLES; cycleIndex++) {
+    // Recomputed every cycle from currentSlots (== `slots` for every cycle
+    // when reselectAfterWipe is unused, so this is a byte-identical
+    // recomputation of the same array each time in that case).
+    const activeEntries = activeEntriesFor(currentSlots);
     for (let n = 0; n < activeEntries.length; n++) {
       const { slot, slotIndex } = activeEntries[n]!;
       const species = slot.species;
@@ -719,6 +833,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
       slotResults.push({
         cycleIndex,
         slotIndex,
+        slotId: slot.slotId ?? String(slotIndex),
         speciesId: species.id,
         speciesName: species.name,
         faintedAtSeconds: clippedFaintedAtSeconds,
@@ -786,6 +901,25 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
     // advance).
     wipeCount += 1;
     globalClock += reviveCostSeconds;
+
+    // Let the caller field a DIFFERENT roster for the cycle about to start
+    // (see TeamRaidReselector's doc comment / IDEAS.md #12) — omitted
+    // reselectAfterWipe leaves currentSlots unchanged, so the next cycle
+    // re-fields the exact same roster, byte-identical to before this hook
+    // existed. Re-validated exactly like the initial `slots` was.
+    if (inputs.reselectAfterWipe) {
+      const nextSlots = inputs.reselectAfterWipe({
+        cycleIndex: cycleIndex + 1,
+        wipeCount,
+        previousSlots: currentSlots,
+        bossDamageDealt: bossDamageAccum,
+        bossMaxHp: bossHp,
+        raidClockSeconds: globalClock,
+        raidTimerSeconds,
+      });
+      validateRoster(nextSlots);
+      currentSlots = nextSlots;
+    }
   }
 
   if (outcome === null) {
@@ -801,7 +935,11 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   const clearsWithinTimer = timeToClearSeconds !== null && timeToClearSeconds <= raidTimerSeconds;
   if (outcome === "cleared" && !clearsWithinTimer) outcome = "timerExpired";
 
-  const usedSlotIndices = new Set(slotResults.map((s) => s.slotIndex));
+  // Counted by slotId, not slotIndex — see TeamRaidResult.slotsUsed's doc
+  // comment for why (byte-identical to the old slotIndex-based count for
+  // every caller not using reselectAfterWipe, since slotId falls back to
+  // String(slotIndex) there).
+  const usedSlotIds = new Set(slotResults.map((s) => s.slotId));
 
   return {
     outcome,
@@ -810,7 +948,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
     timerMarginSeconds: timeToClearSeconds !== null ? raidTimerSeconds - timeToClearSeconds : null,
     clearingCycleIndex,
     clearingSlotIndex,
-    slotsUsed: usedSlotIndices.size,
+    slotsUsed: usedSlotIds.size,
     slotsFainted: slotResults.filter((s) => s.faintedAtSeconds !== null).length,
     wipeCount,
     slots: slotResults,

@@ -135,6 +135,81 @@ export interface ChargedMove {
   plusMovePowerConfidence?: PlusMovePowerConfidence;
 }
 
+/**
+ * One ordinary-evolution BRANCH this engine can honestly price as PURE
+ * CANDY — see SpeciesDefinition.evolutions' doc comment for full context
+ * (IDEAS.md #9, "evolve, then power up to L" as one priced candidate). `to`
+ * is the FULL evolved-form SpeciesDefinition (this package has no I/O to
+ * resolve one from a bare id), `candyCost` is that branch's real
+ * regular-candy cost (never stardust — MECHANICS.md's "Evolution:
+ * candy-only").
+ *
+ * SCHEMA DECISION (2026-09-10, after data-sync measured the real
+ * distribution on 550 species / 577 branches): only ~81% of real branches
+ * are pure candy. The other ~19% are gated on an item, a lure module, buddy
+ * walking distance, gender, time-of-day, or a field quest — see
+ * `GatedEvolutionOption` below for those. `EvolutionOption` deliberately has
+ * NO room to represent a gate; resolving a gated branch into this shape
+ * would silently misprice it as "evolve for N candy" when the real
+ * requirement might be a Metal Coat the caller doesn't own. Never widen this
+ * interface to add gate fields — add to `GatedEvolutionOption` instead and
+ * keep the two populations disjoint, so `evolutionEndpoints` (rosterPlanner.ts)
+ * can keep treating every member of `.evolutions` as unconditionally
+ * committable.
+ */
+export interface EvolutionOption {
+  to: SpeciesDefinition;
+  candyCost: number;
+}
+
+/**
+ * One evolution branch this engine CANNOT honestly price as a committable
+ * candidate — gated on something beyond candy that this project has no
+ * inventory/calendar/social model for at all (an item, a lure item active at
+ * a nearby PokéStop, buddy walking distance, gender, time-of-day, a field
+ * quest). Mirrors data-sync's `EvolutionCandyCostEntry` (`data-sync`'s own
+ * per-branch shape in `scripts/sync-data.ts`, exposed id-keyed on
+ * `data/normalized/species.json` as `evolutionCandyCosts`, never resolved to
+ * object references there — resolving `toId` into a `SpeciesDefinition`
+ * reference is `packages/web/src/registry.ts`'s job, same pattern as
+ * `resolveMegaBaseCandyFamilyId`/`resolveMegaBaseKmBuddyDistance`).
+ *
+ * Reported so a caller can show "this could be stronger, but needs X" rather
+ * than the branch vanishing with no trace whatsoever — CLAUDE.md's standing
+ * rule that an exclusion gets SHOWN, never quietly dropped, applies here
+ * exactly as it does to `neverCompetitive`. See rosterPlanner.ts's
+ * `gatedEvolutionNotices`/`RosterNeverCompetitiveEntry.gatedEvolutions`/
+ * `RosterPowerUpCandidate.viaEvolution.otherGatedOptions`.
+ *
+ * `candyCost` is optional (not required, unlike `EvolutionOption`'s) because
+ * a handful of real branches (Zygarde's own form changes, Gimmighoul ->
+ * Gholdengo) are gated on an item COUNT with no candy component at all.
+ *
+ * Deliberately does NOT carry `noCandyCostViaTrade` (a real mechanic that
+ * waives candy for a traded Kadabra/Machoke/Graveler/Haunter — recorded by
+ * data-sync, but on branches that are ALREADY `EvolutionOption`s, since it
+ * can only make a branch CHEAPER, never gate it) — this project has no
+ * "was this individual traded" input anywhere, so surfacing it would invite
+ * a caller to build UI for a discount this engine can't actually apply.
+ * Left as explicit future work if that input is ever added.
+ */
+export interface GatedEvolutionOption {
+  to: SpeciesDefinition;
+  candyCost?: number;
+  requiresItem?: string;
+  requiresItemCount?: number;
+  requiresLureItem?: string;
+  requiresBuddy?: boolean;
+  requiresBuddyDistanceKm?: number;
+  requiresGender?: string;
+  requiresDaytime?: boolean;
+  requiresNighttime?: boolean;
+  requiresDuskPeriod?: boolean;
+  requiresFullMoon?: boolean;
+  requiresUpsideDown?: boolean;
+  requiresQuest?: boolean;
+}
+
 export interface SpeciesDefinition {
   id: string;
   name: string;
@@ -277,6 +352,48 @@ export interface SpeciesDefinition {
    * union, since a costume template can lack the branch a sibling carries).
    */
   evolvesToIds?: string[];
+  /**
+   * Every ordinary-evolution branch reachable from this species/form that
+   * this engine can honestly price as PURE CANDY (`EvolutionOption`'s own
+   * doc comment) — added 2026-09-10 for rosterPlanner.ts's "evolve, then
+   * power up to L" priced candidate (IDEAS.md #9).
+   *
+   * RESOLUTION CONTRACT (settled 2026-09-10, after data-sync measured the
+   * real distribution and found ~19% of real branches are gated — see
+   * `GatedEvolutionOption`): data-sync itself does NOT populate this field.
+   * It exposes an id-keyed `evolutionCandyCosts` array on the SYNCED
+   * (pre-engine) species record instead (each entry carrying a
+   * `candyCostOnly: boolean`), specifically so resolving a `toId` into an
+   * object reference — and splitting candy-only from gated — stays a
+   * separate, later step. `packages/web/src/registry.ts` does that
+   * resolution (the established id-to-object pattern already used for
+   * `resolveMegaBaseCandyFamilyId`/`resolveMegaBaseKmBuddyDistance`): for
+   * every synced-record entry with `candyCostOnly === true`, resolve `toId`
+   * against the full species map and push `{ to, candyCost }` here; every
+   * entry with `candyCostOnly === false` resolves into
+   * `gatedEvolutions` below instead, never here. As of THIS field's
+   * introduction it is undefined for every real synced species until that
+   * registry.ts step ships — rosterPlanner.ts degrades to its pre-existing
+   * "evolve first" advisory whenever both this and `gatedEvolutions` are
+   * absent, so the feature activates automatically once resolved, no
+   * further engine change needed.
+   */
+  evolutions?: EvolutionOption[];
+  /**
+   * Every evolution branch reachable from this species/form that this
+   * engine CANNOT honestly price (see `GatedEvolutionOption`'s own doc
+   * comment for what "gated" means and why it's a SEPARATE array rather
+   * than a richer `EvolutionOption`). Resolved by `packages/web/src/registry.ts`
+   * the same way as `evolutions` above — see that field's "RESOLUTION
+   * CONTRACT" note. Consumed by rosterPlanner.ts's `gatedEvolutionNotices`
+   * so a gated branch is always SHOWN (with why it can't be priced) rather
+   * than silently absent — never skip surfacing this just because
+   * `evolutions` above already has a real candy-only candidate for the same
+   * species (Eevee: Vaporeon/Jolteon/Flareon are priced candidates,
+   * Espeon/Umbreon/Leafeon/Glaceon/Sylveon are still real options a user
+   * should see even though this engine can't price them).
+   */
+  gatedEvolutions?: GatedEvolutionOption[];
   /**
    * GAME_MASTER's `familyId` (e.g. "FAMILY_BELDUM") — present on all 2472
    * templates. Real Pokémon GO candy is shared across an evolutionary FAMILY,

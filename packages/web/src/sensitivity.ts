@@ -203,6 +203,14 @@ export function computeSensitivity(
       // Level regardless of what's actually configured, which could disagree
       // with the result cards' own currentWinner.
       candidateMegaLevel: a.candidateMegaLevel,
+      // Held fixed at the panel's current friendship/Best Buddy settings —
+      // same discipline as candidateMegaLevel just above: every check below
+      // scans ITS OWN axis while holding these constant, so the sensitivity
+      // panel's own currentWinner baseline can't silently disagree with the
+      // result cards above it (which now also thread these through — see
+      // run/runComparator.ts).
+      friendshipLevel: a.friendshipLevel,
+      candidateIsBestBuddy: a.candidateIsBestBuddy,
       ...moveSelections,
     });
     return [

@@ -23,6 +23,7 @@ import type {
   GameMasterPokemonRecord,
   GameMasterMoveRecord,
   GameMasterUpgradeSettingsRecord,
+  GameMasterUpgradeOverrideRecord,
   GameMasterEvolutionBranchRecord,
   RawRaidBossesPreviousEntry,
   RawRaidBossesResponse,
@@ -242,6 +243,17 @@ export interface GameMasterFetchResult {
    */
   luckyStardustDiscountPercent: number | null;
   /**
+   * Every species-scoped power-up cost OVERRIDE entry found this run
+   * (`POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME>`, matched by
+   * TEMPLATE-ID PATTERN, never a hardcoded species — 2026-09-10). Empty
+   * array (never undefined) when none are found, including on the error
+   * path below. See GameMasterUpgradeOverrideRecord's doc comment
+   * (./rawShapes.ts) for exactly what's carried and MECHANICS.md's
+   * "Per-species cost overrides" for the one confirmed live example
+   * (Eternatus).
+   */
+  perSpeciesUpgradeOverrides: GameMasterUpgradeOverrideRecord[];
+  /**
    * Forms whose movepool gained (or would have gained but skipped) a move
    * via formChange[].moveReassignment resolution this run (2026-09-10) — see
    * resolveFormChangeMoveGrants (./formChangeMoveGrants.ts) and MECHANICS.md's
@@ -312,10 +324,16 @@ export interface GameMasterFetchResult {
  * applies those grants onto the correct forms' `cinematicMoves`/
  * `quickMoves` arrays in place — see that call site below and its own doc
  * comment for the full resolution rule.
- * Deliberately NOT extracted: `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V0890_
- * POKEMON_ETERNATUS`, a real per-species override (30x candy cost) — v1 of
- * the power-up cost table this feeds only models the universal table (see
- * RawGameMasterPokemonUpgradeSettingsFull's doc comment in rawShapes.ts).
+ * As of 2026-09-10, every species-scoped `POKEMON_UPGRADE_OVERRIDE_SETTINGS_
+ * V####_POKEMON_<NAME>` entry (one confirmed live: `..._V0890_
+ * POKEMON_ETERNATUS`, a per-species power-up cost override) is ALSO
+ * extracted, by TEMPLATE-ID PATTERN rather than a hardcoded species name —
+ * see GameMasterFetchResult.perSpeciesUpgradeOverrides and
+ * GameMasterUpgradeOverrideRecord's doc comment in rawShapes.ts for what's
+ * carried. RAW and uninterpreted only: this pipeline does not compute an
+ * actual per-species cost table from it — `powerUpCostTableFromGameMaster`
+ * (packages/engine/src/powerUp.ts) is the sole interpreter and does not yet
+ * consume this field (engine-developer's call).
  *
  * As of 2026-09-10, each pokemonSettings template's `kmBuddyDistance` is ALSO
  * retained (GameMasterPokemonRecord.kmBuddyDistance) — the FIRST-PARTY
@@ -404,6 +422,12 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
     // simply get overwritten if somehow seen twice (never observed).
     let upgradeSettings: GameMasterUpgradeSettingsRecord | null = null;
     let luckyStardustDiscountPercent: number | null = null;
+    // Per-species power-up cost overrides (2026-09-10, see
+    // GameMasterFetchResult.perSpeciesUpgradeOverrides' doc comment) — unlike
+    // upgradeSettings/luckyStardustDiscountPercent above, MULTIPLE of these
+    // can legitimately exist (one per overridden species), so this stays an
+    // array collected across the whole loop.
+    const perSpeciesUpgradeOverrides: GameMasterUpgradeOverrideRecord[] = [];
 
     for (const entry of parsed as RawGameMasterFullEntry[]) {
       const ps = entry?.data?.pokemonSettings;
@@ -454,7 +478,30 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
           familyId: ps.familyId,
           evolutionBranch: (ps.evolutionBranch ?? []).reduce<GameMasterEvolutionBranchRecord[]>((acc, b) => {
             if (b.evolution) {
-              acc.push({ evolution: b.evolution, form: b.form, candyCost: b.candyCost, candyCostPurified: b.candyCostPurified });
+              acc.push({
+                evolution: b.evolution,
+                form: b.form,
+                candyCost: b.candyCost,
+                candyCostPurified: b.candyCostPurified,
+                // 2026-09-10, data-sync's "Normalize evolution candy costs"
+                // task — see RawGameMasterEvolutionBranchFull's own doc
+                // comment (rawShapes.ts) for what each of these means and why
+                // they exist (item/lure/buddy/gender/time-of-day/quest gates
+                // a naive candy-only price would silently hide).
+                evolutionItemRequirement: b.evolutionItemRequirement,
+                evolutionItemRequirementCost: b.evolutionItemRequirementCost,
+                lureItemRequirement: b.lureItemRequirement,
+                mustBeBuddy: b.mustBeBuddy,
+                kmBuddyDistanceRequirement: b.kmBuddyDistanceRequirement,
+                genderRequirement: b.genderRequirement,
+                onlyDaytime: b.onlyDaytime,
+                onlyNighttime: b.onlyNighttime,
+                onlyDuskPeriod: b.onlyDuskPeriod,
+                onlyFullMoon: b.onlyFullMoon,
+                onlyUpsideDown: b.onlyUpsideDown,
+                requiresQuest: Array.isArray(b.questDisplay) && b.questDisplay.length > 0 ? true : undefined,
+                noCandyCostViaTrade: b.noCandyCostViaTrade,
+              });
             }
             return acc;
           }, []),
@@ -511,7 +558,16 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
       // but a reasonable documented default beats discarding good data over a
       // missing minor field" discipline used elsewhere in this same loop, e.g.
       // `ps.quickMoves ?? []` above) rather than rejecting the whole template.
-      const upgrades = entry?.data?.pokemonUpgrades;
+      //
+      // Gated on the EXACT templateId (2026-09-10 tightening) — a
+      // `POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME>` entry's own
+      // `data.pokemonUpgrades` has this identical shape and would otherwise
+      // ALSO satisfy "has candyCost/stardustCost arrays", letting a
+      // per-species override silently masquerade as the universal table
+      // depending on array order (see RawGameMasterPokemonUpgradeSettingsFull's
+      // doc comment in rawShapes.ts for how this was confirmed non-fatal by
+      // luck in one live dump, not by guarantee).
+      const upgrades = entry?.templateId === "POKEMON_UPGRADE_SETTINGS" ? entry?.data?.pokemonUpgrades : undefined;
       if (upgrades && Array.isArray(upgrades.candyCost) && Array.isArray(upgrades.stardustCost)) {
         upgradeSettings = {
           upgradesPerLevel: upgrades.upgradesPerLevel ?? 2,
@@ -525,6 +581,34 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
           purifiedStardustMultiplier: upgrades.purifiedStardustMultiplier ?? 0.9,
           purifiedCandyMultiplier: upgrades.purifiedCandyMultiplier ?? 0.9,
         };
+      }
+
+      // POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME>: a
+      // species-scoped override of the table above (2026-09-10) — see
+      // GameMasterUpgradeOverrideRecord's doc comment (rawShapes.ts) for what
+      // this carries and why it's kept RAW/optional rather than defaulted.
+      // Matched by templateId PATTERN, never a hardcoded species, so a
+      // second one appearing in a future dump is picked up automatically.
+      const overrideMatch = entry?.templateId?.match(/^POKEMON_UPGRADE_OVERRIDE_SETTINGS_V\d+_POKEMON_(.+)$/);
+      const overrideUpgrades = entry?.data?.pokemonUpgrades;
+      if (overrideMatch?.[1] && overrideUpgrades) {
+        perSpeciesUpgradeOverrides.push({
+          pokemonId: overrideMatch[1],
+          sourceTemplateId: entry.templateId as string,
+          upgradesPerLevel: overrideUpgrades.upgradesPerLevel,
+          allowedLevelsAbovePlayer: overrideUpgrades.allowedLevelsAbovePlayer,
+          candyCost: overrideUpgrades.candyCost,
+          stardustCost: overrideUpgrades.stardustCost,
+          shadowStardustMultiplier: overrideUpgrades.shadowStardustMultiplier,
+          shadowCandyMultiplier: overrideUpgrades.shadowCandyMultiplier,
+          purifiedStardustMultiplier: overrideUpgrades.purifiedStardustMultiplier,
+          purifiedCandyMultiplier: overrideUpgrades.purifiedCandyMultiplier,
+          maxNormalUpgradeLevel: overrideUpgrades.maxNormalUpgradeLevel,
+          defaultCpBoostAdditionalLevel: overrideUpgrades.defaultCpBoostAdditionalLevel,
+          xlCandyMinPlayerLevel: overrideUpgrades.xlCandyMinPlayerLevel,
+          xlCandyCost: overrideUpgrades.xlCandyCost,
+          xlCandyMinPokemonLevel: overrideUpgrades.xlCandyMinPokemonLevel,
+        });
       }
 
       // LUCKY_POKEMON_SETTINGS: only `powerUpStardustDiscountPercent` is
@@ -559,6 +643,7 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
         moves,
         upgradeSettings,
         luckyStardustDiscountPercent,
+        perSpeciesUpgradeOverrides,
       },
       null,
       2,
@@ -573,6 +658,7 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
       droppedMoveCount,
       upgradeSettings,
       luckyStardustDiscountPercent,
+      perSpeciesUpgradeOverrides,
       formChangeMoveGrants,
       unmatchedFormChangeTargets,
     };
@@ -587,6 +673,7 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
       droppedMoveCount: 0,
       upgradeSettings: null,
       luckyStardustDiscountPercent: null,
+      perSpeciesUpgradeOverrides: [],
       formChangeMoveGrants: [],
       unmatchedFormChangeTargets: [],
     };

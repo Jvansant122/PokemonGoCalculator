@@ -157,5 +157,12 @@ export function powerUpOptimizerAssumptionsToTeamAssumptions(
     raidTimerSeconds: a.raidTimerSeconds,
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,
+    // PowerUpOptimizerAssumptions has no equivalent of these three fields
+    // (added to Team Raid after this export function existed) — plain
+    // defaults, same as a fresh Team Raid scenario, rather than inventing a
+    // value this source tab never expressed an opinion on.
+    friendshipLevel: "none",
+    bossMaxHpOverrideEnabled: false,
+    reselectAfterWipeEnabled: false,
   };
 }

@@ -149,6 +149,7 @@ import type {
   ActiveRaidEntry,
   RaidHistoryEntry,
   GameMasterPokemonRecord,
+  GameMasterUpgradeOverrideRecord,
   RawRaidBossesPreviousEntry,
 } from "./sync-data/rawShapes.ts";
 import {
@@ -544,6 +545,104 @@ function applyCleanFormDisplayName(definition: SpeciesDefinition, pokemonName: s
 type SpeciesWithKmBuddyDistance = SpeciesDefinition & { kmBuddyDistance?: number };
 function setKmBuddyDistance(definition: SpeciesDefinition, kmBuddyDistance: number | undefined): void {
   (definition as SpeciesWithKmBuddyDistance).kmBuddyDistance = kmBuddyDistance;
+}
+
+/**
+ * One real (non-mega/primal) evolution branch's target species id + its full
+ * cost/requirement data — the normalized-JSON-safe counterpart of the
+ * engine's `EvolutionOption` (`{ to: SpeciesDefinition; candyCost: number }`,
+ * an object reference `data/normalized/species.json` cannot serialize
+ * without a cyclic graph). Added 2026-09-10 for data-sync's "Normalize
+ * evolution candy costs" task (the data half of IDEAS.md #9, "evolve then
+ * power up to L" as one priced candidate — see
+ * `packages/engine/src/rosterPlanner.ts`'s `evolutionEndpoints` and
+ * `SpeciesDefinition.evolutions`' own doc comment).
+ *
+ * DELIBERATELY NOT `SpeciesDefinition.evolutions` itself, and this script
+ * does NOT populate that field — see this same-named field's own doc comment
+ * in `types.ts` for why: `EvolutionOption` has no room to represent "this
+ * branch also needs an item/lure/buddy-distance/gender/time-of-day/quest,
+ * beyond its candyCost", so mechanically resolving `toId` into a
+ * `SpeciesDefinition` object reference and assigning it to `.evolutions`
+ * here would silently misprice every gated branch as pure candy — exactly
+ * the class of error this task's own brief warned against. Resolving `toId`
+ * into an object graph is `packages/web/src/registry.ts`'s job (see
+ * `resolveMegaBaseCandyFamilyId`/`resolveMegaBaseKmBuddyDistance` for the
+ * established id-to-object pattern used for other cross-species links), and
+ * deciding whether/how `EvolutionOption` itself should carry the
+ * `candyCostOnly`/requirement data below is `engine-developer`'s schema call
+ * — reported, not made here.
+ */
+interface EvolutionCandyCostEntry {
+  /** The resolved target species id (same resolution — and same "omit, never guess" discipline on failure — as `evolvesToIds`). */
+  toId: string;
+  /** GAME_MASTER's own form key for the evolved species, e.g. "METANG_NORMAL" — carried through for audit/debugging, mirrors EvolutionTarget.form. */
+  form?: string;
+  /** Undefined only for the handful of real branches gated on a non-candy item COUNT instead (Zygarde's own forms, Gimmighoul -> Gholdengo) — see `candyCostOnly` below, which is false for exactly these too. */
+  candyCost?: number;
+  candyCostPurified?: number;
+  requiresItem?: string;
+  requiresItemCount?: number;
+  requiresLureItem?: string;
+  requiresBuddy?: boolean;
+  requiresBuddyDistanceKm?: number;
+  requiresGender?: string;
+  requiresDaytime?: boolean;
+  requiresNighttime?: boolean;
+  requiresDuskPeriod?: boolean;
+  requiresFullMoon?: boolean;
+  requiresUpsideDown?: boolean;
+  requiresQuest?: boolean;
+  /** Real GO mechanic, can only make this branch CHEAPER (candy-free if traded), never pricier — deliberately excluded from `candyCostOnly`'s computation below. See RawGameMasterEvolutionBranchFull's own doc comment (rawShapes.ts). */
+  noCandyCostViaTrade?: boolean;
+  /**
+   * True only when `candyCost` is this branch's ENTIRE real-world cost — no
+   * item/lure/buddy-distance/gender/time-of-day/quest gate at all (and
+   * `candyCost` is actually defined; the handful of item-count-only branches
+   * above have no candyCost to be "only" about, so this is false for those
+   * too). Any consumer choosing to price this branch as "evolve for N candy"
+   * without a caveat MUST check this first.
+   */
+  candyCostOnly: boolean;
+}
+type SpeciesWithEvolutionCandyCosts = SpeciesDefinition & { evolutionCandyCosts?: EvolutionCandyCostEntry[] };
+function setEvolutionCandyCosts(definition: SpeciesDefinition, entries: EvolutionCandyCostEntry[]): void {
+  (definition as SpeciesWithEvolutionCandyCosts).evolutionCandyCosts = entries;
+}
+/** Builds one EvolutionCandyCostEntry from a resolved EvolutionTarget + its target species id — the single place `candyCostOnly` is derived, so every caller agrees on what counts as a "beyond candy" requirement. */
+function toEvolutionCandyCostEntry(target: EvolutionTarget, toId: string): EvolutionCandyCostEntry {
+  const candyCostOnly =
+    target.candyCost !== undefined &&
+    !target.evolutionItemRequirement &&
+    !target.lureItemRequirement &&
+    !target.mustBeBuddy &&
+    !target.genderRequirement &&
+    !target.onlyDaytime &&
+    !target.onlyNighttime &&
+    !target.onlyDuskPeriod &&
+    !target.onlyFullMoon &&
+    !target.onlyUpsideDown &&
+    !target.requiresQuest;
+  return {
+    toId,
+    form: target.form,
+    candyCost: target.candyCost,
+    candyCostPurified: target.candyCostPurified,
+    requiresItem: target.evolutionItemRequirement,
+    requiresItemCount: target.evolutionItemRequirementCost,
+    requiresLureItem: target.lureItemRequirement,
+    requiresBuddy: target.mustBeBuddy,
+    requiresBuddyDistanceKm: target.kmBuddyDistanceRequirement,
+    requiresGender: target.genderRequirement,
+    requiresDaytime: target.onlyDaytime,
+    requiresNighttime: target.onlyNighttime,
+    requiresDuskPeriod: target.onlyDuskPeriod,
+    requiresFullMoon: target.onlyFullMoon,
+    requiresUpsideDown: target.onlyUpsideDown,
+    requiresQuest: target.requiresQuest,
+    noCandyCostViaTrade: target.noCandyCostViaTrade,
+    candyCostOnly,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1092,6 +1191,7 @@ function resolveEvolutionTargetSpeciesId(target: EvolutionTarget): string | null
 for (const { definition, gmRecord } of pendingEvolutionResolution) {
   if (definition.isFullyEvolved) {
     definition.evolvesToIds = [];
+    setEvolutionCandyCosts(definition, []);
     continue;
   }
   const targets = realEvolutionTargets(gmRecord);
@@ -1103,13 +1203,22 @@ for (const { definition, gmRecord } of pendingEvolutionResolution) {
     // deliberately NOT overridden to true here.
     isFullyEvolvedRealEvolutionTargetsInconsistencies.push(`${definition.name} (${definition.id})`);
     definition.evolvesToIds = [];
+    setEvolutionCandyCosts(definition, []);
     continue;
   }
   const resolvedIds = new Set<string>();
+  const candyCostEntries: EvolutionCandyCostEntry[] = [];
   for (const target of targets) {
     const resolvedId = resolveEvolutionTargetSpeciesId(target);
     if (resolvedId) {
       resolvedIds.add(resolvedId);
+      // One entry per resolved id, matching evolvesToIds' own Set-dedup
+      // semantics (multiple branches resolving to the same target id — not
+      // observed live, but not asserted impossible — collapse to the FIRST
+      // one seen rather than duplicating).
+      if (!candyCostEntries.some((e) => e.toId === resolvedId)) {
+        candyCostEntries.push(toEvolutionCandyCostEntry(target, resolvedId));
+      }
     } else {
       unresolvedEvolutionBranches.push(
         `${definition.name} (${definition.id}) -> ${target.evolutionEnum}${target.form ? ` [${target.form}]` : ""} (no registered species id found for this evolution target — evolvesToIds omits it; isFullyEvolved stays correctly false regardless, computed independently)`,
@@ -1117,6 +1226,7 @@ for (const { definition, gmRecord } of pendingEvolutionResolution) {
     }
   }
   definition.evolvesToIds = [...resolvedIds];
+  setEvolutionCandyCosts(definition, candyCostEntries);
 }
 
 // This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y,
@@ -1978,6 +2088,41 @@ for (const s of kmBuddyDistanceSpecies) {
   kmBuddyDistanceDistribution.set(v, (kmBuddyDistanceDistribution.get(v) ?? 0) + 1);
 }
 
+// 2026-09-10, evolutionCandyCosts (see EvolutionCandyCostEntry's own doc
+// comment above) — same population-counting discipline as the two blocks
+// above, computed over the FINAL species list.
+function evolutionCandyCostsOf(s: SpeciesDefinition): EvolutionCandyCostEntry[] {
+  return (s as SpeciesWithEvolutionCandyCosts).evolutionCandyCosts ?? [];
+}
+const evolutionCandyCostsSpecies = species.filter((s) => evolutionCandyCostsOf(s).length > 0);
+const evolutionCandyCostsCount = evolutionCandyCostsSpecies.length;
+const evolutionCandyCostsBranchingCount = evolutionCandyCostsSpecies.filter((s) => evolutionCandyCostsOf(s).length > 1).length;
+const evolutionCandyCostsAllEntries = evolutionCandyCostsSpecies.flatMap((s) => evolutionCandyCostsOf(s));
+const evolutionCandyCostsGatedEntryCount = evolutionCandyCostsAllEntries.filter((e) => !e.candyCostOnly).length;
+const evolutionCandyCostsItemGatedCount = evolutionCandyCostsAllEntries.filter((e) => e.requiresItem).length;
+const evolutionCandyCostsNoCandyAtAllCount = evolutionCandyCostsAllEntries.filter((e) => e.candyCost === undefined).length;
+const megasWithEvolutionCandyCosts = species.filter((s) => s.boost && evolutionCandyCostsOf(s).length > 0).length;
+// Deepest ordinary-evolution chain reachable via evolutionCandyCosts' own
+// toId links, walked over the FINAL species list the same way the engine's
+// evolutionEndpoints walks SpeciesDefinition.evolutions (see that function's
+// own doc comment, packages/engine/src/rosterPlanner.ts) — a script-local,
+// id-keyed mirror of that walk, not a reuse of it (this script has no
+// resolved SpeciesDefinition.evolutions to walk yet, by design).
+const speciesByIdForChainDepth = new Map(species.map((s) => [s.id, s]));
+function evolutionChainDepth(id: string, seen: ReadonlySet<string>): number {
+  if (seen.has(id)) return 0;
+  const s = speciesByIdForChainDepth.get(id);
+  const entries = s ? evolutionCandyCostsOf(s) : [];
+  if (entries.length === 0) return 0;
+  const nextSeen = new Set(seen);
+  nextSeen.add(id);
+  let max = 0;
+  for (const e of entries) max = Math.max(max, 1 + evolutionChainDepth(e.toId, nextSeen));
+  return max;
+}
+let deepestEvolutionChain = 0;
+for (const s of species) deepestEvolutionChain = Math.max(deepestEvolutionChain, evolutionChainDepth(s.id, new Set()));
+
 // ---------------------------------------------------------------------------
 // Validation
 // ---------------------------------------------------------------------------
@@ -2142,7 +2287,9 @@ const powerUpCostsOutPath = join(NORMALIZED_DIR, "powerUpCosts.json");
 const POWER_UP_COSTS_SOURCE_URL =
   "https://raw.githubusercontent.com/PokeMiners/game_masters/master/latest/latest.json (POKEMON_UPGRADE_SETTINGS + LUCKY_POKEMON_SETTINGS templates)";
 
-let previousPowerUpCosts: (PowerUpCostTable & { sourceUrl: string; fetchedAt: string }) | null = null;
+let previousPowerUpCosts:
+  | (PowerUpCostTable & { sourceUrl: string; fetchedAt: string; perSpeciesUpgradeOverrides?: GameMasterUpgradeOverrideRecord[] })
+  | null = null;
 if (existsSync(powerUpCostsOutPath)) {
   try {
     previousPowerUpCosts = JSON.parse(readFileSync(powerUpCostsOutPath, "utf-8"));
@@ -2165,6 +2312,12 @@ if (!gameMasterAvailable) {
     powerUpCostTable = powerUpCostTableFromGameMaster(
       gameMasterFetchResult.upgradeSettings,
       gameMasterFetchResult.luckyStardustDiscountPercent,
+      // Per-species overrides (2026-09-10). The engine interprets each into its
+      // own complete PowerUpCostTable under `perSpeciesOverridesByPokemonId`;
+      // without this argument Eternatus was priced off the universal table and
+      // understated by ~30-59x. The RAW records are ALSO written to the output
+      // JSON below, alongside the interpreted result, for auditability.
+      gameMasterFetchResult.perSpeciesUpgradeOverrides,
     );
   } catch (err) {
     powerUpCostTableError = `powerUpCostTableFromGameMaster validation failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -2930,7 +3083,24 @@ writeFileSync(raidHistoryOutPath, JSON.stringify(raidHistory, null, 2));
 if (powerUpCostTable) {
   writeFileSync(
     powerUpCostsOutPath,
-    JSON.stringify({ sourceUrl: POWER_UP_COSTS_SOURCE_URL, fetchedAt: SYNC_TIMESTAMP, ...powerUpCostTable }, null, 2),
+    JSON.stringify(
+      {
+        sourceUrl: POWER_UP_COSTS_SOURCE_URL,
+        fetchedAt: SYNC_TIMESTAMP,
+        ...powerUpCostTable,
+        // Species-scoped power-up cost overrides (2026-09-10) — see
+        // GameMasterUpgradeOverrideRecord's doc comment (./sync-data/rawShapes.ts)
+        // for exactly what's carried. These are the RAW source records, kept for
+        // auditability. The INTERPRETED form is already above, spread out of
+        // `powerUpCostTable` as `perSpeciesOverridesByPokemonId` — that is what
+        // the engine actually reads; this field is the provenance trail, not the
+        // input. Always present (possibly empty) so a consumer can tell
+        // "checked, none found" apart from "field doesn't exist in this file".
+        perSpeciesUpgradeOverrides: gameMasterFetchResult.perSpeciesUpgradeOverrides,
+      },
+      null,
+      2,
+    ),
   );
 }
 
@@ -2956,9 +3126,15 @@ console.log(
       ? `skipped this run (${powerUpCostTableError}) — see WARNINGS`
       : !previousPowerUpCosts
         ? "created (no previous file)"
-        : JSON.stringify(previousPowerUpCosts) === JSON.stringify({ sourceUrl: POWER_UP_COSTS_SOURCE_URL, fetchedAt: previousPowerUpCosts.fetchedAt, ...powerUpCostTable })
+        : JSON.stringify(previousPowerUpCosts) ===
+            JSON.stringify({
+              sourceUrl: POWER_UP_COSTS_SOURCE_URL,
+              fetchedAt: previousPowerUpCosts.fetchedAt,
+              ...powerUpCostTable,
+              perSpeciesUpgradeOverrides: gameMasterFetchResult.perSpeciesUpgradeOverrides,
+            })
           ? "none"
-          : "cost table or multipliers changed vs previous sync"
+          : "cost table, multipliers, or perSpeciesUpgradeOverrides changed vs previous sync"
   }`,
 );
 console.log(`AFFECTS SCENARIOS: none (no saved scenarios reference normalized species yet; scenarioA.ts fixtures untouched)`);
@@ -2998,6 +3174,18 @@ if (powerUpCostTable) {
     `  - VALIDATION: power-up cost table NOT produced this run (${powerUpCostTableError}) — data/normalized/powerUpCosts.json left untouched${existsSync(powerUpCostsOutPath) ? " (existing file from an earlier run still stands)" : " (no existing file — Power-Up Optimizer data source is still unpopulated)"}. Re-run once the missing GAME_MASTER template is reachable/well-formed again.`,
   );
 }
+console.log(
+  `  - Per-species power-up cost overrides (data/normalized/powerUpCosts.json's \`perSpeciesUpgradeOverrides\`, 2026-09-10 — POKEMON_UPGRADE_OVERRIDE_SETTINGS_V####_POKEMON_<NAME> GAME_MASTER entries, matched by templateId PATTERN not a hardcoded species; RAW source records, interpreted into the table's \`perSpeciesOverridesByPokemonId\` by powerUpCostTableFromGameMaster): ${
+    gameMasterFetchResult.perSpeciesUpgradeOverrides.length === 0
+      ? "none found this run"
+      : gameMasterFetchResult.perSpeciesUpgradeOverrides
+          .map(
+            (o) =>
+              `${o.pokemonId} (${o.sourceTemplateId}): candyCost ${o.candyCost ? "overridden" : "not overridden (falls back to universal table)"}, stardustCost ${o.stardustCost ? "overridden" : "not overridden"}, xlCandyCost ${o.xlCandyCost ? "overridden" : "not overridden"}`,
+          )
+          .join("; ")
+  }`,
+);
 console.log(
   `  - pokemon_rarity.json is no longer fetched: GAME_MASTER's own \`pokemonClass\` field replaces it entirely (confirmed 2026-09-06: pokemonClass's per-species Legendary/Mythic/Ultra-Beast counts — 77/23/11 — match pokemon_rarity.json's own unique-pokemon_id counts EXACTLY). ${rarityFallenBackToStandard.length === 0 ? "Every species this run had a resolvable GAME_MASTER rarity signal — no STANDARD-by-default fallbacks needed." : `${rarityFallenBackToStandard.length} species/mega had no resolvable GAME_MASTER record at all this run and defaulted to "STANDARD" rarity (no independent signal left to check against): ${rarityFallenBackToStandard.join(", ")}`}`,
 );
@@ -3040,6 +3228,9 @@ console.log(
       .map(([km, count]) => `${km}km: ${count}`)
       .join(", ") || "none"
   }. Per-species (pokemonId-enum), NOT per-candy-family — see GameMasterPokemonRecord.kmBuddyDistance's doc comment in ./sync-data/rawShapes.ts for the 4 confirmed within-family disagreements (Qwilfish/Sneasel/Stantler/Zigzagoon lines, each a regional-evolution split).`,
+);
+console.log(
+  `  - evolutionCandyCosts (2026-09-10, data-sync's "Normalize evolution candy costs" task — data half of IDEAS.md #9): ${evolutionCandyCostsCount}/${species.length} species carry at least one resolved real-evolution branch (${evolutionCandyCostsBranchingCount} of those branch into 2+ targets, e.g. Eevee's 8 eeveelutions); ${evolutionCandyCostsAllEntries.length} branch entries total, deepest resolved chain is ${deepestEvolutionChain} hop(s) (Bulbasaur -> Ivysaur -> Venusaur territory). Of those ${evolutionCandyCostsAllEntries.length} entries, ${evolutionCandyCostsAllEntries.length - evolutionCandyCostsGatedEntryCount} are candyCostOnly (safe to price as plain "N candy") and ${evolutionCandyCostsGatedEntryCount} carry a requirement beyond candy (${evolutionCandyCostsItemGatedCount} need a held item, ${evolutionCandyCostsNoCandyAtAllCount} have no candyCost at all — item/cell-count-gated only, e.g. Zygarde's own forms and Gimmighoul -> Gholdengo) — see EvolutionCandyCostEntry's own doc comment (this file) for the full field-by-field breakdown and why this project does NOT auto-populate SpeciesDefinition.evolutions from this data. Same population gap as candyFamilyId/dexNumber/isFullyEvolved: ${megasWithEvolutionCandyCosts} of this run's mega/primal species carry any (confirms the gap, expected 0 — no real evolution branch ever targets a mega/primal form and this pass doesn't wire that build site).`,
 );
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);

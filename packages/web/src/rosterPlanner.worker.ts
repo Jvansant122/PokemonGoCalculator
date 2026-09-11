@@ -27,9 +27,11 @@
  *
  * MESSAGE CONTRACT (extended by Phase 4 to TWO request types, still ONE
  * shared worker — the task's own instruction was to extend this worker
- * rather than spin up a second one): one request in, exactly one reply out
- * (`requestId` echoed back so a stale reply from a superseded run can't be
- * mistaken for the current one — see rosterPlannerWorkerClient.ts).
+ * rather than spin up a second one): one request in, ZERO OR MORE
+ * `{ type: "progress" }` messages, then exactly one terminal reply out
+ * (`requestId` echoed back on every message, progress included, so a stale
+ * reply/progress event from a superseded run can't be mistaken for the
+ * current one — see rosterPlannerWorkerClient.ts).
  *   - `{ type: "run" }` -> `runRosterPlanner(inputs)` -> `{ type: "result" }`
  *     (the ranked, whole-pool sweep — Phase 3b).
  *   - `{ type: "plan" }` -> `planRosterBudget(inputs)` -> `{ type: "planResult" }`
@@ -39,14 +41,26 @@
  *     (rosterPlannerWorkerClient.ts) sends the SAME resolved inputs object
  *     to both request types, no separate resolution pass.
  * Either request type can also reply `{ type: "error" }` on a thrown engine
- * error. No progress messages — both `runRosterPlanner` and
- * `planRosterBudget` are fully synchronous inside this worker with no yield
- * points of their own (a genuine per-boss/per-round progress event needs an
- * `onProgress` hook inside packages/engine/src/rosterPlanner.ts, out of scope
- * for a web-only phase — see PLAN_multi_raid_roster_optimizer.md's Phase 3b
- * task description). The calling side is responsible for showing coarse
- * running/done/failed state plus elapsed wall-clock time, NOT a fabricated
- * percentage.
+ * error.
+ *
+ * PROGRESS (IDEAS.md #13, engine's `RosterPlannerInputs.onProgress` landed
+ * 2026-09-10): a plain callback can't cross the `postMessage` structured-clone
+ * boundary, so this worker builds its OWN `onProgress` closure right here —
+ * one per request, capturing that request's `requestId` — and hands it to
+ * `runRosterPlanner`/`planRosterBudget` as part of `inputs`. Every real,
+ * completed unit of work the engine reports (one boss's baseline, one
+ * candidate's Stage 4 simulation, one committed budget round — see
+ * `RosterPlannerProgressEvent`'s own doc comment; never a fabricated
+ * fraction) becomes exactly one `{ type: "progress" }` postMessage back to the
+ * main thread, in ADDITION to the final `{ type: "result" }`/`{ type:
+ * "planResult" }` reply. Message volume is cheap relative to the multi-second
+ * compute it reports on: a real 164-entry/13-boss sweep produces on the order
+ * of a few hundred total progress events (baseline: one per boss, ~13;
+ * candidates: one per simulated (entry, level) pair, capped at
+ * `maxCandidates` plus the benched tail, ~60-160; rounds: one per COMMITTED
+ * budget step only, typically single digits) — no batching/throttling here,
+ * each event is a tiny plain object (a stage tag, two counters, optional boss
+ * id/name strings).
  */
 import {
   planRosterBudget,
@@ -54,6 +68,7 @@ import {
   type RosterBudgetInputs,
   type RosterBudgetPlan,
   type RosterPlannerInputs,
+  type RosterPlannerProgressEvent,
   type RosterPlanResult,
 } from "@pogo-analyzer/engine";
 
@@ -74,6 +89,7 @@ export type RosterPlannerWorkerRequest = RosterPlannerWorkerRunRequest | RosterP
 export type RosterPlannerWorkerResponse =
   | { type: "result"; requestId: string; data: RosterPlanResult }
   | { type: "planResult"; requestId: string; data: RosterBudgetPlan }
+  | { type: "progress"; requestId: string; event: RosterPlannerProgressEvent }
   | { type: "error"; requestId: string; message: string };
 
 interface MinimalWorkerScope {
@@ -85,12 +101,16 @@ const ctx = self as unknown as MinimalWorkerScope;
 
 ctx.onmessage = (event) => {
   const { requestId } = event.data;
+  // Built fresh per request, capturing this request's OWN requestId — see
+  // this file's top doc comment for why a callback can't cross the
+  // postMessage boundary any other way.
+  const onProgress = (progressEvent: RosterPlannerProgressEvent) => ctx.postMessage({ type: "progress", requestId, event: progressEvent });
   try {
     if (event.data.type === "run") {
-      const data = runRosterPlanner(event.data.inputs);
+      const data = runRosterPlanner({ ...event.data.inputs, onProgress });
       ctx.postMessage({ type: "result", requestId, data });
     } else {
-      const data = planRosterBudget(event.data.inputs);
+      const data = planRosterBudget({ ...event.data.inputs, onProgress });
       ctx.postMessage({ type: "planResult", requestId, data });
     }
   } catch (err) {
