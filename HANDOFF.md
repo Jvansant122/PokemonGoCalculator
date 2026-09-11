@@ -71,13 +71,27 @@ Corrected to Shadow Alolan **Sandshrew** — first-party anchored, zero raid row
 expire the same way. `CLAUDE.md` had it right all along. This is the pipeline working, not failing:
 the species was synthesized off the GAME_MASTER `shadow` anchor before it ever raided.
 
-**Not done / next.** No `PLAN_*.md` pending. `IDEAS.md` Open: #5 Best Buddy as an optimizer
-*candidate* (needs its own presentation — it costs nothing, so it ranks on neither axis, and it is
-one-at-a-time per account); #15 shadow grunt forms (**needs a user scope call**); #17b enrage
-timings, read by no tab; #23 the Team Raid own-cast cost, which needs an engine field first; #24 a
-"Frustration holder is stuck outside a Taken Over event" label. Also still open from the audit:
-`scripts/run-scenario.ts` has no `roster` case, and `check-scenario-roundtrip` has no row for the
-seventh tab (both deliberate, 2026-09-10, while `scripts/` was off-limits to a concurrent session).
+**Not done / next.** No `PLAN_*.md` pending. `IDEAS.md` has exactly **two** Open items:
+
+1. **#5 Best Buddy — roster/multi-raid mode.** Single-raid shipped 2026-09-11; roster mode needs
+   an `isBestBuddy` field on `RosterEntry` plus the aggregate-across-bosses pricing machinery, so
+   it is not a copy of the single-raid path. ⚠️ **Measure before scheduling**: every single-raid
+   Best Buddy candidate came back *inside* the noise floor (±0.73 team DPS; best gain +0.49). The
+   roster build may buy very little.
+2. **#24 Frustration notice — built, but unreachable with real data.** Engine and UI both ship and
+   are tested, but zero of 1750 species carry `FRUSTRATION`/`RETURN` in `chargedMoves`, because the
+   real game assigns Frustration dynamically rather than via a static movepool. **Needs a user call**
+   between three options in `IDEAS.md`. Worth confirming first whether a real Poke Genie export of
+   an unpurified Shadow says "Frustration" and so earns the "unrecognised" badge — if it does, this
+   is an already-visible defect, not a hypothetical.
+
+`IDEAS.md`'s "Unmodelled real mechanics" table holds five further items that are **blocked on
+evidence, not scheduled** — each names what would unblock it; `LINKS.md` #2 and #4 are the live
+ones. `REJECTED_IDEAS.md` owns everything declined on the merits.
+
+Also still open from the 2026-09-10 concurrent-session split: `scripts/run-scenario.ts` has no
+`roster` case, and `check-scenario-roundtrip` has no row for the seventh tab (the Roster tab's one
+field is covered by a value-level test instead).
 
 ## 2026-09-11 (earlier): move changes, gated evolutions, and two bugs that passing gates hid
 
