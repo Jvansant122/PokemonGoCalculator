@@ -1603,6 +1603,33 @@ Starters and babies (except Toxel) are a flat 10,000 / 25. Sixteen species
 Smeargle, Wurmple, Silcoon, Cascoon, Taillow, Feebas, Beldum, Kricketot) cannot
 learn one at all unless Shadow or Purified.
 
+**The TIERING KEY is first-party, even though the cost figures aren't** (established
+2026-09-10). `kmBuddyDistance` is on `pokemonSettings` in GAME_MASTER and is now
+carried through the sync. Measured across the live 1338-species roster:
+
+- Set on **1277**; every observed value is exactly one of **{1, 3, 5, 20}** — zero
+  outliers, matching this entry's tier boundaries exactly. Distribution: 1 km 181,
+  3 km 593, 5 km 297, 20 km 206.
+- **Missing on exactly 61 — and those 61 are precisely the mega/primal species**,
+  which are built from `tempEvoOverrides` and bypass both GAME_MASTER-matched build
+  loops (the same population gap `candyFamilyId` / `dexNumber` / `isFullyEvolved`
+  already have). Harmless here: a mega has no movepool of its own, so a second move
+  is bought on the **base** form, which does have a distance.
+
+⚠️ **It is per-SPECIES, not per-family — do not key a cost lookup on the candy
+family.** Values are uniform across *forms* of one species (Zacian Hero and Crowned
+Sword are both 20 km), but **4 of 541 families disagree across evolutionary stages**,
+all regional-evolution splits: Qwilfish 3 → Overqwil 5; Sneasel/Weavile 3 →
+Sneasler 5; Stantler 3 → Wyrdeer 5; Zigzagoon/Linoone 1 → Obstagoon 3. A
+family-keyed lookup is wrong for those four. This is a genuine divergence from the
+candy rule recorded elsewhere in this file, where a family really does share one
+pool — the two are keyed differently and must not be conflated.
+
+⚠️ **`kmBuddyDistance` alone cannot reproduce the starter/baby flat rate.** Bulbasaur
+is 3 km, which would predict 50,000/50 rather than the documented flat 10,000/25. The
+flat rate is a separate rule layered on top, so an implementation deriving cost purely
+from distance will overcharge every starter.
+
 > **Trap:** Shadow is ×1.2 for both resources, but **Purified is ×0.8** here —
 > *not* the ×0.9 this project's power-up cost table correctly uses. Do not reuse
 > `PowerUpCostModifiers` for second-move costs.

@@ -5,28 +5,31 @@ import { AttackDefenseBreakpointsView } from "./AttackDefenseBreakpointsView.js"
 import { ComparatorView } from "./ComparatorView.js";
 import { IvBreakpointsView } from "./IvBreakpointsView.js";
 import { PowerUpOptimizerView } from "./PowerUpOptimizerView.js";
+import { RosterView } from "./RosterView.js";
 import { SpeciesReportView } from "./SpeciesReportView.js";
 import { TeamRaidView } from "./TeamRaidView.js";
 
-/** The app's six views. */
+/** The app's seven views. */
 export type AppTab =
   | "comparator"
   | "team-raid"
   | "species-report"
   | "iv-breakpoints"
   | "attack-defense-breakpoints"
-  | "power-up-optimizer";
+  | "power-up-optimizer"
+  | "roster";
 
 /**
  * Which tab a shared link should land on. Deliberately a SEPARATE query param
  * from any view's own scenario param (`s` for Scenario, `ts` for TeamScenario,
  * `sr` for SpeciesReportScenario, `ivc` for IvBreakpointsScenario, `adb` for
- * AttackDefenseBreakpointsScenario, `pu` for PowerUpOptimizerScenario) — a URL
- * can only ever be "about" one tab's scenario at a time, but the six scenario
- * encodings themselves stay fully independent so this file never has to know
- * their shapes. Every view's own "Build link" button additionally stamps this
- * param onto its generated URL so reloading a shared link restores the same
- * tab it was built from, not whatever tab happened to be open last.
+ * AttackDefenseBreakpointsScenario, `pu` for PowerUpOptimizerScenario, `rt` for
+ * RosterScenario) — a URL can only ever be "about" one tab's scenario at
+ * a time, but the seven scenario encodings themselves stay fully independent
+ * so this file never has to know their shapes. Every view's own "Build link"
+ * button additionally stamps this param onto its generated URL so reloading
+ * a shared link restores the same tab it was built from, not whatever tab
+ * happened to be open last.
  */
 function initialTab(): AppTab {
   if (typeof window === "undefined") return "comparator";
@@ -41,7 +44,9 @@ function initialTab(): AppTab {
           ? "attack-defense-breakpoints"
           : requested === "power-up-optimizer"
             ? "power-up-optimizer"
-            : "comparator";
+            : requested === "roster"
+              ? "roster"
+              : "comparator";
 }
 
 /**
@@ -149,6 +154,15 @@ export function App() {
         >
           Power-Up Optimizer
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "roster"}
+          className={`tab-button${tab === "roster" ? " active" : ""}`}
+          onClick={() => setTab("roster")}
+        >
+          Roster
+        </button>
       </nav>
       {tab === "comparator" ? (
         <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
@@ -160,8 +174,10 @@ export function App() {
         <IvBreakpointsView />
       ) : tab === "attack-defense-breakpoints" ? (
         <AttackDefenseBreakpointsView />
-      ) : (
+      ) : tab === "power-up-optimizer" ? (
         <PowerUpOptimizerView />
+      ) : (
+        <RosterView />
       )}
     </div>
   );

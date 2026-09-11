@@ -24,14 +24,15 @@ function attachErrorListeners(page: Page) {
   return { consoleErrors, pageErrors };
 }
 
+/**
+ * Imports the shared sample roster on the Roster tab (its owner as of
+ * 2026-09-10 — see PLAN_roster_tab.md) rather than the Power-Up Optimizer,
+ * which used to host this same panel. localStorage persists across the
+ * `page.goto` navigation below, same origin — the caller navigates onward
+ * to whichever tab it actually needs afterward.
+ */
 async function importSampleRoster(page: Page) {
-  await page.goto("/?view=power-up-optimizer");
-  await expect(page.getByRole("heading", { name: "Assumptions", exact: true })).toBeVisible();
-  const details = page.getByRole("heading", { name: "Assumptions", exact: true }).locator("xpath=ancestor::details[1]");
-  await details.evaluate((el) => {
-    (el as HTMLDetailsElement).open = true;
-  });
-  await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
+  await page.goto("/?view=roster");
   await page.locator("summary", { hasText: "Import a whole roster" }).click();
   await page.locator("#roster-import-paste").fill(sampleCsv);
   await page.getByRole("button", { name: "Import pasted CSV" }).click();
@@ -43,7 +44,7 @@ test("lineup builder: no imported roster shows an honest empty state, never a si
   await page.goto("/?view=team-raid");
   await page.getByRole("button", { name: "Build best lineup from my imported roster" }).click();
   await expect(
-    page.getByText("No imported roster — import a Poke Genie CSV in the Power-Up Optimizer tab's roster panel first"),
+    page.getByText("No imported roster — import a Poke Genie CSV, hand-add Pokémon, or load a save code on the Roster tab"),
   ).toBeVisible();
   expect(consoleErrors, `console errors: ${consoleErrors.join("; ")}`).toEqual([]);
   expect(pageErrors, `page errors: ${pageErrors.join("; ")}`).toEqual([]);

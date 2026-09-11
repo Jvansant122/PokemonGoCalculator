@@ -4,6 +4,8 @@ import {
   bossEffectiveHp,
   buildTeamScenarioUrl,
   MAX_TEAM_RAID_SLOTS,
+  type EliteTmCandidate,
+  type EliteTmKind,
   type PowerUpBudgetBlockedCandidate,
   type PowerUpBudgetResourceShortfall,
   type PowerUpBudgetStopReason,
@@ -34,7 +36,6 @@ import {
 } from "./powerUpOptimizerScenario.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
 import { efficiencyForRankBy, sortCandidatesByEfficiency } from "./powerUpCandidateSort.js";
-import { RosterImportPanel } from "./RosterImportPanel.js";
 import { hydrateRosterPool, loadRosterPool, type RosterPool } from "./rosterPool.js";
 import { useDebouncedValue } from "./useDebouncedValue.js";
 import { getBaseUrl } from "./urlUtils.js";
@@ -47,7 +48,13 @@ import {
   targetPickerOptions,
   unmatchedActiveRaids,
 } from "./registry.js";
-import { runPowerUpOptimizerScenario, type PowerUpOptimizerRunResult } from "./run/runPowerUpOptimizer.js";
+import {
+  runPowerUpOptimizerScenario,
+  type EliteTmBlockedSlot,
+  type PowerUpOptimizerRunResult,
+  type SecondChargedMoveBlockedSlot,
+  type SecondChargedMoveCandidateDisplay,
+} from "./run/runPowerUpOptimizer.js";
 import {
   resolveRosterPlannerInputs,
   type RosterBudgetPlanRunResult,
@@ -160,6 +167,14 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   // powerUpOptimizerScenario.ts's own field doc comment for why an ABSENT
   // decoded value deliberately does NOT fall back to this default.
   multiRaidSignificanceMode: "aggregate-only",
+  // Unknown, not zero — see powerUpOptimizerScenario.ts's own field doc
+  // comment. A fresh page load has no way to know a real player's TM
+  // inventory, and second-charged-move/Elite TM candidates are still
+  // computed and ranked either way (see run/runPowerUpOptimizer.ts).
+  fastTmOnHand: null,
+  chargedTmOnHand: null,
+  eliteFastTmOnHand: null,
+  eliteChargedTmOnHand: null,
 };
 
 export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
@@ -204,6 +219,10 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     candyByFamilyId: a.candyByFamilyId,
     multiRaidMegaLevel: a.multiRaidMegaLevel,
     multiRaidSignificanceMode: a.multiRaidSignificanceMode,
+    fastTmOnHand: a.fastTmOnHand,
+    chargedTmOnHand: a.chargedTmOnHand,
+    eliteFastTmOnHand: a.eliteFastTmOnHand,
+    eliteChargedTmOnHand: a.eliteChargedTmOnHand,
   };
 }
 
@@ -286,6 +305,15 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     // FRESH scenario). Do not "fix" this to match every other field's `??
     // DEFAULT_ASSUMPTIONS...` pattern.
     multiRaidSignificanceMode: s.multiRaidSignificanceMode ?? "aggregate-or-per-boss",
+    // `?? null` (not `?? DEFAULT_ASSUMPTIONS...`, though they're the same
+    // value here) — an explicitly-shared `null` ("unknown") and an absent
+    // field from an old link both mean the same thing for these fields, so
+    // there's no old-link-vs-explicit-unknown distinction to preserve. See
+    // powerUpOptimizerScenario.ts's own field doc comment.
+    fastTmOnHand: s.fastTmOnHand ?? null,
+    chargedTmOnHand: s.chargedTmOnHand ?? null,
+    eliteFastTmOnHand: s.eliteFastTmOnHand ?? null,
+    eliteChargedTmOnHand: s.eliteChargedTmOnHand ?? null,
   };
 }
 
@@ -337,8 +365,79 @@ function speciesLabel(s: SpeciesDefinition): string {
   return s.isHypothetical ? `${s.name} (hypothetical)` : s.name;
 }
 
-function candidateEfficiency(c: PowerUpCandidate, rankBy: PowerUpRankBy): number | null {
-  return efficiencyForRankBy(rankBy, c.deltaTeamDpsPer1000Stardust, c.deltaTeamDpsPerCandy, c.deltaTeamDpsPerXlCandy);
+/**
+ * A single row of the "Ranked power-up candidates" table, normalized from
+ * EITHER a `PowerUpCandidate` (an ordinary power-up step) OR a
+ * `SecondChargedMoveCandidateDisplay` (a second-charged-move unlock) — the
+ * two draw on the SAME stardust/candy budget (PLAN_tm_move_change_optimizer.md's
+ * own framing for why they belong in one ranked list), unlike an Elite TM
+ * candidate, which spends a wholly separate, non-fungible item and gets its
+ * own section below instead (never merged here — see CLAUDE.md's standing
+ * decision against blending non-fungible resources into one score).
+ */
+interface RankedCandidateRow {
+  key: string;
+  kind: "power-up" | "second-charged-move";
+  slotIndex: number;
+  speciesName: string;
+  /** "25 → 25.5" for a power-up, "—" for a second-charged-move unlock (no level change). */
+  levelRange: string;
+  /** null for a power-up (nothing to name); "2nd charged move: Icy Wind" for a move change. */
+  change: string | null;
+  deltaTeamDps: number;
+  deltaExceedsNoise: boolean;
+  deltaTeamDpsPer1000Stardust: number | null;
+  deltaTeamDpsPerCandy: number | null;
+  deltaTeamDpsPerXlCandy: number | null;
+  cost: { stardust: number; candy: number; xlCandy: number };
+  affordable: boolean;
+  crossesFastBreakpoint: boolean;
+  crossesChargedBreakpoint: boolean;
+}
+
+function powerUpCandidateToRow(c: PowerUpCandidate): RankedCandidateRow {
+  return {
+    key: `pu-${c.slotIndex}-${c.toLevel}`,
+    kind: "power-up",
+    slotIndex: c.slotIndex,
+    speciesName: c.speciesName,
+    levelRange: `${c.fromLevel} → ${c.toLevel}`,
+    change: null,
+    deltaTeamDps: c.deltaTeamDps,
+    deltaExceedsNoise: c.deltaExceedsNoise,
+    deltaTeamDpsPer1000Stardust: c.deltaTeamDpsPer1000Stardust,
+    deltaTeamDpsPerCandy: c.deltaTeamDpsPerCandy,
+    deltaTeamDpsPerXlCandy: c.deltaTeamDpsPerXlCandy,
+    cost: c.cost,
+    affordable: c.affordable,
+    crossesFastBreakpoint: c.crossesFastBreakpoint,
+    crossesChargedBreakpoint: c.crossesChargedBreakpoint,
+  };
+}
+
+function secondChargedMoveCandidateToRow(c: SecondChargedMoveCandidateDisplay): RankedCandidateRow {
+  return {
+    key: `scm-${c.slotIndex}-${c.newChargedMoveId}`,
+    kind: "second-charged-move",
+    slotIndex: c.slotIndex,
+    speciesName: c.speciesName,
+    levelRange: "—",
+    change: `2nd charged move: ${c.newChargedMoveName}`,
+    deltaTeamDps: c.deltaTeamDps,
+    deltaExceedsNoise: c.deltaExceedsNoise,
+    deltaTeamDpsPer1000Stardust: c.deltaTeamDpsPer1000Stardust,
+    deltaTeamDpsPerCandy: c.deltaTeamDpsPerCandy,
+    // A second charged move is never paid in XL Candy — see toPowerUpResourceCost.
+    deltaTeamDpsPerXlCandy: null,
+    cost: { stardust: c.cost.stardust, candy: c.cost.candy, xlCandy: 0 },
+    affordable: c.affordable,
+    crossesFastBreakpoint: false,
+    crossesChargedBreakpoint: false,
+  };
+}
+
+function rankedRowEfficiency(row: RankedCandidateRow, rankBy: PowerUpRankBy): number | null {
+  return efficiencyForRankBy(rankBy, row.deltaTeamDpsPer1000Stardust, row.deltaTeamDpsPerCandy, row.deltaTeamDpsPerXlCandy);
 }
 
 /** Same idea as candidateEfficiency above, for multi-raid's differently-named fields — see powerUpCandidateSort.ts's own doc comment on why the two shapes need separate call sites into the same shared resolver. */
@@ -902,7 +1001,7 @@ function MultiRaidResultsSection({
       {!run && !isRunning && (
         <p className="caveats">
           {hydratedPoolCount === 0
-            ? "No roster imported in this browser yet — import a Poke Genie CSV export in “Import a whole roster” below, then click “Run sweep”."
+            ? "No roster imported in this browser yet — import a Poke Genie CSV export (or hand-add Pokémon) on the Roster tab, then come back and click “Run sweep”."
             : bossCount === 0
               ? "No bosses selected — pick at least one under “Boss set” above, then click “Run sweep”."
               : "Click “Run sweep” to rank power-ups across this roster and boss set."}
@@ -917,8 +1016,8 @@ function MultiRaidResultsSection({
         <p className="caveats">
           No roster imported in this browser yet — this shared link carries every SETTING (boss set, budgets,
           dodge/weather/timer) but never the roster itself (see the note under &ldquo;Share this scenario&rdquo;).
-          Import a Poke Genie CSV export in &ldquo;Import a whole roster&rdquo; below, then click &ldquo;Run
-          sweep&rdquo; again.
+          Import a Poke Genie CSV export (or hand-add Pokémon) on the Roster tab, then come back and click
+          &ldquo;Run sweep&rdquo; again.
         </p>
       )}
 
@@ -1587,8 +1686,79 @@ interface SingleRaidResultsSectionProps {
   rankBy: PowerUpRankBy;
   showAllCandidates: boolean;
   onToggleShowAllCandidates: () => void;
-  visibleCandidates: PowerUpCandidate[];
+  visibleCandidates: RankedCandidateRow[];
   sortedCandidatesCount: number;
+  secondChargedMoveBlocked: SecondChargedMoveBlockedSlot[];
+  eliteTmCandidates: EliteTmCandidate[];
+  eliteTmBlocked: EliteTmBlockedSlot[];
+  eliteFastTmOnHand: number | null;
+  eliteChargedTmOnHand: number | null;
+}
+
+/**
+ * "your 2 Elite Fast TMs, best 2 targets" / "unknown Elite Fast TM count —
+ * showing every ranked candidate" — the plan's own explicit framing (PLAN
+ * §"Elite TM"). `onHand === null` (unknown) never hides a row, only changes
+ * the heading and which rows get the "within your stock" marker.
+ */
+function eliteTmHeading(kind: EliteTmKind, onHand: number | null, count: number): string {
+  const label = kind === "fast" ? "Elite Fast TM" : "Elite Charged TM";
+  if (count === 0) return `${label} candidates`;
+  if (onHand === null) return `${label} candidates — unknown ${label} count, showing every ranked target`;
+  return `${label} candidates — your ${onHand} ${label}${onHand === 1 ? "" : "s"}, best ${Math.min(onHand, count)} target${Math.min(onHand, count) === 1 ? "" : "s"}`;
+}
+
+/**
+ * One Elite TM section (fast or charged — never merged, separate
+ * single-digit-supply items). Ranked by raw Δ team DPS (not a per-resource
+ * efficiency — an Elite TM's "cost" is always exactly 1 item, so there is no
+ * ratio to compute; see EliteTmCandidate.eliteTmItemsSpent's own doc
+ * comment). Rows within `onHand` (when known) are marked "within your
+ * stock"; the rest are still shown, framed as "would need another Elite TM."
+ */
+function EliteTmSection({ kind, candidates, onHand }: { kind: EliteTmKind; candidates: EliteTmCandidate[]; onHand: number | null }) {
+  const sorted = useMemo(() => [...candidates].sort((a, b) => b.deltaTeamDps - a.deltaTeamDps), [candidates]);
+  if (sorted.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h3>{eliteTmHeading(kind, onHand, sorted.length)}</h3>
+      <div className="table-scroll">
+        <table className="time-series-table">
+          <thead>
+            <tr>
+              <th>Slot</th>
+              <th>Species</th>
+              <th>Current move</th>
+              <th>New move</th>
+              <th>Δ team DPS</th>
+              <th>Within stock?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((c, i) => (
+              <tr key={`${c.slotIndex}-${c.newMoveId}`} style={{ opacity: c.deltaExceedsNoise ? 1 : 0.6 }}>
+                <td>{c.slotIndex + 1}</td>
+                <td>{c.speciesName}</td>
+                <td>{c.currentMoveName}</td>
+                <td>{c.newMoveName}</td>
+                <td>
+                  {c.deltaExceedsNoise ? (
+                    <>
+                      {c.deltaTeamDps >= 0 ? "+" : ""}
+                      {c.deltaTeamDps.toFixed(2)}
+                    </>
+                  ) : (
+                    "≈0 (no measurable change)"
+                  )}
+                </td>
+                <td>{onHand === null ? "unknown" : i < onHand ? "✓" : "✗"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -1614,6 +1784,11 @@ function SingleRaidResultsSection({
   onToggleShowAllCandidates,
   visibleCandidates,
   sortedCandidatesCount,
+  secondChargedMoveBlocked,
+  eliteTmCandidates,
+  eliteTmBlocked,
+  eliteFastTmOnHand,
+  eliteChargedTmOnHand,
 }: SingleRaidResultsSectionProps) {
   return (
     <>
@@ -1788,13 +1963,20 @@ function SingleRaidResultsSection({
               efficiency column, and sorts into the middle group by stardust cost (cheapest first) — the measured delta is
               indistinguishable from seed-to-seed jitter, not a real gain or loss.
             </p>
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              "2nd charged move" rows compete in this SAME stardust/candy ranking (they draw on the same budget as a
+              power-up) — Elite TM candidates do NOT, since an Elite TM is a separate, single-digit-supply item; see
+              "Elite TM candidates" below instead.
+            </p>
             <div className="table-scroll" style={{ opacity: isOptimizerPending ? 0.55 : 1, transition: "opacity 0.15s ease" }}>
               <table className="time-series-table">
                 <thead>
                   <tr>
+                    <th>Type</th>
                     <th>Slot</th>
                     <th>Species</th>
                     <th>Level</th>
+                    <th>Change</th>
                     <th>Δ team DPS</th>
                     <th>/1000 stardust</th>
                     <th>/candy</th>
@@ -1807,18 +1989,18 @@ function SingleRaidResultsSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCandidates.map((c, i) => (
-                    <tr key={`${c.slotIndex}-${c.toLevel}-${i}`} style={{ opacity: c.affordable ? 1 : 0.5 }}>
+                  {visibleCandidates.map((c) => (
+                    <tr key={c.key} style={{ opacity: c.affordable ? 1 : 0.5 }}>
+                      <td>{c.kind === "power-up" ? "Power-up" : "2nd charged move"}</td>
                       <td>{c.slotIndex + 1}</td>
                       <td>{c.speciesName}</td>
-                      <td>
-                        {c.fromLevel} → {c.toLevel}
-                      </td>
+                      <td>{c.levelRange}</td>
+                      <td>{c.change ?? "—"}</td>
                       <td
                         title={
                           c.deltaExceedsNoise
                             ? undefined
-                            : `Within ±${data.noiseFloorTeamDps.toFixed(2)} noise floor; the measured delta was ${c.deltaTeamDps >= 0 ? "+" : ""}${c.deltaTeamDps.toFixed(2)}`
+                            : `Within this candidate's own noise floor; the measured delta was ${c.deltaTeamDps >= 0 ? "+" : ""}${c.deltaTeamDps.toFixed(2)}`
                         }
                       >
                         {c.deltaExceedsNoise ? (
@@ -1850,6 +2032,31 @@ function SingleRaidResultsSection({
               <button type="button" style={{ marginTop: 8 }} onClick={onToggleShowAllCandidates}>
                 {showAllCandidates ? `Show top ${CANDIDATE_TABLE_INITIAL_ROWS} only` : `Show all ${sortedCandidatesCount}`}
               </button>
+            )}
+            {secondChargedMoveBlocked.length > 0 && (
+              <p className="caveats" style={{ marginTop: 12 }}>
+                No second-charged-move candidate for: {secondChargedMoveBlocked.map((b) => `${b.speciesName} (${b.reason})`).join("; ")}
+              </p>
+            )}
+          </CollapsibleSection>
+
+          <CollapsibleSection id="pu-elite-tm-candidates" heading="Elite TM candidates" defaultOpen>
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              A SEPARATE section on purpose — an Elite Fast/Elite Charged TM is a single-digit-supply item, not
+              stardust/candy, so it never competes in the ranked table above (CLAUDE.md's standing rule against
+              blending non-fungible resources into one score). Every reachable move is evaluated regardless of how
+              many Elite TMs you actually have on hand; fill those counts in above to see which rows are within your
+              current stock.
+            </p>
+            <EliteTmSection kind="fast" candidates={eliteTmCandidates.filter((c) => c.kind === "fast")} onHand={eliteFastTmOnHand} />
+            <EliteTmSection kind="charged" candidates={eliteTmCandidates.filter((c) => c.kind === "charged")} onHand={eliteChargedTmOnHand} />
+            {eliteTmCandidates.length === 0 && eliteTmBlocked.length === 0 && (
+              <p className="caveats">No Elite TM candidates for the current roster.</p>
+            )}
+            {eliteTmBlocked.length > 0 && (
+              <p className="caveats">
+                No Elite TM candidate for: {eliteTmBlocked.map((b) => `${b.speciesName} ${b.kind} (${b.reason})`).join("; ")}
+              </p>
             )}
           </CollapsibleSection>
         </>
@@ -1923,6 +2130,28 @@ function SingleRaidResultsSection({
           resolve, so a documented stand-in species' stats are used instead — treat those runs as directional.
           </p>
         </details>
+        <details className="prose-details">
+          <summary>Move changes (second charged move &amp; TMs)</summary>
+          <p>
+          Second-charged-move pricing is [community-consensus] (no first-party Niantic table found), tiered by the
+          family's real buddy-walking distance, with starters/babies flat-rated and 16 named species barred entirely
+          unless Shadow or Purified. Purified is a 0.8x stardust/candy discount HERE, NOT the 0.9x an ordinary
+          power-up uses — a deliberately separate rate, not a copy/paste of the power-up table. A slot whose species'
+          buddy distance isn't in this data layer yet shows no second-charged-move candidate at all rather than
+          guessing a tier. Elite TM candidates are deterministic once a target move is picked, so every reachable
+          move is evaluated regardless of how many Elite TMs you actually hold — the TM-count fields above only
+          label which rows are "within your stock." A REGULAR (non-Elite) Fast/Charged TM is deliberately NOT
+          modelled at all: its outcome is a random, guaranteed-different move from a pool whose real distribution
+          Niantic has never published, and it can irreversibly overwrite a legacy/event move that only an Elite TM
+          could restore — ranking a candidate here would mean either fabricating a distribution or collapsing real
+          uncertainty into one misleading number. Frustration/Return, signature moves, and Super Max "+" moves can
+          never be targeted by any TM of any kind (real game rule). Frustration removal itself needs a real,
+          roughly-quarterly "Taken Over" event and is not modelled here at all. Every candidate above assumes this
+          tab's own 6-slot roster, whose species/move pickers always resolve to a concrete move — the "unknown
+          moveset" exclusion above only applies to your separately-imported Roster-tab pool, which this tab's TM
+          ranking does not draw candidates from yet.
+          </p>
+        </details>
         </div>
       </CollapsibleSection>
     </>
@@ -1943,13 +2172,14 @@ export function PowerUpOptimizerView() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [showAllCandidates, setShowAllCandidates] = useState(false);
 
-  // Lifted up from RosterImportPanel (which used to own this itself) so the
-  // multi-raid sweep below can read the SAME pool a CSV import just produced
-  // without requiring a page reload — see RosterImportPanel.tsx's own Props
-  // doc comment. RosterImportPanel still owns PERSISTENCE (saveRosterPool as
-  // a side effect of its own import/clear actions); this is just the
-  // canonical in-memory value both it and the sweep now share.
-  const [rosterPool, setRosterPool] = useState<RosterPool>(loadRosterPool);
+  // The roster is now OWNED by the Roster tab (RosterView.tsx, added
+  // 2026-09-10 — see PLAN_roster_tab.md), which hosts hand-entry, CSV import,
+  // editing, and the save code. This view only READS the pool from
+  // localStorage at mount — since every tab fully unmounts when another is
+  // active (App.tsx's own doc comment), returning here after editing the
+  // roster on that tab always re-reads the current pool, with no lifted
+  // setter needed on this side any more.
+  const [rosterPool] = useState<RosterPool>(loadRosterPool);
   const {
     entries: hydratedPool,
     droppedCount: rosterDroppedCount,
@@ -2098,6 +2328,14 @@ export function PowerUpOptimizerView() {
       candyByFamilyId: {},
       multiRaidMegaLevel: null,
       multiRaidSignificanceMode: "aggregate-only",
+      // Placeholders — runPowerUpOptimizerScenario never reads TM inventory
+      // (it's purely a render-layer "within your stock" framing, see
+      // PowerUpOptimizerAssumptions' own field doc comments), so these
+      // don't belong in this memo's dependency array either.
+      fastTmOnHand: null,
+      chargedTmOnHand: null,
+      eliteFastTmOnHand: null,
+      eliteChargedTmOnHand: null,
     }),
     [
       assumptions.slots,
@@ -2135,7 +2373,15 @@ export function PowerUpOptimizerView() {
     () => (assumptions.mode === "single-raid" ? runPowerUpOptimizerScenario(debouncedOptimizerAssumptions, speciesRegistry) : null),
     [assumptions.mode, debouncedOptimizerAssumptions],
   );
-  const result = { data: runResult?.data ?? null, plan: runResult?.plan ?? null, error: runResult?.error ?? null };
+  const result = {
+    data: runResult?.data ?? null,
+    plan: runResult?.plan ?? null,
+    error: runResult?.error ?? null,
+    secondChargedMoveCandidates: runResult?.secondChargedMoveCandidates ?? [],
+    secondChargedMoveBlocked: runResult?.secondChargedMoveBlocked ?? [],
+    eliteTmCandidates: runResult?.eliteTmCandidates ?? [],
+    eliteTmBlocked: runResult?.eliteTmBlocked ?? [],
+  };
 
   // --- Multi-raid mode ---------------------------------------------------
   // Everything runRosterPlannerScenario ACTUALLY reads, EXCLUDING the pool
@@ -2157,6 +2403,12 @@ export function PowerUpOptimizerView() {
       bossStartsPrimed: false,
       bossStartingEnergyFraction: 0,
       rankBy: "stardust",
+      // Placeholders — resolveRosterPlannerInputs doesn't read TM inventory
+      // either (multi-raid TM candidates aren't built yet).
+      fastTmOnHand: null,
+      chargedTmOnHand: null,
+      eliteFastTmOnHand: null,
+      eliteChargedTmOnHand: null,
       multiRaidIncludePastRaids: assumptions.multiRaidIncludePastRaids,
       multiRaidIncludedTiers: assumptions.multiRaidIncludedTiers,
       multiRaidMaxBossCount: assumptions.multiRaidMaxBossCount,
@@ -2288,14 +2540,21 @@ export function PowerUpOptimizerView() {
   // three-group noise-floor-aware order lives in powerUpCandidateSort.ts,
   // shared with multi-raid mode's own ranked-table sort below.
   const sortedCandidates = useMemo(() => {
-    const list = result.data?.candidates ?? [];
-    return sortCandidatesByEfficiency(list, (c) => ({
-      delta: c.deltaTeamDps,
-      isSignificant: c.deltaExceedsNoise,
-      costStardust: c.cost.stardust,
-      efficiency: candidateEfficiency(c, assumptions.rankBy),
+    // Second-charged-move rows compete in the SAME ranked list as power-up
+    // rows (they draw on the same stardust/candy budget) — see
+    // RankedCandidateRow's own doc comment. Elite TM candidates are
+    // deliberately excluded (rendered in their own section instead).
+    const list: RankedCandidateRow[] = [
+      ...(result.data?.candidates.map(powerUpCandidateToRow) ?? []),
+      ...result.secondChargedMoveCandidates.map(secondChargedMoveCandidateToRow),
+    ];
+    return sortCandidatesByEfficiency(list, (row) => ({
+      delta: row.deltaTeamDps,
+      isSignificant: row.deltaExceedsNoise,
+      costStardust: row.cost.stardust,
+      efficiency: rankedRowEfficiency(row, assumptions.rankBy),
     }));
-  }, [result.data, assumptions.rankBy]);
+  }, [result.data, result.secondChargedMoveCandidates, assumptions.rankBy]);
 
   const visibleCandidates = showAllCandidates ? sortedCandidates : sortedCandidates.slice(0, CANDIDATE_TABLE_INITIAL_ROWS);
 
@@ -2350,6 +2609,19 @@ export function PowerUpOptimizerView() {
         )}
       </p>
 
+      {entryMovesetBadges.size > 0 && (
+        <p className="caveats" style={{ marginBottom: 12 }}>
+          {entryMovesetBadges.size} imported roster entr{entryMovesetBadges.size === 1 ? "y has an" : "ies have"} unknown
+          or unrecognized moveset{entryMovesetBadges.size === 1 ? "" : "s"} and can&rsquo;t be priced for a TM — a TM is
+          never suggested against a moveset this tool never observed. Fill{" "}
+          {entryMovesetBadges.size === 1 ? "it" : "them"} in on the{" "}
+          <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a> to make{" "}
+          {entryMovesetBadges.size === 1 ? "it" : "them"} eligible. (The 6-slot roster below is always fully known — its
+          own species/move pickers can&rsquo;t leave a move blank — so this count is about your separately-imported
+          roster, not the slots above.)
+        </p>
+      )}
+
       <PowerUpOptimizerAssumptionPanel
         value={assumptions}
         onChange={setAssumptions}
@@ -2377,6 +2649,11 @@ export function PowerUpOptimizerView() {
           onToggleShowAllCandidates={() => setShowAllCandidates((v) => !v)}
           visibleCandidates={visibleCandidates}
           sortedCandidatesCount={sortedCandidates.length}
+          secondChargedMoveBlocked={result.secondChargedMoveBlocked}
+          eliteTmCandidates={result.eliteTmCandidates}
+          eliteTmBlocked={result.eliteTmBlocked}
+          eliteFastTmOnHand={assumptions.eliteFastTmOnHand}
+          eliteChargedTmOnHand={assumptions.eliteChargedTmOnHand}
         />
       )}
 
@@ -2485,15 +2762,28 @@ export function PowerUpOptimizerView() {
             <p className="caveats" style={{ marginTop: 8 }}>
               This link carries every SETTING above (boss set, budgets, dodge/weather/timer, etc.) but NOT your
               imported roster — the roster lives only in THIS browser&rsquo;s local storage (a deliberate exception,
-              see PLAN_multi_raid_roster_optimizer.md §3.2). A recipient opening this link needs to import their own
-              Poke Genie CSV (or yours, exported as JSON below) before they see a sweep.
+              see CLAUDE.md&rsquo;s roster/localStorage exception). A recipient opening this link needs their own
+              roster on the Roster tab first (import a Poke Genie CSV, hand-add Pokémon, or load a save code) before
+              they see a sweep.
             </p>
           </>
         )}
       </section>
 
       <section className="panel">
-        <RosterImportPanel pool={rosterPool} onPoolChange={setRosterPool} />
+        <h2>Roster</h2>
+        <p className="species-picker-hint">
+          {hydratedPool.length > 0
+            ? `${hydratedPool.length} Pokémon in your roster.`
+            : "No roster yet."}{" "}
+          Import a CSV, hand-add Pokémon, edit entries, or save a code on the Roster tab.
+        </p>
+        {rosterDroppedCount > 0 && (
+          <p className="caveats">
+            {rosterDroppedCount} stored entr{rosterDroppedCount === 1 ? "y" : "ies"} reference a species this data
+            layer no longer has — visit the Roster tab to re-import.
+          </p>
+        )}
       </section>
     </>
   );

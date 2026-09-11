@@ -9,6 +9,7 @@ import {
   hydrateRosterEntry,
   hydrateRosterPool,
   loadRosterPool,
+  mergeRosterPools,
   ROSTER_POOL_SCHEMA_VERSION,
   RosterPoolFormatError,
   saveRosterPool,
@@ -261,5 +262,44 @@ describe("JSON file import/export", () => {
     const pool = { version: ROSTER_POOL_SCHEMA_VERSION, entries: [good, { garbage: true }], candyBySpeciesId: {}, savedAt: "x" };
     const result = deserializeRosterPoolFromJson(JSON.stringify(pool));
     expect(result.entries).toEqual([good]);
+  });
+});
+
+describe("mergeRosterPools", () => {
+  function poolOf(entries: StoredRosterEntry[], candyBySpeciesId: RosterPool["candyBySpeciesId"] = {}): RosterPool {
+    return { version: ROSTER_POOL_SCHEMA_VERSION, entries, candyBySpeciesId, savedAt: new Date(0).toISOString() };
+  }
+
+  it("concatenates both pools' entries additively — never drops or overwrites an existing entry", () => {
+    const current = poolOf([dehydrateRosterEntry(fakeEntry({ entryId: "a" }))]);
+    const incoming = poolOf([dehydrateRosterEntry(fakeEntry({ entryId: "b" }))]);
+    const merged = mergeRosterPools(current, incoming);
+    expect(merged.entries.map((e) => e.entryId).sort()).toEqual(["a", "b"]);
+  });
+
+  it("re-keys a colliding entryId from the incoming pool rather than overwriting the current one", () => {
+    const current = poolOf([dehydrateRosterEntry(fakeEntry({ entryId: "dup" }))]);
+    const incoming = poolOf([dehydrateRosterEntry(fakeEntry({ entryId: "dup" }))]);
+    const merged = mergeRosterPools(current, incoming);
+    expect(merged.entries).toHaveLength(2);
+    const ids = merged.entries.map((e) => e.entryId);
+    expect(ids.filter((id) => id === "dup")).toHaveLength(1); // current's own id untouched
+    expect(ids).toContain("dup-dup"); // incoming's re-keyed id
+  });
+
+  it("re-keys a SECOND collision with the same base id distinctly (loading the same code twice)", () => {
+    const current = poolOf([dehydrateRosterEntry(fakeEntry({ entryId: "dup" })), dehydrateRosterEntry(fakeEntry({ entryId: "dup-dup" }))]);
+    const incoming = poolOf([dehydrateRosterEntry(fakeEntry({ entryId: "dup" }))]);
+    const merged = mergeRosterPools(current, incoming);
+    const ids = merged.entries.map((e) => e.entryId);
+    expect(new Set(ids).size).toBe(ids.length); // every id still unique
+  });
+
+  it("prefers current's own candyBySpeciesId entry on a key collision, and keeps an incoming-only key", () => {
+    const current = poolOf([], { houndour: { candy: 5, xlCandy: 0 } });
+    const incoming = poolOf([], { houndour: { candy: 999, xlCandy: 999 }, garchomp: { candy: 10, xlCandy: 2 } });
+    const merged = mergeRosterPools(current, incoming);
+    expect(merged.candyBySpeciesId.houndour).toEqual({ candy: 5, xlCandy: 0 });
+    expect(merged.candyBySpeciesId.garchomp).toEqual({ candy: 10, xlCandy: 2 });
   });
 });

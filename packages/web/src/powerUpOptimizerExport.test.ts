@@ -43,6 +43,10 @@ function baseAssumptions(overrides: Partial<PowerUpOptimizerAssumptions> = {}): 
     candyByFamilyId: {},
     multiRaidMegaLevel: null,
     multiRaidSignificanceMode: "aggregate-only",
+    fastTmOnHand: null,
+    chargedTmOnHand: null,
+    eliteFastTmOnHand: null,
+    eliteChargedTmOnHand: null,
     ...overrides,
   };
 }

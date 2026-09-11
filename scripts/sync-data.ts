@@ -526,6 +526,26 @@ function applyCleanFormDisplayName(definition: SpeciesDefinition, pokemonName: s
   }
 }
 
+/**
+ * sync-data.ts-local extension of `SpeciesDefinition`, used ONLY to carry
+ * `kmBuddyDistance` (GAME_MASTER's own first-party buddy-walking-distance
+ * tiering key, see GameMasterPokemonRecord.kmBuddyDistance's doc comment in
+ * ./sync-data/rawShapes.ts) through to data/normalized/species.json ahead of
+ * a formal `SpeciesDefinition` field — that's a schema decision this script
+ * does not own (CLAUDE.md's "When the schema itself needs to change"; see
+ * data-sync's own operating rule of the same name). data/normalized/
+ * species.json is plain JSON on the way out (`JSON.stringify(species, ...)`
+ * below), never re-imported as `SpeciesDefinition` at compile time, so this
+ * cast doesn't misrepresent what `fromGameMaster`'s real return type
+ * promises any other caller. Set only where a matched GAME_MASTER template
+ * is available — same two call sites, same discipline, as
+ * `definition.candyFamilyId` right next to each use below.
+ */
+type SpeciesWithKmBuddyDistance = SpeciesDefinition & { kmBuddyDistance?: number };
+function setKmBuddyDistance(definition: SpeciesDefinition, kmBuddyDistance: number | undefined): void {
+  (definition as SpeciesWithKmBuddyDistance).kmBuddyDistance = kmBuddyDistance;
+}
+
 // ---------------------------------------------------------------------------
 // Build normalized species list (one form per species — "Normal", or the
 // documented fallback above). VALUES now come primarily from GAME_MASTER,
@@ -749,6 +769,7 @@ for (const stat of normalStats) {
   if (gmRecord && enumName) {
     definition.isFullyEvolved = isFullyEvolved(gameMasterPokemonByEnum.get(enumName) ?? []);
     definition.candyFamilyId = gmRecord.familyId;
+    setKmBuddyDistance(definition, gmRecord.kmBuddyDistance);
     if (gmRecord.form) speciesIdByGameMasterFormKey.set(gmRecord.form, definition.id);
     speciesIdByGameMasterEnum.set(enumName, definition.id);
     pendingEvolutionResolution.push({ definition, gmRecord });
@@ -1022,6 +1043,7 @@ for (const [pokemonId, rows] of statsByPokemonId) {
     if (gmExactRecord) {
       definition.isFullyEvolved = isFullyEvolved(candidates);
       definition.candyFamilyId = gmExactRecord.familyId;
+      setKmBuddyDistance(definition, gmExactRecord.kmBuddyDistance);
       if (gmExactRecord.form) speciesIdByGameMasterFormKey.set(gmExactRecord.form, definition.id);
       pendingEvolutionResolution.push({ definition, gmRecord: gmExactRecord });
       // Deliberately NOT registered in speciesIdByGameMasterEnum — that map
@@ -1938,6 +1960,23 @@ const notFullyEvolvedCount = species.filter((s) => s.isFullyEvolved === false).l
 const dexNumberCount = species.filter((s) => s.dexNumber !== undefined).length;
 const candyFamilyIdCount = species.filter((s) => s.candyFamilyId !== undefined).length;
 const evolvesToIdsPopulatedCount = species.filter((s) => (s.evolvesToIds?.length ?? 0) > 0).length;
+
+// 2026-09-10, kmBuddyDistance (see setKmBuddyDistance's own doc comment
+// above) — same population-counting discipline as the Phase 0 fields just
+// above, computed over the FINAL species list so Shadow variants (inherited
+// via spread) count correctly. Distribution reported by value since a
+// missing count alone doesn't say whether "missing" is rare or common (see
+// this task's own requirement) — every value observed live 2026-09-10 was
+// one of {1, 3, 5, 20}, so an "other" bucket exists here purely as a canary
+// for a future GAME_MASTER change, not because one is expected.
+const kmBuddyDistanceSpecies = species.filter((s) => (s as SpeciesWithKmBuddyDistance).kmBuddyDistance !== undefined);
+const kmBuddyDistanceCount = kmBuddyDistanceSpecies.length;
+const kmBuddyDistanceMissingCount = species.length - kmBuddyDistanceCount;
+const kmBuddyDistanceDistribution = new Map<number, number>();
+for (const s of kmBuddyDistanceSpecies) {
+  const v = (s as SpeciesWithKmBuddyDistance).kmBuddyDistance!;
+  kmBuddyDistanceDistribution.set(v, (kmBuddyDistanceDistribution.get(v) ?? 0) + 1);
+}
 
 // ---------------------------------------------------------------------------
 // Validation
@@ -2993,6 +3032,14 @@ console.log(`  - Skipped ${skippedSpecies.length} species for missing typing/mov
 console.log(`  - Unresolved move names referenced by a species' moveset but absent from BOTH GAME_MASTER's moveSettings AND pogoapi's fast_moves/charged_moves.json (likely retired/legacy/Dynamax-only moves, filtered out silently per-species): ${[...unresolvedMoveNames].join(", ") || "none"}`);
 console.log(
   `  - Phase 0 of PLAN_multi_raid_roster_optimizer.md (evolution/candy-family/dex-number data, this run): isFullyEvolved set on ${fullyEvolvedCount + notFullyEvolvedCount}/${species.length} species (${fullyEvolvedCount} fully evolved, ${notFullyEvolvedCount} not); evolvesToIds is non-empty on ${evolvesToIdsPopulatedCount} of those ${notFullyEvolvedCount} not-fully-evolved species; candyFamilyId set on ${candyFamilyIdCount}/${species.length}; dexNumber set on ${dexNumberCount}/${species.length}. All four are set only via the primary and "mechanically-distinct extra forms" species-build loops (not mega/primal or Shadow — no real evolution branch ever targets one of those, and Shadow variants instead inherit all four fields unchanged from their base species via getOrCreateShadowVariant's spread, including a base-species-id evolvesToIds that intentionally does NOT repoint to the Shadow sibling); a species that fell all the way back to pogoapi-sourced data (see the fallback line above) gets dexNumber only, since the other three need GAME_MASTER's own evolutionBranch/familyId. ${unresolvedEvolutionBranches.length === 0 ? "Every real evolution branch resolved to a registered species id this run (Phase 0's own groundwork measured 859 distinct real evolution edges, all resolving at the enum level)." : `${unresolvedEvolutionBranches.length} evolution branch(es) could NOT be resolved to a registered species id this run (reported, not silently dropped — isFullyEvolved stays correctly false for the source species regardless, since it's computed independently of resolution success): ${unresolvedEvolutionBranches.join("; ")}`} ${isFullyEvolvedRealEvolutionTargetsInconsistencies.length === 0 ? "No isFullyEvolved/realEvolutionTargets inconsistencies this run (see gameMasterMatching.ts's realEvolutionTargets doc comment for what this would mean)." : `${isFullyEvolvedRealEvolutionTargetsInconsistencies.length} species have isFullyEvolved: false (a SIBLING GAME_MASTER template for their enum carries a real branch) but their OWN matched template carries none — evolvesToIds is [] for these, isFullyEvolved deliberately NOT overridden to true (see isFullyEvolvedRealEvolutionTargetsInconsistencies's doc comment in this file): ${isFullyEvolvedRealEvolutionTargetsInconsistencies.join(", ")}`}`,
+);
+console.log(
+  `  - kmBuddyDistance (2026-09-10, MECHANICS.md "Second charged move unlock" tiering key): set on ${kmBuddyDistanceCount}/${species.length} species, missing on ${kmBuddyDistanceMissingCount} (same "no matched GAME_MASTER template" population as candyFamilyId's own gap above). Distribution: ${
+    [...kmBuddyDistanceDistribution.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([km, count]) => `${km}km: ${count}`)
+      .join(", ") || "none"
+  }. Per-species (pokemonId-enum), NOT per-candy-family — see GameMasterPokemonRecord.kmBuddyDistance's doc comment in ./sync-data/rawShapes.ts for the 4 confirmed within-family disagreements (Qwilfish/Sneasel/Stantler/Zigzagoon lines, each a regional-evolution split).`,
 );
 console.log(`  - Raid entries with no usable stat data (speciesId: null): ${raidsWithNullSpecies} of ${activeRaids.length}`);
 console.log(`  - Raid entries matched approximately (base/Normal-form stats standing in for a regional/mega variant this project lacks real per-form stat data for): ${raidsApproximate}`);

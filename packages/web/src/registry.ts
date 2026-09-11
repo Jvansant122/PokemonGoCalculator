@@ -423,6 +423,24 @@ export function resolveMegaBaseCandyFamilyId(species: SpeciesDefinition): string
   return resolveMegaBaseSpecies(species)?.candyFamilyId;
 }
 
+/**
+ * Same gap, same fix, for `kmBuddyDistance` — confirmed empirically (e.g.
+ * `lucario-mega` carries `kmBuddyDistance: undefined` while `lucario` itself
+ * carries `5`) for the same reason `resolveMegaBaseCandyFamilyId` exists: a
+ * mega/primal species record has no buddy-walking history of its own (it's
+ * never the form actually walked), so this data layer only ever populates
+ * the field on the base form. Used by `tmMove.ts`'s second-charged-move
+ * pricing (`SecondChargedMovePricingInput.kmBuddyDistance`) — without this,
+ * every mega/primal slot would show "buddy distance unknown" and never get a
+ * second-charged-move candidate at all, even though the underlying base
+ * form's distance is known and (per CLAUDE.md's standing decision "a TM on
+ * the base form is a TM on the mega") applies identically.
+ */
+export function resolveMegaBaseKmBuddyDistance(species: SpeciesDefinition): number | undefined {
+  if (species.kmBuddyDistance != null) return species.kmBuddyDistance;
+  return resolveMegaBaseSpecies(species)?.kmBuddyDistance;
+}
+
 export interface TargetPickerOption {
   id: string;
   label: string;

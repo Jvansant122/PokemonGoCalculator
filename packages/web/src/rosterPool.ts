@@ -242,6 +242,44 @@ export function saveRosterPool(pool: RosterPool): { persisted: boolean } {
 }
 
 /**
+ * Merges `incoming` (a freshly-decoded save code or JSON import) into
+ * `current` ADDITIVELY — never a silent overwrite of a roster someone spent
+ * time entering (PLAN_roster_tab.md's own explicit requirement; the caller's
+ * OTHER option, a full replace, is just `incoming` used directly with no
+ * merge at all). Re-keys any `entryId` collision (e.g. loading the same code
+ * twice, or two exports that happen to share an id) by appending a suffix,
+ * so a merge can never silently drop or overwrite an entry the way a naive
+ * `Map`-by-id merge would. `candyBySpeciesId` is a plain shallow merge with
+ * `current` taking priority on a key present in both — this field is still
+ * unused by any UI as of this writing (see its own doc comment), so there is
+ * no real behavior riding on the tie-break, but "the roster already open
+ * wins" is the least surprising choice if that ever changes.
+ */
+export function mergeRosterPools(current: RosterPool, incoming: RosterPool): RosterPool {
+  const usedIds = new Set(current.entries.map((e) => e.entryId));
+  const remapped = incoming.entries.map((entry) => {
+    if (!usedIds.has(entry.entryId)) {
+      usedIds.add(entry.entryId);
+      return entry;
+    }
+    let candidate = `${entry.entryId}-dup`;
+    let suffix = 2;
+    while (usedIds.has(candidate)) {
+      candidate = `${entry.entryId}-dup${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(candidate);
+    return { ...entry, entryId: candidate };
+  });
+  return {
+    version: ROSTER_POOL_SCHEMA_VERSION,
+    entries: [...current.entries, ...remapped],
+    candyBySpeciesId: { ...incoming.candyBySpeciesId, ...current.candyBySpeciesId },
+    savedAt: current.savedAt,
+  };
+}
+
+/**
  * JSON is the transferable-by-file substitute for link-shareability (§3.2 of
  * PLAN_multi_raid_roster_optimizer.md — the roster deliberately does NOT go
  * in the URL). Lossless round-trip with `deserializeRosterPoolFromJson`.

@@ -22,3 +22,4 @@ export * from "./speciesReport.js";
 export * from "./powerUp.js";
 export * from "./rosterPlanner.js";
 export * from "./lineupBuilder.js";
+export * from "./tmMove.js";

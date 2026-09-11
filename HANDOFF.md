@@ -1,9 +1,50 @@
 # Handoff
 
-Last updated: 2026-09-10 (the second user's feedback batch + two player-audit rounds). Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-10 (the Roster tab, built while a concurrent session worked in `packages/engine`/`scripts/`). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-10 (latest): feedback batch, `pogo-player` agent, two audit rounds — SHIPPED
+## 2026-09-10 (latest): Roster tab — the seventh tab, hand-entry + gzip save code
+
+`web-developer` built the roster-tab plan (self-contained implementation plan, root of the repo —
+not yet deleted, see "Not yet done" below). Replaces the deleted Firebase/login plan: this app
+still has no backend. The roster (hand-entry, the pre-existing Poke Genie CSV import — moved here
+from the Power-Up Optimizer tab — editing, and a self-contained save code) now has its own tab
+(`view=roster`, param `rt`) instead of living inside the Power-Up Optimizer.
+
+- **New**: `RosterView.tsx` (the tab), `RosterEntryForm.tsx` (hand-entry/edit form, reuses
+  `SpeciesPicker`/`MoveSelect`/`NumberField`), `rosterEntryDraft.ts` (draft <-> `RosterEntry`
+  conversion — a hand-entered/edited entry's moveset/IVs/level are always marked fully KNOWN, never
+  the "default moveset" badge a blank CSV column earns), `rosterSaveCode.ts` (versioned,
+  gzip-compressed save code via the platform's `CompressionStream`, no dependency added — ~90%
+  smaller than the raw roster JSON on a realistic 164-entry roster), `rosterScenario.ts` (the
+  tab's own `RosterScenario`, carrying ONLY a display setting — table sort order — never the
+  roster's contents, per the standing "no backend" decision), `run/runRoster.ts`.
+- **Changed**: `rosterPool.ts` gained `mergeRosterPools` (additive load, re-keys an `entryId`
+  collision rather than overwriting). `PowerUpOptimizerView.tsx`/`LineupBuilderPanel.tsx` updated
+  to point at the Roster tab instead of hosting/describing the import panel themselves — both keep
+  working unchanged, reading the same `rosterPool.ts` localStorage pool fresh on mount.
+- **Real bug found and fixed during live verification**: `RosterImportPanel.tsx` used to render
+  its own bottom roster table with a coarse, generic "default moveset" flag; kept alongside
+  `RosterView.tsx`'s new, more precise per-slot badge (`rosterMovesetBadge.ts`), the SAME row could
+  show two DISAGREEING badge texts depending on which table you looked at. Deleted the old table
+  entirely — see `web-developer`'s own memory for the full story.
+- **Verified live**: Playwright against the built `dist` (real Chromium) — hand-add a Pokémon
+  (badge-free, reaches Power-Up Optimizer and Team Raid's Lineup Builder identically to an
+  imported entry), editing an imported blank-moveset entry clears its badge, a save code
+  round-trips exactly and a truncated code fails legibly, and a share link restores the display
+  setting only, never the roster. `npm run test:web` (284 tests), full e2e suite (26 specs, up
+  from 21), and `npm run verify`'s every step EXCEPT ONE (below) are green.
+- **`scripts/` touch points finished in a follow-up session (2026-09-10, `data-sync`)**:
+  `scripts/check-scenario-roundtrip.mjs` gained the Roster tab's `TABS` row — it contributes
+  exactly one field (`sortBy`; the roster's contents deliberately never round-trip, per the
+  standing localStorage-only decision), bringing the total from 137 to 138 fields across 7 tabs.
+  `scripts/run-scenario.ts` gained a `"roster"` CLI case (`rt` param), which reports the restored
+  `sortBy` setting and an honest zero-entries roster (the CLI structurally cannot see
+  localStorage), same shape as the Power-Up Optimizer's multi-raid "no roster" branch. Covered by
+  a new `scripts/run-scenario-roster.test.ts`. `npm run check-docs-drift` and `npm run verify` are
+  both fully green; `PLAN_roster_tab.md` is deleted — the Roster tab is shipped in full.
+
+## 2026-09-10: feedback batch, `pogo-player` agent, two audit rounds — SHIPPED
 
 Driven by three message logs from the project's real second user, then by two rounds of a new
 `pogo-player` audit agent. Everything below is verified: `npm run verify` green, `test:e2e` 14/14.
@@ -166,10 +207,9 @@ have round-tripped perfectly and been **ignored at simulation time**. Fixed.
 
 ## Next
 
-1. **PLAN_roster_tab.md** — not yet built. Supersedes the old login/Firebase plan; this app has **no backend
-   and is not getting one**. A 7th tab: hand-entry, CSV import, and a self-contained copyable save
-   code. **Build this BEFORE the TM plan** — hand-entry is what lets a user fix an unknown moveset,
-   and TM candidates are blocked on unknown movesets for roughly a third of a real import.
+1. **PLAN_roster_tab.md** — built 2026-09-10 (see the section above), but still needs its
+   `scripts/check-scenario-roundtrip.mjs`/`scripts/run-scenario.ts` wiring before the plan file
+   itself can be deleted — a future session should finish that, then delete the plan.
 2. **`PLAN_tm_move_change_optimizer.md`** — researched and scoped, not built. Read it before
    starting: the user's "blank CSV move column ⇒ needs a TM" clause was deliberately overridden
    (a Pokémon always has moves, so blank means the export missed it), and regular TMs are *random*,

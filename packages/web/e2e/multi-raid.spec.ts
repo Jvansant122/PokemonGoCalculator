@@ -43,8 +43,32 @@ async function expandAssumptions(page: Page) {
   });
 }
 
+/**
+ * Imports the shared sample roster on the Roster tab (its owner as of
+ * 2026-09-10 — see PLAN_roster_tab.md; it used to be embedded directly in
+ * this tab). localStorage persists across the `page.goto` navigation, same
+ * origin — the caller navigates back to `?view=power-up-optimizer`
+ * afterward.
+ */
+async function importSampleRosterViaRosterTab(page: Page) {
+  await page.goto("/?view=roster");
+  await page.locator("summary", { hasText: "Import a whole roster" }).click();
+  const pasteArea = page.locator("#roster-import-paste");
+  await expect(pasteArea).toBeVisible();
+  await pasteArea.fill(sampleCsv);
+  await page.getByRole("button", { name: "Import pasted CSV" }).click();
+  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
+}
+
 test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep off the main thread, real rows render", async ({ page }) => {
   const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+  // Real Poke Genie sample fixture — same fixture Phase 1's own unit tests
+  // (import/pokeGenieMatch.test.ts) exercise, so this is a real,
+  // previously-verified-to-match export, not synthetic data. Imported on the
+  // Roster tab (its owner as of 2026-09-10), then read back here via
+  // localStorage.
+  await importSampleRosterViaRosterTab(page);
 
   await page.goto("/?view=power-up-optimizer");
   await expect(page.getByRole("heading", { name: "Assumptions", exact: true })).toBeVisible();
@@ -53,20 +77,6 @@ test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep o
   await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
   await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
   await expect(page.locator(".species-picker-hint", { hasText: /boss(es)? resolved and encoded/ })).toBeVisible();
-
-  // Expand the (collapsed by default) <details> roster import panel and
-  // paste the real Poke Genie sample fixture — same fixture Phase 1's own
-  // unit tests (import/pokeGenieMatch.test.ts) exercise, so this is a real,
-  // previously-verified-to-match export, not synthetic data.
-  await page.locator("summary", { hasText: "Import a whole roster" }).click();
-  const pasteArea = page.locator("#roster-import-paste");
-  await expect(pasteArea).toBeVisible();
-  await pasteArea.fill(sampleCsv);
-  await page.getByRole("button", { name: "Import pasted CSV" }).click();
-
-  // A real import happened — the <details> summary's own Pokémon count goes
-  // from 0 to a real positive number.
-  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
 
   const runSweepButton = page.getByRole("button", { name: "Run sweep" });
   await expect(runSweepButton).toBeEnabled({ timeout: 10_000 });
@@ -144,17 +154,12 @@ test("power-up-optimizer multi-raid: the significance-mode toggle changes which 
 }) => {
   const { consoleErrors, pageErrors } = attachErrorListeners(page);
 
+  await importSampleRosterViaRosterTab(page);
+
   await page.goto("/?view=power-up-optimizer");
   await expandAssumptions(page);
   await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
   await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
-
-  await page.locator("summary", { hasText: "Import a whole roster" }).click();
-  const pasteArea = page.locator("#roster-import-paste");
-  await expect(pasteArea).toBeVisible();
-  await pasteArea.fill(sampleCsv);
-  await page.getByRole("button", { name: "Import pasted CSV" }).click();
-  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
 
   const checkbox = page.getByRole("checkbox", { name: /Also count a candidate that only helps against one boss/ });
   await expect(checkbox).toBeVisible();
@@ -264,17 +269,12 @@ test("power-up-optimizer multi-raid: hand-picking a single boss runs the sweep a
 }) => {
   const { consoleErrors, pageErrors } = attachErrorListeners(page);
 
+  await importSampleRosterViaRosterTab(page);
+
   await page.goto("/?view=power-up-optimizer");
   await expandAssumptions(page);
   await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
   await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
-
-  await page.locator("summary", { hasText: "Import a whole roster" }).click();
-  const pasteArea = page.locator("#roster-import-paste");
-  await expect(pasteArea).toBeVisible();
-  await pasteArea.fill(sampleCsv);
-  await page.getByRole("button", { name: "Import pasted CSV" }).click();
-  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
 
   // Search for a specific boss and commit to it as the ONLY boss in the set —
   // the fast, two-action single-boss path this feature exists for.

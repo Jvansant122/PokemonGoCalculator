@@ -9,16 +9,22 @@
 import {
   bossChargedMoveReadySeconds,
   bossEffectiveHp,
+  generateEliteTmCandidates,
+  generateSecondChargedMoveCandidates,
   optimizePowerUps,
   planPowerUpBudget,
+  type EliteTmCandidate,
+  type EliteTmKind,
+  type MoveChangeEvaluationInputs,
   type PowerUpBudgetInputs,
   type RaidTier,
+  type SecondChargedMoveCandidate,
   type SpeciesDefinition,
   type SpeciesRegistry,
 } from "@pogo-analyzer/engine";
 import type { PowerUpOptimizerAssumptions } from "../PowerUpOptimizerAssumptionPanel.js";
 import { applyShadowToggle, effectiveIsShadow } from "../shadowToggle.js";
-import { powerUpCostTable, raidTierForSpeciesId } from "../registry.js";
+import { powerUpCostTable, raidTierForSpeciesId, resolveMegaBaseKmBuddyDistance } from "../registry.js";
 
 /**
  * Matches DEFAULT_ASSUMPTIONS.slots[0]!.level in PowerUpOptimizerView.tsx —
@@ -56,6 +62,36 @@ function clampIv(iv: number): number {
   return Math.min(15, Math.max(0, Math.round(safe)));
 }
 
+/**
+ * A `SecondChargedMoveCandidate` (packages/engine/src/tmMove.ts) plus an
+ * `affordable` flag this run module computes itself — the engine type
+ * carries no such flag (unlike `PowerUpCandidate.affordable`) since pricing a
+ * second charged move never depends on which OTHER candidates exist. Priced
+ * the same "single candidate, independent of every other" way
+ * `PowerUpCandidate.affordable` already documents: stardust against the
+ * shared `stardustOnHand` pool, candy against this ONE slot's own
+ * `candyOnHand` plus the shared `rareCandyOnHand` pool (a second charged move
+ * is never paid in XL Candy — see `toPowerUpResourceCost`).
+ */
+export interface SecondChargedMoveCandidateDisplay extends SecondChargedMoveCandidate {
+  affordable: boolean;
+}
+
+/** Why a fielded slot produced no second-charged-move candidates at all — see `secondChargedMoveEligibility` (tmMove.ts) for the possible reasons (already knows 2, can't learn one at all, or its buddy distance is unknown). Reported, never silently dropped, per PLAN_tm_move_change_optimizer.md's central rule. */
+export interface SecondChargedMoveBlockedSlot {
+  slotIndex: number;
+  speciesName: string;
+  reason: string;
+}
+
+/** Why a fielded slot produced no Elite `kind` TM candidates — Smeargle (no TM of any kind), or a currently-active move that can never be replaced by any TM (Frustration/Return/signature/Super Max "+" — see `isTmTargetableMove`). */
+export interface EliteTmBlockedSlot {
+  slotIndex: number;
+  speciesName: string;
+  kind: EliteTmKind;
+  reason: string;
+}
+
 export interface PowerUpOptimizerRunResult {
   slotSpecies: (SpeciesDefinition | null)[];
   bossSpecies: SpeciesDefinition | null;
@@ -73,6 +109,27 @@ export interface PowerUpOptimizerRunResult {
    * slot) or the same computation error applies — see `error`.
    */
   plan: ReturnType<typeof planPowerUpBudget> | null;
+  /**
+   * Every second-charged-move candidate across every fielded slot — one per
+   * (slot, learnable-charged-move-not-already-known) pair, deliberately
+   * flat (not grouped per slot) so the view can sort it into the SAME
+   * ranked list as `data.candidates` (both draw on the same stardust/candy
+   * budget — PLAN_tm_move_change_optimizer.md's own framing for why this
+   * competes there, unlike the Elite TM candidates below).
+   */
+  secondChargedMoveCandidates: SecondChargedMoveCandidateDisplay[];
+  secondChargedMoveBlocked: SecondChargedMoveBlockedSlot[];
+  /**
+   * Every Elite Fast/Elite Charged TM candidate across every fielded slot,
+   * kept in ONE flat array (`kind` distinguishes fast vs. charged) — NEVER
+   * merged into `data.candidates`/`secondChargedMoveCandidates`'s ranking.
+   * An Elite TM is a third/fourth, single-digit-supply, non-fungible
+   * currency (CLAUDE.md's standing decision on never blending non-fungible
+   * resources into one score) — the view renders this as its own "your N
+   * Elite TMs, best N targets" section.
+   */
+  eliteTmCandidates: EliteTmCandidate[];
+  eliteTmBlocked: EliteTmBlockedSlot[];
   error: string | null;
 }
 
@@ -102,6 +159,10 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
 
   let data: ReturnType<typeof optimizePowerUps> | null = null;
   let plan: ReturnType<typeof planPowerUpBudget> | null = null;
+  const secondChargedMoveCandidates: SecondChargedMoveCandidateDisplay[] = [];
+  const secondChargedMoveBlocked: SecondChargedMoveBlockedSlot[] = [];
+  const eliteTmCandidates: EliteTmCandidate[] = [];
+  const eliteTmBlocked: EliteTmBlockedSlot[] = [];
   let error: string | null = null;
 
   if (bossSpecies && a.slots.some((s) => s.speciesId)) {
@@ -155,10 +216,100 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
       // DIFFERENT algorithm (greedy multi-slot budget allocation) over the
       // same inputs, not a re-derivation of `data`. See PowerUpOptimizerRunResult.plan.
       plan = planPowerUpBudget(optimizerInputs);
+
+      // Move-change candidates (PLAN_tm_move_change_optimizer.md web half).
+      // `optimizerInputs` already satisfies every TeamRaidInputs field
+      // MoveChangeEvaluationInputs needs EXCEPT a roster-wide level/ivs
+      // default — every slot here already carries its OWN required
+      // level/ivs (PowerUpSlotInput.level/ivs is required, unlike
+      // TeamRaidSlotInput's optional per-slot override), so that default is
+      // never actually consulted for any fielded slot; the placeholders
+      // below exist purely to satisfy the type. Iterations deliberately
+      // left at the engine's own default (3) rather than this tab's
+      // boosted OPTIMIZER_ITERATIONS (20) — these are supplementary
+      // candidates on top of the main power-up ranking, and each call
+      // reports its own noise floor, so a coarser-but-fast evaluation here
+      // keeps the debounced recompute from ballooning as slot count grows.
+      const moveChangeInputs: MoveChangeEvaluationInputs = {
+        ...optimizerInputs,
+        level: FALLBACK_LEVEL,
+        ivs: { attack: 15, defense: 15, stamina: 15 },
+      };
+
+      a.slots.forEach((s, i) => {
+        const species = slotSpecies[i];
+        if (!species) return;
+        const effectiveShadowFlag = effectiveIsShadow(species, s.isShadow);
+
+        // Second charged move — unlike an imported roster row (Roster tab /
+        // multi-raid mode), this tab's own move pickers always resolve to
+        // ONE concrete charged move (never "unknown" — see this module's
+        // own doc comment on SecondChargedMoveCandidateDisplay), so
+        // `currentChargedMoveIds` is always exactly the one currently
+        // selected move here.
+        const knownChargedMoveId = s.chargedMoveId ?? species.chargedMoves[0]?.id;
+        if (knownChargedMoveId) {
+          const scmResult = generateSecondChargedMoveCandidates({
+            inputs: moveChangeInputs,
+            slotIndex: i,
+            currentChargedMoveIds: [knownChargedMoveId],
+            pricing: {
+              // A mega/primal species record carries no buddy distance of
+              // its own — resolved from its BASE form instead (see
+              // resolveMegaBaseKmBuddyDistance's own doc comment; without
+              // this, every mega/primal slot would show "unknown" here).
+              kmBuddyDistance: resolveMegaBaseKmBuddyDistance(species) ?? null,
+              modifiers: { isShadow: effectiveShadowFlag, isPurified: s.isPurified },
+            },
+          });
+          if (scmResult.blocked) {
+            secondChargedMoveBlocked.push({ slotIndex: i, speciesName: species.name, reason: scmResult.reason });
+          } else {
+            for (const c of scmResult.candidates) {
+              // Same "priced independently of every other candidate" model
+              // as PowerUpCandidate.affordable's own doc comment: stardust
+              // against the shared pool, candy against this slot's OWN
+              // candyOnHand plus the shared Rare Candy pool (never XL Candy
+              // — a second charged move is never paid in it).
+              const candyAffordable = c.cost.candy <= s.candyOnHand + a.rareCandyOnHand;
+              const stardustAffordable = c.cost.stardust <= a.stardustOnHand;
+              secondChargedMoveCandidates.push({ ...c, affordable: candyAffordable && stardustAffordable });
+            }
+          }
+        }
+
+        // Elite Fast/Elite Charged TM — deterministic once a target is
+        // picked, so every reachable move (other than the one currently
+        // simulated) is evaluated regardless of how many Elite TMs this
+        // slot's owner actually holds (see PowerUpOptimizerAssumptions'
+        // eliteFastTmOnHand/eliteChargedTmOnHand doc comments — "unknown,
+        // not zero," never gates candidate generation itself).
+        for (const kind of ["fast", "charged"] as const) {
+          const eliteResult = generateEliteTmCandidates({ inputs: moveChangeInputs, slotIndex: i, kind });
+          if (eliteResult.blocked) {
+            eliteTmBlocked.push({ slotIndex: i, speciesName: species.name, kind, reason: eliteResult.reason });
+          } else {
+            eliteTmCandidates.push(...eliteResult.candidates);
+          }
+        }
+      });
     } catch (err) {
       error = (err as Error).message;
     }
   }
 
-  return { slotSpecies, bossSpecies, bossRaidTier, bossReadySeconds, bossHp, data, plan, error };
+  return {
+    slotSpecies,
+    bossSpecies,
+    bossRaidTier,
+    bossReadySeconds,
+    bossHp,
+    data,
+    plan,
+    secondChargedMoveCandidates,
+    secondChargedMoveBlocked,
+    eliteTmCandidates,
+    eliteTmBlocked,
+    error,
+  };
 }

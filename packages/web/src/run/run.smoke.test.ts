@@ -14,6 +14,7 @@ import { runIvBreakpointsScenario } from "./runIvBreakpoints.js";
 import { runAttackDefenseBreakpointsScenario } from "./runAttackDefenseBreakpoints.js";
 import { runPowerUpOptimizerScenario } from "./runPowerUpOptimizer.js";
 import { runRosterBudgetScenario, runRosterPlannerScenario } from "./runRosterPlanner.js";
+import { runRosterScenario } from "./runRoster.js";
 import { resolveMultiRaidBossIds, DEFAULT_MULTI_RAID_BOSS_FILTERS } from "../multiRaidBossSet.js";
 import type { RosterEntry } from "../import/pokeGenieMatch.js";
 
@@ -535,5 +536,48 @@ describe("runRosterBudgetScenario (multi-raid mode fixed-budget plan, Phase 4)",
     expect(result.error).toBeNull();
     expect(result.data).toBeNull();
     expect(result.blockedReason).toBe("no-bosses");
+  });
+});
+
+describe("runRosterScenario (Roster tab, default sortBy)", () => {
+  // Same hand-built pool shape as runRosterPlannerScenario's own smoke test
+  // above — this tab computes no combat numbers at all, so this only proves
+  // the summary/sort wiring doesn't throw on real data.
+  const pool: RosterEntry[] = ["houndour", "tyranitar-mega", "garchomp"].map((id, i) => {
+    const species = speciesRegistry.get(id);
+    return {
+      entryId: `roster-smoke-${i}-${id}`,
+      species,
+      fastMoveId: species.fastMoves[0]!.id,
+      chargedMoveId: species.chargedMoves[0]!.id,
+      level: 20 + i,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      costModifiers: { isShadow: false, isPurified: false, isLucky: false },
+      canMega: id === "tyranitar-mega",
+      ivsAreApproximate: false,
+      levelIsApproximate: false,
+      movesetIsDefaulted: false,
+      fastMoveIsDefaulted: false,
+      chargedMoveIsDefaulted: false,
+      fastMoveUnmatchedName: null,
+      chargedMoveUnmatchedName: null,
+      sourceLineNumber: i + 2,
+      unmatchedMoveNames: [],
+    };
+  });
+
+  it("produces a well-formed summary with no NaN/undefined headline numbers, given a real pool", () => {
+    const result = runRosterScenario("recent", pool);
+    expectFiniteNumber(result.summary.entryCount, "summary.entryCount");
+    expectFiniteNumber(result.summary.uniqueSpeciesCount, "summary.uniqueSpeciesCount");
+    expect(result.summary.entryCount).toBe(3);
+    expect(result.summary.megaCapableCount).toBe(1);
+    expect(result.sortedEntries).toHaveLength(3);
+  });
+
+  it("produces the same empty summary as a fresh page load's default scenario, given an empty pool", () => {
+    const result = runRosterScenario("recent", []);
+    expect(result.summary.entryCount).toBe(0);
+    expect(result.sortedEntries).toEqual([]);
   });
 });

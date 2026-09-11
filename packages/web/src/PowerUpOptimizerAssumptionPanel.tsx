@@ -143,6 +143,11 @@ export interface PowerUpOptimizerAssumptions {
    * default deliberately differs from DEFAULT_ASSUMPTIONS.
    */
   multiRaidSignificanceMode: RosterSignificanceMode;
+  /** TM inventory — see powerUpOptimizerScenario.ts's own field doc comment. `null` = unknown, never gates candidate generation (single-raid mode only computes these candidates today; see run/runPowerUpOptimizer.ts). */
+  fastTmOnHand: number | null;
+  chargedTmOnHand: number | null;
+  eliteFastTmOnHand: number | null;
+  eliteChargedTmOnHand: number | null;
 }
 
 interface Props {
@@ -645,6 +650,63 @@ export function PowerUpOptimizerAssumptionPanel({
             title="A separate shared, account-wide pool from plain Rare Candy — converts 1:1 into any species' XL Candy only. Only used by the fixed-budget plan below, after each slot's own XL candy on hand runs out."
           />
         </div>
+
+        {value.mode === "single-raid" && (
+          <>
+            <div className="field">
+              <label htmlFor="pu-fastTm">Fast TM on hand</label>
+              <NumberField
+                id="pu-fastTm"
+                min={0}
+                allowEmpty
+                value={value.fastTmOnHand ?? undefined}
+                placeholder="unknown"
+                warnAbove={CURRENCY_SANITY_THRESHOLD}
+                onChange={(v) => set("fastTmOnHand", v ?? null)}
+                title="Leave blank if unknown — second-charged-move and Elite TM candidates below are still ranked either way; regular TMs are informational only (no lottery outcome is modeled, see &quot;Known caveats&quot;)."
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="pu-chargedTm">Charged TM on hand</label>
+              <NumberField
+                id="pu-chargedTm"
+                min={0}
+                allowEmpty
+                value={value.chargedTmOnHand ?? undefined}
+                placeholder="unknown"
+                warnAbove={CURRENCY_SANITY_THRESHOLD}
+                onChange={(v) => set("chargedTmOnHand", v ?? null)}
+                title="Leave blank if unknown — informational only (no regular-TM lottery is modeled, see &quot;Known caveats&quot;)."
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="pu-eliteFastTm">Elite Fast TM on hand</label>
+              <NumberField
+                id="pu-eliteFastTm"
+                min={0}
+                allowEmpty
+                value={value.eliteFastTmOnHand ?? undefined}
+                placeholder="unknown"
+                warnAbove={CURRENCY_SANITY_THRESHOLD}
+                onChange={(v) => set("eliteFastTmOnHand", v ?? null)}
+                title="Leave blank if unknown — every Elite Fast TM candidate is still ranked below; this only labels how many rows are within your current stock."
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="pu-eliteChargedTm">Elite Charged TM on hand</label>
+              <NumberField
+                id="pu-eliteChargedTm"
+                min={0}
+                allowEmpty
+                value={value.eliteChargedTmOnHand ?? undefined}
+                placeholder="unknown"
+                warnAbove={CURRENCY_SANITY_THRESHOLD}
+                onChange={(v) => set("eliteChargedTmOnHand", v ?? null)}
+                title="Leave blank if unknown — every Elite Charged TM candidate is still ranked below; this only labels how many rows are within your current stock."
+              />
+            </div>
+          </>
+        )}
 
         <div className="field">
           <label htmlFor="pu-rankBy">Rank candidates by</label>

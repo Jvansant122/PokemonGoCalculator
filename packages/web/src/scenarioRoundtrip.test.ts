@@ -46,6 +46,13 @@ import {
 } from "./PowerUpOptimizerView.js";
 import type { PowerUpOptimizerAssumptions } from "./PowerUpOptimizerAssumptionPanel.js";
 import { buildPowerUpOptimizerScenarioUrl, parsePowerUpOptimizerScenarioFromUrl, type PowerUpOptimizerScenario } from "./powerUpOptimizerScenario.js";
+import {
+  assumptionsToScenario as rosterAssumptionsToScenario,
+  DEFAULT_ASSUMPTIONS as ROSTER_DEFAULTS,
+  scenarioToAssumptions as rosterScenarioToAssumptions,
+  type RosterAssumptions,
+} from "./RosterView.js";
+import { buildRosterScenarioUrl, parseRosterScenarioFromUrl, type RosterScenario } from "./rosterScenario.js";
 
 // This is the VALUE-level round-trip check scripts/check-scenario-roundtrip.mjs
 // explicitly says it isn't (it only checks field NAMES appear in both
@@ -476,6 +483,11 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     multiRaidMegaLevel: "high",
     // Non-default: PU_DEFAULTS is "aggregate-only".
     multiRaidSignificanceMode: "aggregate-or-per-boss",
+    // Non-default: PU_DEFAULTS has all four TM counts as null (unknown).
+    fastTmOnHand: 3,
+    chargedTmOnHand: 1,
+    eliteFastTmOnHand: 2,
+    eliteChargedTmOnHand: 0,
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -534,5 +546,31 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     expect(decoded).not.toBeNull();
     const roundTripped = puScenarioToAssumptions(decoded!);
     expect(roundTripped.multiRaidSignificanceMode).toBe("aggregate-or-per-boss");
+  });
+});
+
+describe("RosterScenario round-trip", () => {
+  // The Roster tab's own Scenario deliberately carries no roster CONTENTS
+  // (see CLAUDE.md's standing decision — those live in a save code, never a
+  // share link) — its only field is a display-only table sort order, same
+  // "still a real, shareable setting" precedent as Species Report's sortMode.
+  const nonDefault: RosterAssumptions = { sortBy: "level" };
+
+  it("round-trips a fully populated non-default scenario through the URL transport", () => {
+    const scenario = rosterAssumptionsToScenario(nonDefault);
+    const url = buildRosterScenarioUrl("http://example.test/", scenario);
+    const decoded = parseRosterScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    const roundTripped = rosterScenarioToAssumptions(decoded!);
+    expect(roundTripped).toEqual(nonDefault);
+  });
+
+  it("decodes a minimal (old-link-shaped) scenario to documented defaults without throwing", () => {
+    const minimal = {} as unknown as RosterScenario;
+    let result: RosterAssumptions | undefined;
+    expect(() => {
+      result = rosterScenarioToAssumptions(minimal);
+    }).not.toThrow();
+    expect(result).toEqual(ROSTER_DEFAULTS);
   });
 });

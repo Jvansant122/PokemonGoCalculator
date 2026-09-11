@@ -114,8 +114,8 @@ export function LineupBuilderPanel({ state, onBuild }: Props) {
 
       {state.kind === "blocked" && state.reason === "no-roster" && (
         <p className="error-text">
-          No imported roster — import a Poke Genie CSV in the Power-Up Optimizer tab's roster panel first, then come
-          back here. No lineup to build without one.
+          No imported roster — import a Poke Genie CSV, hand-add Pokémon, or load a save code on the Roster tab
+          first, then come back here. No lineup to build without one.
         </p>
       )}
       {state.kind === "blocked" && state.reason === "no-boss" && (

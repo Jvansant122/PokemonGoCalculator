@@ -161,8 +161,8 @@ npm workspaces monorepo, two packages:
   `test/perf.test.ts` is a coarse perf-regression guard in the normal suite (budgets ~10x a
   measured number); `npm run bench` is the benchmark behind it.
 - `packages/web` — Vite + React + TypeScript UI, imports `@pogo-analyzer/engine` straight from
-  its TS source. Owned by `web-developer` for features, `site-builder` for build/deploy. **Six**
-  tab-switched views as of 2026-09-08 (`App.tsx`'s `view=` query param): the original two-candidate
+  its TS source. Owned by `web-developer` for features, `site-builder` for build/deploy. **Seven**
+  tab-switched views as of 2026-09-10 (`App.tsx`'s `view=` query param): the original two-candidate
   **Comparator**, the **Team Raid Simulator** (one trainer's own 6-slot sequential roster vs. a
   boss's real HP pool and countdown timer, with wipe-and-revive looping), the **Species
   Report** (one Pokémon ranked against every currently-active real raid boss, plus optionally
@@ -205,12 +205,30 @@ npm workspaces monorepo, two packages:
   measures between-boss spread (8-92 on a real roster), which cancels in a paired delta and made
   the first build report 0 of 60 candidates significant. Significance is aggregate **OR**
   per-boss, since a gain worth +1.29 against one boss reads as 0.11 averaged over 13.
-  The imported roster is `localStorage`-only — see the standing decision above). Each has its own shareable `Scenario`-family
-  type and URL query param (`s` / `ts` / `sr` / `ivc` / `adb` / `pu`) — don't conflate them.
+  The imported roster is `localStorage`-only — see the standing decision above). The **Roster**
+  tab (added 2026-09-10, replacing a deleted Firebase/login plan — see PLAN_roster_tab.md) OWNS
+  the roster outright: hand-entry/editing via `RosterEntryForm.tsx` (reusing `SpeciesPicker`/
+  `MoveSelect`/`NumberField`, never a hand-rolled form), the Poke Genie CSV import
+  (`RosterImportPanel.tsx`, moved here from the Power-Up Optimizer tab), and a self-contained,
+  versioned, gzip-compressed save code (`rosterSaveCode.ts`, `pogo-roster-v<N>:...`, ~90% smaller
+  than the raw roster JSON on a realistic 164-entry roster) the user copies and pastes deliberately
+  — this app has no backend and no accounts, so this save code (never the URL — the standing
+  decision above still applies) is the only way to move a roster between devices. A hand-entered
+  or hand-edited entry's moveset/level/IVs are always marked fully KNOWN, never inheriting the
+  "default moveset" badge a blank CSV column earns. Loading a code is additive-or-replace by
+  explicit user choice, and a corrupted/truncated code fails with a specific, legible error rather
+  than a partial load. Every other tab that reads the roster (Power-Up Optimizer's multi-raid
+  mode, Team Raid Simulator's Lineup Builder) keeps working unchanged, reading the same
+  `rosterPool.ts` localStorage pool fresh whenever that tab (re)mounts. Each of these seven tabs
+  has its own shareable `Scenario`-family type and URL query param (`s` / `ts` / `sr` / `ivc` /
+  `adb` / `pu` / `rt`) — don't conflate them; the Roster tab's own `RosterScenario` carries ONLY a
+  display setting (table sort order), never the roster's contents, per the standing decision.
   Each view's computation is a pure, React-free `run<Tab>Scenario` in `packages/web/src/run/`,
   called via `useMemo`; `scripts/run-scenario.ts` and `run/run.smoke.test.ts` call the same
-  functions, so CLI == UI by construction. `packages/web` has its own vitest suite
-  (`npm run test:web`: all six codecs at value level, helpers, `rankingFlip.ts`, one smoke per
+  functions, so CLI == UI by construction — **`scripts/run-scenario.ts` does not yet have a
+  "roster" case** (left out deliberately 2026-09-10 while a concurrent session was editing
+  `scripts/`; see HANDOFF.md). `packages/web` has its own vitest suite
+  (`npm run test:web`: all seven codecs at value level, helpers, `rankingFlip.ts`, one smoke per
   run function) and a Playwright suite under `packages/web/e2e/` (`npm run test:e2e`, against
   the built `dist`: per-tab load with zero console errors, one UI-vs-engine number check, and a
   share-link round-trip).
@@ -290,8 +308,11 @@ the Mega Skarmory failure mode, which `check-mega-gates.ts` cannot see because i
 `.boost`.
 
 `check-scenario-roundtrip` is the mechanical half of the `add-scenario-assumption` skill: it
-asserts every field of all six tabs' `Assumptions` interfaces appears in both round-trip
-directions, and exits non-zero naming the field if not. Since 2026-09-10 it also recurses into
+asserts every field of all six tabs it knows about's `Assumptions` interfaces appears in both
+round-trip directions, and exits non-zero naming the field if not. **It does not yet have a row
+for the seventh (Roster) tab** — added 2026-09-10 while `scripts/` was off-limits to a concurrent
+session (see HANDOFF.md); the Roster tab's one field is instead covered by the value-level test in
+`scenarioRoundtrip.test.ts`. Since 2026-09-10 it also recurses into
 any `Foo[]`-shaped member (e.g. `TeamAssumptions.slots`/`PowerUpOptimizerAssumptions.slots`) and
 checks each per-slot field individually — previously `slots: TeamSlotAssumption[]` counted as one
 opaque field and no per-slot field (`speciesId`, `fastMoveId`, `isMega`, `megaLevel`, `isShadow`,

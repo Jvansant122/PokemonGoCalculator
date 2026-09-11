@@ -59,6 +59,7 @@ interface NormalizedSpecies {
   isShadow?: boolean;
   rarity?: string;
   lastKnownRaidTier?: string;
+  kmBuddyDistance?: number;
 }
 
 interface ActiveRaidEntry {
@@ -365,6 +366,41 @@ describe("species.json sentinels", () => {
     expect(s).toBeDefined();
     expect(s.id).toBe("shellos-west_sea");
     expect(s.name).toBe("Shellos (West Sea)");
+  });
+
+  // kmBuddyDistance (2026-09-10) — GAME_MASTER's own first-party buddy-
+  // walking-distance tiering key behind MECHANICS.md's "Second charged move
+  // unlock" cost table (see setKmBuddyDistance's doc comment in
+  // scripts/sync-data.ts). Magikarp/Gyarados at the fastest real-world 1km
+  // buddy tier, Zacian's two real forms both at the slowest 20km tier (same
+  // value across both forms of one pokemonId, confirmed directly against a
+  // live 2026-09-10 GAME_MASTER fetch).
+  it("Magikarp and Gyarados: both 1km buddy distance (fastest real tier)", () => {
+    expect(speciesById.get("magikarp")!.kmBuddyDistance).toBe(1);
+    expect(speciesById.get("gyarados")!.kmBuddyDistance).toBe(1);
+  });
+
+  it("Zacian (Hero) and Zacian (Crowned Sword): both 20km buddy distance (uniform across forms of one pokemonId)", () => {
+    expect(speciesById.get("zacian-hero")!.kmBuddyDistance).toBe(20);
+    expect(speciesById.get("zacian-crowned_sword")!.kmBuddyDistance).toBe(20);
+  });
+
+  // The one confirmed per-family DISAGREEMENT case: Qwilfish (3km) evolves
+  // into Overqwil (5km) — candy is pooled across the family (MECHANICS.md)
+  // but kmBuddyDistance is keyed to the pokemonId enum (evolutionary stage),
+  // not the family, so a family-keyed cost lookup would be wrong here.
+  it("Qwilfish (3km) and its evolution Overqwil (5km) disagree — kmBuddyDistance is per-species, not per-candy-family", () => {
+    expect(speciesById.get("qwilfish")!.kmBuddyDistance).toBe(3);
+    expect(speciesById.get("overqwil")!.kmBuddyDistance).toBe(5);
+  });
+
+  // Mega Charizard X never gets its own kmBuddyDistance — mega/primal
+  // species are built directly from tempEvoOverrides, not through either of
+  // the two GAME_MASTER-matched build loops that set it (same population as
+  // candyFamilyId/dexNumber/isFullyEvolved — see CLAUDE.md's Phase 0 note).
+  // `undefined` here must stay distinguishable from a real 0km value.
+  it("Mega Charizard X: kmBuddyDistance is undefined (mega/primal species never get one)", () => {
+    expect(speciesById.get("charizard-mega-x")!.kmBuddyDistance).toBeUndefined();
   });
 });
 

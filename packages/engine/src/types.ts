@@ -298,6 +298,38 @@ export interface SpeciesDefinition {
    * which is why the Poke Genie importer resolves megas by name rather than dex.
    */
   dexNumber?: number;
+  /**
+   * Buddy-walking distance (km) required to earn a candy for THIS
+   * pokemonId/form — GAME_MASTER's own first-party `kmBuddyDistance`
+   * (`data-sync`'s `scripts/sync-data.ts`/`rawShapes.ts` document full
+   * provenance). Added 2026-09-10 for tmMove.ts's second-charged-move cost
+   * tiering (MECHANICS.md's "Second charged move unlock": 1/3/5/20 km ->
+   * 10,000/50,000/75,000/100,000 stardust). Undefined for a species
+   * data-sync couldn't match to a GAME_MASTER template, or for any
+   * hand-authored test/hypothetical fixture that never went through
+   * `fromGameMaster`.
+   *
+   * IMPORTANT: keyed to the pokemonId ENUM (one evolutionary stage), NOT the
+   * candy family — candy is pooled across a whole family, but this is NOT
+   * always uniform across one. `data-sync` confirmed live 2026-09-10: 4 of
+   * 541 families disagree between evolutionary stages (Qwilfish 3km ->
+   * Overqwil 5km; Sneasel/Weavile 3km -> Sneasler 5km; Stantler 3km ->
+   * Wyrdeer 5km; Zigzagoon/Linoone 1km -> Obstagoon 3km — all four are a
+   * species that regionally-evolves into a form Game Freak treats as a
+   * materially different Pokémon). It IS uniform across every FORM of the
+   * same pokemonId (e.g. base/Hisuian Sneasel both 3km, Zacian Hero/Crowned
+   * Sword both 20km) — a per-(pokemonId, form) lookup (i.e. this field, read
+   * straight off the specific `SpeciesDefinition` in hand) is safe; deriving
+   * it from `candyFamilyId` is not, without picking a specific stage.
+   *
+   * tmMove.ts's `secondChargedMoveCost` deliberately still takes buddy
+   * distance as an explicit function parameter rather than reading this
+   * field directly — it also needs the starter/baby flat-rate override
+   * (which this field alone can't express) and stayed unblocked while this
+   * field didn't exist yet. A caller should pass `species.kmBuddyDistance`
+   * through to that parameter now that it exists.
+   */
+  kmBuddyDistance?: number;
 }
 
 export interface EffectiveStats {

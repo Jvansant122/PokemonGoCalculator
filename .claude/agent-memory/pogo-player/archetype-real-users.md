@@ -4,8 +4,8 @@ Additions to the archetype in `.claude/agents/pogo-player.md`. **This file is re
 so it takes effect immediately; the agent body only reloads on a session restart. Same rules as
 the body: every bullet tagged, quotes verbatim, `[inference]` marked separately, nothing unsourced.
 
-Added 2026-09-10 from two earlier logs — `the first message log` (2026-09-04) and
-`the second message log` (2026-09-04 evening). These predate the tool: they are this player doing
+Added 2026-09-10 from two earlier logs — `the field researcher's first log` (2026-09-04) and
+`the field researcher's second log` (2026-09-04 evening). These predate the tool: they are this player doing
 the analysis **by hand, in spreadsheets**, which is why they say more about how they think than
 the later log does.
 

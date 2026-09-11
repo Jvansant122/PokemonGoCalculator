@@ -74,9 +74,23 @@ import { parsePowerUpOptimizerScenarioFromUrl } from "../packages/web/src/powerU
 import { runPowerUpOptimizerScenario } from "../packages/web/src/run/runPowerUpOptimizer.js";
 import { runRosterBudgetScenario, runRosterPlannerScenario } from "../packages/web/src/run/runRosterPlanner.js";
 
+import {
+  DEFAULT_ASSUMPTIONS as ROSTER_DEFAULTS,
+  scenarioToAssumptions as rosterScenarioToAssumptions,
+} from "../packages/web/src/RosterView.js";
+import { parseRosterScenarioFromUrl } from "../packages/web/src/rosterScenario.js";
+import { runRosterScenario } from "../packages/web/src/run/runRoster.js";
+
 import { speciesRegistry } from "../packages/web/src/registry.js";
 
-type Tab = "comparator" | "team-raid" | "species-report" | "iv-breakpoints" | "attack-defense-breakpoints" | "power-up-optimizer";
+type Tab =
+  | "comparator"
+  | "team-raid"
+  | "species-report"
+  | "iv-breakpoints"
+  | "attack-defense-breakpoints"
+  | "power-up-optimizer"
+  | "roster";
 
 /** Same param-per-tab mapping as App.tsx's tab-switcher / each *Scenario.ts module's own query-param constant. */
 const SCENARIO_PARAM_BY_TAB: Record<Tab, string> = {
@@ -86,6 +100,7 @@ const SCENARIO_PARAM_BY_TAB: Record<Tab, string> = {
   "iv-breakpoints": "ivc",
   "attack-defense-breakpoints": "adb",
   "power-up-optimizer": "pu",
+  roster: "rt",
 };
 
 /** Accepts a full share URL or a bare query string (with or without a leading "?") and returns a real URL object every parse*ScenarioFromUrl function can read searchParams off of. */
@@ -305,6 +320,23 @@ function main(): void {
             : `    Nothing further measurably helps beyond this plan's own steps.`,
         );
       }
+      jsonResult = result;
+      break;
+    }
+    case "roster": {
+      const fromUrl = parseRosterScenarioFromUrl(urlString);
+      const assumptions = fromUrl ? rosterScenarioToAssumptions(fromUrl) : ROSTER_DEFAULTS;
+      // The CLI structurally CANNOT have a roster to summarize — same reason
+      // as Power-Up Optimizer's multi-raid branch above: the roster lives
+      // only in the browser's own localStorage (rosterPool.ts), never the
+      // share link (CLAUDE.md's standing decision). This tab's Scenario
+      // carries only its display setting (`sortBy`), so an empty pool is the
+      // honest, complete reproduction of what a share link alone can restore.
+      const result = runRosterScenario(assumptions.sortBy, []);
+      summary = [
+        `Roster (sort: ${assumptions.sortBy}): 0 entries available to this CLI.`,
+        `  The roster itself lives only in the browser's local storage, never the share link — open this link in a browser to see real entries. This link only restores the "${assumptions.sortBy}" sort order.`,
+      ];
       jsonResult = result;
       break;
     }

@@ -11,7 +11,6 @@ import {
   serializeRosterPoolToJson,
   type RosterPool,
 } from "./rosterPool.js";
-import { SpeciesBadges } from "./SpeciesBadges.js";
 import { speciesRegistry } from "./registry.js";
 
 interface ImportSummary {
@@ -42,23 +41,6 @@ function downloadTextFile(filename: string, contents: string, mimeType: string) 
   URL.revokeObjectURL(url);
 }
 
-function entryFlags(entry: {
-  canMega: boolean;
-  costModifiers: { isPurified: boolean; isLucky: boolean };
-  movesetIsDefaulted: boolean;
-  secondChargedMoveName?: string;
-  unmatchedMoveNames: string[];
-}): string[] {
-  const flags: string[] = [];
-  if (entry.canMega) flags.push("mega-capable");
-  if (entry.costModifiers.isPurified) flags.push("purified");
-  if (entry.costModifiers.isLucky) flags.push("lucky");
-  if (entry.movesetIsDefaulted) flags.push("default moveset");
-  if (entry.secondChargedMoveName) flags.push(`2nd charged move recorded, not modelled: ${entry.secondChargedMoveName}`);
-  if (entry.unmatchedMoveNames.length > 0) flags.push(`unmatched move name(s): ${entry.unmatchedMoveNames.join(", ")}`);
-  return flags;
-}
-
 interface Props {
   /**
    * Controlled from PowerUpOptimizerView.tsx (which owns the canonical
@@ -74,13 +56,15 @@ interface Props {
 }
 
 /**
- * Whole-roster import for the multi-raid Power-Up Optimizer mode — see
- * PLAN_multi_raid_roster_optimizer.md. Import a Poke Genie CSV export,
- * persist it to THIS BROWSER's localStorage (deliberately NOT the share-link
- * URL — §3.2 of the plan, a documented exception to this project's usual
- * "every setting round-trips through Scenario" rule), and display a match
- * report + roster table. Feeds `runRosterPlannerScenario` via the pool/
- * onPoolChange props this component is now controlled by.
+ * Whole-roster CSV import, one panel among several the Roster tab
+ * (RosterView.tsx) owns — see PLAN_roster_tab.md. Import a Poke Genie CSV
+ * export, persist it to THIS BROWSER's localStorage (deliberately NOT the
+ * share-link URL — CLAUDE.md's standing "no backend" roster exception), and
+ * display a match report + roster table. Feeds the Power-Up Optimizer's
+ * multi-raid mode and Team Raid Simulator's Lineup Builder via the pool/
+ * onPoolChange props this component is controlled by. Originally embedded
+ * directly in the Power-Up Optimizer tab; moved here 2026-09-10 once the
+ * roster stopped being that tab's own implementation detail.
  */
 export function RosterImportPanel({ pool, onPoolChange }: Props) {
   const [pasteText, setPasteText] = useState("");
@@ -164,10 +148,10 @@ export function RosterImportPanel({ pool, onPoolChange }: Props) {
       <summary>Import a whole roster (Poke Genie CSV) — {hydratedEntries.length} Pokémon stored in this browser</summary>
 
       <p className="caveats" style={{ marginTop: 12 }}>
-        Whole-roster import for this tab's multi-raid Power-Up Optimizer mode (switch to it above). This roster is
-        stored ONLY in this browser's local storage, never in a share link — a shared link from this tab carries
-        settings, not this roster (see the note under &ldquo;Share this scenario&rdquo;). Export it as a file below to
-        move it to another browser/device or back it up.
+        Feeds the Power-Up Optimizer's multi-raid mode and Team Raid Simulator's Lineup Builder. This roster is
+        stored ONLY in this browser's local storage, never in a share link (see the save code section below for the
+        deliberate, user-driven way to move it to another device). See the &ldquo;Your roster&rdquo; table below for
+        every imported (and hand-added) entry, with edit/delete controls — not duplicated here.
       </p>
 
       {errorMessage && <p className="error-text">{errorMessage}</p>}
@@ -298,46 +282,6 @@ export function RosterImportPanel({ pool, onPoolChange }: Props) {
         </div>
       )}
 
-      {hydratedEntries.length > 0 && (
-        <div className="table-scroll" style={{ marginTop: 12 }}>
-          <table className="time-series-table">
-            <thead>
-              <tr>
-                <th>Species</th>
-                <th>Level</th>
-                <th>IVs</th>
-                <th>Fast move</th>
-                <th>Charged move</th>
-                <th>Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {hydratedEntries.map((entry) => {
-                const flags = entryFlags(entry);
-                return (
-                  <tr key={entry.entryId}>
-                    <td>
-                      {entry.species.name}
-                      <SpeciesBadges isHypothetical={entry.species.isHypothetical} isShadow={entry.species.isShadow || entry.costModifiers.isShadow} />
-                    </td>
-                    <td>
-                      {entry.level}
-                      {entry.levelIsApproximate && <span className="badge badge-approximate">approx level</span>}
-                    </td>
-                    <td>
-                      {entry.ivs.attack}/{entry.ivs.defense}/{entry.ivs.stamina}
-                      {entry.ivsAreApproximate && <span className="badge badge-approximate">approx IVs</span>}
-                    </td>
-                    <td>{entry.species.fastMoves.find((m) => m.id === entry.fastMoveId)?.name ?? "—"}</td>
-                    <td>{entry.species.chargedMoves.find((m) => m.id === entry.chargedMoveId)?.name ?? "—"}</td>
-                    <td>{flags.length > 0 ? flags.join("; ") : "—"}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </details>
   );
 }

@@ -135,5 +135,11 @@ export function teamAssumptionsToPowerUpOptimizerAssumptions(team: TeamAssumptio
     candyByFamilyId: {},
     multiRaidMegaLevel: null,
     multiRaidSignificanceMode: "aggregate-only",
+    // Destination-tab-only setting — Team Raid has no TM-inventory concept
+    // at all, so there's nothing to map; unknown, same as a fresh page load.
+    fastTmOnHand: null,
+    chargedTmOnHand: null,
+    eliteFastTmOnHand: null,
+    eliteChargedTmOnHand: null,
   };
 }

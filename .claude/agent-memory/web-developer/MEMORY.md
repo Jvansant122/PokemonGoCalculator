@@ -69,3 +69,5 @@
 - [Party-size flip (Comparator) + boss-moveset sweep (Team Raid)](feature_partysize_flip_and_boss_moveset_sweep.md) — reused engine's unused findCrossoverPartySize; Playwright-as-browser-tool technique
 - [Lineup Builder UI (Team Raid entry point)](feature_lineup_builder_ui.md) — per-slot level/IVs threaded through 3 call sites, export fix, verified concurrently with an unrelated engine WIP
 - [Bugfix: Power-Up -> Team Raid mean-collapse](bugfix_powerup_to_teamraid_meancollapse.md) — mirrored teamRaidExport's per-slot override; live-verified 125.7s(bug)->89.6s(fixed) vs plan's 89.8s claim
+- [Roster tab (7th): hand-entry, editing, gzip save code](feature_roster_tab_hand_entry_and_save_code.md) — real duplicate-table bug caught live; SpeciesPicker/MoveSelect e2e picker gotchas; scripts/-blocked check-scenario-roundtrip.mjs gap
+- [TM Move Change Optimizer (Power-Up Optimizer, single-raid only)](feature_tm_move_change_optimizer_powerup_tab.md) — merged-ranked-table technique, mega kmBuddyDistance gap fix, full Roster-tab-loop Playwright verification

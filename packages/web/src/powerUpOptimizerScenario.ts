@@ -164,6 +164,25 @@ export interface PowerUpOptimizerScenario {
    * not silently adopt the new stricter default.
    */
   multiRaidSignificanceMode?: RosterSignificanceMode;
+  /**
+   * TM inventory (PLAN_tm_move_change_optimizer.md web half) — account-wide,
+   * like rareCandyOnHand/rareCandyXlOnHand, not per-slot. `null` (the
+   * default) means UNKNOWN, never 0 — the same "don't gate the sweep on a
+   * typed number the field researcher would have to alt-tab to look up"
+   * convention as multiRaidBossIds' own candyByFamilyId. Second-charged-move
+   * and Elite TM candidates are computed and ranked regardless of whether
+   * these are filled in; a filled-in count only changes the "within your
+   * stock" framing shown alongside the Elite TM candidates (this field is
+   * otherwise purely informational — no regular-TM lottery is modeled, see
+   * PLAN's "Regular TMs — do not build the lottery"). Optional so a link
+   * shared before these fields existed decodes via `?? null`.
+   */
+  fastTmOnHand?: number | null;
+  chargedTmOnHand?: number | null;
+  /** See fastTmOnHand. Frames the Elite Fast TM candidate section's "your N Elite TMs, best N targets" heading — never gates which candidates are generated. */
+  eliteFastTmOnHand?: number | null;
+  /** See fastTmOnHand/eliteFastTmOnHand, for Elite Charged TM. */
+  eliteChargedTmOnHand?: number | null;
 }
 
 export function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {

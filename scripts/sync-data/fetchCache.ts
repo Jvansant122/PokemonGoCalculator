@@ -317,6 +317,15 @@ export interface GameMasterFetchResult {
  * the power-up cost table this feeds only models the universal table (see
  * RawGameMasterPokemonUpgradeSettingsFull's doc comment in rawShapes.ts).
  *
+ * As of 2026-09-10, each pokemonSettings template's `kmBuddyDistance` is ALSO
+ * retained (GameMasterPokemonRecord.kmBuddyDistance) — the FIRST-PARTY
+ * tiering key behind MECHANICS.md's "Second charged move unlock" cost table,
+ * previously entirely `[community-consensus]` including which distance
+ * bucket a species falls into. The cost FIGURES per bucket (10,000/25 at
+ * 1km, etc.) remain community-sourced — this only makes "which bucket" a
+ * derived fact instead of a guess. See that field's own doc comment for the
+ * per-species (pokemonId-enum-keyed), not per-candy-family, caveat.
+ *
  * Deliberately reads `moveSettings`, NEVER `combatMove` — GAME_MASTER carries
  * TWO separate move-stat tables for the same move name: `moveSettings` (PvE,
  * what this engine's raid/gym damage math needs) and `combatMove` (PvP/
@@ -412,6 +421,10 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
           eliteQuickMoves: ps.eliteQuickMove ?? [],
           eliteCinematicMoves: ps.eliteCinematicMove ?? [],
           pokemonClass: ps.pokemonClass,
+          // 2026-09-10, Power-Up Optimizer cost-model data source — see
+          // GameMasterPokemonRecord.kmBuddyDistance's doc comment
+          // (rawShapes.ts) for the per-species-vs-per-family caveat.
+          kmBuddyDistance: ps.kmBuddyDistance,
           tempEvoOverrides: (ps.tempEvoOverrides ?? [])
             .filter((o) => o.stats && o.tempEvoId)
             .map((o) => {

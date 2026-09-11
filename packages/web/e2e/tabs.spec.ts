@@ -20,6 +20,7 @@ const TABS: { view: string; headline: RegExp; timeout?: number }[] = [
   { view: "iv-breakpoints", headline: /Impact across every raid target this tool can model/ },
   { view: "attack-defense-breakpoints", headline: /own damage output vs/ },
   { view: "power-up-optimizer", headline: /Baseline — roster as-is/, timeout: 20_000 },
+  { view: "roster", headline: /Roster summary/ },
 ];
 
 function attachErrorListeners(page: Page) {

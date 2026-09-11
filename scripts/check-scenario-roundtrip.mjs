@@ -77,6 +77,7 @@ export const TABS = [
   ['IV Breakpoints', 'packages/web/src/IvBreakpointsView.tsx', 'IvBreakpointsAssumptions', 'packages/web/src/IvBreakpointsView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['Attack/Defense', 'packages/web/src/AttackDefenseBreakpointsView.tsx', 'AttackDefenseBreakpointsAssumptions', 'packages/web/src/AttackDefenseBreakpointsView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['Power-Up Optimizer', 'packages/web/src/PowerUpOptimizerAssumptionPanel.tsx', 'PowerUpOptimizerAssumptions', 'packages/web/src/PowerUpOptimizerView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
+  ['Roster', 'packages/web/src/RosterView.tsx', 'RosterAssumptions', 'packages/web/src/RosterView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
 ];
 
 /** Lines of the block opened by the line matching `re` within an already-split `lines` array, up to the first column-0 `}`. Pure — no filesystem access, so it's directly unit-testable against synthetic source text. */

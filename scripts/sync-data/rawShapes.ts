@@ -298,6 +298,19 @@ export interface RawGameMasterPokemonSettingsFull {
    * consumed by the pipeline itself — see GameMasterPokemonRecord.familyId).
    */
   familyId?: string;
+  /**
+   * Buddy-walking distance (km) required to earn a candy for this SPECIFIC
+   * template's pokemonId, e.g. `20` for Zacian. Added 2026-09-10 for the
+   * Power-Up Optimizer's second-charged-move cost model (see MECHANICS.md's
+   * "Second charged move unlock" — previously `[community-consensus]` for
+   * the tiering key itself; this is the first-party source for it). Present
+   * on all 2472 pokemonSettings templates with a `stats` block in the
+   * 2026-09-10 dump (no observed missing case) and always one of {1, 3, 5,
+   * 20} — see GameMasterPokemonRecord.kmBuddyDistance's doc comment for the
+   * per-species-not-per-family caveat this implies for a family-keyed cost
+   * lookup.
+   */
+  kmBuddyDistance?: number;
   tempEvoOverrides?: RawGameMasterTempEvoOverrideFull[];
   evolutionBranch?: RawGameMasterEvolutionBranchFull[];
   /**
@@ -477,6 +490,28 @@ export interface GameMasterPokemonRecord {
    * species.json" caveat.
    */
   evolutionBranch: GameMasterEvolutionBranchRecord[];
+  /**
+   * Buddy-walking distance (km) required to earn a candy for THIS template's
+   * pokemonId — see RawGameMasterPokemonSettingsFull.kmBuddyDistance's doc
+   * comment for provenance/completeness. Added 2026-09-10, carried onto
+   * data/normalized/species.json (via a sync-data.ts-local type extension,
+   * not a SpeciesDefinition schema change — that's engine-developer's call,
+   * see CLAUDE.md's "When the schema itself needs to change") for the
+   * Power-Up Optimizer's cost model.
+   *
+   * IMPORTANT: this is keyed to the pokemonId ENUM (one evolutionary stage),
+   * NOT the candy family — candy is pooled across a whole family (MECHANICS.md),
+   * but kmBuddyDistance is NOT always uniform across one. Confirmed live
+   * 2026-09-10: 4 of 541 families disagree between evolutionary stages
+   * (Qwilfish 3km -> Overqwil 5km; Sneasel/Weavile 3km -> Sneasler 5km;
+   * Stantler 3km -> Wyrdeer 5km; Zigzagoon/Linoone 1km -> Obstagoon 3km — all
+   * four are the species that regionally-evolve into a form base Game Freak
+   * treats as a materially different Pokémon). It IS uniform across every
+   * FORM of the same pokemonId (e.g. base/Hisuian Sneasel both 3km, Zacian
+   * Hero/Crowned Sword both 20km) — a per-(pokemonId, form) cost lookup is
+   * safe, a per-familyId one is not without picking a specific stage.
+   */
+  kmBuddyDistance?: number;
   /**
    * This template's own formChange entries, already filtered to move-bearing
    * ones only (see GameMasterFormChangeEntryRecord). Added 2026-09-10.
