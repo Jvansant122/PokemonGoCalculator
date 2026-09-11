@@ -67,4 +67,34 @@ export const MULTI_MOVE_TEAM_SPECIES: SpeciesDefinition[] = ["a", "b", "c", "d",
 /** Deliberately weaker than MULTI_MOVE_TEAM_SPECIES so it starts BENCHED — but a TM onto its strong charged move should be able to close the gap far enough to matter for a benched-candidate test. */
 export const MULTI_MOVE_BENCH_SPECIES: SpeciesDefinition = makeMultiMoveSpecies("tm-bench", { baseAttack: 195, baseDefense: 118, baseStamina: 176 });
 
+/** A real mega/primal boost — same shape used by megaLevel.ts/uptime.ts. Only ever attached to a species a test explicitly wants `canMega: true` for (see the "at-most-one-mega" describe block in rosterMoveChange.test.ts). */
+export const MEGA_BOOST = { multiplier: 1.3, boostedType: "normal" as const };
+
+/**
+ * A team where slot 0 is mega-capable (same base stats as its 5 siblings,
+ * PLUS the boost — scores highest, so runRosterPlanner's own `selectTeam`
+ * reliably picks IT as the team's one mega, never one of the other 5).
+ * Regression fixture for the "benched mega-capable candidate vs an
+ * already-fielded mega" bug (rosterMoveChange.ts, 2026-09-10/11) — see that
+ * module's own "At most one Mega" doc-comment section.
+ */
+export const MULTI_MOVE_TEAM_MEGA_SPECIES: SpeciesDefinition[] = MULTI_MOVE_TEAM_SPECIES.map((sp, i) =>
+  i === 0 ? { ...sp, boost: MEGA_BOOST } : sp,
+);
+
+/**
+ * Mega-capable AND weaker in raw stats than MULTI_MOVE_TEAM_MEGA_SPECIES's
+ * own slot-0 mega, so `selectTeam` always claims the mega slot for the
+ * FIELDED team first and skips this one — guaranteeing it starts BENCHED
+ * (not merely likely) regardless of exact score arithmetic, since
+ * `selectTeam` skips ANY second `canMega` entry outright once the mega slot
+ * is claimed, independent of its own score.
+ */
+export const MULTI_MOVE_BENCH_MEGA_SPECIES: SpeciesDefinition = makeMultiMoveSpecies("tm-bench-mega", {
+  baseAttack: 195,
+  baseDefense: 118,
+  baseStamina: 176,
+  boost: MEGA_BOOST,
+});
+
 export { BOSS_ONE };

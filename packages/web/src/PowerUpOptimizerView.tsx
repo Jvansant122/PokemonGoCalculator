@@ -6,17 +6,20 @@ import {
   MAX_TEAM_RAID_SLOTS,
   type EliteTmCandidate,
   type EliteTmKind,
+  type GatedEvolutionNotice,
   type PowerUpBudgetBlockedCandidate,
   type PowerUpBudgetResourceShortfall,
   type PowerUpBudgetStopReason,
   type PowerUpCandidate,
   type RosterBudgetBlockedCandidate,
   type RosterBudgetStep,
+  type RosterEliteTmCandidate,
   type RosterHypotheticalCatchImpact,
   type RosterNeverCompetitiveEntry,
   type RosterPerBossImpact,
   type RosterPlannerProgressEvent,
   type RosterPowerUpCandidate,
+  type RosterSecondChargedMoveCandidate,
   type RosterSignificanceMode,
   type SpeciesDefinition,
   type WeightedRaidTarget,
@@ -62,12 +65,17 @@ import {
   resolveRosterPlannerInputs,
   type RosterBudgetPlanRunResult,
   type RosterPlannerBlockedReason,
-  type RosterPlannerResolution,
   type RosterPlannerRunResult,
 } from "./run/runRosterPlanner.js";
-import { runRosterBudgetOffMainThread, runRosterPlannerOffMainThread } from "./rosterPlannerWorkerClient.js";
+import { resolveRosterMoveChangeInputs, type RosterMoveChangeRunResult } from "./run/runRosterMoveChange.js";
+import {
+  runRosterBudgetOffMainThread,
+  runRosterMoveChangeOffMainThread,
+  runRosterPlannerOffMainThread,
+} from "./rosterPlannerWorkerClient.js";
 import { dedupeInterchangeableCandidates, type DedupedRosterCandidateGroup } from "./rosterCandidateDedupe.js";
 import { movesetDefaultBadge, type MovesetDefaultBadgeInfo } from "./rosterMovesetBadge.js";
+import { displacedSlotNote } from "./rosterDisplacedSlotNote.js";
 import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
 import { powerUpOptimizerAssumptionsToTeamAssumptions, POWER_UP_OPTIMIZER_EXPORT_MISSING_NOTE } from "./powerUpOptimizerExport.js";
 import { assumptionsToTeamScenario } from "./TeamRaidView.js";
@@ -688,6 +696,18 @@ function MultiRaidCandidateRow({
               candy unverified
             </span>
           )}
+          {c.viaEvolution && (
+            <div className="species-picker-hint" style={{ marginTop: 2 }}>
+              via evolution from {c.viaEvolution.fromSpeciesName} (+{c.viaEvolution.evolutionCandyCost} candy, folded into
+              the cost at left)
+              {c.viaEvolution.otherGatedOptions && c.viaEvolution.otherGatedOptions.length > 0 && (
+                <>
+                  <div style={{ marginTop: 2 }}>Also possible from {c.viaEvolution.fromSpeciesName}, not priced by this tool:</div>
+                  <GatedEvolutionList options={c.viaEvolution.otherGatedOptions} />
+                </>
+              )}
+            </div>
+          )}
         </td>
         <td>
           {c.fromLevel} → {c.toLevel}
@@ -771,6 +791,63 @@ function MultiRaidHypotheticalCatchRow({ impact }: { impact: RosterHypotheticalC
   );
 }
 
+/** One human-readable line per gated evolution branch — reused by both `EvolutionOptionsCell` (the "Never competitive" table) and `MultiRaidCandidateRow`'s "other options" note under a `viaEvolution` candidate. Never invents a requirement `GatedEvolutionNotice.requirementSummary` didn't already state (that string is built by the engine's own `describeEvolutionRequirement` — see rosterPlanner.ts). */
+function GatedEvolutionList({ options }: { options: GatedEvolutionNotice[] }) {
+  if (options.length === 0) return null;
+  return (
+    <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+      {options.map((g) => (
+        <li key={g.toSpeciesId} style={{ fontSize: "0.9em" }}>
+          {g.toSpeciesName} — {g.requirementSummary}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Concretely SHOWS every evolution option this planner found for an
+ * unevolved "never competitive" entry — CLAUDE.md's standing "an exclusion
+ * gets shown, never quietly dropped" rule, applied to evolution branches the
+ * same way `ExcludedEntriesTable` already applies it to the entry itself.
+ * `evolutionRecommendation` (a real priced candy-only option this planner
+ * found, information-only for the fixed-budget plan — see
+ * RosterNeverCompetitiveEntry's own doc comment) and `gatedEvolutions`
+ * (branches this engine can't price at all — an item, a lure, buddy
+ * distance, gender, time-of-day, a quest) are BOTH rendered whenever
+ * present, never one hiding the other — Eevee's Vaporeon (priceable) and
+ * Espeon (gated on a 10km buddy + daytime + a quest) are both real options a
+ * user considering this entry should see.
+ */
+function EvolutionOptionsCell({
+  evolutionRecommendation,
+  gatedEvolutions,
+}: {
+  evolutionRecommendation?: RosterNeverCompetitiveEntry["evolutionRecommendation"];
+  gatedEvolutions?: GatedEvolutionNotice[];
+}) {
+  if (!evolutionRecommendation && (!gatedEvolutions || gatedEvolutions.length === 0)) return <>—</>;
+  return (
+    <>
+      {evolutionRecommendation && (
+        <div style={{ fontSize: "0.9em" }}>
+          Candy-only: {evolutionRecommendation.toSpeciesName} ({evolutionRecommendation.evolutionCandyCost} candy) — est.{" "}
+          {evolutionRecommendation.meanDeltaTeamDps >= 0 ? "+" : ""}
+          {evolutionRecommendation.meanDeltaTeamDps.toFixed(3)} team DPS at L{evolutionRecommendation.toLevel}
+        </div>
+      )}
+      {gatedEvolutions && gatedEvolutions.length > 0 && (
+        <>
+          <div className="species-picker-hint" style={{ marginTop: evolutionRecommendation ? 4 : 0 }}>
+            Also possible, but not priced by this tool:
+          </div>
+          <GatedEvolutionList options={gatedEvolutions} />
+        </>
+      )}
+    </>
+  );
+}
+
 /**
  * A "not silently dropped" table for `RosterNeverCompetitiveEntry[]` —
  * shared by the ranked sweep's `neverCompetitive` (Phase 3b) AND the
@@ -821,6 +898,7 @@ function ExcludedEntriesTable({
             <tr>
               <th>Species</th>
               <th>Reason</th>
+              <th>Evolution options</th>
             </tr>
           </thead>
           <tbody>
@@ -837,6 +915,9 @@ function ExcludedEntriesTable({
                     )}
                   </td>
                   <td>{e.reason}</td>
+                  <td>
+                    <EvolutionOptionsCell evolutionRecommendation={e.evolutionRecommendation} gatedEvolutions={e.gatedEvolutions} />
+                  </td>
                 </tr>
               );
             })}
@@ -1275,6 +1356,373 @@ function MultiRaidResultsSection({
   );
 }
 
+/**
+ * True for an exclusion reason the Roster tab can actually FIX (an
+ * unobserved moveset or an unconfirmed charged-move count — both blank-CSV-
+ * column cases) — see `moveChangeEligibilityReason`/the `knownChargedMoveIds`
+ * check in rosterMoveChange.ts, whose own reason strings this matches
+ * against verbatim ("was not observed" / "COUNT is unknown"). Distinct from
+ * every OTHER exclusion reason this sweep reports (fixed movepool at
+ * capture, can't learn a second charged move without Shadow/Purified, buddy
+ * distance unknown, current move can never be TM'd) — none of those are
+ * fixable by editing the entry, so they get a plain list instead of the
+ * "fill this in" call to action.
+ */
+function isUnknownMovesetExclusionReason(reason: string): boolean {
+  return reason.includes("was not observed") || reason.includes("COUNT is unknown");
+}
+
+/**
+ * One row of the multi-raid second-charged-move candidate table —
+ * `RosterSecondChargedMoveCandidate`, NOT the single-raid tab's own
+ * `SecondChargedMoveCandidateDisplay` (different shape: per-(entry, boss)
+ * rather than per-slot, and `affordable`/`deltaPer1000Stardust`/
+ * `deltaPerCandy` are already engine-computed here rather than derived by
+ * the run module). Deliberately its OWN flat table, never merged into
+ * `MultiRaidCandidateRow`'s ranked-power-up table — a second-charged-move
+ * candidate has no `fromLevel`/`toLevel`/XL-candy cost, and per
+ * CLAUDE.md's "TM candidates need their own axis" this sweep is already a
+ * SEPARATE, later-stage computation (it needs `baselinePerBoss` from an
+ * already-completed main sweep) rather than one more row type merged into
+ * the same ranked list.
+ */
+function RosterSecondChargedMoveTable({
+  candidates,
+  entryNameById,
+}: {
+  candidates: RosterSecondChargedMoveCandidate[];
+  entryNameById: Map<string, string>;
+}) {
+  const sorted = useMemo(() => [...candidates].sort((a, b) => b.deltaTeamDps - a.deltaTeamDps), [candidates]);
+  if (sorted.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h3>Second charged move candidates — {sorted.length}</h3>
+      <div className="table-scroll">
+        <table className="time-series-table">
+          <thead>
+            <tr>
+              <th>Species</th>
+              <th>Boss</th>
+              <th title="fielded = already on the boss's team; benched = would newly join, displacing a fielded slot — see the note under each benched row.">
+                Fielded?
+              </th>
+              <th>New charged move</th>
+              <th>Stardust</th>
+              <th>Candy</th>
+              <th>Δ team DPS</th>
+              <th title="Never blended with candy — CLAUDE.md's standing decision.">/1000 stardust</th>
+              <th title="Regular candy only, never blended with stardust.">/candy</th>
+              <th>Affordable now?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((c, i) => {
+              const note = displacedSlotNote(c.fielded, c.displacedEntryId, c.displacedFieldedMega, entryNameById.get(c.displacedEntryId ?? ""));
+              return (
+                <tr key={`${c.entryId}-${c.bossId}-${c.newChargedMoveId}-${i}`} style={{ opacity: c.deltaExceedsNoise ? 1 : 0.6 }}>
+                  <td>
+                    {c.speciesName}
+                    {c.costUnverified && (
+                      <span
+                        className="badge badge-approximate"
+                        title="This entry's candy family has no known candy-on-hand — ranked normally, but this cost can't be confirmed affordable."
+                      >
+                        candy unverified
+                      </span>
+                    )}
+                  </td>
+                  <td>{c.bossName}</td>
+                  <td>
+                    {c.fielded ? "fielded" : "benched"}
+                    {note && (
+                      <span
+                        className={note.isMegaConflict ? "badge badge-approximate" : "caveats"}
+                        title={note.title}
+                        style={note.isMegaConflict ? { display: "block", marginTop: 2, marginLeft: 0 } : { display: "block", fontSize: "0.85em" }}
+                      >
+                        {note.label}
+                      </span>
+                    )}
+                  </td>
+                  <td>{c.newChargedMoveName}</td>
+                  <td>{c.cost.stardust.toLocaleString()}</td>
+                  <td>{c.cost.candy || "—"}</td>
+                  <td>
+                    {c.deltaExceedsNoise ? (
+                      <>
+                        {c.deltaTeamDps >= 0 ? "+" : ""}
+                        {c.deltaTeamDps.toFixed(3)}
+                      </>
+                    ) : (
+                      "≈0 (no measurable change)"
+                    )}
+                  </td>
+                  <td>{!c.deltaExceedsNoise || c.deltaPer1000Stardust === null ? "—" : c.deltaPer1000Stardust.toFixed(3)}</td>
+                  <td>{!c.deltaExceedsNoise || c.deltaPerCandy === null ? "—" : c.deltaPerCandy.toFixed(3)}</td>
+                  <td>{c.costUnverified ? "unverified" : c.affordable ? "✓" : "✗"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Same "your N Elite [Fast|Charged] TMs" framing as single-raid's own
+ * `eliteTmHeading`, adapted for `RosterEliteTmCandidate`'s already-computed
+ * per-candidate `affordable` (unlike single-raid's index-based "within
+ * stock" marker — this sweep's `affordable` is a REAL engine-computed field,
+ * see rosterMoveChange.ts's own `RosterEliteTmCandidate.affordable` doc
+ * comment, so there's no separate index math to duplicate here).
+ */
+function rosterEliteTmHeading(kind: EliteTmKind, onHand: number | null, count: number): string {
+  const label = kind === "fast" ? "Elite Fast TM" : "Elite Charged TM";
+  if (count === 0) return `${label} candidates`;
+  if (onHand === null) return `${label} candidates — unknown ${label} count, affordability not shown`;
+  return `${label} candidates — your ${onHand} ${label}${onHand === 1 ? "" : "s"}`;
+}
+
+/** Multi-raid mode's Elite TM section — see rosterEliteTmHeading's own doc comment for how this differs from single-raid's EliteTmSection. */
+function RosterEliteTmSection({
+  kind,
+  candidates,
+  onHand,
+  entryNameById,
+}: {
+  kind: EliteTmKind;
+  candidates: RosterEliteTmCandidate[];
+  onHand: number | null;
+  entryNameById: Map<string, string>;
+}) {
+  const sorted = useMemo(() => [...candidates].sort((a, b) => b.deltaTeamDps - a.deltaTeamDps), [candidates]);
+  if (sorted.length === 0) return null;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h3>{rosterEliteTmHeading(kind, onHand, sorted.length)}</h3>
+      <div className="table-scroll">
+        <table className="time-series-table">
+          <thead>
+            <tr>
+              <th>Species</th>
+              <th>Boss</th>
+              <th title="fielded = already on the boss's team; benched = would newly join, displacing a fielded slot — see the note under each benched row.">
+                Fielded?
+              </th>
+              <th>Current move</th>
+              <th>New move</th>
+              <th>Δ team DPS</th>
+              <th>Affordable now?</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((c, i) => {
+              const note = displacedSlotNote(c.fielded, c.displacedEntryId, c.displacedFieldedMega, entryNameById.get(c.displacedEntryId ?? ""));
+              return (
+                <tr key={`${c.entryId}-${c.bossId}-${c.newMoveId}-${i}`} style={{ opacity: c.deltaExceedsNoise ? 1 : 0.6 }}>
+                  <td>{c.speciesName}</td>
+                  <td>{c.bossName}</td>
+                  <td>
+                    {c.fielded ? "fielded" : "benched"}
+                    {note && (
+                      <span
+                        className={note.isMegaConflict ? "badge badge-approximate" : "caveats"}
+                        title={note.title}
+                        style={note.isMegaConflict ? { display: "block", marginTop: 2, marginLeft: 0 } : { display: "block", fontSize: "0.85em" }}
+                      >
+                        {note.label}
+                      </span>
+                    )}
+                  </td>
+                  <td>{c.currentMoveName}</td>
+                  <td>{c.newMoveName}</td>
+                  <td>
+                    {c.deltaExceedsNoise ? (
+                      <>
+                        {c.deltaTeamDps >= 0 ? "+" : ""}
+                        {c.deltaTeamDps.toFixed(2)}
+                      </>
+                    ) : (
+                      "≈0 (no measurable change)"
+                    )}
+                  </td>
+                  <td>{onHand === null ? "unknown" : c.affordable ? "✓" : "✗"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+interface MultiRaidMoveChangeSectionProps {
+  /** Whether a completed, non-stale main sweep exists at all — the move-change sweep needs its `baselinePerBoss`, so it can't run before that (see run/runRosterMoveChange.ts's own top doc comment). */
+  canRun: boolean;
+  run: RosterMoveChangeRunResult | null;
+  isRunning: boolean;
+  isStale: boolean;
+  ranOn: "worker" | "main-thread-fallback" | null;
+  elapsedMs: number;
+  onRunSweep: () => void;
+  eliteFastTmOnHand: number | null;
+  eliteChargedTmOnHand: number | null;
+  /** entryId -> species name, for the "which fielded slot did this benched candidate displace" note — see rosterDisplacedSlotNote.ts. */
+  entryNameById: Map<string, string>;
+}
+
+/**
+ * The multi-raid move-change sweep (PLAN_tm_move_change_optimizer.md's
+ * "Both modes" section) — second-charged-move and Elite TM candidates across
+ * the WHOLE pool x boss set, computed by `runRosterMoveChangeCandidates`
+ * (run/runRosterMoveChange.ts) against the main sweep's ALREADY-COMPUTED
+ * `baselinePerBoss`. A SEPARATE button/run from the main "Run sweep" above —
+ * not auto-triggered, since it depends on that sweep's own output and would
+ * otherwise silently re-run stale.
+ */
+function MultiRaidMoveChangeSection({
+  canRun,
+  run,
+  isRunning,
+  isStale,
+  ranOn,
+  elapsedMs,
+  onRunSweep,
+  eliteFastTmOnHand,
+  eliteChargedTmOnHand,
+  entryNameById,
+}: MultiRaidMoveChangeSectionProps) {
+  // Depending on `run` itself (not a fresh `run?.data?.excluded ?? []`
+  // derived array) — a fresh `[]` on every render whenever data is null
+  // would make these useMemo dependency arrays change every render too (see
+  // MultiRaidResultsSection's own identical comment on dedupedCandidates).
+  const unknownMovesetExcluded = useMemo(
+    () => (run?.data?.excluded ?? []).filter((e) => isUnknownMovesetExclusionReason(e.reason)),
+    [run],
+  );
+  const otherExcluded = useMemo(() => (run?.data?.excluded ?? []).filter((e) => !isUnknownMovesetExclusionReason(e.reason)), [run]);
+  const [showAllOtherExcluded, setShowAllOtherExcluded] = useState(false);
+  const visibleOtherExcluded = showAllOtherExcluded ? otherExcluded : otherExcluded.slice(0, MULTI_RAID_TABLE_INITIAL_ROWS);
+
+  return (
+    <CollapsibleSection id="pu-multi-move-change" heading="Move-change sweep (second charged move / Elite TM)" defaultOpen={false}>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        Unlocking a second charged move or replacing one with an Elite TM, across your WHOLE imported roster
+        (including currently-benched Pokémon) against the boss set above — reuses the main sweep&rsquo;s ALREADY-
+        COMPUTED baseline team per boss, so run &ldquo;Run sweep&rdquo; above first (and again after any change).
+        Regular (non-Elite) TMs are never modeled here — the outcome is random and non-uniform-confirmed (see
+        &ldquo;Known caveats&rdquo; below).
+      </p>
+      <div className="result-row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
+        <button type="button" onClick={onRunSweep} disabled={isRunning || !canRun}>
+          {isRunning ? "Running move-change sweep…" : run ? "Run move-change sweep again" : "Run move-change sweep"}
+        </button>
+        {isRunning && <span className="species-picker-hint">{(elapsedMs / 1000).toFixed(1)}s elapsed</span>}
+        {!isRunning && run && ranOn && (
+          <span className="species-picker-hint">
+            {ranOn === "worker" ? "computed off the main thread" : "computed on the main thread (worker unavailable)"} in{" "}
+            {(elapsedMs / 1000).toFixed(1)}s
+          </span>
+        )}
+        {isStale && run && !isRunning && (
+          <span className="badge badge-pending" title="The main sweep, roster, or settings changed since this result was computed.">
+            stale — click Run move-change sweep again
+          </span>
+        )}
+        {!canRun && !isRunning && (
+          <span className="caveats">Run the main sweep above first — this needs its computed baseline team per boss.</span>
+        )}
+      </div>
+
+      {run?.error && <p className="error-text">Could not compute this sweep: {run.error}</p>}
+      {run?.blockedReason === "no-roster" && <p className="caveats">No roster imported in this browser yet.</p>}
+      {run?.blockedReason === "no-bosses" && (
+        <p className="caveats">No bosses resolved, or the main sweep&rsquo;s baseline is stale — run &ldquo;Run sweep&rdquo; above again first.</p>
+      )}
+
+      {run?.data && (
+        <>
+          <div className="result-card" style={{ marginBottom: 12 }}>
+            <dl>
+              <dt>Second charged move candidates</dt>
+              <dd>{run.data.secondChargedMove.length}</dd>
+              <dt>Elite TM candidates</dt>
+              <dd>{run.data.eliteTm.length}</dd>
+              <dt title="Real runTeamRaid calls this sweep made — a sanity-check figure, not a user setting.">Team-raid simulations run</dt>
+              <dd>{run.data.teamRaidCallCount.toLocaleString()}</dd>
+            </dl>
+          </div>
+
+          <RosterSecondChargedMoveTable candidates={run.data.secondChargedMove} entryNameById={entryNameById} />
+          <RosterEliteTmSection
+            kind="fast"
+            candidates={run.data.eliteTm.filter((c) => c.kind === "fast")}
+            onHand={eliteFastTmOnHand}
+            entryNameById={entryNameById}
+          />
+          <RosterEliteTmSection
+            kind="charged"
+            candidates={run.data.eliteTm.filter((c) => c.kind === "charged")}
+            onHand={eliteChargedTmOnHand}
+            entryNameById={entryNameById}
+          />
+
+          {unknownMovesetExcluded.length > 0 && (
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              {unknownMovesetExcluded.length} entr{unknownMovesetExcluded.length === 1 ? "y has an" : "ies have"} unknown
+              or unconfirmed moveset{unknownMovesetExcluded.length === 1 ? "" : "s"} and can&rsquo;t be considered for a
+              TM. Fill {unknownMovesetExcluded.length === 1 ? "it" : "them"} in on the{" "}
+              <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a> to include {unknownMovesetExcluded.length === 1 ? "it" : "them"}.
+            </p>
+          )}
+
+          {otherExcluded.length > 0 && (
+            <CollapsibleSection
+              id="pu-multi-move-change-excluded"
+              heading={`Other excluded entries — ${otherExcluded.length}`}
+              headingLevel="h3"
+              defaultOpen={false}
+              variant="subsection"
+            >
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                Excluded for a reason the Roster tab can&rsquo;t fix — a fixed movepool at capture, a move that can
+                never be TM&rsquo;d, or a second charged move this species can&rsquo;t learn without Shadow/Purified.
+              </p>
+              <div className="table-scroll">
+                <table className="time-series-table">
+                  <thead>
+                    <tr>
+                      <th>Species</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleOtherExcluded.map((e, i) => (
+                      <tr key={`${e.entryId}-${i}`}>
+                        <td>{e.speciesName}</td>
+                        <td>{e.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {otherExcluded.length > MULTI_RAID_TABLE_INITIAL_ROWS && (
+                <button type="button" style={{ marginTop: 8 }} onClick={() => setShowAllOtherExcluded((v) => !v)}>
+                  {showAllOtherExcluded ? `Show top ${MULTI_RAID_TABLE_INITIAL_ROWS} only` : `Show all ${otherExcluded.length}`}
+                </button>
+              )}
+            </CollapsibleSection>
+          )}
+        </>
+      )}
+    </CollapsibleSection>
+  );
+}
+
 const MULTI_RAID_BUDGET_STEP_COLUMN_COUNT = 10;
 
 /**
@@ -1619,9 +2067,17 @@ interface MultiRaidTrackedResult<TData> {
  * state is threaded through explicit setState callbacks rather than
  * useEffect/useState internally (same reasoning the pre-Phase-4 single-call
  * version of this logic already used).
+ *
+ * `resolution` is typed as the narrow subset this function actually reads
+ * (`targets`/`blockedReason` only — `inputs` is read by the CALLER, inside
+ * its own `offMainThread` closure, never by this function directly) rather
+ * than the full `RosterPlannerResolution` shape, so the SAME helper also
+ * serves `RosterMoveChangeResolution` (run/runRosterMoveChange.ts) below —
+ * structurally identical on these two fields despite a different `inputs`
+ * type.
  */
 function runMultiRaidTrackedComputation<TData>(
-  resolution: RosterPlannerResolution,
+  resolution: { targets: WeightedRaidTarget[]; blockedReason: RosterPlannerBlockedReason | null },
   offMainThread: () => Promise<{ data: TData; ranOn: "worker" | "main-thread-fallback" }>,
   setIsRunning: (v: boolean) => void,
   setElapsedMs: (v: number) => void,
@@ -2355,6 +2811,18 @@ export function PowerUpOptimizerView() {
     return map;
   }, [hydratedPool]);
 
+  // entryId -> species name, for the move-change sweep's `displacedEntryId`
+  // join (rosterDisplacedSlotNote.ts) — a benched candidate's row needs to
+  // name WHICH fielded team member it swapped out, and `displacedEntryId` is
+  // an opaque id, not something a player recognizes. Kept separate from
+  // `entryIdentities` above (that map is an IV spread, not a name) rather
+  // than overloading its meaning.
+  const entryNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const entry of hydratedPool) map.set(entry.entryId, entry.species.name);
+    return map;
+  }, [hydratedPool]);
+
   // entryId -> a "moveset had to be guessed" badge for the multi-raid result
   // tables — a real trust bug fixed 2026-09-10: `RosterPowerUpCandidate`/
   // `RosterNeverCompetitiveEntry`/`RosterBudgetStep` (engine result types)
@@ -2572,8 +3040,16 @@ export function PowerUpOptimizerView() {
       bossStartsPrimed: false,
       bossStartingEnergyFraction: 0,
       rankBy: "stardust",
-      // Placeholders — resolveRosterPlannerInputs doesn't read TM inventory
-      // either (multi-raid TM candidates aren't built yet).
+      // Placeholders on THIS memo — resolveRosterPlannerInputs (the main
+      // sweep) never reads any of the four TM inventory fields. The
+      // move-change sweep DOES read eliteFastTmOnHand/eliteChargedTmOnHand,
+      // but deliberately NOT off this object — see
+      // resolveRosterMoveChangeInputs' own doc comment (run/runRosterMoveChange.ts)
+      // for why: this memo's reference identity ALSO drives the main
+      // sweep's `isMultiRaidStale` flag, so folding a TM count into it would
+      // mark an unrelated, already-completed sweep stale every time the
+      // user typed one. handleRunMoveChangeSweep below reads both straight
+      // off the LIVE `assumptions` object instead.
       fastTmOnHand: null,
       chargedTmOnHand: null,
       eliteFastTmOnHand: null,
@@ -2677,6 +3153,74 @@ export function PowerUpOptimizerView() {
   const [budgetProgress, setBudgetProgress] = useState<RosterPlannerProgressEvent | null>(null);
   const isMultiRaidBudgetStale =
     multiRaidBudgetRun !== null && (multiRaidBudgetRun.inputs !== multiRaidInputs || multiRaidBudgetRun.pool !== hydratedPool);
+
+  // The move-change sweep (PLAN_tm_move_change_optimizer.md) — a THIRD,
+  // separate worker round trip, kicked off by its OWN button (never
+  // auto-triggered alongside the two above) because it depends on the main
+  // sweep's ALREADY-COMPUTED `baselinePerBoss`, which doesn't exist until
+  // that sweep has actually run once. Staleness also tracks `baselineRef`
+  // (the exact baseline array this move-change result was computed against,
+  // by reference) — not just `inputs`/`pool` — since re-running the main
+  // sweep alone (same inputs/pool, e.g. clicking "Run sweep again" without
+  // changing anything) produces a NEW baseline array via a fresh seed set,
+  // and this result should still be flagged stale against it.
+  const currentBaselinePerBoss = multiRaidRun?.result.data?.baselinePerBoss ?? null;
+  const [moveChangeRun, setMoveChangeRun] = useState<{
+    inputs: PowerUpOptimizerAssumptions;
+    pool: typeof hydratedPool;
+    baselineRef: typeof currentBaselinePerBoss;
+    // Tracked SEPARATELY from `inputs` — see resolveRosterMoveChangeInputs'
+    // own doc comment (run/runRosterMoveChange.ts) for why these two are
+    // deliberately NOT part of the `multiRaidInputs` memo this `inputs`
+    // field is.
+    eliteFastTmOnHand: number | null;
+    eliteChargedTmOnHand: number | null;
+    result: RosterMoveChangeRunResult;
+    ranOn: "worker" | "main-thread-fallback" | null;
+  } | null>(null);
+  const [isRunningMoveChange, setIsRunningMoveChange] = useState(false);
+  const [moveChangeElapsedMs, setMoveChangeElapsedMs] = useState(0);
+  const isMoveChangeStale =
+    moveChangeRun !== null &&
+    (moveChangeRun.inputs !== multiRaidInputs ||
+      moveChangeRun.pool !== hydratedPool ||
+      moveChangeRun.baselineRef !== currentBaselinePerBoss ||
+      moveChangeRun.eliteFastTmOnHand !== assumptions.eliteFastTmOnHand ||
+      moveChangeRun.eliteChargedTmOnHand !== assumptions.eliteChargedTmOnHand);
+  const canRunMoveChange = currentBaselinePerBoss !== null && !isMultiRaidStale;
+
+  function handleRunMoveChangeSweep() {
+    if (!currentBaselinePerBoss) return;
+    const resolution = resolveRosterMoveChangeInputs(
+      multiRaidInputs,
+      speciesRegistry,
+      hydratedPool,
+      currentBaselinePerBoss,
+      assumptions.eliteFastTmOnHand,
+      assumptions.eliteChargedTmOnHand,
+    );
+    const snapshotInputs = multiRaidInputs;
+    const snapshotPool = hydratedPool;
+    const snapshotBaseline = currentBaselinePerBoss;
+    const snapshotEliteFastTmOnHand = assumptions.eliteFastTmOnHand;
+    const snapshotEliteChargedTmOnHand = assumptions.eliteChargedTmOnHand;
+    runMultiRaidTrackedComputation(
+      resolution,
+      () => runRosterMoveChangeOffMainThread(resolution.inputs!),
+      setIsRunningMoveChange,
+      setMoveChangeElapsedMs,
+      (result, ranOn) =>
+        setMoveChangeRun({
+          inputs: snapshotInputs,
+          pool: snapshotPool,
+          baselineRef: snapshotBaseline,
+          eliteFastTmOnHand: snapshotEliteFastTmOnHand,
+          eliteChargedTmOnHand: snapshotEliteChargedTmOnHand,
+          result,
+          ranOn,
+        }),
+    );
+  }
 
   function handleRunMultiRaidSweep() {
     // RESOLUTION happens ONCE, right here, shared by BOTH engine calls below
@@ -2866,6 +3410,18 @@ export function PowerUpOptimizerView() {
             elapsedMs={budgetElapsedMs}
             progress={budgetProgress}
           />
+          <MultiRaidMoveChangeSection
+            canRun={canRunMoveChange}
+            run={moveChangeRun?.result ?? null}
+            isRunning={isRunningMoveChange}
+            isStale={isMoveChangeStale}
+            ranOn={moveChangeRun?.ranOn ?? null}
+            elapsedMs={moveChangeElapsedMs}
+            onRunSweep={handleRunMoveChangeSweep}
+            eliteFastTmOnHand={assumptions.eliteFastTmOnHand}
+            eliteChargedTmOnHand={assumptions.eliteChargedTmOnHand}
+            entryNameById={entryNameById}
+          />
 
           <CollapsibleSection id="pu-known-caveats-multi" heading="Known caveats" defaultOpen={false}>
             <div className="note-block">
@@ -2922,6 +3478,21 @@ export function PowerUpOptimizerView() {
               OFF does (&ldquo;what&rsquo;s worth investing in&rdquo; vs. &ldquo;what should I power up tonight&rdquo;) —
               neither is more &ldquo;correct,&rdquo; they answer different things. The single-raid TM/second-move
               optimizer above is unaffected either way — it only ever prices a moveset it actually observed.
+              </p>
+            </details>
+            <details className="prose-details">
+              <summary>Move-change sweep (second charged move / Elite TM)</summary>
+              <p>
+              Reuses the main sweep&rsquo;s ALREADY-COMPUTED baseline team per boss — it can never run before that
+              sweep has, and re-running the main sweep invalidates it (a fresh &ldquo;stale&rdquo; badge appears).
+              A TM candidate is only ever generated for a KNOWN moveset — an entry whose charged-move count (1 vs
+              2) was never confirmed is excluded and reported, never guessed against. Elite Fast/Elite Charged TM
+              are their OWN non-fungible item currencies, never blended into the stardust/candy ranking or into
+              each other — CLAUDE.md&rsquo;s standing decision. Regular (non-Elite) TMs and Frustration removal are
+              never modeled: a regular TM&rsquo;s outcome is random and not confirmed uniform, and Frustration
+              removal is only actionable during a real-world &ldquo;Taken Over&rdquo; event this tool has no live
+              calendar for. There is no joint budget allocator across move changes (unlike the fixed-budget plan
+              above for power-ups) — each candidate is priced as if it were the only thing you buy.
               </p>
             </details>
             </div>

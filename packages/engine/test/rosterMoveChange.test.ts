@@ -9,7 +9,9 @@ import {
   CHARGED_MOVE_STRONG,
   CHARGED_MOVE_WEAK,
   FAST_MOVE_WEAK,
+  MULTI_MOVE_BENCH_MEGA_SPECIES,
   MULTI_MOVE_BENCH_SPECIES,
+  MULTI_MOVE_TEAM_MEGA_SPECIES,
   MULTI_MOVE_TEAM_SPECIES,
   makeMultiMoveSpecies,
 } from "./fixtures/rosterMoveChangeFixtures.js";
@@ -193,6 +195,51 @@ describe("runRosterMoveChangeCandidates — benched entries (IDEAS: 'not limited
     const result = runRosterMoveChangeCandidates(baseInputs(pool, { includeBenchedEntries: true, maxBenchedRealEvaluations: 1 }));
     const benchedRowCount = [...result.secondChargedMove, ...result.eliteTm].filter((c) => !c.fielded).length;
     expect(benchedRowCount).toBeLessThanOrEqual(1);
+  });
+});
+
+describe("runRosterMoveChangeCandidates — at-most-one-mega (real bug: benched mega candidate vs an already-fielded mega)", () => {
+  it("does not throw, and displaces the FIELDED MEGA (not the weakest slot) when a benched mega-capable candidate is evaluated", () => {
+    // team-0 is the baseline team's one fielded mega (highest score — see
+    // MULTI_MOVE_TEAM_MEGA_SPECIES's own doc comment). The benched candidate
+    // is ALSO mega-capable but deliberately weaker, so it stays benched
+    // rather than displacing team-0 in the baseline team itself.
+    const pool = [
+      ...MULTI_MOVE_TEAM_MEGA_SPECIES.map((sp, i) => entry(`team-${i}`, sp, 30, { canMega: sp.boost !== undefined })),
+      entry("bench-mega", MULTI_MOVE_BENCH_MEGA_SPECIES, 30, {
+        canMega: true,
+        fastMoveId: FAST_MOVE_WEAK.id,
+        chargedMoveId: CHARGED_MOVE_WEAK.id,
+      }),
+    ];
+
+    let result: ReturnType<typeof runRosterMoveChangeCandidates> | undefined;
+    expect(() => {
+      result = runRosterMoveChangeCandidates(baseInputs(pool));
+    }).not.toThrow();
+
+    const benchMegaRows = [...result!.secondChargedMove, ...result!.eliteTm].filter((c) => !c.fielded && c.entryId === "bench-mega");
+    expect(benchMegaRows.length).toBeGreaterThan(0);
+    for (const row of benchMegaRows) {
+      // Displaces the fielded MEGA (team-0), never the plain weakest slot —
+      // fielding both would be illegal (only one Mega Evolution at a time).
+      expect(row.displacedFieldedMega).toBe(true);
+      expect(row.displacedEntryId).toBe("team-0");
+    }
+  });
+
+  it("a benched NON-mega candidate against a team that already fields a mega still uses the ordinary weakest-slot swap", () => {
+    const pool = [
+      ...MULTI_MOVE_TEAM_MEGA_SPECIES.map((sp, i) => entry(`team-${i}`, sp, 30, { canMega: sp.boost !== undefined })),
+      entry("bench", MULTI_MOVE_BENCH_SPECIES, 30, { fastMoveId: FAST_MOVE_WEAK.id, chargedMoveId: CHARGED_MOVE_WEAK.id }),
+    ];
+    const result = runRosterMoveChangeCandidates(baseInputs(pool));
+    const benchRows = [...result.secondChargedMove, ...result.eliteTm].filter((c) => !c.fielded && c.entryId === "bench");
+    expect(benchRows.length).toBeGreaterThan(0);
+    for (const row of benchRows) {
+      expect(row.displacedFieldedMega).toBe(false);
+      expect(row.displacedEntryId).not.toBe("team-0"); // team-0 (the mega) is untouched; the plain weakest slot is swapped instead
+    }
   });
 });
 

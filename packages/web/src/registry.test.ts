@@ -41,6 +41,38 @@ describe("allSpeciesOptions / candidatePickerOptions", () => {
   });
 });
 
+describe("gated-evolution resolution (registry.ts's resolveEvolutions)", () => {
+  it("splits Eevee's real evolutionCandyCosts into candy-only vs. gated branches, resolved to real SpeciesDefinition objects", () => {
+    const eevee = speciesRegistry.get("eevee");
+    expect(eevee.evolutions).toBeDefined();
+    expect(eevee.gatedEvolutions).toBeDefined();
+    const candyOnlyIds = eevee.evolutions!.map((e) => e.to.id).sort();
+    expect(candyOnlyIds).toEqual(["flareon", "jolteon", "vaporeon"].sort());
+    for (const e of eevee.evolutions!) {
+      expect(e.to.id).toBe(speciesRegistry.get(e.to.id).id); // resolved to the SAME registered object, not a guess
+      expect(e.candyCost).toBeGreaterThan(0);
+    }
+    const gatedIds = eevee.gatedEvolutions!.map((g) => g.to.id).sort();
+    expect(gatedIds).toEqual(["espeon", "glaceon", "leafeon", "sylveon", "umbreon"].sort());
+    const umbreon = eevee.gatedEvolutions!.find((g) => g.to.id === "umbreon")!;
+    expect(umbreon.requiresBuddy).toBe(true);
+    expect(umbreon.requiresBuddyDistanceKm).toBe(10);
+    expect(umbreon.requiresNighttime).toBe(true);
+  });
+
+  it("resolves roughly 110 gated branches across the real synced roster (per data-sync's own measured 2026-09-10 distribution)", () => {
+    let gatedCount = 0;
+    let candyOnlyCount = 0;
+    for (const species of speciesRegistry.all()) {
+      gatedCount += species.gatedEvolutions?.length ?? 0;
+      candyOnlyCount += species.evolutions?.length ?? 0;
+    }
+    expect(gatedCount).toBeGreaterThan(90);
+    expect(gatedCount).toBeLessThan(130);
+    expect(candyOnlyCount).toBeGreaterThan(400);
+  });
+});
+
 describe("activeRaidBossOptions / targetPickerOptions", () => {
   it("every active raid boss resolves to a registered species", () => {
     for (const boss of activeRaidBossOptions()) {

@@ -188,20 +188,31 @@ export interface PowerUpOptimizerScenario {
   multiRaidHypotheticalCatches?: PowerUpHypotheticalCatchScenario[];
   /**
    * TM inventory (PLAN_tm_move_change_optimizer.md web half) — account-wide,
-   * like rareCandyOnHand/rareCandyXlOnHand, not per-slot. `null` (the
-   * default) means UNKNOWN, never 0 — the same "don't gate the sweep on a
-   * typed number the field researcher would have to alt-tab to look up"
-   * convention as multiRaidBossIds' own candyByFamilyId. Second-charged-move
-   * and Elite TM candidates are computed and ranked regardless of whether
-   * these are filled in; a filled-in count only changes the "within your
-   * stock" framing shown alongside the Elite TM candidates (this field is
-   * otherwise purely informational — no regular-TM lottery is modeled, see
-   * PLAN's "Regular TMs — do not build the lottery"). Optional so a link
-   * shared before these fields existed decodes via `?? null`.
+   * like rareCandyOnHand/rareCandyXlOnHand, not per-slot, and shared between
+   * BOTH modes (single-raid AND multi-raid read the same four fields — see
+   * PowerUpOptimizerAssumptionPanel.tsx, widened from single-raid-only when
+   * the multi-raid move-change sweep started consuming the two Elite TM
+   * fields). `null` (the default) means UNKNOWN, never 0 — the same "don't
+   * gate the sweep on a typed number the field researcher would have to
+   * alt-tab to look up" convention as multiRaidBossIds' own candyByFamilyId.
+   * `fastTmOnHand`/`chargedTmOnHand` are purely informational in EITHER mode
+   * — no regular-TM lottery is modeled anywhere, see PLAN's "Regular TMs — do
+   * not build the lottery". Optional so a link shared before these fields
+   * existed decodes via `?? null`.
    */
   fastTmOnHand?: number | null;
   chargedTmOnHand?: number | null;
-  /** See fastTmOnHand. Frames the Elite Fast TM candidate section's "your N Elite TMs, best N targets" heading — never gates which candidates are generated. */
+  /**
+   * See fastTmOnHand for the shared shape. In single-raid mode, frames the
+   * Elite Fast TM candidate section's "your N Elite TMs, best N targets"
+   * heading — never gates which candidates are generated there (every
+   * candidate is still simulated and ranked regardless). In MULTI-RAID mode,
+   * this ALSO feeds a real engine input
+   * (`RosterMoveChangeInputs.eliteFastTmOnHand`, run/runRosterMoveChange.ts)
+   * that sets each `RosterEliteTmCandidate.affordable` flag directly — a
+   * genuinely different consumption than single-raid's display-only framing,
+   * not just a second UI for the same computation.
+   */
   eliteFastTmOnHand?: number | null;
   /** See fastTmOnHand/eliteFastTmOnHand, for Elite Charged TM. */
   eliteChargedTmOnHand?: number | null;

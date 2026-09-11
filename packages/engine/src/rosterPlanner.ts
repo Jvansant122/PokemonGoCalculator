@@ -1046,12 +1046,77 @@ export interface GatedEvolutionNotice {
   requirementSummary: string;
 }
 
+/**
+ * Real Pokémon GO display names for the GAME_MASTER `ITEM_*` evolution
+ * constants (`GatedEvolutionOption.requiresItem`) — added 2026-09-11 so
+ * `describeEvolutionRequirement` can say "needs a Sun Stone" instead of
+ * leaking the raw constant "ITEM_SUN_STONE" (the web layer only ever sees
+ * this pre-composed `requirementSummary` string, never the raw field, so
+ * humanizing belongs HERE, not in every consumer). Every key currently
+ * observed in `data/normalized/species.json` (checked 2026-09-11) is mapped;
+ * an unmapped key falls through `humanizeGateConstant`'s de-constant-ised
+ * fallback below rather than inventing a product name this project has no
+ * source for — see that function's own doc comment. These are NOT recorded
+ * in MECHANICS.md: they're applied from general Pokémon GO item knowledge,
+ * not independently re-verified via a live source this session, per this
+ * project's "do not add a MECHANICS.md entry unless you actually verified
+ * something" rule — re-confirm before citing any of these as sourced fact.
+ */
+const GATE_ITEM_DISPLAY_NAMES: Record<string, string> = {
+  ITEM_SUN_STONE: "a Sun Stone",
+  ITEM_KINGS_ROCK: "a King's Rock",
+  ITEM_METAL_COAT: "a Metal Coat",
+  ITEM_DRAGON_SCALE: "a Dragon Scale",
+  ITEM_UP_GRADE: "an Up-Grade",
+  ITEM_GEN4_EVOLUTION_STONE: "a Sinnoh Stone",
+  ITEM_GEN5_EVOLUTION_STONE: "an Unova Stone",
+  // Applin's three branches (Appletun/Flapple/Dipplin) — real mainline items
+  // this species' GO release reuses the same names for.
+  ITEM_OTHER_EVOLUTION_STONE_MAPLE_A: "a Tart Apple",
+  ITEM_OTHER_EVOLUTION_STONE_MAPLE_B: "a Sweet Apple",
+  ITEM_OTHER_EVOLUTION_STONE_MAPLE_C: "a Syrupy Apple",
+  // Gimmighoul -> Gholdengo (requiresItemCount 999) — Gimmighoul Coins.
+  ITEM_OTHER_EVOLUTION_STONE_A: "Gimmighoul Coins",
+  // Zygarde's own form changes (10% -> 50% -> Complete) — Zygarde Cells.
+  ITEM_BEANS: "Zygarde Cells",
+};
+
+/** Same table, keyed for `requiresLureItem` (a Lure Module active at a nearby PokéStop) — see GATE_ITEM_DISPLAY_NAMES' own doc comment for sourcing/confidence. */
+const GATE_LURE_ITEM_DISPLAY_NAMES: Record<string, string> = {
+  ITEM_TROY_DISK: "a Lure Module",
+  ITEM_TROY_DISK_GLACIAL: "a Glacial Lure Module",
+  ITEM_TROY_DISK_MOSSY: "a Mossy Lure Module",
+  ITEM_TROY_DISK_MAGNETIC: "a Magnetic Lure Module",
+  ITEM_TROY_DISK_RAINY: "a Rainy Lure Module",
+};
+
+/**
+ * Fallback for a GAME_MASTER item/lure constant NOT present in
+ * GATE_ITEM_DISPLAY_NAMES/GATE_LURE_ITEM_DISPLAY_NAMES — de-constant-ises it
+ * ("ITEM_FOO_BAR" -> "a Foo Bar") rather than guessing at a real product
+ * name this project hasn't confirmed. Deliberately its own named function
+ * (never inlined) so a search for `humanizeGateConstant(` — or its
+ * distinctive "(unconfirmed name" output text — finds every place this
+ * fallback, rather than a confirmed table entry, is actually reached: the
+ * signal that one of the two tables above is missing a real, currently-synced
+ * value.
+ */
+function humanizeGateConstant(raw: string, table: Record<string, string>): string {
+  const known = table[raw];
+  if (known) return known;
+  const words = raw.replace(/^ITEM_/, "").split("_").filter(Boolean);
+  const titleCased = words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  return `an item this tool doesn't have a confirmed name for (unconfirmed name — raw: ${raw}, "${titleCased}")`;
+}
+
 function describeEvolutionRequirement(g: GatedEvolutionOption): string {
   const parts: string[] = [];
-  if (g.requiresItem) parts.push(`needs ${g.requiresItem}${g.requiresItemCount ? ` x${g.requiresItemCount}` : ""}`);
-  if (g.requiresLureItem) parts.push(`needs ${g.requiresLureItem} active nearby`);
+  if (g.requiresItem) {
+    parts.push(`needs ${humanizeGateConstant(g.requiresItem, GATE_ITEM_DISPLAY_NAMES)}${g.requiresItemCount ? ` x${g.requiresItemCount}` : ""}`);
+  }
+  if (g.requiresLureItem) parts.push(`needs ${humanizeGateConstant(g.requiresLureItem, GATE_LURE_ITEM_DISPLAY_NAMES)} active nearby`);
   if (g.requiresBuddy) parts.push(`needs to be your buddy${g.requiresBuddyDistanceKm ? ` for ${g.requiresBuddyDistanceKm}km` : ""}`);
-  if (g.requiresGender) parts.push(`must be ${g.requiresGender}`);
+  if (g.requiresGender) parts.push(`must be ${g.requiresGender.toLowerCase()}`);
   if (g.requiresDaytime) parts.push("daytime only");
   if (g.requiresNighttime) parts.push("nighttime only");
   if (g.requiresDuskPeriod) parts.push("dusk only");

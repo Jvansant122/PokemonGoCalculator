@@ -90,6 +90,21 @@ describe("dehydrateRosterEntry / hydrateRosterEntry", () => {
     const registry = { has: () => false, get: () => fakeSpecies("houndour") };
     expect(hydrateRosterEntry(stored, registry)).toBeNull();
   });
+
+  it("round-trips a known knownChargedMoveIds pair (PLAN_tm_move_change_optimizer.md)", () => {
+    const entry = fakeEntry({ knownChargedMoveIds: ["BODY_SLAM", "SWIFT"] });
+    const stored = dehydrateRosterEntry(entry);
+    expect(stored.knownChargedMoveIds).toEqual(["BODY_SLAM", "SWIFT"]);
+    const registry = { has: (id: string) => id === "houndour", get: () => fakeSpecies("houndour") };
+    expect(hydrateRosterEntry(stored, registry)).toEqual(entry);
+  });
+
+  it("leaves knownChargedMoveIds undefined (unknown), never guessed, when absent from a stored entry", () => {
+    const stored = dehydrateRosterEntry(fakeEntry());
+    expect(stored.knownChargedMoveIds).toBeUndefined();
+    const registry = { has: (id: string) => id === "houndour", get: () => fakeSpecies("houndour") };
+    expect(hydrateRosterEntry(stored, registry)!.knownChargedMoveIds).toBeUndefined();
+  });
 });
 
 describe("hydrateRosterPool", () => {

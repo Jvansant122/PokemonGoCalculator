@@ -48,8 +48,9 @@ export function RosterEntryForm({ idPrefix, draft, onChange, species, speciesOpt
         onChange={(id) =>
           // A previously-picked move id almost certainly doesn't exist on
           // the new species — reset both back to "use first move" in the
-          // same update, same convention as every other tab.
-          set({ ...draft, speciesId: id, fastMoveId: null, chargedMoveId: null })
+          // same update, same convention as every other tab. The second
+          // charged move state resets too, for the same reason.
+          set({ ...draft, speciesId: id, fastMoveId: null, chargedMoveId: null, knowsSecondChargedMove: false, secondChargedMoveId: null })
         }
       />
       {species && (
@@ -71,8 +72,31 @@ export function RosterEntryForm({ idPrefix, draft, onChange, species, speciesOpt
             moves={species.chargedMoves}
             kind="charged"
             value={draft.chargedMoveId}
-            onChange={(id) => set({ ...draft, chargedMoveId: id })}
+            onChange={(id) => set({ ...draft, chargedMoveId: id, secondChargedMoveId: id === draft.secondChargedMoveId ? null : draft.secondChargedMoveId })}
           />
+          {species.chargedMoves.length >= 2 && (
+            <div className="team-slot-flags">
+              <label className="species-picker-hint">
+                <input
+                  type="checkbox"
+                  checked={draft.knowsSecondChargedMove}
+                  onChange={(e) => set({ ...draft, knowsSecondChargedMove: e.target.checked })}
+                  title="Whether this Pokémon has ALSO unlocked a second charged move — leave unchecked if it only knows the one above. Feeds TM-eligibility on the Power-Up Optimizer's multi-raid move-change sweep."
+                />{" "}
+                Knows a second charged move
+              </label>
+            </div>
+          )}
+          {draft.knowsSecondChargedMove && species.chargedMoves.length >= 2 && (
+            <MoveSelect
+              idPrefix={`${idPrefix}-charged2`}
+              label="Second charged move"
+              moves={species.chargedMoves.filter((m) => m.id !== (draft.chargedMoveId ?? species.chargedMoves[0]?.id))}
+              kind="charged"
+              value={draft.secondChargedMoveId}
+              onChange={(id) => set({ ...draft, secondChargedMoveId: id })}
+            />
+          )}
           <div className="field">
             <label htmlFor={`${idPrefix}-level`}>Level</label>
             <NumberField

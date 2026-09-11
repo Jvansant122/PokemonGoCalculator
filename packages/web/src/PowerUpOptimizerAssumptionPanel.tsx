@@ -803,62 +803,64 @@ export function PowerUpOptimizerAssumptionPanel({
           />
         </div>
 
-        {value.mode === "single-raid" && (
-          <>
-            <div className="field">
-              <label htmlFor="pu-fastTm">Fast TM on hand</label>
-              <NumberField
-                id="pu-fastTm"
-                min={0}
-                allowEmpty
-                value={value.fastTmOnHand ?? undefined}
-                placeholder="unknown"
-                warnAbove={CURRENCY_SANITY_THRESHOLD}
-                onChange={(v) => set("fastTmOnHand", v ?? null)}
-                title="Leave blank if unknown — second-charged-move and Elite TM candidates below are still ranked either way; regular TMs are informational only (no lottery outcome is modeled, see &quot;Known caveats&quot;)."
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="pu-chargedTm">Charged TM on hand</label>
-              <NumberField
-                id="pu-chargedTm"
-                min={0}
-                allowEmpty
-                value={value.chargedTmOnHand ?? undefined}
-                placeholder="unknown"
-                warnAbove={CURRENCY_SANITY_THRESHOLD}
-                onChange={(v) => set("chargedTmOnHand", v ?? null)}
-                title="Leave blank if unknown — informational only (no regular-TM lottery is modeled, see &quot;Known caveats&quot;)."
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="pu-eliteFastTm">Elite Fast TM on hand</label>
-              <NumberField
-                id="pu-eliteFastTm"
-                min={0}
-                allowEmpty
-                value={value.eliteFastTmOnHand ?? undefined}
-                placeholder="unknown"
-                warnAbove={CURRENCY_SANITY_THRESHOLD}
-                onChange={(v) => set("eliteFastTmOnHand", v ?? null)}
-                title="Leave blank if unknown — every Elite Fast TM candidate is still ranked below; this only labels how many rows are within your current stock."
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="pu-eliteChargedTm">Elite Charged TM on hand</label>
-              <NumberField
-                id="pu-eliteChargedTm"
-                min={0}
-                allowEmpty
-                value={value.eliteChargedTmOnHand ?? undefined}
-                placeholder="unknown"
-                warnAbove={CURRENCY_SANITY_THRESHOLD}
-                onChange={(v) => set("eliteChargedTmOnHand", v ?? null)}
-                title="Leave blank if unknown — every Elite Charged TM candidate is still ranked below; this only labels how many rows are within your current stock."
-              />
-            </div>
-          </>
-        )}
+        {/* TM inventory — account-wide, applies to BOTH modes (single-raid's own TM
+            candidates AND the multi-raid move-change sweep both read eliteFastTmOnHand/
+            eliteChargedTmOnHand; fastTmOnHand/chargedTmOnHand stay purely informational
+            in either mode, since no regular-TM lottery is modeled anywhere — see "Known
+            caveats"). Previously single-raid-only; widened when the multi-raid move-change
+            sweep started consuming the same two Elite TM fields. */}
+        <div className="field">
+          <label htmlFor="pu-fastTm">Fast TM on hand</label>
+          <NumberField
+            id="pu-fastTm"
+            min={0}
+            allowEmpty
+            value={value.fastTmOnHand ?? undefined}
+            placeholder="unknown"
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("fastTmOnHand", v ?? null)}
+            title="Leave blank if unknown — second-charged-move and Elite TM candidates below are still ranked either way; regular TMs are informational only (no lottery outcome is modeled, see &quot;Known caveats&quot;)."
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="pu-chargedTm">Charged TM on hand</label>
+          <NumberField
+            id="pu-chargedTm"
+            min={0}
+            allowEmpty
+            value={value.chargedTmOnHand ?? undefined}
+            placeholder="unknown"
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("chargedTmOnHand", v ?? null)}
+            title="Leave blank if unknown — informational only (no regular-TM lottery is modeled, see &quot;Known caveats&quot;)."
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="pu-eliteFastTm">Elite Fast TM on hand</label>
+          <NumberField
+            id="pu-eliteFastTm"
+            min={0}
+            allowEmpty
+            value={value.eliteFastTmOnHand ?? undefined}
+            placeholder="unknown"
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("eliteFastTmOnHand", v ?? null)}
+            title="Single-raid: every Elite Fast TM candidate is still ranked below; this only labels how many rows are within your current stock. Multi-raid: this count directly gates each move-change candidate's own &quot;affordable now&quot; flag."
+          />
+        </div>
+        <div className="field">
+          <label htmlFor="pu-eliteChargedTm">Elite Charged TM on hand</label>
+          <NumberField
+            id="pu-eliteChargedTm"
+            min={0}
+            allowEmpty
+            value={value.eliteChargedTmOnHand ?? undefined}
+            placeholder="unknown"
+            warnAbove={CURRENCY_SANITY_THRESHOLD}
+            onChange={(v) => set("eliteChargedTmOnHand", v ?? null)}
+            title="Single-raid: every Elite Charged TM candidate is still ranked below; this only labels how many rows are within your current stock. Multi-raid: this count directly gates each move-change candidate's own &quot;affordable now&quot; flag."
+          />
+        </div>
 
         <div className="field">
           <label htmlFor="pu-rankBy">Rank candidates by</label>

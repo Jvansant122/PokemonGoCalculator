@@ -15,6 +15,17 @@ export interface RosterEntryDraft {
   fastMoveId: string | null;
   /** See fastMoveId. */
   chargedMoveId: string | null;
+  /**
+   * Whether this Pokémon knows a SECOND charged move — a hand-entered entry
+   * is fully known either way (per this file's own "always clean" doc
+   * comment below), so this is a real 1-vs-2 fact, never "unknown." Gates
+   * whether `secondChargedMoveId`'s picker even renders in
+   * RosterEntryForm.tsx and whether `draftToRosterEntry` includes a second
+   * id in `knownChargedMoveIds`.
+   */
+  knowsSecondChargedMove: boolean;
+  /** Only meaningful when `knowsSecondChargedMove` is true — null = use the species' first OTHER charged move (same "null = default" convention as `chargedMoveId`, scoped to exclude whichever move `chargedMoveId` itself resolves to — see RosterEntryForm.tsx). */
+  secondChargedMoveId: string | null;
   level: number;
   ivAttack: number;
   ivDefense: number;
@@ -30,6 +41,8 @@ export function emptyRosterEntryDraft(): RosterEntryDraft {
     speciesId: null,
     fastMoveId: null,
     chargedMoveId: null,
+    knowsSecondChargedMove: false,
+    secondChargedMoveId: null,
     level: 20,
     ivAttack: 15,
     ivDefense: 15,
@@ -57,8 +70,19 @@ export function normalizeRosterEntryDraft(draft: RosterEntryDraft, species: Spec
   const isShadow = hasBoost ? false : draft.isShadow;
   const canMega = hasBoost ? draft.canMega : false;
   const isPurified = effectiveIsShadow(species, isShadow) ? false : draft.isPurified;
-  if (isShadow === draft.isShadow && canMega === draft.canMega && isPurified === draft.isPurified) return draft;
-  return { ...draft, isShadow, canMega, isPurified };
+  // A species with fewer than 2 charged moves total has no "other" move to
+  // learn — force the checkbox off rather than leaving an unusable, empty
+  // picker rendered.
+  const knowsSecondChargedMove = species.chargedMoves.length >= 2 ? draft.knowsSecondChargedMove : false;
+  if (
+    isShadow === draft.isShadow &&
+    canMega === draft.canMega &&
+    isPurified === draft.isPurified &&
+    knowsSecondChargedMove === draft.knowsSecondChargedMove
+  ) {
+    return draft;
+  }
+  return { ...draft, isShadow, canMega, isPurified, knowsSecondChargedMove };
 }
 
 /** The inverse of draftToRosterEntry — pre-fills the form when editing an existing (imported or previously hand-entered) roster entry. */
@@ -67,6 +91,11 @@ export function rosterEntryToDraft(entry: RosterEntry): RosterEntryDraft {
     speciesId: entry.species.id,
     fastMoveId: entry.fastMoveId,
     chargedMoveId: entry.chargedMoveId,
+    // A second known move is whichever of `knownChargedMoveIds` ISN'T the
+    // active `chargedMoveId` — never assume index [1] specifically (a CSV
+    // import's order isn't guaranteed to put the active move first).
+    knowsSecondChargedMove: (entry.knownChargedMoveIds?.length ?? 0) >= 2,
+    secondChargedMoveId: entry.knownChargedMoveIds?.find((id) => id !== entry.chargedMoveId) ?? null,
     level: entry.level,
     ivAttack: entry.ivs.attack,
     ivDefense: entry.ivs.defense,
@@ -103,17 +132,25 @@ export function newHandEntryId(): string {
  * a blank CSV column, so it must never carry the "default moveset" badge
  * (rosterMovesetBadge.ts) or an "approx IV"/"approx level" badge a blank or
  * averaged import column earns. This is the exact requirement PLAN_roster_tab.md
- * calls out as "critical."
+ * calls out as "critical." Same "always clean" reasoning applies to
+ * `knownChargedMoveIds` (PLAN_tm_move_change_optimizer.md) — a hand-entered
+ * entry is ALWAYS a confirmed 1-vs-2 fact (`draft.knowsSecondChargedMove`),
+ * never the CSV import's "undefined = unknown" state.
  */
 export function draftToRosterEntry(draft: RosterEntryDraft, species: SpeciesDefinition, entryId: string): RosterEntry {
   const ivs: IVSpread = { attack: draft.ivAttack, defense: draft.ivDefense, stamina: draft.ivStamina };
   const fastMoveId = draft.fastMoveId ?? species.fastMoves[0]?.id ?? null;
   const chargedMoveId = draft.chargedMoveId ?? species.chargedMoves[0]?.id ?? null;
+  const secondChargedMoveId = draft.knowsSecondChargedMove
+    ? (draft.secondChargedMoveId ?? species.chargedMoves.find((m) => m.id !== chargedMoveId)?.id ?? null)
+    : null;
+  const knownChargedMoveIds = !chargedMoveId ? undefined : secondChargedMoveId ? [chargedMoveId, secondChargedMoveId] : [chargedMoveId];
   return {
     entryId,
     species,
     fastMoveId,
     chargedMoveId,
+    knownChargedMoveIds,
     level: draft.level,
     ivs,
     costModifiers: {

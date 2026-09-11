@@ -30,6 +30,7 @@ import {
   STRONG_SPECIES,
   UNEVOLVED_SPECIES,
   UNEVOLVED_WITH_EVOLUTIONS_SPECIES,
+  makeAttacker,
 } from "./fixtures/rosterPlannerFixtures.js";
 
 /**
@@ -143,7 +144,7 @@ describe("gatedEvolutionNotices — a gated branch is described, never dropped (
   it("describes an item-gated branch with no candy component named separately", () => {
     const notices = gatedEvolutionNotices(GATED_ONLY_SPECIES);
     expect(notices).toEqual([
-      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs Metal Coat, 50 candy" },
+      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs a Metal Coat, 50 candy" },
     ]);
   });
 
@@ -156,6 +157,63 @@ describe("gatedEvolutionNotices — a gated branch is described, never dropped (
         requirementSummary: "needs to be your buddy for 10km, daytime only, a field/special research quest",
       },
     ]);
+  });
+
+  // Regression coverage for the "renders as a raw GAME_MASTER constant" bug
+  // (e.g. "needs ITEM_SUN_STONE" instead of "needs a Sun Stone") fixed
+  // 2026-09-11 — describeEvolutionRequirement humanizes requiresItem/
+  // requiresLureItem/requiresGender itself now, rather than leaking the raw
+  // constant for a caller to reformat.
+  it("humanizes a KNOWN requiresItem constant to its real display name", () => {
+    const species = makeAttacker("test-gated-sun-stone", 200, 120, 160, {
+      isFullyEvolved: false,
+      evolvesToIds: [GATED_EVOLVED_FORM_SPECIES.id],
+      gatedEvolutions: [{ to: GATED_EVOLVED_FORM_SPECIES, requiresItem: "ITEM_SUN_STONE" }],
+    });
+    expect(gatedEvolutionNotices(species)).toEqual([
+      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs a Sun Stone" },
+    ]);
+  });
+
+  it("humanizes a KNOWN requiresLureItem constant to its real Lure Module name", () => {
+    const species = makeAttacker("test-gated-mossy-lure", 200, 120, 160, {
+      isFullyEvolved: false,
+      evolvesToIds: [GATED_EVOLVED_FORM_SPECIES.id],
+      gatedEvolutions: [{ to: GATED_EVOLVED_FORM_SPECIES, requiresLureItem: "ITEM_TROY_DISK_MOSSY" }],
+    });
+    expect(gatedEvolutionNotices(species)).toEqual([
+      {
+        toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id,
+        toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name,
+        requirementSummary: "needs a Mossy Lure Module active nearby",
+      },
+    ]);
+  });
+
+  it("lowercases a raw requiresGender constant instead of leaking it verbatim", () => {
+    const species = makeAttacker("test-gated-gender", 200, 120, 160, {
+      isFullyEvolved: false,
+      evolvesToIds: [GATED_EVOLVED_FORM_SPECIES.id],
+      gatedEvolutions: [{ to: GATED_EVOLVED_FORM_SPECIES, requiresGender: "FEMALE" }],
+    });
+    expect(gatedEvolutionNotices(species)).toEqual([
+      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "must be female" },
+    ]);
+  });
+
+  it("falls back to a de-constant-ised (never invented) name for an UNMAPPED requiresItem constant", () => {
+    const species = makeAttacker("test-gated-unknown-item", 200, 120, 160, {
+      isFullyEvolved: false,
+      evolvesToIds: [GATED_EVOLVED_FORM_SPECIES.id],
+      gatedEvolutions: [{ to: GATED_EVOLVED_FORM_SPECIES, requiresItem: "ITEM_SOME_FUTURE_THING" }],
+    });
+    const summary = gatedEvolutionNotices(species)[0]!.requirementSummary;
+    // Never a raw constant leaking through verbatim, and never a fabricated
+    // product name — a caller can tell this is the fallback path from the
+    // "unconfirmed name" marker and the raw token it preserves.
+    expect(summary).not.toContain("ITEM_SOME_FUTURE_THING needs");
+    expect(summary).toMatch(/unconfirmed name/);
+    expect(summary).toMatch(/ITEM_SOME_FUTURE_THING/);
   });
 });
 
@@ -171,7 +229,7 @@ describe("runRosterPlanner — a gated branch is never silently dropped (schema 
     expect(row).toBeDefined();
     expect(row!.reason).toMatch(/Metal Coat/);
     expect(row!.gatedEvolutions).toEqual([
-      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs Metal Coat, 50 candy" },
+      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs a Metal Coat, 50 candy" },
     ]);
   });
 
@@ -207,7 +265,7 @@ describe("planRosterBudget — a gated branch is named in excludedEntries too (s
     expect(row).toBeDefined();
     expect(row!.reason).toMatch(/Metal Coat/);
     expect(row!.gatedEvolutions).toEqual([
-      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs Metal Coat, 50 candy" },
+      { toSpeciesId: GATED_EVOLVED_FORM_SPECIES.id, toSpeciesName: GATED_EVOLVED_FORM_SPECIES.name, requirementSummary: "needs a Metal Coat, 50 candy" },
     ]);
     // Never committed — this planner never spends against a gated OR a candy-only evolution.
     expect(plan.steps.some((s) => s.entryId === "gated-only")).toBe(false);

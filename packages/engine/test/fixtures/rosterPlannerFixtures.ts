@@ -117,7 +117,10 @@ export const GATED_EVOLVED_FORM_SPECIES: SpeciesDefinition = makeAttacker("test-
 export const GATED_ONLY_SPECIES: SpeciesDefinition = makeAttacker("test-gated-only", 200, 120, 160, {
   isFullyEvolved: false,
   evolvesToIds: [GATED_EVOLVED_FORM_SPECIES.id],
-  gatedEvolutions: [{ to: GATED_EVOLVED_FORM_SPECIES, candyCost: 50, requiresItem: "Metal Coat" }],
+  // Raw GAME_MASTER constant, same shape data-sync actually writes (never a
+  // pre-humanized string) — describeEvolutionRequirement is what turns this
+  // into "a Metal Coat".
+  gatedEvolutions: [{ to: GATED_EVOLVED_FORM_SPECIES, candyCost: 50, requiresItem: "ITEM_METAL_COAT" }],
 });
 
 /** Eevee-shaped: ONE priceable candy-only branch (to EVOLVED_FORM_SPECIES) alongside a real GATED sibling branch — the gated one must still be named on every candidate/never-competitive row this species produces, never omitted just because a priceable option exists. */

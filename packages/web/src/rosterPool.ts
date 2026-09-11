@@ -39,6 +39,8 @@ export interface StoredRosterEntry {
   fastMoveUnmatchedName: string | null;
   chargedMoveUnmatchedName: string | null;
   secondChargedMoveName?: string;
+  /** See RosterEntry's own doc comment (import/pokeGenieMatch.ts) — TM-eligibility provenance, added alongside PLAN_tm_move_change_optimizer.md's roster-mode half. */
+  knownChargedMoveIds?: string[];
   sourceLineNumber: number;
   unmatchedMoveNames: string[];
 }
@@ -84,6 +86,7 @@ export function dehydrateRosterEntry(entry: RosterEntry): StoredRosterEntry {
     fastMoveUnmatchedName: entry.fastMoveUnmatchedName,
     chargedMoveUnmatchedName: entry.chargedMoveUnmatchedName,
     secondChargedMoveName: entry.secondChargedMoveName,
+    knownChargedMoveIds: entry.knownChargedMoveIds,
     sourceLineNumber: entry.sourceLineNumber,
     unmatchedMoveNames: entry.unmatchedMoveNames,
   };
@@ -121,6 +124,11 @@ export function hydrateRosterEntry(stored: StoredRosterEntry, registry: SpeciesL
     fastMoveUnmatchedName: stored.fastMoveUnmatchedName ?? null,
     chargedMoveUnmatchedName: stored.chargedMoveUnmatchedName ?? null,
     secondChargedMoveName: stored.secondChargedMoveName,
+    // Absent on a pool saved before this field existed — `undefined` is
+    // already the correct "unknown" meaning (see RosterEntry.knownChargedMoveIds'
+    // own doc comment), so no `?? []`/`?? false`-style fallback is needed
+    // here, unlike the four moveset-badge fields above.
+    knownChargedMoveIds: stored.knownChargedMoveIds,
     sourceLineNumber: stored.sourceLineNumber,
     unmatchedMoveNames: stored.unmatchedMoveNames,
   };

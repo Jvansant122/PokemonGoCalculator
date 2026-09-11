@@ -46,11 +46,33 @@ export interface RosterEntry {
   /** Same as `fastMoveUnmatchedName`, for the Charge Move column. */
   chargedMoveUnmatchedName: string | null;
   /**
-   * Poke Genie's "Charge Move 2" column, when present — recorded, NEVER
-   * modelled (the engine simulates one charged move per attacker; see the
-   * plan's §3 "Charge Move 2" note).
+   * Poke Genie's "Charge Move 2" column, when present — recorded verbatim,
+   * still never fed to any combat simulation (the engine simulates one
+   * ACTIVE charged move per attacker at a time — this is provenance/display
+   * only). As of PLAN_tm_move_change_optimizer.md's roster-mode half
+   * (2026-09-10), it IS used to resolve `knownChargedMoveIds` below — a
+   * different, narrower purpose (TM eligibility, never which move fights).
    */
   secondChargedMoveName?: string;
+  /**
+   * The charged move id(s) this entry is KNOWN (never guessed/defaulted) to
+   * currently have — mirrors the engine's own `RosterEntry.knownChargedMoveIds`
+   * (rosterPlanner.ts) field-for-field; see that field's own doc comment for
+   * the full "1 vs 2 vs unknown" contract this feeds `rosterMoveChange.ts`'s
+   * second-charged-move eligibility. Resolved in `buildRosterEntry` below:
+   * `undefined` unless the PRIMARY charged move itself resolved (an
+   * unconfirmed primary move can't anchor a known count either); when it
+   * did, a BLANK "Charge Move 2" column resolves to `[chargedMoveId]` (Poke
+   * Genie genuinely records "no second move" as a blank column — a
+   * different, more reliable signal than "Charge Move" being blank, which
+   * means "not captured" — see this project's own "a blank move column means
+   * not captured, never has no move" rule, which does NOT extend to this
+   * column); a NON-blank column that resolves against this species' own
+   * moveset becomes `[chargedMoveId, secondId]`; a non-blank column that
+   * DOESN'T resolve (an unrecognized name — our data gap, not the player's)
+   * is left `undefined` rather than guessed.
+   */
+  knownChargedMoveIds?: string[];
   /** The source CSV row's own 1-based line number — provenance for the match report / roster table. */
   sourceLineNumber: number;
   /**
@@ -332,6 +354,17 @@ function buildRosterEntry(row: PokeGenieRow, species: SpeciesDefinition): Roster
   const unmatchedMoveNames = [fast.unmatchedName, charged.unmatchedName].filter((n): n is string => n !== null);
 
   const secondChargedMoveNameRaw = (v["Charge Move 2"] ?? "").trim();
+  const secondCharged = resolveMoveByName(species.chargedMoves, v["Charge Move 2"]);
+  // See RosterEntry.knownChargedMoveIds' own doc comment for the full
+  // "blank Charge Move 2 means no second move, not unknown" reasoning.
+  const knownChargedMoveIds: string[] | undefined =
+    charged.id === null
+      ? undefined
+      : secondChargedMoveNameRaw === ""
+        ? [charged.id]
+        : secondCharged.id
+          ? [charged.id, secondCharged.id]
+          : undefined;
 
   return {
     entryId: `pg-${row.lineNumber}-${species.id}`,
@@ -354,6 +387,7 @@ function buildRosterEntry(row: PokeGenieRow, species: SpeciesDefinition): Roster
     fastMoveUnmatchedName: fast.unmatchedName,
     chargedMoveUnmatchedName: charged.unmatchedName,
     secondChargedMoveName: secondChargedMoveNameRaw === "" ? undefined : secondChargedMoveNameRaw,
+    knownChargedMoveIds,
     sourceLineNumber: row.lineNumber,
     unmatchedMoveNames,
   };

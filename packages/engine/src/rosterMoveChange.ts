@@ -126,6 +126,29 @@ import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
  * that module's own top doc comment) — not attempted in this pass. Each
  * candidate's own `affordable`/`eliteFastTmAffordable`/`eliteChargedTmAffordable`
  * field answers "could I buy JUST this," same as `RosterPowerUpCandidate.affordable`.
+ *
+ * === At most one Mega (real bug fixed 2026-09-10) =========================
+ *
+ * A BENCHED candidate's real evaluation swaps it into the boss's fielded
+ * team — normally into the team's plain weakest (6th) slot. But real
+ * Pokémon GO only allows ONE Pokémon Mega Evolved at a time
+ * (`runTeamRaid`'s own validation throws on a second `isMega` slot), and a
+ * baseline team's fielded mega is very often NOT its weakest member (a good
+ * mega usually scores near the top) — so naively always swapping the
+ * weakest slot can field two megas at once whenever the benched candidate is
+ * ALSO mega-capable. This is not an edge case: the planner always fields its
+ * single best mega, so every OTHER mega-capable pool entry is benched by
+ * construction, making "baseline mega + benched mega candidate" the
+ * ORDINARY shape of a real roster, not a rare one. When this happens, the
+ * fielded mega slot is displaced instead of the weakest one — the only
+ * faithful comparison for a candidate that would ALSO be mega'd is "does it
+ * beat your CURRENT mega," not "does it beat your worst attacker." This
+ * changes which slot the delta is measured against for exactly this case,
+ * so it is surfaced explicitly via `displacedEntryId`/`displacedFieldedMega`
+ * on the output row rather than left implicit — never silently reported as
+ * an ordinary weakest-slot swap. See `rosterPlanner.ts`'s own `selectTeam`
+ * for the established, analogous convention (skip a second `canMega` entry
+ * rather than let two through) this mirrors.
  */
 
 // ---------------------------------------------------------------------------
@@ -204,7 +227,7 @@ interface SharedTeamRaidAssumptions {
 // ---------------------------------------------------------------------------
 
 export interface RosterSecondChargedMoveCandidate {
-  /** True for an entry already fielded on this boss's baseline team; false for a benched entry this candidate would newly field (displacing the team's current weakest slot). */
+  /** True for an entry already fielded on this boss's baseline team; false for a benched entry this candidate would newly field (displacing a fielded slot — see displacedEntryId/displacedFieldedMega). */
   fielded: boolean;
   entryId: string;
   bossId: string;
@@ -221,6 +244,10 @@ export interface RosterSecondChargedMoveCandidate {
   deltaExceedsNoise: boolean;
   deltaPer1000Stardust: number | null;
   deltaPerCandy: number | null;
+  /** Only meaningful when `fielded` is false: the entryId of the fielded team member this candidate's real evaluation swapped OUT. `null` for a fielded row (nobody is displaced — the entry is already on the team). See `displacedFieldedMega` for what it means when this ISN'T the team's plain weakest member. */
+  displacedEntryId: string | null;
+  /** See displacedEntryId's doc comment — the mega-conflict case (real Pokémon GO bug found 2026-09-10, see rosterMoveChange.ts's own top doc comment "At most one Mega" note). */
+  displacedFieldedMega: boolean;
 }
 
 export interface RosterEliteTmCandidate {
@@ -241,6 +268,10 @@ export interface RosterEliteTmCandidate {
   eliteTmItemsSpent: 1;
   /** Whether THIS SINGLE candidate is affordable against eliteFastTmOnHand/eliteChargedTmOnHand (priced independently — see this module's top doc comment, "No joint budget allocator here"). */
   affordable: boolean;
+  /** See RosterSecondChargedMoveCandidate.displacedEntryId — same convention, same mega-conflict case. */
+  displacedEntryId: string | null;
+  /** See RosterSecondChargedMoveCandidate.displacedFieldedMega. */
+  displacedFieldedMega: boolean;
 }
 
 export interface RosterMoveChangeExcludedEntry {
@@ -515,6 +546,8 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
               deltaExceedsNoise: c.deltaExceedsNoise,
               deltaPer1000Stardust: c.deltaTeamDpsPer1000Stardust,
               deltaPerCandy: c.deltaTeamDpsPerCandy,
+              displacedEntryId: null,
+              displacedFieldedMega: false,
             });
           }
         }
@@ -550,6 +583,8 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
             deltaExceedsNoise: c.deltaExceedsNoise,
             eliteTmItemsSpent: 1,
             affordable: onHand >= 1,
+            displacedEntryId: null,
+            displacedFieldedMega: false,
           });
         }
       }
@@ -625,6 +660,28 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
         : { ...entry, fastMoveId: move.id };
     const candidateSlot = toSlotInput(candidateEntry, megaLevel);
 
+    // --- At-most-one-Mega guard (real bug found 2026-09-10) ------------------
+    // The naive "always replace the team's weakest (6th) slot" swap can field
+    // TWO isMega:true slots at once — runTeamRaid throws — whenever this
+    // benched candidate is itself mega-capable AND the baseline team already
+    // fields a DIFFERENT mega-capable entry that ISN'T the weakest slot. This
+    // is the ORDINARY shape of a real roster, not an edge case: the planner
+    // always fields its single best mega, so any OTHER mega-capable pool
+    // entry is benched by construction. Real Pokémon GO only allows one
+    // Pokémon Mega Evolved at a time, so there is no team this candidate could
+    // legally join WITH its own mega active while the fielded mega stays too
+    // — the only faithful real-game comparison is "would this candidate,
+    // mega'd, replace your CURRENT mega," so displace the fielded mega slot
+    // itself instead of the weakest one. This changes which slot the paired
+    // delta compares against for exactly this case — surfaced via
+    // displacedEntryId/displacedFieldedMega on the output row rather than left
+    // implicit, per this project's "never silently misreport a candidate's
+    // value" rule.
+    const fieldedMegaIndex = fieldedEntries.findIndex((e) => e.canMega);
+    const displacesFieldedMega = candidateEntry.canMega && fieldedMegaIndex !== -1 && fieldedMegaIndex !== weakestIndex;
+    const swapIndex = displacesFieldedMega ? fieldedMegaIndex : weakestIndex;
+    const displacedEntryId = fieldedEntries[swapIndex]!.entryId;
+
     const bossHp = bossEffectiveHp(target.species, target.tier, target.bossMaxHpOverride);
     const teamRaidBase = {
       boss: target.species,
@@ -639,7 +696,7 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
     };
 
     const baselineResults = evalSeeds.map((s) => runTeamRaid({ ...teamRaidBase, slots: baselineSlots, seed: s } satisfies TeamRaidInputs));
-    const candidateSlots: TeamRaidSlotInput[] = baselineSlots.map((s, i) => (i === weakestIndex ? candidateSlot : s));
+    const candidateSlots: TeamRaidSlotInput[] = baselineSlots.map((s, i) => (i === swapIndex ? candidateSlot : s));
     const candidateResults = evalSeeds.map((s) => runTeamRaid({ ...teamRaidBase, slots: candidateSlots, seed: s } satisfies TeamRaidInputs));
     teamRaidCallCount += evalSeeds.length * 2;
 
@@ -681,6 +738,8 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
         deltaExceedsNoise,
         deltaPer1000Stardust: cost.stardust > 0 ? (deltaTeamDps / cost.stardust) * 1000 : null,
         deltaPerCandy: cost.candy > 0 ? deltaTeamDps / cost.candy : null,
+        displacedEntryId,
+        displacedFieldedMega: displacesFieldedMega,
       });
     } else {
       const eliteKind: EliteTmKind = kind === "elite-fast" ? "fast" : "charged";
@@ -703,6 +762,8 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
         deltaExceedsNoise,
         eliteTmItemsSpent: 1,
         affordable: onHand >= 1,
+        displacedEntryId,
+        displacedFieldedMega: displacesFieldedMega,
       });
     }
   }

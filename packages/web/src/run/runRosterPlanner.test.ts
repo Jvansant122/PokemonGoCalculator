@@ -105,6 +105,13 @@ describe("toEngineRosterPool", () => {
     expect(entry!.candyFamilyId).toBeUndefined();
   });
 
+  it("carries knownChargedMoveIds straight through unchanged (PLAN_tm_move_change_optimizer.md) — never derived from movesetIsDefaulted/chargedMoveId", () => {
+    const [known] = toEngineRosterPool([fakeImportedEntry({ knownChargedMoveIds: ["BODY_SLAM"] })]);
+    expect(known!.knownChargedMoveIds).toEqual(["BODY_SLAM"]);
+    const [unknown] = toEngineRosterPool([fakeImportedEntry({ knownChargedMoveIds: undefined })]);
+    expect(unknown!.knownChargedMoveIds).toBeUndefined();
+  });
+
   it("defensively clears canMega when the species has no boost mechanic, even if the imported flag says true", () => {
     const corrupt = fakeImportedEntry({ canMega: true, species: fakeSpecies("no-boost-species") });
     const [entry] = toEngineRosterPool([corrupt]);

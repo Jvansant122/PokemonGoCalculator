@@ -14,6 +14,7 @@ import { runIvBreakpointsScenario } from "./runIvBreakpoints.js";
 import { runAttackDefenseBreakpointsScenario } from "./runAttackDefenseBreakpoints.js";
 import { runPowerUpOptimizerScenario } from "./runPowerUpOptimizer.js";
 import { runRosterBudgetScenario, runRosterPlannerScenario } from "./runRosterPlanner.js";
+import { runRosterMoveChangeScenario } from "./runRosterMoveChange.js";
 import { runRosterScenario } from "./runRoster.js";
 import { resolveMultiRaidBossIds, DEFAULT_MULTI_RAID_BOSS_FILTERS } from "../multiRaidBossSet.js";
 import type { RosterEntry } from "../import/pokeGenieMatch.js";
@@ -422,9 +423,28 @@ describe("runRosterPlannerScenario (multi-raid mode)", () => {
       expectFiniteNumber(c.meanDeltaTeamDps, "candidate.meanDeltaTeamDps");
       expect(c.perBoss.length).toBe(result.targets.length);
     }
-    // Houndour has an evolution (Houndoom) — must be excluded and reported,
-    // never silently dropped (PLAN §3.6).
-    expect(d.neverCompetitive.some((n) => n.speciesId === "houndour")).toBe(true);
+    // Houndour has a real, candy-only evolution (Houndoom) — as of
+    // registry.ts's gated-evolution resolution (PLAN_tm_move_change_optimizer.md's
+    // engine-surfaces gap, closed 2026-09-10) this is now a REAL priced
+    // "evolve, then power up" candidate (IDEAS.md #9) rather than an inert
+    // exclusion: `SpeciesDefinition.evolutions` used to be permanently
+    // undefined for every real species (nothing in packages/web ever
+    // resolved data-sync's own `evolutionCandyCosts` into it), so
+    // `evolutionEndpoints` always returned `[]` and Houndour could only ever
+    // land in `neverCompetitive`. Now that a competitive evolve+power-up
+    // option is actually found, it's promoted OUT of `neverCompetitive`
+    // entirely and into `candidates`/`benchedButPromising` instead — see
+    // RosterNeverCompetitiveEntry.evolutionRecommendation's own doc comment
+    // for exactly this "only landed in neverCompetitive if NO evolution
+    // endpoint touched any boss" rule. Assert the NEW behavior rather than
+    // the old exclusion.
+    expect(d.neverCompetitive.some((n) => n.speciesId === "houndour")).toBe(false);
+    const houndourCandidates = [...d.candidates, ...d.benchedButPromising].filter((c) => c.viaEvolution?.fromSpeciesId === "houndour");
+    expect(houndourCandidates.length).toBeGreaterThan(0);
+    for (const c of houndourCandidates) {
+      expect(c.speciesId).toBe("houndoom");
+      expect(c.viaEvolution!.evolutionCandyCost).toBeGreaterThan(0);
+    }
   }, 30_000);
 
   it("reports blockedReason \"no-roster\" for an empty pool, never a thrown error", () => {
@@ -466,6 +486,62 @@ describe("runRosterPlannerScenario (multi-raid mode)", () => {
     expect(viaWorkerShapedPath.noiseFloorTeamDps).toBe(viaSynchronousPath.data!.noiseFloorTeamDps);
     expect(viaWorkerShapedPath.candidates.length).toBe(viaSynchronousPath.data!.candidates.length);
   }, 30_000);
+
+  // run/runRosterMoveChange.ts's own smoke coverage — PLAN_tm_move_change_optimizer.md's
+  // roster-mode half. Reuses the SAME hand-built pool/assumptions above; needs
+  // an already-computed baselinePerBoss (see resolveRosterMoveChangeInputs'
+  // own doc comment), so it first runs the main sweep exactly like the UI
+  // does before its own "Run move-change sweep" button is even enabled.
+  it("runRosterMoveChangeScenario produces a well-formed result against an already-computed baseline, and eliteFastTmOnHand/eliteChargedTmOnHand gate every RosterEliteTmCandidate.affordable flag", () => {
+    const mainResult = runRosterPlannerScenario(multiRaidAssumptions, speciesRegistry, pool);
+    expect(mainResult.data).not.toBeNull();
+    const baselinePerBoss = mainResult.data!.baselinePerBoss;
+
+    const withUnknownTmCount = runRosterMoveChangeScenario(multiRaidAssumptions, speciesRegistry, pool, baselinePerBoss);
+    expect(withUnknownTmCount.error).toBeNull();
+    expect(withUnknownTmCount.blockedReason).toBeNull();
+    expect(withUnknownTmCount.data).not.toBeNull();
+    const d0 = withUnknownTmCount.data!;
+    for (const c of d0.eliteTm) expectFiniteNumber(c.deltaTeamDps, "eliteTm.deltaTeamDps");
+    expect(d0.eliteTm.length).toBeGreaterThan(0);
+    // Every pool entry above has no `knownChargedMoveIds` set — the
+    // "unknown charged-move count" exclusion must fire for all six, never
+    // silently drop them (PLAN's central "known moveset" rule).
+    expect(d0.excluded.length).toBe(pool.length);
+    // eliteFastTmOnHand/eliteChargedTmOnHand default to null (unknown) on
+    // PU_DEFAULTS, which resolveRosterMoveChangeInputs clamps to 0 — a
+    // REAL engine input, not a display-only framing (unlike single-raid's
+    // own EliteTmCandidate) — so with 0 on hand, NOTHING is affordable yet.
+    expect(d0.eliteTm.every((c) => !c.affordable)).toBe(true);
+
+    // The live "does this control actually move a number" proof: filling in
+    // both counts flips `affordable` to true for every candidate (each
+    // needs exactly 1 item — RosterEliteTmCandidate.eliteTmItemsSpent is
+    // always 1), without changing which candidates exist or their own
+    // deltaTeamDps at all.
+    const withFiveOnHand = runRosterMoveChangeScenario(
+      { ...multiRaidAssumptions, eliteFastTmOnHand: 5, eliteChargedTmOnHand: 5 },
+      speciesRegistry,
+      pool,
+      baselinePerBoss,
+    );
+    const d5 = withFiveOnHand.data!;
+    expect(d5.eliteTm.length).toBe(d0.eliteTm.length);
+    expect(d5.eliteTm.every((c) => c.affordable)).toBe(true);
+    expect(d5.eliteTm.map((c) => c.deltaTeamDps)).toEqual(d0.eliteTm.map((c) => c.deltaTeamDps));
+  }, 30_000);
+
+  it("runRosterMoveChangeScenario reports blockedReason when handed a baseline that doesn't match the resolved boss set", () => {
+    // An empty baselinePerBoss array can never match multiRaidAssumptions'
+    // own resolved 3-boss target set — the exact "stale baseline" case
+    // resolveRosterMoveChangeInputs guards against (see its own doc
+    // comment), which the UI's isMultiRaidStale check exists to prevent in
+    // normal use.
+    const result = runRosterMoveChangeScenario(multiRaidAssumptions, speciesRegistry, pool, []);
+    expect(result.error).toBeNull();
+    expect(result.data).toBeNull();
+    expect(result.blockedReason).toBe("no-bosses");
+  });
 });
 
 describe("runRosterBudgetScenario (multi-raid mode fixed-budget plan, Phase 4)", () => {

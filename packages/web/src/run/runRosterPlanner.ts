@@ -234,6 +234,12 @@ export function toEngineRosterPool(pool: ImportedRosterEntry[], useBestAvailable
       ivsAreApproximate: e.ivsAreApproximate,
       levelIsApproximate: e.levelIsApproximate,
       movesetIsDefaulted: e.movesetIsDefaulted,
+      // See RosterEntry.knownChargedMoveIds' own doc comment (import/pokeGenieMatch.ts)
+      // — TM-eligibility provenance for rosterMoveChange.ts, carried straight
+      // through unchanged (never derived from movesetIsDefaulted/fastMoveId/
+      // chargedMoveId, which can't by themselves distinguish "known single
+      // move" from "known move plus an unrecorded second one").
+      knownChargedMoveIds: e.knownChargedMoveIds,
       candyFamilyId: canMega ? resolveMegaBaseCandyFamilyId(e.species) : undefined,
     };
   });

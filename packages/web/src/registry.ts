@@ -2,6 +2,8 @@ import {
   SpeciesRegistry,
   defaultRaidTierForSpecies,
   isKnownRaidTier,
+  type EvolutionOption,
+  type GatedEvolutionOption,
   type PowerUpCostTable,
   type RaidTier,
   type SpeciesDefinition,
@@ -96,9 +98,110 @@ export interface RawRaidHistoryEntry {
   eraHp?: number;
 }
 
-const RAW_SPECIES = speciesData as unknown as SpeciesDefinition[];
+/**
+ * data-sync's own per-branch shape for `evolutionCandyCosts` on the SYNCED
+ * (pre-engine) species record — NOT part of the engine's `SpeciesDefinition`
+ * at all (see that interface's `evolutions`/`gatedEvolutions` fields' own
+ * "RESOLUTION CONTRACT" doc comments in packages/engine/src/types.ts). Mirrors
+ * scripts/sync-data.ts's `EvolutionCandyCostEntry` exactly — this interface
+ * exists purely so this module can type the extra JSON field before splitting
+ * it into `.evolutions` (candyCostOnly: true) / `.gatedEvolutions`
+ * (candyCostOnly: false). `noCandyCostViaTrade` is read here but deliberately
+ * never carried into `GatedEvolutionOption` — see that interface's own doc
+ * comment for why (this project has no "was this individual traded" input).
+ */
+interface RawEvolutionCandyCostEntry {
+  toId: string;
+  form?: string;
+  candyCost?: number;
+  candyCostPurified?: number;
+  candyCostOnly: boolean;
+  noCandyCostViaTrade?: boolean;
+  requiresItem?: string;
+  requiresItemCount?: number;
+  requiresLureItem?: string;
+  requiresBuddy?: boolean;
+  requiresBuddyDistanceKm?: number;
+  requiresGender?: string;
+  requiresDaytime?: boolean;
+  requiresNighttime?: boolean;
+  requiresDuskPeriod?: boolean;
+  requiresFullMoon?: boolean;
+  requiresUpsideDown?: boolean;
+  requiresQuest?: boolean;
+}
+
+type RawSpeciesRecord = SpeciesDefinition & { evolutionCandyCosts?: RawEvolutionCandyCostEntry[] };
+
+const RAW_SPECIES = speciesData as unknown as RawSpeciesRecord[];
 const RAW_ACTIVE_RAIDS = activeRaidsData as unknown as RawActiveRaidEntry[];
 const RAW_RAID_HISTORY = raidHistoryData as unknown as RawRaidHistoryEntry[];
+
+/**
+ * Splits every registered species' `evolutionCandyCosts` (data-sync's raw,
+ * unresolved per-branch array — see RawEvolutionCandyCostEntry's own doc
+ * comment) into `SpeciesDefinition.evolutions` (candyCostOnly branches,
+ * unconditionally committable) and `.gatedEvolutions` (everything else —
+ * gated on an item, a lure, buddy distance, gender, time-of-day, or a quest),
+ * resolving each branch's `toId` into the ALREADY-REGISTERED full
+ * `SpeciesDefinition` object — the same id-to-object resolution pattern
+ * `resolveMegaBaseCandyFamilyId`/`resolveMegaBaseKmBuddyDistance` already use
+ * below. MUST run AFTER every species is registered (a branch can point
+ * forward or backward in `RAW_SPECIES`' own array order — Eevee's branches
+ * all point forward to its eeveelutions, for instance), and mutates the
+ * ALREADY-REGISTERED species objects in place (`SpeciesRegistry.register`
+ * stores the exact reference handed to it, never a copy — see gamemaster.ts),
+ * so every `EvolutionOption`/`GatedEvolutionOption.to` reference below and
+ * every OTHER reader of `speciesRegistry.get(id)` observe the same mutated
+ * object.
+ *
+ * A `toId` that fails to resolve (a resync dropped/renamed a target species)
+ * is silently skipped for that one branch — never guessed, never thrown —
+ * matching this module's existing "degrade a stale reference rather than
+ * crash the app" convention (activeRaidBossOptions, resolveBossTarget, etc).
+ */
+function resolveEvolutions(registry: SpeciesRegistry, rawSpecies: RawSpeciesRecord[]): void {
+  for (const raw of rawSpecies) {
+    const rawCosts = raw.evolutionCandyCosts;
+    if (!rawCosts || rawCosts.length === 0) continue;
+    if (!registry.has(raw.id)) continue;
+    const species = registry.get(raw.id);
+
+    const evolutions: EvolutionOption[] = [];
+    const gatedEvolutions: GatedEvolutionOption[] = [];
+    for (const branch of rawCosts) {
+      if (!registry.has(branch.toId)) continue;
+      const to = registry.get(branch.toId);
+      if (branch.candyCostOnly) {
+        // EvolutionOption.candyCost is required (never gated) — every real
+        // candyCostOnly:true branch in the synced data carries a candyCost
+        // (confirmed 467/467, 2026-09-10), but fall back to 0 rather than
+        // `undefined` if a future sync ever omits it, since this array is
+        // trusted as "unconditionally committable" everywhere it's read.
+        evolutions.push({ to, candyCost: branch.candyCost ?? 0 });
+      } else {
+        gatedEvolutions.push({
+          to,
+          candyCost: branch.candyCost,
+          requiresItem: branch.requiresItem,
+          requiresItemCount: branch.requiresItemCount,
+          requiresLureItem: branch.requiresLureItem,
+          requiresBuddy: branch.requiresBuddy,
+          requiresBuddyDistanceKm: branch.requiresBuddyDistanceKm,
+          requiresGender: branch.requiresGender,
+          requiresDaytime: branch.requiresDaytime,
+          requiresNighttime: branch.requiresNighttime,
+          requiresDuskPeriod: branch.requiresDuskPeriod,
+          requiresFullMoon: branch.requiresFullMoon,
+          requiresUpsideDown: branch.requiresUpsideDown,
+          requiresQuest: branch.requiresQuest,
+        });
+      }
+    }
+    if (evolutions.length > 0) species.evolutions = evolutions;
+    if (gatedEvolutions.length > 0) species.gatedEvolutions = gatedEvolutions;
+  }
+}
 
 /**
  * Single memoized registry for the whole app: every real species from the
@@ -110,12 +213,16 @@ const RAW_RAID_HISTORY = raidHistoryData as unknown as RawRaidHistoryEntry[];
  * `isHypothetical` field and its picker badge remain generic infrastructure
  * on `SpeciesDefinition`/`SpeciesRegistry` for any future speculative real
  * data, not dead code tied to these 4 specifically.
+ *
+ * `resolveEvolutions` runs AFTER every species is registered — see its own
+ * doc comment for why order matters and what it mutates.
  */
 function buildRegistry(): SpeciesRegistry {
   const registry = new SpeciesRegistry();
   for (const species of RAW_SPECIES) {
     registry.register(species);
   }
+  resolveEvolutions(registry, RAW_SPECIES);
   return registry;
 }
 

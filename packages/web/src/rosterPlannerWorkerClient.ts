@@ -1,8 +1,11 @@
 import {
   planRosterBudget,
+  runRosterMoveChangeCandidates,
   runRosterPlanner,
   type RosterBudgetInputs,
   type RosterBudgetPlan,
+  type RosterMoveChangeInputs,
+  type RosterMoveChangeResult,
   type RosterPlannerInputs,
   type RosterPlannerProgressCallback,
   type RosterPlanResult,
@@ -60,6 +63,12 @@ export interface RosterPlannerWorkerRunOutcome {
 /** Same "worker" vs "main-thread-fallback" distinction as RosterPlannerWorkerRunOutcome, for the Phase 4 fixed-budget plan instead of the ranked sweep. */
 export interface RosterBudgetWorkerRunOutcome {
   data: RosterBudgetPlan;
+  ranOn: "worker" | "main-thread-fallback";
+}
+
+/** Same "worker" vs "main-thread-fallback" distinction, for the move-change sweep (PLAN_tm_move_change_optimizer.md) instead of either of the above. */
+export interface RosterMoveChangeWorkerRunOutcome {
+  data: RosterMoveChangeResult;
   ranOn: "worker" | "main-thread-fallback";
 }
 
@@ -164,6 +173,12 @@ function isPlanResult(msg: RosterPlannerWorkerResponse): msg is { type: "planRes
   return msg.type === "planResult";
 }
 
+function isMoveChangeResult(
+  msg: RosterPlannerWorkerResponse,
+): msg is { type: "moveChangeResult"; requestId: string; data: RosterMoveChangeResult } {
+  return msg.type === "moveChangeResult";
+}
+
 /** The ranked, whole-pool sweep (`runRosterPlanner`) — Phase 3b. See this module's own top doc comment, including the PROGRESS section for `onProgress`. */
 export function runRosterPlannerOffMainThread(
   inputs: RosterPlannerInputs,
@@ -180,4 +195,15 @@ export function runRosterBudgetOffMainThread(
 ): Promise<RosterBudgetWorkerRunOutcome> {
   const requestId = `roster-budget-${++requestCounter}`;
   return runOnWorker({ type: "plan", requestId, inputs }, isPlanResult, () => planRosterBudget({ ...inputs, onProgress }), onProgress);
+}
+
+/**
+ * The move-change sweep (`runRosterMoveChangeCandidates`,
+ * PLAN_tm_move_change_optimizer.md) — second-charged-move/Elite TM
+ * candidates across the whole pool x boss set. No `onProgress` (this engine
+ * call takes no such input — see rosterMoveChange.ts's own doc comment).
+ */
+export function runRosterMoveChangeOffMainThread(inputs: RosterMoveChangeInputs): Promise<RosterMoveChangeWorkerRunOutcome> {
+  const requestId = `roster-movechange-${++requestCounter}`;
+  return runOnWorker({ type: "moveChange", requestId, inputs }, isMoveChangeResult, () => runRosterMoveChangeCandidates(inputs));
 }

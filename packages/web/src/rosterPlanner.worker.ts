@@ -25,9 +25,10 @@
  * message-contract-specific signatures below instead of the full DOM or
  * WebWorker `self` type.
  *
- * MESSAGE CONTRACT (extended by Phase 4 to TWO request types, still ONE
- * shared worker — the task's own instruction was to extend this worker
- * rather than spin up a second one): one request in, ZERO OR MORE
+ * MESSAGE CONTRACT (extended by Phase 4 to TWO request types, then by the
+ * move-change sweep (PLAN_tm_move_change_optimizer.md) to THREE — still ONE
+ * shared worker each time, per the task's own instruction to extend this
+ * worker rather than spin up a second one): one request in, ZERO OR MORE
  * `{ type: "progress" }` messages, then exactly one terminal reply out
  * (`requestId` echoed back on every message, progress included, so a stale
  * reply/progress event from a superseded run can't be mistaken for the
@@ -40,7 +41,13 @@
  *     rosterPlanner.ts's own `RosterBudgetInputs` doc comment) — the caller
  *     (rosterPlannerWorkerClient.ts) sends the SAME resolved inputs object
  *     to both request types, no separate resolution pass.
- * Either request type can also reply `{ type: "error" }` on a thrown engine
+ *   - `{ type: "moveChange" }` -> `runRosterMoveChangeCandidates(inputs)` ->
+ *     `{ type: "moveChangeResult" }` (second-charged-move/Elite TM
+ *     candidates across the whole pool x boss set — see rosterMoveChange.ts's
+ *     own top doc comment). No `onProgress` — this engine call takes no such
+ *     input (measured ~942ms at real pool/boss scale, short enough not to
+ *     need one).
+ * Any request type can also reply `{ type: "error" }` on a thrown engine
  * error.
  *
  * PROGRESS (IDEAS.md #13, engine's `RosterPlannerInputs.onProgress` landed
@@ -64,9 +71,12 @@
  */
 import {
   planRosterBudget,
+  runRosterMoveChangeCandidates,
   runRosterPlanner,
   type RosterBudgetInputs,
   type RosterBudgetPlan,
+  type RosterMoveChangeInputs,
+  type RosterMoveChangeResult,
   type RosterPlannerInputs,
   type RosterPlannerProgressEvent,
   type RosterPlanResult,
@@ -84,11 +94,21 @@ export interface RosterPlannerWorkerPlanRequest {
   inputs: RosterBudgetInputs;
 }
 
-export type RosterPlannerWorkerRequest = RosterPlannerWorkerRunRequest | RosterPlannerWorkerPlanRequest;
+export interface RosterPlannerWorkerMoveChangeRequest {
+  type: "moveChange";
+  requestId: string;
+  inputs: RosterMoveChangeInputs;
+}
+
+export type RosterPlannerWorkerRequest =
+  | RosterPlannerWorkerRunRequest
+  | RosterPlannerWorkerPlanRequest
+  | RosterPlannerWorkerMoveChangeRequest;
 
 export type RosterPlannerWorkerResponse =
   | { type: "result"; requestId: string; data: RosterPlanResult }
   | { type: "planResult"; requestId: string; data: RosterBudgetPlan }
+  | { type: "moveChangeResult"; requestId: string; data: RosterMoveChangeResult }
   | { type: "progress"; requestId: string; event: RosterPlannerProgressEvent }
   | { type: "error"; requestId: string; message: string };
 
@@ -109,9 +129,14 @@ ctx.onmessage = (event) => {
     if (event.data.type === "run") {
       const data = runRosterPlanner({ ...event.data.inputs, onProgress });
       ctx.postMessage({ type: "result", requestId, data });
-    } else {
+    } else if (event.data.type === "plan") {
       const data = planRosterBudget({ ...event.data.inputs, onProgress });
       ctx.postMessage({ type: "planResult", requestId, data });
+    } else {
+      // No onProgress here — RosterMoveChangeInputs takes no such field (see
+      // this file's own top doc comment).
+      const data = runRosterMoveChangeCandidates(event.data.inputs);
+      ctx.postMessage({ type: "moveChangeResult", requestId, data });
     }
   } catch (err) {
     ctx.postMessage({ type: "error", requestId, message: err instanceof Error ? err.message : String(err) });

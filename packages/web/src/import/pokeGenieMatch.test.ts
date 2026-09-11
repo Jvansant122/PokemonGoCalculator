@@ -285,6 +285,52 @@ describe("matchPokeGenieRows — per-row interpretation", () => {
     expect(entry.secondChargedMoveName).toBeUndefined();
   });
 
+  // knownChargedMoveIds (PLAN_tm_move_change_optimizer.md) — this fixture's
+  // registry (`species()` above) carries only ONE charged move
+  // ("Body Slam"), so it can only ever exercise the "blank Charge Move 2"
+  // and "primary move itself unresolved" cases. A second, two-charged-move
+  // registry below exercises the "explicit second move resolves"/"doesn't
+  // resolve" cases.
+  it("knownChargedMoveIds: a resolved primary move with a BLANK Charge Move 2 resolves to exactly one known id — never 'unknown'", () => {
+    const entry = matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150", "Charge Move": "Body Slam", "Charge Move 2": "" });
+    expect(entry.knownChargedMoveIds).toEqual(["MEWTWO_BODY_SLAM"]);
+  });
+
+  it("knownChargedMoveIds: an unresolved (defaulted) primary move leaves the count unknown, even with Charge Move 2 blank", () => {
+    const entry = matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150", "Charge Move": "", "Charge Move 2": "" });
+    expect(entry.chargedMoveIsDefaulted).toBe(true);
+    expect(entry.knownChargedMoveIds).toBeUndefined();
+  });
+
+  describe("knownChargedMoveIds — a second charged move", () => {
+    const twoMoveRegistry = {
+      all: () => [
+        species({
+          id: "mewtwo",
+          name: "Mewtwo",
+          dex: 150,
+          chargedMoves: [chargedMove("MEWTWO_PSYSTRIKE", "Psystrike"), chargedMove("MEWTWO_ICE_BEAM", "Ice Beam")],
+        }),
+      ],
+    };
+    function matchOneTwoMove(values: Record<string, string>): RosterEntry {
+      const result = matchPokeGenieRows([row(2, values)], twoMoveRegistry);
+      expect(result.unmatched).toHaveLength(0);
+      return result.matched[0]!;
+    }
+
+    it("resolves a NON-blank Charge Move 2 that matches this species' own moveset to a known pair", () => {
+      const entry = matchOneTwoMove({ Name: "Mewtwo", Form: "Normal", Pokemon: "150", "Charge Move": "Psystrike", "Charge Move 2": "Ice Beam" });
+      expect(entry.knownChargedMoveIds).toEqual(["MEWTWO_PSYSTRIKE", "MEWTWO_ICE_BEAM"]);
+    });
+
+    it("leaves the count unknown (never guessed) when Charge Move 2 is non-blank but doesn't resolve — an unrecognized name is our data gap, not a confirmed single move", () => {
+      const entry = matchOneTwoMove({ Name: "Mewtwo", Form: "Normal", Pokemon: "150", "Charge Move": "Psystrike", "Charge Move 2": "Shadow Ball" });
+      expect(entry.secondChargedMoveName).toBe("Shadow Ball");
+      expect(entry.knownChargedMoveIds).toBeUndefined();
+    });
+  });
+
   it("sets canMega true only when Form is Mega", () => {
     expect(matchOne({ Name: "Mewtwo", Form: "Normal", Pokemon: "150" }).canMega).toBe(false);
   });
