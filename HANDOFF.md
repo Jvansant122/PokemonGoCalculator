@@ -1,9 +1,85 @@
 # Handoff
 
-Last updated: 2026-09-11 (TM/move-change + gated evolutions shipped; `PLAN_tm_move_change_optimizer.md` retired). Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-11 (boss-moveset sweep widened to fast × charged; three audit findings fixed; shipped and deployed). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-11 (latest): move changes, gated evolutions, and two bugs that passing gates hid
+## 2026-09-11 (latest): the full moveset sweep, and an audit that found three real bugs
+
+Shipped in `6d850e1`, deployed green (`deploy.yml` run #63, `success` in 2m41s). Working tree
+clean, nothing uncommitted. Session was an audit (`pogo-researcher` + `pogo-player`) that turned
+into fixes, plus one user-requested feature.
+
+**The sweep now covers every fast × charged combination, not charged alone.** A real raid instance
+rolls BOTH moves, and the boss's fast move drives incoming chip damage AND its energy gain (so its
+charged-move cadence) — pinning it at `fastMoves[0]` hid a live axis. Reproduced directly before
+building: Mega Tyranitar, charged move held at Fire Blast, varying only the fast move moves
+Machamp's damage 207 → 283. The old sweep reported Bite's 235 as *the* answer for that charged move.
+`compareAcrossBossChargedMoves` → `compareAcrossBossMovesets`, fast-major/charged-minor as a
+documented stable contract; `bossFastMoveId` is now ignored by the sweep exactly as
+`bossChargedMoveId` already was, and still governs the main non-sweep result.
+
+Three things about this that are worth carrying forward:
+
+1. **There were TWO sweeps, and the second didn't call the engine.** `runTeamRaid.ts` had its own
+   hand-rolled loop, and its `buildTeamRaidInputs` took no fast-move parameter at all — so widening
+   the loop alone would have compiled clean, passed, and simulated the identical fast move on all
+   16 rows. A widened loop over an input the simulation never receives is a silent no-op.
+2. **The gate was `chargedMoves.length >= 2`**, so a boss with 2 fast × 1 charged got no sweep at
+   all despite having two genuinely different rollable movesets. Now the product.
+3. **Perf was measured before building, and no cap was added.** Worst real boss is `starmie-mega`
+   (4×9, highest combo count across all 771 rows of `raidHistory.json`) at 157ms/36 variants vs
+   64ms/9. Team Raid runs one deterministic sim per variant. Don't add a guard on speculation.
+
+**Three bugs the audit found, all fixed.**
+
+- **Roster `canMega` was only ever forced OFF, never derived.** Picking "Mega Mewtwo X" produced a
+  mega that silently never mega evolved — in the Lineup Builder and the Optimizer's multi-raid mode
+  both. Now defaults from `species.boost`. **Deliberately NOT harmonised** with `TeamAssumptions` /
+  `PowerUpOptimizerAssumptions`'s `isMega`: that field is *exclusive selection* (setting it clears
+  every other slot), `canMega` is *eligibility*. Defaulting `isMega` on would fight its invariant.
+  A comment at the derivation says so; don't merge them.
+- **`SpeciesPicker` appended instead of selecting-all on re-pick.** The audit reported this as a
+  Roster-tab regression of a fix older tabs already had. That was wrong — `web-developer`
+  reproduced it on the Comparator first and found it in the shared component: picking keeps the
+  input focused by design, so `onFocus`'s select-all never re-fires. Fixed once, for every tab.
+- **`planRosterBudget` claimed "every fielded slot has already reached level 50" on an all-level-20
+  roster.** `[].every()` is vacuously true, and an empty `eligiblePool` (every entry excluded for
+  unknown candy) reached it. New `"no-eligible-entries"` stop reason, guarded *before* the vacuous
+  check. `powerUp.ts`'s structurally identical check was confirmed not exposed — `validateRoster`
+  throws first — and the asymmetry is documented on the new variant.
+
+**Audit findings that did NOT survive checking.** Both agents were reproduced before their claims
+drove any change, and two claims failed:
+
+- `pogo-player` said the Roster tab was *inconsistent* with the other panels, which auto-select the
+  mega flag. Source says all three leave it as-is. The fix went in on the eligibility argument
+  alone, not the inconsistency one.
+- The select-all bug's "already fixed elsewhere" framing was false (above), which is why the fix
+  landed in `SpeciesPicker` rather than in one tab.
+
+**`pogo-researcher`: the load-bearing check holds.** Mega/primal `1.3`/`1.1` verified unchanged
+against fresh sources, matching `uptime.ts`. No content gaps — 59 Mega + 2 Primal matches the
+independently-sourced released count; all 12 `RELEASED_MEGA_PRIMAL_ALLOWLIST` entries still
+justified; Mega Staraptor correctly still excluded (debut 2026-09-19, future). No new feature
+proposals, deliberately — it read `IDEAS.md`/`REJECTED_IDEAS.md` first and found the recent
+ideation cycle had already shipped the candidates.
+
+**MECHANICS.md corrected.** The shadow-synthesis entry cited Shadow Alolan **Sandslash** as the
+grunt-only never-raided example; it became a live 3-Star Shadow Raid boss two days later, which
+`raidHistory.json` had already caught on its own (`live-feed`, `firstSeenAt 2026-09-09T23:05Z`).
+Corrected to Shadow Alolan **Sandshrew** — first-party anchored, zero raid rows, so it cannot
+expire the same way. `CLAUDE.md` had it right all along. This is the pipeline working, not failing:
+the species was synthesized off the GAME_MASTER `shadow` anchor before it ever raided.
+
+**Not done / next.** No `PLAN_*.md` pending. `IDEAS.md` Open: #5 Best Buddy as an optimizer
+*candidate* (needs its own presentation — it costs nothing, so it ranks on neither axis, and it is
+one-at-a-time per account); #15 shadow grunt forms (**needs a user scope call**); #17b enrage
+timings, read by no tab; #23 the Team Raid own-cast cost, which needs an engine field first; #24 a
+"Frustration holder is stuck outside a Taken Over event" label. Also still open from the audit:
+`scripts/run-scenario.ts` has no `roster` case, and `check-scenario-roundtrip` has no row for the
+seventh tab (both deliberate, 2026-09-10, while `scripts/` was off-limits to a concurrent session).
+
+## 2026-09-11 (earlier): move changes, gated evolutions, and two bugs that passing gates hid
 
 Shipped in `983ca15` and `ddd47e9`, across four concurrent lanes split by file ownership.
 `PLAN_tm_move_change_optimizer.md` is **deleted** — see "the one clause not shipped" below.
@@ -320,18 +396,19 @@ research rounds failed to source.
 
 ## Next
 
-1. **PLAN_roster_tab.md** — built 2026-09-10 (see the section above), but still needs its
-   `scripts/check-scenario-roundtrip.mjs`/`scripts/run-scenario.ts` wiring before the plan file
-   itself can be deleted — a future session should finish that, then delete the plan.
-2. **`PLAN_tm_move_change_optimizer.md`** — researched and scoped, not built. Read it before
-   starting: the user's "blank CSV move column ⇒ needs a TM" clause was deliberately overridden
-   (a Pokémon always has moves, so blank means the export missed it), and regular TMs are *random*,
-   which may make them unrankable against deterministic power-ups. Build the second-charged-move
-   half first.
-3. **Dodge-lockout UI** — engine detection has landed, nothing surfaces it yet, so that config still
-   shows unexplained zeros. Deliberately deferred by the user.
-4. `IDEAS.md` #9 (evolve-then-power-up) probably beats both: **6 of 8 "never competitive" entries in
-   the sample are blocked on "evolve first", none on moveset.**
+⚠️ **Superseded 2026-09-11 — the current next-list lives in the newest section at the top of this
+file.** The four items that stood here were stale in exactly the way this file is supposed to
+prevent: (1) and (2) pointed at `PLAN_roster_tab.md` / `PLAN_tm_move_change_optimizer.md`, both
+since built and deleted (no `PLAN_*.md` remains at the root), and (4) `IDEAS.md` #9
+(evolve-then-power-up) shipped 2026-09-10 and is in that file's Shipped table. Only one item is
+not accounted for:
+
+- **Dodge-lockout UI** — the old entry claimed "engine detection has landed, nothing surfaces it
+  yet." A 2026-09-11 grep of `packages/engine/src` found no such detection under `dodgeLockout`,
+  `dodgeWindow`, `cannotDodge`, `dodgeImpossible`, `dodgeUnavailable`, or `unavoidable` — only an
+  unrelated "animation lockout" comment on `Move.durationSeconds`. That is a **null grep, not a
+  finding**: it may have been named something else, or removed. Someone picking this up should
+  establish whether the engine-side detection exists at all before scoping UI for it.
 
 ## 2026-09-09: multi-raid, whole-roster Power-Up Optimizer — SHIPPED
 
