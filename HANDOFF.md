@@ -89,9 +89,12 @@ the species was synthesized off the GAME_MASTER `shadow` anchor before it ever r
 evidence, not scheduled** — each names what would unblock it; `LINKS.md` #2 and #4 are the live
 ones. `REJECTED_IDEAS.md` owns everything declined on the merits.
 
-Also still open from the 2026-09-10 concurrent-session split: `scripts/run-scenario.ts` has no
-`roster` case, and `check-scenario-roundtrip` has no row for the seventh tab (the Roster tab's one
-field is covered by a value-level test instead).
+✅ **Closed 2026-09-11 — the two "still open from the 2026-09-10 concurrent-session split" items
+were already done.** Both `scripts/run-scenario.ts`'s `roster` case and `check-scenario-roundtrip`'s
+Roster row exist and work; verified by running both (the checker reports 152 fields across 7 tabs,
+and the CLI renders a roster link). CLAUDE.md still described both as missing and was corrected in
+the same pass. Nearly cost two subagent spawns to rebuild existing work — check the claim before
+routing from it.
 
 ## 2026-09-11 (earlier): move changes, gated evolutions, and two bugs that passing gates hid
 

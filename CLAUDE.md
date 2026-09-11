@@ -244,9 +244,9 @@ npm workspaces monorepo, two packages:
   display setting (table sort order), never the roster's contents, per the standing decision.
   Each view's computation is a pure, React-free `run<Tab>Scenario` in `packages/web/src/run/`,
   called via `useMemo`; `scripts/run-scenario.ts` and `run/run.smoke.test.ts` call the same
-  functions, so CLI == UI by construction — **`scripts/run-scenario.ts` does not yet have a
-  "roster" case** (left out deliberately 2026-09-10 while a concurrent session was editing
-  `scripts/`; see HANDOFF.md). `packages/web` has its own vitest suite
+  functions, so CLI == UI by construction — including a `roster` case (it reports the sort
+  order and states plainly that the roster itself is localStorage-only and so unavailable to a
+  CLI). `packages/web` has its own vitest suite
   (`npm run test:web`: all seven codecs at value level, helpers, `rankingFlip.ts`, one smoke per
   run function) and a Playwright suite under `packages/web/e2e/` (`npm run test:e2e`, against
   the built `dist`: per-tab load with zero console errors, one UI-vs-engine number check, and a
@@ -308,7 +308,7 @@ npm run test:e2e                     # Playwright, packages/web/e2e/, against th
 npm run bench                        # engine benchmarks (test/perf.test.ts asserts ~10x budgets in the normal suite)
 
 # Checks — the first four are what `npm run check` runs
-npm run check-scenario-roundtrip     # every Assumptions field appears in both round-trip directions, all six tabs
+npm run check-scenario-roundtrip     # every Assumptions field appears in both round-trip directions, all seven tabs
 npm run check-raid-history-sources   # raidHistory source values known to packages/web; every shadow species anchored by a row
 npm run check-mega-gates             # flags a mega/primal carried ONLY by the live-raid gate (fragile)
 npm run check-docs-drift             # tab counts / params / command names / agent+skill mentions / shipped PLANs agree with code
@@ -334,11 +334,9 @@ the Mega Skarmory failure mode, which `check-mega-gates.ts` cannot see because i
 `.boost`.
 
 `check-scenario-roundtrip` is the mechanical half of the `add-scenario-assumption` skill: it
-asserts every field of all six tabs it knows about's `Assumptions` interfaces appears in both
-round-trip directions, and exits non-zero naming the field if not. **It does not yet have a row
-for the seventh (Roster) tab** — added 2026-09-10 while `scripts/` was off-limits to a concurrent
-session (see HANDOFF.md); the Roster tab's one field is instead covered by the value-level test in
-`scenarioRoundtrip.test.ts`. Since 2026-09-10 it also recurses into
+asserts every field of all seven tabs' `Assumptions` interfaces appears in both round-trip
+directions, and exits non-zero naming the field if not — 152 fields across 7 tabs as of
+2026-09-11, 25 of them nested inside per-slot arrays. Since 2026-09-10 it also recurses into
 any `Foo[]`-shaped member (e.g. `TeamAssumptions.slots`/`PowerUpOptimizerAssumptions.slots`) and
 checks each per-slot field individually — previously `slots: TeamSlotAssumption[]` counted as one
 opaque field and no per-slot field (`speciesId`, `fastMoveId`, `isMega`, `megaLevel`, `isShadow`,
