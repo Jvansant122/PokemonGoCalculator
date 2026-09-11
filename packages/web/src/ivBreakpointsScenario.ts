@@ -56,12 +56,12 @@ export interface IvBreakpointsScenario {
   isShadow: boolean;
 }
 
-export function encodeIvBreakpointsScenario(scenario: IvBreakpointsScenario): string {
+function encodeIvBreakpointsScenario(scenario: IvBreakpointsScenario): string {
   const json = JSON.stringify(scenario);
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodeIvBreakpointsScenario(encoded: string): IvBreakpointsScenario {
+function decodeIvBreakpointsScenario(encoded: string): IvBreakpointsScenario {
   const json = new TextDecoder().decode(fromBase64Url(encoded));
   return JSON.parse(json) as IvBreakpointsScenario;
 }

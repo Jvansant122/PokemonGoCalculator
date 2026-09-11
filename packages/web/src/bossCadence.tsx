@@ -20,9 +20,6 @@
 import type { BossChargedMoveCadence } from "@pogo-analyzer/engine";
 export type { BossChargedMoveCadence };
 
-/** Matches every tab's existing implicit behavior — see each Scenario-family type's own field doc comment for the `??` guard this backs. */
-export const DEFAULT_BOSS_CHARGED_MOVE_CADENCE: BossChargedMoveCadence = "fixed-interval";
-
 /**
  * The cadence model's deep-sourcing explanation. As of 2026-09-10 this no
  * longer renders inline under the <select> at all — a 384-word block on

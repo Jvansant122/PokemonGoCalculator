@@ -85,12 +85,12 @@ export interface SpeciesReportScenario {
   includePastRaids: boolean;
 }
 
-export function encodeSpeciesReportScenario(scenario: SpeciesReportScenario): string {
+function encodeSpeciesReportScenario(scenario: SpeciesReportScenario): string {
   const json = JSON.stringify(scenario);
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodeSpeciesReportScenario(encoded: string): SpeciesReportScenario {
+function decodeSpeciesReportScenario(encoded: string): SpeciesReportScenario {
   const json = new TextDecoder().decode(fromBase64Url(encoded));
   return JSON.parse(json) as SpeciesReportScenario;
 }

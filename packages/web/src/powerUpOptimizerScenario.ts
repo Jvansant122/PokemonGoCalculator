@@ -218,12 +218,12 @@ export interface PowerUpOptimizerScenario {
   eliteChargedTmOnHand?: number | null;
 }
 
-export function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {
+function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {
   const json = JSON.stringify(scenario);
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodePowerUpOptimizerScenario(encoded: string): PowerUpOptimizerScenario {
+function decodePowerUpOptimizerScenario(encoded: string): PowerUpOptimizerScenario {
   const json = new TextDecoder().decode(fromBase64Url(encoded));
   return JSON.parse(json) as PowerUpOptimizerScenario;
 }

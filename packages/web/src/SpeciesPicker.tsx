@@ -47,9 +47,15 @@ export function SpeciesPicker({ idPrefix, label, options, value, onChange, prima
 
   // Keep the displayed text in sync when the selection changes from outside
   // (e.g. restoring a shared scenario URL, or the options list itself resyncing).
-  useEffect(() => {
+  // Done during render — React's documented "adjust state when a prop changes"
+  // pattern — rather than in an effect, so the stale text never reaches the DOM
+  // for a frame and the set-state-in-effect lint rule stays clean.
+  const selectedKey = selected ? `${selected.id}|${selected.label}` : "";
+  const [syncedSelectedKey, setSyncedSelectedKey] = useState(selectedKey);
+  if (selectedKey !== syncedSelectedKey) {
+    setSyncedSelectedKey(selectedKey);
     setQuery(selected?.label ?? "");
-  }, [selected?.id, selected?.label]);
+  }
 
   // Re-select the input's full text after picking an option from the list,
   // so the very next keystroke replaces it instead of appending. Can't do

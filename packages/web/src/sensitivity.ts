@@ -231,8 +231,8 @@ export function computeSensitivity(
   // at this point — this models other trainers simultaneously in the same
   // raid lobby, never this candidate's own bench (a solo trainer only has one
   // Pokémon active at a time). (Considered swapping this to the engine's own
-  // findCrossoverPartySize, which exists and is tested but has zero call
-  // sites in packages/web today — declined: that function anchors its
+  // findCrossoverPartySize, which runComparator.ts now uses for the
+  // party-size flip breakpoint — declined: that function anchors its
   // "flip" to wherever the sweep's own leader first changes starting from
   // 0 other trainers, not to the specific currently-configured count's
   // actual winner (currentWinner here) — the two only agree if leadership

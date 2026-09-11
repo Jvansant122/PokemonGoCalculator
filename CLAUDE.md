@@ -19,8 +19,8 @@ this file, **this file wins**:
 | Assumption panel includes "Combat phase: opening burst vs. sustained" (Phase 4, item 9) | Removed at the user's explicit, repeated request — see "No user-selectable combat phase" below. Do not rebuild it from the spec. |
 | Phase 1 acceptance tests pin Mega Raichu X/Y vs Primal Kyogre at 190 / 221 / 10.0s / 130 HP | Those hand-authored fixtures were deleted 2026-09-06; equivalent pinned coverage lives in `packages/engine/test/fixtures/` instead. |
 | "Hypothetical species support... make the data layer accept user-defined entries" | Reversed. Fabricated stats reaching the live species picker was the exact problem that got the fixtures deleted. Real content that's missing goes through `RELEASED_MEGA_PRIMAL_ALLOWLIST`, not a hand-authored entry. |
-| "Mega Skarmory, both Mega Raichu forms" are "not live content" | All three are real, released content now, flowing through the normal data pipeline. |
-| "No backend in v1. Scenarios serialize into the URL." | Still true, and now **unconditionally** — the login/Firebase plan that was the one scoped exception was **deleted 2026-09-10** at the user's instruction ("remove login"). This app has no backend and is not getting one; cross-device roster transfer is a self-contained copyable code instead. See `PLAN_roster_tab.md`. |
+| "Mega Skarmory, both Mega Raichu forms" are "not live content" | All three are real, released content now, reaching the species picker through the released-content gates described under "Standing decisions". |
+| "No backend in v1. Scenarios serialize into the URL." | Still true, and now **unconditionally** — the login/Firebase plan that was the one scoped exception was **deleted 2026-09-10** at the user's instruction ("remove login"). This app has no backend and is not getting one; cross-device roster transfer is the Roster tab's self-contained copyable save code instead. |
 
 ## Your role
 
@@ -54,7 +54,8 @@ The handful of product-level calls that must survive no matter which agent touch
   structural and visible rather than a field quietly missing from the codec, and
   `check-scenario-roundtrip` still passes honestly. Every *setting* still round-trips. Any UI
   producing a share link must say the roster isn't in it, and a recipient without one gets an
-  explicit empty state. Cross-device transfer is a self-contained copyable code (no backend, no accounts) — see `PLAN_roster_tab.md`.
+  explicit empty state. Cross-device transfer is the Roster tab's self-contained copyable save
+  code (no backend, no accounts).
 - **Backward compatibility with OLD share links is NOT required** (user, 2026-09-10:
   *"dont care about maintaining shared link compatibility"*). A link produced by an earlier
   version may decode differently, lose a setting, or stop working. Do **not** spend design effort
@@ -65,11 +66,6 @@ The handful of product-level calls that must survive no matter which agent touch
   setting must still survive its OWN encode→decode cycle — that is the recurring bug class
   `check-scenario-roundtrip` and the `add-scenario-assumption` skill exist for, and it stays
   mandatory. The relaxation is only about links made by a *previous version of the code*.
-
-  Two existing fields were built under the old rule and now carry needless complexity:
-  `showDetailedAssumptions` (defaults `false`, absent decodes `true`) and
-  `multiRaidSignificanceMode` (defaults `aggregate-only`, absent decodes `aggregate-or-per-boss`).
-  Both may be simplified to a single plain default whenever someone is next in those files.
 - **A multi-boss sweep encodes RESOLVED boss ids, never a filter.** The active-raid roster
   rotates, so encoding "active raids" would silently sweep a different boss set than the sender
   ran. The Power-Up Optimizer's `multiRaidBossIds` is authoritative for the computation; the
@@ -82,21 +78,17 @@ The handful of product-level calls that must survive no matter which agent touch
   `packages/engine/test/fixtures/` only, never re-exported from `packages/engine/src/index.ts` —
   keep it that way. Don't casually change their stats either; `engine-developer` owns why/how.
   **Sharing a name with a deleted fixture does not make a species fake.** Mega Raichu X/Y is real,
-  released content (Pokémon GO debut 2026-07-18 via a Super Mega Raid Day, off *Legends: Z-A*'s
-  "Mega Dimension" DLC) that was wrongly assumed fan-made when the 4 fixtures were deleted; it
-  ships as real synced data now (`raichu-mega-x`/`raichu-mega-y`), and Primal Kyogre was never
-  affected at all. The durable lesson is **the gap that hid it**: a mega whose debut was a one-day
-  event is missing from `mega_pokemon.json` *and* isn't a currently-live raid, so neither the
-  pogoapi roster nor the live-raid gap-fill catches it. That's what
-  `RELEASED_MEGA_PRIMAL_ALLOWLIST` in `scripts/sync-data/releasedMegaPrimalAllowlist.ts` is for — a hand-reviewed,
-  per-entry-cited table for real content the automated gates structurally can't see. Add to it
-  (never speculatively; GAME_MASTER lists unreleased forms too) rather than reintroducing a
-  hand-authored fixture. `scripts/check-mega-gaps.ts` is the scheduled detector for these.
-  **Mega Skarmory proved this gap is not hypothetical** (2026-09-07): an earlier version of this
-  bullet claimed it flowed through the normal `mega_pokemon.json` pipeline, but it only ever
-  reached the picker through the *live-raid* gate — so the moment its rotation ended, a real
-  released species silently vanished from the species list. A species being visible today tells
-  you nothing about **which gate** is carrying it; check before assuming it's safe.
+  released content (debut 2026-07-18 via a one-day Super Mega Raid Day) and ships as synced data
+  (`raichu-mega-x`/`raichu-mega-y`). The durable rule is **the gap that hid it**: a mega whose
+  debut was a one-day event is missing from `mega_pokemon.json` *and* isn't a currently-live raid,
+  so neither the pogoapi roster nor the live-raid gap-fill catches it. That's what
+  `RELEASED_MEGA_PRIMAL_ALLOWLIST` in `scripts/sync-data/releasedMegaPrimalAllowlist.ts` is for —
+  a hand-reviewed, per-entry-cited table for real content the automated gates structurally can't
+  see. Add to it (never speculatively; GAME_MASTER lists unreleased forms too) rather than
+  reintroducing a hand-authored fixture. `scripts/check-mega-gaps.ts` is the scheduled detector.
+  A species being visible today tells you nothing about **which gate** is carrying it — Mega
+  Skarmory reached the picker only through the live-raid gate and silently vanished when its
+  rotation ended — so check before assuming it's safe.
 - **The mega/primal team-wide damage boost never reaches the boosting Pokémon's own party** — only
   *other trainers* simultaneously in the same raid lobby (confirmed via Niantic's own official
   guide plus two independent community sources, 2026-09-06). A solo trainer only ever has one
@@ -206,7 +198,7 @@ npm workspaces monorepo, two packages:
   slot always spends its OWN per-species candy first; plain Rare Candy can never become XL Candy
   (MECHANICS.md, "Fungible candy currencies").
   **The tab has TWO MODES as of 2026-09-09** (`mode` in its scenario; absent decodes as
-  `"single-raid"`, which is unchanged). **Multi-raid** swaps the 6 hand-entered slots for a whole
+  `"single-raid"`). **Multi-raid** swaps the 6 hand-entered slots for a whole
   roster imported from a **Poke Genie CSV** (`packages/web/src/import/`, ~164 entries on a real
   export) and the single boss for a **set** of them, and its candidates are deliberately NOT
   limited to the six already fielded — a benched Pokémon that would displace a fielded one after
@@ -225,8 +217,7 @@ npm workspaces monorepo, two packages:
   the first build report 0 of 60 candidates significant. Significance is aggregate **OR**
   per-boss, since a gain worth +1.29 against one boss reads as 0.11 averaged over 13.
   The imported roster is `localStorage`-only — see the standing decision above). The **Roster**
-  tab (added 2026-09-10, replacing a deleted Firebase/login plan — see PLAN_roster_tab.md) OWNS
-  the roster outright: hand-entry/editing via `RosterEntryForm.tsx` (reusing `SpeciesPicker`/
+  tab (added 2026-09-10, replacing a deleted Firebase/login plan) OWNS the roster outright: hand-entry/editing via `RosterEntryForm.tsx` (reusing `SpeciesPicker`/
   `MoveSelect`/`NumberField`, never a hand-rolled form), the Poke Genie CSV import
   (`RosterImportPanel.tsx`, moved here from the Power-Up Optimizer tab), and a self-contained,
   versioned, gzip-compressed save code (`rosterSaveCode.ts`, `pogo-roster-v<N>:...`, ~90% smaller
@@ -262,12 +253,11 @@ npm workspaces monorepo, two packages:
   carries **per-species cost overrides** (2026-09-10) in two forms that are easy to confuse:
   `perSpeciesUpgradeOverrides` is the RAW source record, kept for auditability and read by
   nothing; `perSpeciesOverridesByPokemonId` is the interpreted table the engine actually uses,
-  via `powerUpCostTableFor(table, species)` at every cost lookup. Those raw records shipped for a
-  while with nothing consuming them, because `sync-data.ts` never passed the engine's new third
-  argument — so **presence of a field in `data/normalized/` is not evidence anything reads it**,
-  and a golden sentinel over the raw field proves only that the field exists.
-  `scripts/sync-data.ts`'s own header comment is the authoritative
-  description of that split — read it before assuming where a field comes from.
+  via `powerUpCostTableFor(table, species)` at every cost lookup. **Presence of a field in
+  `data/normalized/` is not evidence anything reads it** (the raw override records once shipped
+  with nothing consuming them), and a golden sentinel over the raw field proves only that the
+  field exists. `scripts/sync-data.ts`'s own header comment is the authoritative description of
+  that split — read it before assuming where a field comes from.
   `data/normalized/raidHistory.json` (added 2026-09-07) is an accumulate-only log of every raid
   boss this pipeline has ever recorded, backfilled from pogoapi's archive and Bulbapedia's 16
   raid-boss-change pages; `live-feed` > `researched-tier` > archive sources, and it is never
@@ -338,13 +328,11 @@ the Mega Skarmory failure mode, which `check-mega-gates.ts` cannot see because i
 `check-scenario-roundtrip` is the mechanical half of the `add-scenario-assumption` skill: it
 asserts every field of all seven tabs' `Assumptions` interfaces appears in both round-trip
 directions, and exits non-zero naming the field if not — 152 fields across 7 tabs as of
-2026-09-11, 25 of them nested inside per-slot arrays. Since 2026-09-10 it also recurses into
-any `Foo[]`-shaped member (e.g. `TeamAssumptions.slots`/`PowerUpOptimizerAssumptions.slots`) and
-checks each per-slot field individually — previously `slots: TeamSlotAssumption[]` counted as one
-opaque field and no per-slot field (`speciesId`, `fastMoveId`, `isMega`, `megaLevel`, `isShadow`,
-...) was ever independently checked in either direction. Don't re-narrow this back to
-top-level-only. The `PostToolUse` hook runs it after any edit to a scenario, assumption-panel, or
-view file.
+2026-09-11, 25 of them nested inside per-slot arrays. It also recurses into any `Foo[]`-shaped
+member (e.g. `TeamAssumptions.slots`/`PowerUpOptimizerAssumptions.slots`) and checks each
+per-slot field (`speciesId`, `fastMoveId`, `isMega`, `megaLevel`, `isShadow`, ...) individually
+— don't re-narrow this back to top-level-only. The `PostToolUse` hook runs it after any edit to a
+scenario, assumption-panel, or view file.
 
 **Node on PATH**: the `SessionStart` hook puts `C:\Program Files\nodejs` on PATH for the session;
 if `npm -v` still fails in a shell, `export PATH="/c/Program Files/nodejs:$PATH"` once.
@@ -425,7 +413,6 @@ absorb another:
 - **`HANDOFF.md`** — the point-in-time "what shipped, what's next," newest section first. Update
   it (don't just append) at the end of a session with meaningful unfinished work; it's the first
   place a fresh session looks. The `close-session` skill is the checklist.
-
 - **`MECHANICS.md`** — how the REAL game behaves, with a source and date per entry, and
   explicitly what this engine does about each one (implemented / diverges / not modelled). Check
   it before assuming a number is right, and add to it whenever research establishes a mechanic —

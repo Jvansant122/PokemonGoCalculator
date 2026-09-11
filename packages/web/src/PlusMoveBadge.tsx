@@ -1,4 +1,4 @@
-import type { ChargedMove, MegaLevel, PlusMovePowerConfidence } from "@pogo-analyzer/engine";
+import type { ChargedMove, PlusMovePowerConfidence } from "@pogo-analyzer/engine";
 
 /**
  * Confidence badge for a Super Max "+" charged move's displayed power — a
@@ -57,35 +57,5 @@ export function PlusMoveBadge({ move }: { move: PlusMoveLike | null | undefined 
     <span className={`badge ${CONFIDENCE_CLASS[confidence]}`} title={CONFIDENCE_TITLE[confidence]}>
       + move ({CONFIDENCE_LABEL[confidence]})
     </span>
-  );
-}
-
-/**
- * Plain-text equivalent of the badge above, for contexts that can't render
- * HTML — specifically MoveSelect.tsx's <option> text, which a native
- * <select>'s closed/open list renders as plain strings on every browser (see
- * MoveSelect.tsx's own doc comment on why the type tag is ALSO baked into
- * option text rather than relying on a swatch alone). Returns "" for a
- * non-"+" move so callers can unconditionally append it.
- */
-export function plusMoveOptionTag(move: PlusMoveLike): string {
-  if (!move.isPlusMove) return "";
-  const confidence = move.plusMovePowerConfidence ?? "community-estimate";
-  return ` [+move: ${CONFIDENCE_LABEL[confidence]}]`;
-}
-
-/**
- * Caveat sentence for when a "+" move is being displayed/consumed at a
- * scaled (non-Base) Mega Level — a SEPARATE claim from the move's own
- * Base-tier confidence above (see megaLevel.ts's own doc comment: the
- * +10%-per-tier scaling curve is its own community estimate, independent of
- * how well-evidenced any given move's Base-tier power is). Returns null for
- * Base/null (nothing scaled) or a non-"+" move (nothing to scale).
- */
-export function plusMoveScalingCaveat(move: PlusMoveLike | null | undefined, megaLevel: MegaLevel | null | undefined): string | null {
-  if (!move?.isPlusMove || !megaLevel || megaLevel === "base") return null;
-  return (
-    'This "+" move\'s displayed power is also scaled by the +10%-per-tier curve described under the Mega Level ' +
-    "control above — itself a community estimate, independent of this move's own Base-tier confidence badge."
   );
 }

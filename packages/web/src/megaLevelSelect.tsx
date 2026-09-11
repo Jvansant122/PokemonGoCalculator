@@ -18,9 +18,6 @@ import { canReachSuperMax, type MegaLevel, type SpeciesDefinition } from "@pogo-
  * identically at every engine call site.
  */
 
-/** Every DEFAULT_ASSUMPTIONS in this project sets its megaLevel field(s) to this — matches the engine's own "undefined/null means no investment assumed" default, so a scenario URL encoded before this feature existed decodes unchanged. */
-export const DEFAULT_MEGA_LEVEL: MegaLevel | null = null;
-
 const MEGA_LEVEL_LABELS: Record<MegaLevel, string> = {
   base: "Base",
   high: "High",
@@ -45,7 +42,7 @@ const MEGA_LEVEL_ORDER: MegaLevel[] = ["base", "high", "max", "super-max"];
  * affects the result — exactly the "control invisible but not inert" bug
  * this project's own rules warn against, just inverted.
  */
-export function canHaveMegaLevel(species: Pick<SpeciesDefinition, "boost"> | null | undefined): boolean {
+function canHaveMegaLevel(species: Pick<SpeciesDefinition, "boost"> | null | undefined): boolean {
   return !!species?.boost;
 }
 

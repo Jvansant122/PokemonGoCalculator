@@ -76,7 +76,7 @@ export interface DodgeExecutionErrorCandidateInputs {
 }
 
 /** See this module's own top doc comment for why this exists and what it deliberately does NOT reimplement. */
-export function buildStepwiseParamsForCandidate(
+function buildStepwiseParamsForCandidate(
   inputs: DodgeExecutionErrorCandidateInputs,
 ): Omit<StepwiseSimulationParams, "dodge" | "seed"> {
   const { boss } = inputs;

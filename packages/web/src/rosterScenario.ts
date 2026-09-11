@@ -23,12 +23,12 @@ export interface RosterScenario {
   sortBy?: RosterSortBy;
 }
 
-export function encodeRosterScenario(scenario: RosterScenario): string {
+function encodeRosterScenario(scenario: RosterScenario): string {
   const json = JSON.stringify(scenario);
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodeRosterScenario(encoded: string): RosterScenario {
+function decodeRosterScenario(encoded: string): RosterScenario {
   const json = new TextDecoder().decode(fromBase64Url(encoded));
   return JSON.parse(json) as RosterScenario;
 }

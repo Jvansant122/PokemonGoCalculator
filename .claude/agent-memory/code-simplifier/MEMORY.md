@@ -22,7 +22,7 @@ metadata:
 
 ## Cross-pass reminders (don't rediscover)
 
-- `findCrossoverPartySize`/`CrossoverPoint` (uptime.ts) unwired — already declined, see
+- `findCrossoverPartySize`/`CrossoverPoint` (uptime.ts) — WIRED since 2026-09-10 (IDEAS #19, `runComparator.ts`'s party-size flip). `sensitivity.ts` deliberately still does NOT use it, see
   pogo-researcher's own memory + `sensitivity.ts:190-197` comment. Not a fresh finding ever again
   unless that comment/memory file disappears.
 - `packages/engine/test/fixtures/hypotheticalDuo.ts` species not re-exported from

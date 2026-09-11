@@ -540,10 +540,11 @@ export function blockedCandidateSentence(blocked: PowerUpBudgetBlockedCandidate)
  * one because the two types name their own delta field differently
  * (`meanDeltaTeamDps` here vs. `deltaTeamDps` there — the multi-raid type has
  * no single-boss "the" delta, only a weighted mean across the whole boss set,
- * see RosterBudgetBlockedCandidate's own doc comment). Exported for the same
- * CLI-reuse reason as `blockedCandidateSentence`.
+ * see RosterBudgetBlockedCandidate's own doc comment). Not exported: unlike
+ * `blockedCandidateSentence`, the CLI never reaches this — the roster is
+ * localStorage-only, so `run-scenario.ts` cannot run the roster budget.
  */
-export function rosterBlockedCandidateSentence(blocked: RosterBudgetBlockedCandidate): string {
+function rosterBlockedCandidateSentence(blocked: RosterBudgetBlockedCandidate): string {
   const shortfallText = joinWithAnd(blocked.shortfalls.map(formatShortfall));
   return `Next real gain: ${blocked.speciesName} Lv${blocked.fromLevel} → Lv${blocked.toLevel}, +${blocked.meanDeltaTeamDps.toFixed(2)} mean team DPS — you're short ${shortfallText}.`;
 }

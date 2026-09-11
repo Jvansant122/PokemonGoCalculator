@@ -71,12 +71,12 @@ export interface AttackDefenseBreakpointsScenario {
   isShadow: boolean;
 }
 
-export function encodeAttackDefenseBreakpointsScenario(scenario: AttackDefenseBreakpointsScenario): string {
+function encodeAttackDefenseBreakpointsScenario(scenario: AttackDefenseBreakpointsScenario): string {
   const json = JSON.stringify(scenario);
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodeAttackDefenseBreakpointsScenario(encoded: string): AttackDefenseBreakpointsScenario {
+function decodeAttackDefenseBreakpointsScenario(encoded: string): AttackDefenseBreakpointsScenario {
   const json = new TextDecoder().decode(fromBase64Url(encoded));
   return JSON.parse(json) as AttackDefenseBreakpointsScenario;
 }

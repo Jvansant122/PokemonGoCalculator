@@ -31,10 +31,6 @@ import type {
 import type { RawPokebattlerResponse, RawPokebattlerTier } from "./pokebattlerRaids.ts";
 import { resolveFormChangeMoveGrants, type FormChangeMoveGrantReport } from "./formChangeMoveGrants.ts";
 
-export function readJson<T>(rawDir: string, filename: string): T {
-  return JSON.parse(readFileSync(join(rawDir, filename), "utf-8")) as T;
-}
-
 interface RawFetchMeta {
   fetchedAt: string;
   bytes: number;
@@ -46,7 +42,7 @@ interface RawFetchMeta {
  * files this script doesn't itself fetch (see sync-data.ts's module
  * docstring).
  */
-export function recordFetchMeta(rawDir: string, filename: string, bytes: number): void {
+function recordFetchMeta(rawDir: string, filename: string, bytes: number): void {
   const metaPath = join(rawDir, "_meta.json");
   let meta: Record<string, RawFetchMeta> = {};
   if (existsSync(metaPath)) {
@@ -875,7 +871,7 @@ export async function fetchAndCacheBulbapediaRaidArchive(rawDir: string): Promis
  * evidence source a shadow variant depends on, though the pipeline doesn't
  * special-case that; it just adds to the same evidence set.
  */
-export const BULBAPEDIA_SHADOW_RAID_ARCHIVE_PAGE = "List_of_Shadow_Raid_Boss_changes";
+const BULBAPEDIA_SHADOW_RAID_ARCHIVE_PAGE = "List_of_Shadow_Raid_Boss_changes";
 
 export interface BulbapediaShadowRaidArchiveFetchResult {
   wikitext: string | null;

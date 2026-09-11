@@ -35,7 +35,7 @@ export interface RosterSummary {
   approximateLevelCount: number;
 }
 
-export function summarizeRoster(entries: RosterEntry[]): RosterSummary {
+function summarizeRoster(entries: RosterEntry[]): RosterSummary {
   const speciesIds = new Set<string>();
   let megaCapableCount = 0;
   let shadowCount = 0;
@@ -73,7 +73,7 @@ export function summarizeRoster(entries: RosterEntry[]): RosterSummary {
  * order a user added/imported things in and there is no other natural
  * "recency" this pool tracks.
  */
-export function sortRosterEntries(entries: RosterEntry[], sortBy: RosterSortBy): RosterEntry[] {
+function sortRosterEntries(entries: RosterEntry[], sortBy: RosterSortBy): RosterEntry[] {
   const copy = [...entries];
   if (sortBy === "species") copy.sort((a, b) => a.species.name.localeCompare(b.species.name));
   else if (sortBy === "level") copy.sort((a, b) => b.level - a.level);

@@ -99,7 +99,7 @@ export interface HypotheticalCatchAssumption {
   level: 20 | 25;
 }
 
-export function emptyHypotheticalCatch(): HypotheticalCatchAssumption {
+function emptyHypotheticalCatch(): HypotheticalCatchAssumption {
   return { speciesId: null, level: 20 };
 }
 
