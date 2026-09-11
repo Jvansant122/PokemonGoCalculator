@@ -312,6 +312,8 @@ npm run check-scenario-roundtrip     # every Assumptions field appears in both r
 npm run check-raid-history-sources   # raidHistory source values known to packages/web; every shadow species anchored by a row
 npm run check-mega-gates             # flags a mega/primal carried ONLY by the live-raid gate (fragile)
 npm run check-docs-drift             # tab counts / params / command names / agent+skill mentions / shipped PLANs agree with code
+                                     #   + ADVISORY: "not yet"-shaped claims in CLAUDE.md / HANDOFF.md's newest
+                                     #   section unverified >14d (--strict to fail, --max-age-days=N, <!-- drift-ok --> to suppress)
 npm run check-mega-gaps              # diffs the mega/primal roster against Bulbapedia (network; not part of `check`)
 
 # Tools
@@ -430,7 +432,7 @@ absorb another:
   an undocumented mechanic gets rediscovered as a bug. It records real-game bugs too, so we
   neither reproduce them nor mistake one for ours.
 - **`IDEAS.md`** — not-yet-scheduled feature ideas, barebones. Nothing here is committed work.
-  An item **blocked on evidence that doesn't exist** stays, in the "Unmodelled real mechanics"
+  An item **blocked on evidence that doesn't exist** stays, in the "Unmodelled real mechanics" <!-- drift-ok -->
   table, with a row saying what would unblock it — a source arriving makes it live again. The
   underlying fact stays in `MECHANICS.md` so it isn't rediscovered as a bug. Item numbers are
   **stable and permanent** (agent memory and commit messages cite `IDEAS #13`), so a shipped item
@@ -439,7 +441,7 @@ absorb another:
   an agent to build something that already existed.
 - **`REJECTED_IDEAS.md`** — things this project **will not build even if they were free and fully
   unblocked**, each with the reasoning that killed it. Distinct from `IDEAS.md`'s blocked items:
-  *blocked* is "not yet" and evidence rescues it, *rejected* is "no" and evidence does not. Read
+  *blocked* is "not yet" and evidence rescues it, *rejected* is "no" and evidence does not. Read <!-- drift-ok -->
   it before proposing a feature — several entries (multi-trainer mega staggering above all) are
   re-proposed repeatedly because they are genuinely interesting. Adding an entry is cheaper than
   re-litigating one.

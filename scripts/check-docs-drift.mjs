@@ -19,6 +19,8 @@
  * Run: `npm run check-docs-drift` (also part of `npm run check` / `npm run verify`).
  */
 import fs from 'fs';
+import { execFileSync } from 'child_process';
+import { findAgingClaims } from './docsDriftAging.mjs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -149,6 +151,62 @@ for (const p of plans) {
   }
 }
 if (!badPlans) ok(`${plans.length} PLAN_*.md file(s) present, none described as shipped in HANDOFF.md`);
+
+// ---- 7. Aging negative claims (ADVISORY) ---------------------------------------------------
+// See scripts/docsDriftAging.mjs for why this exists and what it can/can't catch.
+//
+// ADVISORY BY DEFAULT: prints and exits 0. Deliberately NOT a build failure, because it is
+// time-based — a red CI on a day nobody changed anything trains people to disable the checker.
+// `--strict` makes it fail, for a deliberate audit pass. Tune with `--max-age-days=N`.
+const strict = process.argv.includes('--strict');
+const maxAgeArg = process.argv.find((a) => a.startsWith('--max-age-days='));
+const MAX_AGE_DAYS = maxAgeArg ? Number(maxAgeArg.split('=')[1]) : 14;
+
+/** Commit author-date per line, 1-indexed, via one `git blame` per file. Null if blame fails. */
+function blameDates(relPath) {
+  try {
+    const out = execFileSync('git', ['blame', '--line-porcelain', '--', relPath], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    const dates = [];
+    for (const line of out.split('\n')) {
+      if (line.startsWith('author-time ')) dates.push(Number(line.slice('author-time '.length)) * 1000);
+    }
+    return dates;
+  } catch {
+    return null;
+  }
+}
+
+const AGING_TARGETS = [
+  ['CLAUDE.md', false],
+  ['HANDOFF.md', true],
+];
+
+const aging = [];
+let blameUnavailable = false;
+for (const [relPath, onlyNewestSection] of AGING_TARGETS) {
+  const dates = blameDates(relPath);
+  if (!dates) { blameUnavailable = true; continue; }
+  for (const hit of findAgingClaims(read(relPath), dates, { onlyNewestSection, maxAgeDays: MAX_AGE_DAYS })) {
+    aging.push({ relPath, ...hit });
+  }
+}
+
+if (blameUnavailable) {
+  ok('aging negative claims: skipped (git blame unavailable here)');
+} else if (aging.length === 0) {
+  ok(`no "not yet"-shaped claim in CLAUDE.md / HANDOFF.md's newest section is older than ${MAX_AGE_DAYS} days`);
+} else {
+  aging.sort((a, b) => b.ageDays - a.ageDays);
+  console.error(
+    `${strict ? 'FAIL' : 'WARN'} ${aging.length} "not yet"-shaped claim(s) unverified for over ${MAX_AGE_DAYS} days — re-check each against the CODE, then either correct it or re-affirm it (committing the line re-dates it):`,
+  );
+  for (const a of aging) console.error(`     ${a.relPath}:${a.lineNo}  (${a.ageDays}d)  ${a.text.slice(0, 110)}`);
+  if (strict) problems.push(`${aging.length} aging "not yet" claim(s)`);
+}
 
 // ---- result --------------------------------------------------------------------------------
 if (problems.length) {
