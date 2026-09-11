@@ -1,9 +1,55 @@
 # Handoff
 
-Last updated: 2026-09-10 (the Roster tab, built while a concurrent session worked in `packages/engine`/`scripts/`). Read `CLAUDE.md` first for durable project architecture/conventions —
+Last updated: 2026-09-11 (TM/move-change + gated evolutions shipped; `PLAN_tm_move_change_optimizer.md` retired). Read `CLAUDE.md` first for durable project architecture/conventions —
 this file is the point-in-time "what's done, what's next."
 
-## 2026-09-10 (latest): Roster tab — the seventh tab, hand-entry + gzip save code
+## 2026-09-11 (latest): move changes, gated evolutions, and two bugs that passing gates hid
+
+Shipped in `983ca15` and `ddd47e9`, across four concurrent lanes split by file ownership.
+`PLAN_tm_move_change_optimizer.md` is **deleted** — see "the one clause not shipped" below.
+
+**Features.** Friendship level and Best Buddy on the Comparator (per-candidate) and Team Raid
+(per-slot); a dodge-execution-error band across 50-100% accuracy; the own-charged-move-cast cost
+surfaced on the Comparator (badged as the unsourced placeholder it is); `bossMaxHpOverride` wired
+to a real recorded `eraHp`; post-wipe reselection; per-stage sweep progress; hypothetical catches;
+gated evolutions end to end; and the roster-mode move-change sweep (second charged move + Elite
+TM, fielded and benched).
+
+**Two bugs that every gate reported green on.** Both are worth remembering as a pattern, not as
+incidents:
+
+1. **The Eternatus per-species cost override was read by nothing.** The raw records were
+   extracted, normalized, committed, and pinned by a passing golden test a day earlier —
+   `sync-data.ts` simply never passed the engine's new third argument. Now wired: level 30→50 goes
+   from 182 to 6,320 candy. *Presence of a field in `data/normalized/` is not evidence anything
+   reads it, and a sentinel over a raw field proves only that the field exists.* Guards added: a
+   sentinel over the INTERPRETED table, and `diff-normalized` now reports unrecognized top-level
+   keys — which immediately exposed that `luckyStardustMultiplier` had never been in its diffed
+   list either.
+2. **`rosterMoveChange.ts` could field two Mega Evolutions and throw.** Every fixture set
+   `canMega: false`, so 12 passing tests never ran a mega through the benched-substitution path.
+   The trigger is the ordinary shape of a real roster, since the planner fields your best mega and
+   benches the rest. Fixed by displacing the FIELDED MEGA rather than the weakest slot — which
+   changes what the row means, so `displacedFieldedMega` is now shown on screen.
+
+**The one clause not shipped.** The plan asked for a static "only actionable during a Taken Over
+event" label on Frustration. The engine instead excludes Frustration/Return from TM candidates
+unconditionally — correct, and deliberately documented, since a live is-an-event-on check would
+make a share link's answer depend on when it is opened. But nothing yet *tells* the user a
+Frustration holder is stuck. Moved to `IDEAS.md` #24 rather than left in a plan file, because one
+informational label is an idea, not a plan.
+
+**Measured and deliberately NOT changed.** Optimizer iterations were already 20, not the 3
+`IDEAS.md` claimed; 20→100 costs ~553ms→~2643ms to move a marginal candidate's stdev 0.107→0.026,
+which the existing noise floor already absorbs. The stale line had already cost an agent its
+budget — `IDEAS.md` was rewritten (244→140 lines) and now carries that warning at the top.
+
+**Not done / next.** `IDEAS.md` Open: #5 Best Buddy as an optimizer *candidate* (needs its own
+presentation — it costs nothing, so it ranks on neither axis, and it is one-at-a-time per account);
+#15 shadow grunt forms (**needs a user scope call**); #17b enrage timings, read by no tab; #23 the
+Team Raid own-cast cost, which needs an engine field first; #24 above.
+
+## 2026-09-10: Roster tab — the seventh tab, hand-entry + gzip save code
 
 `web-developer` built the roster-tab plan (self-contained implementation plan, root of the repo —
 not yet deleted, see "Not yet done" below). Replaces the deleted Firebase/login plan: this app

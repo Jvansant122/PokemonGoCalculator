@@ -67,6 +67,22 @@ building the Comparator half. Needs an `engine-developer` change first; it is no
 Still gated on the same caveat: the underlying per-cast dodge cost rests on an unsourced
 assumption (`MECHANICS.md`'s OPEN QUESTION entry), and surfacing a number is not sourcing it.
 
+### 24. Frustration: an informational "can't fix this yet" label
+
+`PLAN_tm_move_change_optimizer.md` asked for this, and it is the one part of that plan NOT
+shipped (2026-09-11). The engine excludes Frustration and Return from TM candidates
+**unconditionally** — correct and deliberate, because no live "is a Taken Over event on right now"
+check may ever exist (it would make a share link's answer depend on when it is opened). But the
+exclusion is currently **silent at the move level**: a shadow holding Frustration still generates
+second-charged-move candidates, and nothing anywhere says its existing charged move is stuck.
+
+What's wanted is a **static** label on such an entry — "only removable during a Taken Over event"
+— never a live event check. Small, purely informational, and it closes the plan's last clause.
+
+Note the entry-level exclusion list (`moveChangeEligibilityReason` in `rosterMoveChange.ts`)
+currently covers only a defaulted moveset and Smeargle, so this needs its own path rather than
+another reason string there.
+
 ## Unmodelled real mechanics
 
 Real, recorded game mechanics this engine does **not** model. Each lives in `MECHANICS.md` with
