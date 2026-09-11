@@ -105,20 +105,15 @@ reopen either without a contradicting source.
 Standing caveat: this sourcing is ~2 years old and Niantic re-tunes raid internals without notice.
 Re-verify before building on any of it.
 
-## Rejected, deliberately, so they don't get re-proposed
+## Rejected
 
-- **An event-worth-attending calculator** — needs calendar data this tool doesn't ingest. A
-  different product.
-- **Anything multi-trainer**, including mega staggering across a raid lobby. See `CLAUDE.md`'s
-  standing decision, which distinguishes this from the single-trainer lineup builder that *was*
-  approved. Most likely to be re-proposed during ideation; flag it rather than building toward it.
-- **Mega Energy as an investment currency** for Super Max progression — it would rest on two
-  stacked `[unverified]` numbers (the CP bump and the "+10%/tier" curve), repeating in miniature
-  the fabricated-stats failure this project was already burned by. `LINKS.md` #1 is what would
-  unblock the curve.
-- **Regular-TM ranking as a single score** — the reroll is random over a pool whose size varies
-  per species, and the distribution has never been confirmed uniform (`LINKS.md` #3). If ever
-  built, it must show a [worst, expected, best] band, never one blended number.
+Moved to **`REJECTED_IDEAS.md`** (2026-09-11), which owns this lane now. Every entry there means
+"do not build this", and the file explains why each was declined.
+
+Do not re-add a rejected item here. The distinction the two files keep apart: an item **blocked**
+on evidence stays in this file (a source arriving makes it live again), while an item **rejected**
+on the merits is not rescued by evidence. The "Unmodelled real mechanics" table above is blocked,
+not rejected.
 
 ## Shipped
 

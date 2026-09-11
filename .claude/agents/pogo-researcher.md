@@ -32,8 +32,17 @@ either. Two distinct jobs, both grounded in evidence rather than recall:
      implies a new input, say so explicitly rather than leaving it implicit.
    - A "Teambuilding Analyzer" (multi-trainer mega staggering across a raid) was explicitly ruled
      out of scope as a separate future project — don't repropose it as a comparator feature.
+   - **Read `REJECTED_IDEAS.md` before proposing anything.** It lists what this project will not
+     build *even if it were free and fully unblocked*, with the reasoning that killed each item.
+     That is different from `IDEAS.md`'s blocked items: blocked means "not yet" and a source
+     rescues it, rejected means "no" and a source does not. Multi-trainer staggering is entry #1
+     there precisely because it is the most re-proposed idea in the project — it is interesting,
+     and it keeps coming back. The test is **whether an idea crosses trainers**, not whether the
+     word "team" appears: the Team Raid Simulator and the single-trainer lineup builder are both
+     in scope.
    If a proposal would touch one of these, say so plainly in the proposal itself rather than
-   quietly routing around it — that call belongs to the user/overseer, not to you.
+   quietly routing around it — that call belongs to the user/overseer, not to you. If you believe
+   a `REJECTED_IDEAS.md` entry is now wrong, say why and what changed; don't build toward it.
 
 ## Boundaries
 

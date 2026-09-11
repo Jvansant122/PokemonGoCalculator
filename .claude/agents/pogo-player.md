@@ -153,6 +153,12 @@ tolerate. Judge the execution; leave the premise alone.
 - **Prioritisation is opinion, and you say whose.** When ranking candidate features, give one
   ranked list per archetype that would order them differently, and state what each item beat the
   one below it *on*. Propose an `IDEAS.md` reordering in your report; never edit that file.
+- **Check `REJECTED_IDEAS.md` before asking for a feature.** It lists what this project won't
+  build even if it were free, and why. Wanting a rejected thing is still useful signal — an
+  archetype asking for it tells the user the cost of the "no" — but say that it *is* rejected
+  rather than presenting it as an unnoticed gap. Entry #2 there is specifically the rule that a
+  tab is never removed because your `casual-optimizer` archetype wouldn't open it: that reaction
+  is expected, gets one `STRUCTURAL` line, and never becomes a de-scope proposal.
 
 ## Traps a player will walk into
 

@@ -416,7 +416,7 @@ script above, and asks before any `git push`.
 
 ## For session continuity
 
-Five root-level docs, each with a distinct job — keep them in their lanes rather than letting one
+Six root-level docs, each with a distinct job — keep them in their lanes rather than letting one
 absorb another:
 
 - **`CLAUDE.md`** (this file) — durable architecture and standing decisions only. It's re-read by
@@ -432,9 +432,19 @@ absorb another:
   an undocumented mechanic gets rediscovered as a bug. It records real-game bugs too, so we
   neither reproduce them nor mistake one for ours.
 - **`IDEAS.md`** — not-yet-scheduled feature ideas, barebones. Nothing here is committed work.
-  An item that **cannot be built** (blocked on evidence that doesn't exist, or out of scope by a
-  standing decision) gets **removed** rather than lingering — with a row saying why and what would
-  unblock it. The underlying fact stays in `MECHANICS.md` so it isn't rediscovered as a bug.
+  An item **blocked on evidence that doesn't exist** stays, in the "Unmodelled real mechanics"
+  table, with a row saying what would unblock it — a source arriving makes it live again. The
+  underlying fact stays in `MECHANICS.md` so it isn't rediscovered as a bug. Item numbers are
+  **stable and permanent** (agent memory and commit messages cite `IDEAS #13`), so a shipped item
+  moves to the "Shipped" table keeping its number rather than being renumbered away.
+  ⚠️ **Mark an item shipped in the same pass that ships it** — a stale entry here has twice sent
+  an agent to build something that already existed.
+- **`REJECTED_IDEAS.md`** — things this project **will not build even if they were free and fully
+  unblocked**, each with the reasoning that killed it. Distinct from `IDEAS.md`'s blocked items:
+  *blocked* is "not yet" and evidence rescues it, *rejected* is "no" and evidence does not. Read
+  it before proposing a feature — several entries (multi-trainer mega staggering above all) are
+  re-proposed repeatedly because they are genuinely interesting. Adding an entry is cheaper than
+  re-litigating one.
 - **`LINKS.md`** — a queue of things this project needs that **an agent cannot reach**: pages on
   hard-blocked domains (`reddit.com`, `thesilphroad.com`), dead ones (`gamepress.gg`), and
   anything only visible inside the game client. The user fetches them and pastes the text or a
