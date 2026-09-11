@@ -1716,7 +1716,40 @@ stardust or candy), so they need no caveat.
 
 ## Shadow raids
 
-Sourcing for this section: Bulbapedia's `Shadow_Raid` raw wikitext, fetched
+### Which species can be Shadow at all — a first-party roster, not just a raid list
+
+`[first-party]`. GAME_MASTER's live dump (PokeMiners' mirror, queried directly 2026-09-11) carries
+a `pokemonSettings.shadow` block (`purificationStardustNeeded`, `purificationCandyNeeded`,
+`purifiedChargeMove: "RETURN"`, `shadowChargeMove: "FRUSTRATION"`) on **1,015 (pokemonId, form)
+template combinations, 467 distinct pokemonId values, 45 of them regional forms** — including
+`SANDSHREW_ALOLA`/`SANDSHREW_ALOLA_NORMAL`. This is Niantic's own client-side claim that a species
+is shadow-capable, independent of whether it has ever actually appeared as a **Shadow Raid boss**
+(a separate, narrower thing — see the raid-specific entries below). Team GO Rocket **grunt**
+encounters are the other real route to a Shadow Pokémon in-game, and can produce a shadow-capable
+species this block names that has never raided as Shadow at all (Shadow Alolan Sandslash is the
+confirmed live case, raised by the field researcher 2026-09-09 — no live/historical Shadow Alolan
+Sandslash raid exists, only the grunt encounter).
+
+Duplicate raw templates sharing one pokemonId (e.g. `BULBASAUR` bare, `BULBASAUR_NORMAL`,
+`BULBASAUR_FALL_2019` — all three carrying byte-identical `shadow` data) are not 1,015 distinct
+Pokémon; this project's own one-template-per-roster-species resolution (`resolveGameMasterPokemonRecord`)
+collapses them naturally, since only one GAME_MASTER template is ever matched per built species.
+
+**Engine/pipeline: implemented 2026-09-11** (IDEAS.md #15). `scripts/sync-data.ts`'s
+Shadow-variant durable synthesis section now treats this block as a fourth evidence source,
+alongside (never replacing) `raidHistory.json`/Pokebattler's `_SHADOW_LEGACY` tiers/Bulbapedia's
+Shadow Raid page — see `CLAUDE.md`'s shadow-synthesis standing decision for the full anchor list
+and `data/normalized/shadowFirstPartyAnchors.json` for the durability signal `check-raid-history-sources`
+reads. `purificationStardustNeeded`/`purificationCandyNeeded` are captured raw in
+`data/raw/game_master.json` (`GameMasterPokemonRecord.shadow`) but **not yet normalized into any
+output** — flagged for `engine-developer`, since this project has no data model for one-time
+purification cost yet (the Power-Up Optimizer only models recurring power-up/second-move costs).
+Do not conflate these with the Purified power-up discount multiplier immediately below, which is a
+different, unrelated game system despite the similar name.
+
+---
+
+Sourcing for the rest of this section: Bulbapedia's `Shadow_Raid` raw wikitext, fetched
 2026-09-09, corroborated by community guides. `[community-consensus]` — no
 first-party source states any of these numbers.
 

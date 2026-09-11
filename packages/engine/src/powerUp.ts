@@ -772,6 +772,29 @@ export interface PowerUpCandidate {
   deltaExceedsNoise: boolean;
 }
 
+/**
+ * IDEAS.md #5 — a candidate whose only change is one slot's
+ * `TeamRaidSlotInput.isBestBuddy` flag, flipped from false/undefined to
+ * true. Deliberately a SEPARATE type from `PowerUpCandidate`, never one
+ * shared type with an optional/zero `cost` — Best Buddy's +1 effective
+ * level (`megaLevel.ts`'s `effectiveLevelForBestBuddy`) costs ZERO stardust
+ * and ZERO candy, so it cannot be ranked on either of this tab's two axes
+ * (`deltaTeamDpsPer1000Stardust`/`deltaTeamDpsPerCandy`) at all — a shared
+ * type would either divide by zero or need a fabricated non-zero
+ * denominator, both wrong. This type simply has no cost/efficiency fields to
+ * misuse.
+ */
+export interface BestBuddyCandidate {
+  slotIndex: number;
+  speciesId: string;
+  speciesName: string;
+  /** Real full-roster simulation with ONLY this slot's isBestBuddy flipped to true — everything else (level, moveset, every other slot) unchanged from the do-nothing baseline. */
+  summary: PowerUpEncounterSummary;
+  deltaTeamDps: number;
+  /** `Math.abs(deltaTeamDps) > noiseFloorTeamDps` — same test/reasoning as PowerUpCandidate.deltaExceedsNoise. */
+  deltaExceedsNoise: boolean;
+}
+
 export interface PowerUpOptimizerResult {
   baseline: PowerUpEncounterSummary;
   bossHp: number;
@@ -804,6 +827,26 @@ export interface PowerUpOptimizerResult {
   bestAffordableByDelta: PowerUpCandidate | null;
   /** Max deltaTeamDpsPer1000Stardust among affordable candidates with deltaTeamDps > noiseFloorTeamDps (and a non-null per-1000-stardust value). Null if none qualify. */
   bestAffordableByStardustEfficiency: PowerUpCandidate | null;
+  /**
+   * IDEAS.md #5 — one candidate per fielded slot NOT already flagged
+   * `isBestBuddy: true`, each a real paired simulation with ONLY that slot's
+   * Best Buddy flag flipped on. See BestBuddyCandidate's own doc comment for
+   * why this is a wholly separate array rather than folded into `candidates`
+   * — there is no cost here at all, so no per-1000-stardust/per-candy field
+   * to report.
+   *
+   * REAL-GAME CONSTRAINT THIS ARRAY DOES NOT ENFORCE: only one Pokémon can
+   * be a trainer's active Best Buddy at a time (see
+   * `TeamRaidSlotInput.isBestBuddy`'s own doc comment). Every row here is
+   * evaluated INDEPENDENTLY, as if it were the only Best Buddy candidate —
+   * exactly `PowerUpCandidate.affordable`'s own "priced as if it were the
+   * only purchase" convention, applied to a free candidate instead of a paid
+   * one. More than one row can show a positive gain at once; a caller must
+   * not recommend more than one from this array. `PowerUpBudgetPlan.
+   * bestBuddyRecommendation` is the joint, AT-MOST-ONE version of this same
+   * question.
+   */
+  bestBuddyCandidates: BestBuddyCandidate[];
 }
 
 const mean = (values: number[]): number => values.reduce((a, b) => a + b, 0) / values.length;
@@ -873,6 +916,14 @@ export function summarizeResults(results: TeamRaidResult[], bossHp: number, raid
  * dimension itself (no power-up candidate here ever changes a slot's
  * megaLevel), but a caller who sets one on an input slot must not have it
  * silently dropped on the way into the simulation.
+ *
+ * BUG FIX (2026-09-11, IDEAS.md #5): this used to silently DROP
+ * `isBestBuddy` entirely — same shape of bug `toTeamRaidSlotsAtLevels` had
+ * for `megaLevel` (see that function's own 2026-09-09 doc comment) — so a
+ * caller who pre-set `isBestBuddy: true` on an input slot as a fixed
+ * assumption (independent of this module's own new bestBuddyCandidates
+ * below) had it silently ignored by every simulation this function feeds.
+ * Forwarding it now.
  */
 function toTeamRaidSlots(slots: PowerUpSlotInput[], overrideIndex: number | null, overrideLevel: number | undefined): TeamRaidSlotInput[] {
   return slots.map((slot, i) => ({
@@ -883,6 +934,7 @@ function toTeamRaidSlots(slots: PowerUpSlotInput[], overrideIndex: number | null
     level: i === overrideIndex ? overrideLevel : slot.level,
     ivs: slot.ivs,
     megaLevel: slot.megaLevel,
+    isBestBuddy: slot.isBestBuddy,
   }));
 }
 
@@ -1043,7 +1095,40 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
       ? stardustEfficiencyCandidates.reduce((best, c) => (c.deltaTeamDpsPer1000Stardust! > best.deltaTeamDpsPer1000Stardust! ? c : best))
       : null;
 
-  return { baseline, bossHp, iterations, noiseFloorTeamDps, candidates, ladders, bestAffordableByDelta, bestAffordableByStardustEfficiency };
+  // --- Best Buddy candidates (IDEAS.md #5) -----------------------------
+  // One per fielded slot NOT already flagged isBestBuddy — each a real
+  // paired simulation against the SAME baseline every PowerUpCandidate is
+  // compared to, with ONLY that one slot's Best Buddy flag flipped on. See
+  // BestBuddyCandidate's own doc comment for why this never touches the
+  // stardust/candy candidate list above.
+  const bestBuddyCandidates: BestBuddyCandidate[] = [];
+  slots.forEach((slot, slotIndex) => {
+    if (!slot.species || slot.isBestBuddy) return;
+    const bestBuddySlots = baselineSlots.map((s, i) => (i === slotIndex ? { ...s, isBestBuddy: true } : s));
+    const bestBuddyResults = seeds.map((s) => runTeamRaid({ ...rest, slots: bestBuddySlots, level: rosterLevel, ivs: rosterIvs, seed: s }));
+    const summary = summarizeResults(bestBuddyResults, bossHp, rest.raidTimerSeconds);
+    const deltaTeamDps = summary.teamDps - baseline.teamDps;
+    bestBuddyCandidates.push({
+      slotIndex,
+      speciesId: slot.species.id,
+      speciesName: slot.species.name,
+      summary,
+      deltaTeamDps,
+      deltaExceedsNoise: Math.abs(deltaTeamDps) > noiseFloorTeamDps,
+    });
+  });
+
+  return {
+    baseline,
+    bossHp,
+    iterations,
+    noiseFloorTeamDps,
+    candidates,
+    ladders,
+    bestAffordableByDelta,
+    bestAffordableByStardustEfficiency,
+    bestBuddyCandidates,
+  };
 }
 
 // --- Fixed-budget planner (Part F) -----------------------------------------
@@ -1436,6 +1521,30 @@ export interface PowerUpBudgetPlan {
    * .maxBlockedCandidatesToCheck for the bound itself.
    */
   bestBlockedCandidate: PowerUpBudgetBlockedCandidate | null;
+  /**
+   * IDEAS.md #5's "at most one" version for a JOINT plan: at most ONE slot,
+   * evaluated against the FINAL committed roster (after every paid step
+   * above), with its Best Buddy flag flipped on — never folded into
+   * `steps`/`ledger` (it costs nothing tracked: no stardust, no candy, no XL
+   * Candy row to debit against), and never more than one entry, honoring the
+   * real one-Best-Buddy-per-trainer constraint that `PowerUpOptimizerResult.
+   * bestBuddyCandidates`'s ranked-table array deliberately does NOT enforce
+   * (see that field's own doc comment for why the ranked table stays
+   * independent-per-row while this joint plan cannot). `null` when no
+   * unflagged fielded slot's Best Buddy delta clears the FINAL
+   * `noiseFloorTeamDps`, OR every fielded slot already carries
+   * `isBestBuddy: true`.
+   */
+  bestBuddyRecommendation: BestBuddyPlanRecommendation | null;
+}
+
+/** See PowerUpBudgetPlan.bestBuddyRecommendation. */
+export interface BestBuddyPlanRecommendation {
+  slotIndex: number;
+  speciesId: string;
+  speciesName: string;
+  /** Real simulated gain vs. the FINAL committed roster (after every paid step), with ONLY this one slot's Best Buddy flag flipped on. Guaranteed > the FINAL noiseFloorTeamDps — that's what qualifies it for this field at all. */
+  deltaTeamDps: number;
 }
 
 /**
@@ -1666,6 +1775,10 @@ export function usefulPowerUpLevelsAbove(params: UsefulPowerUpLevelsParams): num
  * this comment's own "every other field passes through unchanged" claim.
  * Forwarding it now brings this in line with toTeamRaidSlots and with
  * powerUpDamageLadder's own megaLevel handling above.
+ *
+ * BUG FIX (2026-09-11, IDEAS.md #5): the same gap existed for `isBestBuddy`
+ * — see toTeamRaidSlots' own identical fix, added the same day for the same
+ * reason.
  */
 function toTeamRaidSlotsAtLevels(slots: PowerUpSlotInput[], levels: number[]): TeamRaidSlotInput[] {
   return slots.map((slot, i) => ({
@@ -1676,6 +1789,7 @@ function toTeamRaidSlotsAtLevels(slots: PowerUpSlotInput[], levels: number[]): T
     level: levels[i] ?? slot.level,
     ivs: slot.ivs,
     megaLevel: slot.megaLevel,
+    isBestBuddy: slot.isBestBuddy,
   }));
 }
 
@@ -2110,6 +2224,32 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
     }
   }
 
+  // --- Best Buddy recommendation (one-time, post-search; IDEAS.md #5) -------
+  // Same "run once against the roster/budget state the search stopped at"
+  // discipline as the bestBlockedCandidate pass just above, and judged
+  // against the SAME final floor (currentNoiseFloorTeamDps) — but this one
+  // costs nothing tracked, so it is reported separately rather than folded
+  // into steps/ledger. Real Pokémon GO constraint: only ONE Pokémon can be a
+  // trainer's active Best Buddy, so — unlike the bestBlockedCandidate pass,
+  // which can name several shortfalls — this can recommend AT MOST ONE slot.
+  let bestBuddyRecommendation: BestBuddyPlanRecommendation | null = null;
+  for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
+    const slot = slots[slotIndex]!;
+    if (!slot.species || slot.isBestBuddy) continue;
+    const bestBuddySlots = toTeamRaidSlotsAtLevels(slots, currentLevels).map((s, i) =>
+      i === slotIndex ? { ...s, isBestBuddy: true } : s,
+    );
+    const results = seeds.map((s) => runTeamRaid({ ...rest, slots: bestBuddySlots, level: rosterLevel, ivs: rosterIvs, seed: s }));
+    const summary = summarizeResults(results, bossHp, rest.raidTimerSeconds);
+    const deltaTeamDps = summary.teamDps - currentSummary.teamDps;
+    if (
+      deltaTeamDps > currentNoiseFloorTeamDps &&
+      (bestBuddyRecommendation === null || deltaTeamDps > bestBuddyRecommendation.deltaTeamDps)
+    ) {
+      bestBuddyRecommendation = { slotIndex, speciesId: slot.species.id, speciesName: slot.species.name, deltaTeamDps };
+    }
+  }
+
   const finalLevels: PowerUpBudgetFinalLevel[] = slots.map((slot, i) => ({
     slotIndex: i,
     speciesId: slot.species?.id ?? null,
@@ -2144,5 +2284,6 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
     ledger,
     stopReason,
     bestBlockedCandidate,
+    bestBuddyRecommendation,
   };
 }

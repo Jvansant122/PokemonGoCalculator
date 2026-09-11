@@ -17,71 +17,63 @@ the premise was false. Mark an item shipped in the same pass that ships it.
 
 ## Open
 
-### 5. Best Buddy as a cost-less Power-Up Optimizer candidate
+### 5. Best Buddy as a cost-less candidate — SINGLE-RAID SHIPPED, ROSTER MODE OPEN
 
-Best Buddy's +1 effective level (`defaultCpBoostAdditionalLevel`) is modelled in the engine
-(`megaLevel.ts`'s `effectiveLevelForBestBuddy`) and is a live control on the **Comparator**
-(per-candidate) and **Team Raid** (per-slot) as of 2026-09-10. It is deliberately **not** in the
-Power-Up Optimizer, where it would be a different thing: not a setting but a *candidate* — a free
-+1 level competing against paid half-levels in the ranked table and the budget plan.
+**Single-raid mode shipped 2026-09-11.** `PowerUpOptimizerResult.bestBuddyCandidates` (one per
+fielded slot, cost/efficiency fields **absent from the type**, not null — a zero-cost candidate
+divides by zero on both of the tab's axes) and `PowerUpBudgetPlan.bestBuddyRecommendation`
+(`| null`, never an array, so the real one-Best-Buddy-per-trainer limit is structural). Both have
+UI. A pre-existing bug was found and fixed in passing: `toTeamRaidSlots` silently dropped
+`isBestBuddy`, the same shape as an earlier `megaLevel` gap — latent only, since no UI set it.
 
-That is the interesting version, because it costs no stardust and no candy at all, so it cannot be
-ranked on either of the tab's two axes. It needs its own presentation ("free, if you walk it"),
-not a row with a divide-by-zero efficiency score.
+**Roster/multi-raid mode is NOT built**, scoped out deliberately by `engine-developer`:
+`RosterEntry` has no `isBestBuddy` field, and pricing it correctly needs the same
+aggregate-across-bosses machinery `RosterPowerUpCandidate` uses. That is a materially bigger
+change, not a copy of the single-raid path. The tab tells a multi-raid user this is single-raid
+only rather than rendering an empty section.
+
+⚠️ **Measured caveat worth knowing before investing more here.** On the default scenario every
+Best Buddy candidate came back *inside* the noise floor (±0.73 team DPS at 20 seeds; best observed
+gain +0.49). That is an honest result, not a wiring failure — a single +1 effective level is a
+small effect, and it shrinks further at level 50. The feature reports "≈0 (within noise)" rather
+than a fake signed number, which is correct, but it means the roster-mode build may buy very
+little. Measure before scheduling it.
 
 ⚠️ Best Buddy is a **per-Pokémon, one-at-a-time** status in the real game — a roster cannot hold
-six of them simultaneously. A plan recommending Best Buddy for several slots at once would be
-unachievable, which is the trap to design around.
+six of them simultaneously. Any future joint-plan work must keep that constraint structural.
 
-### 15. Shadow forms exist only for species that have been shadow *raid bosses*
+### 24. Frustration notice — BUILT 2026-09-11, but structurally UNREACHABLE with real data
 
-108 shadow entries today, and exactly one Alolan one (Shadow Sandslash). Shadow Alolan Sandshrew —
-the case the user raised on 2026-09-09 — is a Team GO Rocket **grunt** shadow, so nothing in the
-synthesis chain (raidHistory, Pokebattler `_SHADOW_LEGACY`, Bulbapedia's Shadow Raid page) can
-ever produce it. That is arguably correct for a boss list and wrong for the *attacker* picker and
-the Poke Genie import, where a user's grunt-caught shadow has no entry to match.
+Engine (`tmMove.ts`'s `frustrationLockNotice`, `RosterMoveChangeResult.frustrationNotices`) and UI
+both shipped, both tested, and the UI renders correctly when handed a Frustration-holding entry.
+**No real user workflow can produce one.**
 
-**Blocked on a scope call from the user, not on evidence or effort.** `CLAUDE.md`'s standing
-decision deliberately anchors shadows on recorded evidence rather than on the live feed, so
-widening synthesis to grunt shadows needs its own evidence anchor and is a scope change to make
-deliberately. Ask before building.
+Verified 2026-09-11 against the committed data: `FRUSTRATION` and `RETURN` exist in GAME_MASTER's
+move list, but **zero of 1750 species** carry either in `chargedMoves` — including all 520 shadow
+entries. The real game assigns Frustration *dynamically* to a freshly-caught unpurified Shadow; it
+is never part of a species' static movepool, which is the only thing this pipeline reads. Both
+routes into an entry's `chargedMoveId` (the Poke Genie CSV matcher and the Roster tab's
+`MoveSelect`) can only resolve a move that is actually in `species.chargedMoves`, so neither can
+ever yield one.
 
-### 17b. Surface Shadow Raid enrage timings in the UI
+**This is a data-layer question, and there is a strong candidate answer already in hand.** The
+`shadow` block captured during the #15 widening carries first-party `shadowChargeMove:
+"FRUSTRATION"` / `purifiedChargeMove: "RETURN"` per species — i.e. GAME_MASTER itself states that
+an unpurified Shadow holds Frustration. Options, needing a deliberate call:
 
-The mechanic itself shipped 2026-09-10 (`shadow.ts`, threaded through `simulate.ts`), and
-correctly added no `Scenario` field — enrage is a computed fact inside the simulation, not a
-setting. But `enragedAtSeconds` / `subduedAtSeconds` / `enragedAtRaidSeconds` /
-`subduedAtRaidSeconds` are read by **no tab**, verified 2026-09-10.
+1. Add Frustration/Return to shadow species' movepools so the CSV matcher can resolve them.
+   ⚠️ Blast radius: they become selectable in every move picker and simulatable everywhere. Their
+   real stats are recorded (Frustration 10 power / 2000 ms), so a simulation would be *correct*,
+   just showing a deliberately terrible move. `tmMove.ts` already refuses to TM them.
+2. Annotate at import/hand-entry instead ("this Shadow may still hold Frustration"), leaving
+   movepools untouched. Weaker, but zero blast radius.
+3. Leave it. The code is harmless and already correct if the data ever changes.
 
-This is the smallest remaining instance of the recurring orphan pattern: the engine computes it,
-the fields exist, nothing renders it. Worth doing precisely because it is cheap — a shadow raid's
-difficulty is concentrated in the enrage phase, and a clear time that hides *when* the boss
-enraged is a number without its explanation.
-
-### 23. Own-charged-move-cast cost on the Team Raid tab
-
-The Comparator surfaces this (shipped 2026-09-10, badged as the unsourced placeholder it is), but
-`TeamRaidSlotResult` carries **no per-fight equivalent field** — flagged by `web-developer` while
-building the Comparator half. Needs an `engine-developer` change first; it is not a UI-only task.
-
-Still gated on the same caveat: the underlying per-cast dodge cost rests on an unsourced
-assumption (`MECHANICS.md`'s OPEN QUESTION entry), and surfacing a number is not sourcing it.
-
-### 24. Frustration: an informational "can't fix this yet" label
-
-`PLAN_tm_move_change_optimizer.md` asked for this, and it is the one part of that plan NOT
-shipped (2026-09-11). The engine excludes Frustration and Return from TM candidates
-**unconditionally** — correct and deliberate, because no live "is a Taken Over event on right now"
-check may ever exist (it would make a share link's answer depend on when it is opened). But the
-exclusion is currently **silent at the move level**: a shadow holding Frustration still generates
-second-charged-move candidates, and nothing anywhere says its existing charged move is stuck.
-
-What's wanted is a **static** label on such an entry — "only removable during a Taken Over event"
-— never a live event check. Small, purely informational, and it closes the plan's last clause.
-
-Note the entry-level exclusion list (`moveChangeEligibilityReason` in `rosterMoveChange.ts`)
-currently covers only a defaulted moveset and Smeargle, so this needs its own path rather than
-another reason string there.
+⚠️ **Suspected live consequence of doing nothing**, not yet confirmed: a Poke Genie CSV row for an
+unpurified Shadow probably *does* say "Frustration", which our matcher cannot resolve — so it
+lands in `unmatchedMoveNames` and earns the **"unrecognised"** badge, which by its own definition
+means "our data gap, not the player's problem". If so, that is a real, already-visible defect
+rather than a hypothetical. Worth confirming against a real export before choosing an option.
 
 ## Unmodelled real mechanics
 
@@ -148,9 +140,11 @@ described in `HANDOFF.md` and git history, and any *mechanic* it established is 
 | 13 | Real per-boss progress for the multi-raid sweep | 2026-09-10. Per-stage sentences from engine-reported completed work; **never a fabricated combined percentage**. |
 | 14 | `TeamRaidInputs.bossMaxHpOverride` | 2026-09-10, wired to a real recorded `eraHp` for past bosses (verified live: a recorded Abra encounter at 600 HP, not today's 3,600). |
 | 16 | Two tabs modelled "show advanced assumptions" two ways | 2026-09-10. `TeamScenario` carries the real required field; the web-side local bolt-on is gone. |
-| 17 | Shadow Raid enrage | Engine 2026-09-10. **UI half still open — see #17b above.** |
+| 17 | Shadow Raid enrage | Engine 2026-09-10, UI 2026-09-11 (#17b). Comparator shows the per-run clock, Team Raid the raid-global one — two different clocks, deliberately not interchangeable. Surfacing it exposed a real engine bug: `enragePhase` initialized to `"normal"` regardless of `damageDealtBeforeFight`, so every team-raid slot after the first re-reported a bogus enrage at its own tick 0 (14 of 14 slots non-null; one real). Fixed, and a pinned test that had been enshrining the bug corrected from `0.1` to `null`. |
+| 23 | Own-charged-move-cast cost on Team Raid | 2026-09-11. `TeamRaidSlotResult` gained the per-fight fields the Comparator already had; summed across the encounter. Still badged as the unsourced placeholder it is — appearing on a second tab does not make it better sourced. |
 | 18 | The boss-moveset sweep on the Team Raid Simulator | 2026-09-10, as a headline callout keyed on whether the *verdict* varies, not a copy of the Comparator's table. Scoped to Team Raid only; on the ~13-boss multi-raid sweep the cost multiplies for a smaller payoff. |
 | 19 | Party-size ranking-flip breakpoint | 2026-09-10, reusing the engine's `findCrossoverPartySize`, which already existed, was tested, and had **zero call sites**. |
 | 20 | Own-charged-move-cast vulnerability cost | Comparator 2026-09-10, badged as the unsourced placeholder it is. **Team Raid half still open — see #23 above.** |
 | 21 | Dodge-execution-error sensitivity band | 2026-09-10. A band across 50-100% accuracy, never one blended number. |
 | 22 | The first-party 1.0s swap cost | 2026-09-10. Replaced the shipped 0.5s; the Team Raid default's clear time lengthening is the fix working, not a regression. |
+| 15 | Shadow forms exist only for species that have been shadow *raid bosses* | 2026-09-11. Widened, not blocked — GAME_MASTER's own per-template `shadow` block is a first-party anchor (stronger than a raid archive) that raidHistory/Pokebattler/Bulbapedia structurally can't see, since a grunt-only shadow (Shadow Alolan Sandshrew) never raids. See `MECHANICS.md`'s "Which species can be Shadow at all" and `CLAUDE.md`'s shadow-synthesis standing decision. |

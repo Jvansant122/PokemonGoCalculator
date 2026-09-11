@@ -18,6 +18,7 @@ import { FRIENDSHIP_HINT } from "./FriendshipSelect.js";
 import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { DamageOverTimeTable } from "./DamageOverTimeTable.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
+import { OWN_CAST_DODGE_COST_HINT_CORE } from "./ownCastDodgeCostHint.js";
 import { PartySizeFlipView } from "./PartySizeFlipView.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
@@ -47,12 +48,8 @@ const DEFAULT_TARGET_ID = "latios-mega";
  * every scenario that hasn't opted into that setting.
  */
 const OWN_CAST_DODGE_COST_HINT =
-  "UNSOURCED PLACEHOLDER, not a confirmed game mechanic: with \"hold charged move for a safer moment\" on, this " +
-  "engine models the attacker as dodging TWICE around each held cast (once before throwing it, once after) rather " +
-  "than the ordinary single dodge attempt, so each of the boss's charged hits attempted-to-dodge while holding " +
-  "costs 2x the usual dodge time instead of 1x. No source quantifies this sequence at all — it is this project's " +
-  "own labelled modelling assumption (simulate.ts's HOLD_CHARGED_MOVE_DODGE_ATTEMPTS), and MECHANICS.md still " +
-  "records it as an open question. \"Mean per run\" averages this candidate's own 200 simulated runs; the event " +
+  OWN_CAST_DODGE_COST_HINT_CORE +
+  ' "Mean per run" averages this candidate\'s own 200 simulated runs; the event ' +
   "count alongside it is from the one specific representative run the chart below draws.";
 
 export const DEFAULT_ASSUMPTIONS: Assumptions = {
@@ -508,6 +505,19 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                       <dd>{(c.fractionSurvivedFullWindow * 100).toFixed(0)}%</dd>
                       <dt>Died mid own-animation</dt>
                       <dd>{(c.fractionDiedDuringOwnAnimation * 100).toFixed(0)}%</dd>
+                      {c.representativeRun.enragedAtSeconds !== null && (
+                        <>
+                          <dt title="Shadow raid boss enrage — the boss's Attack/Defense jump once its remaining HP drops to 60%, in the one charted run (seed 1) behind this candidate's own trajectory below">
+                            Boss enraged (this run)
+                          </dt>
+                          <dd>
+                            {c.representativeRun.enragedAtSeconds.toFixed(1)}s
+                            {c.representativeRun.subduedAtSeconds !== null
+                              ? ` – subdued at ${c.representativeRun.subduedAtSeconds.toFixed(1)}s`
+                              : " – still enraged when this run ended"}
+                          </dd>
+                        </>
+                      )}
                       <dt>Mean charged damage</dt>
                       <dd>{c.meanChargedDamage.toFixed(0)}</dd>
                       <dt>Mean fast-move damage</dt>

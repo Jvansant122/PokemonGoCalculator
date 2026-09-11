@@ -418,6 +418,37 @@ export interface TeamRaidSlotResult {
    */
   bossChargedHitsTaken: number;
   /**
+   * How many of this fight's dodge attempts against the boss's CHARGED
+   * attacks were the EXTRA "protect the held cast" ones — copied straight
+   * from simulate.ts's StepwiseRunResult.holdChargedMoveDodgeCostEvents for
+   * this fight's own run (IDEAS.md #23). Always 0 whenever
+   * TeamRaidInputs.holdChargedMoveUntilSafe is false (every caller before
+   * this field existed), or when no charged dodge is ever actually attempted
+   * during this fight. Same "not clipped to the clear point" caveat as
+   * chargedAttacksLanded/bossChargedHitsTaken above — can slightly overcount
+   * for the one fight that lands the finishing blow.
+   */
+  holdChargedMoveDodgeCostEvents: number;
+  /**
+   * `holdChargedMoveDodgeCostEvents * HOLD_CHARGED_MOVE_DODGE_ATTEMPTS *
+   * DODGE_COST_SECONDS` for this fight — copied straight from simulate.ts's
+   * StepwiseRunResult.holdChargedMoveDodgeCostSeconds. IDEAS.md #23, the
+   * Team Raid half of the own-charged-move-cast cost the Comparator already
+   * surfaces (see simulate.ts's HOLD_CHARGED_MOVE_DODGE_ATTEMPTS/
+   * StepwiseAttacker.holdChargedMoveUntilSafe doc comments).
+   *
+   * **THIS IS THIS PROJECT'S OWN UNSOURCED PLACEHOLDER MODELLING ASSUMPTION,
+   * NOT A CONFIRMED GAME MECHANIC** — see MECHANICS.md's 2026-09-09 "OPEN
+   * QUESTION" entry under "Dodging", which is still open as of this field's
+   * addition. Surfacing this number here is NOT sourcing it: a caller
+   * rendering it MUST label it as resting on that placeholder, the same way
+   * simulate.ts's own doc comment requires of its per-run counterpart — never
+   * present it alongside a measured fact like ownDamageDealt/
+   * chargedAttacksLanded as though it carried the same confidence. Always 0
+   * under the same conditions as holdChargedMoveDodgeCostEvents above.
+   */
+  holdChargedMoveDodgeCostSeconds: number;
+  /**
    * Combined fast+charged cumulative TEAM damage over time — this fight's
    * own contribution stacked on top of every prior fight's already-
    * accumulated total (across every earlier slot AND every earlier cycle),
@@ -850,6 +881,8 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
         // doesn't expose. Doesn't affect any outcome/margin computation.
         chargedAttacksLanded: run.chargedAttacksLanded,
         bossChargedHitsTaken: run.bossChargedHitsTaken,
+        holdChargedMoveDodgeCostEvents: run.holdChargedMoveDodgeCostEvents,
+        holdChargedMoveDodgeCostSeconds: run.holdChargedMoveDodgeCostSeconds,
         ownDamageTrajectory: clippedTrajectory.map((p) => ({
           atSeconds: startClock + p.atSeconds,
           cumulativeDamage: bossDamageAccum + p.cumulativeDamage,

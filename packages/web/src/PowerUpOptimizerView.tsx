@@ -1129,6 +1129,12 @@ function MultiRaidResultsSection({
         ~164 Pokémon, so a per-entry control would be unusable. It only ever affects an entry that can actually
         Mega Evolve; everything else in the pool is untouched by it.
       </p>
+      <p className="caveats" style={{ marginBottom: 12 }}>
+        <strong>No Best Buddy candidates here.</strong> IDEAS.md #5&rsquo;s free (no stardust/candy) Best Buddy
+        candidate list is Single-raid mode ONLY — a roster entry here carries no Best Buddy flag at all, and
+        evaluating it correctly needs the aggregate-across-bosses noise-floor machinery Single-raid mode
+        doesn&rsquo;t have. Switch to Single-raid mode (in Assumptions above) to see it.
+      </p>
 
       <div className="result-row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
         <button type="button" onClick={onRunSweep} disabled={isRunning || hydratedPoolCount === 0 || bossCount === 0}>
@@ -1657,6 +1663,24 @@ function MultiRaidMoveChangeSection({
             </dl>
           </div>
 
+          {run.data.frustrationNotices.length > 0 && (
+            <div className="result-card" style={{ marginBottom: 12 }}>
+              <h3>Holds Frustration — informational, NOT an exclusion</h3>
+              <p className="caveats" style={{ marginBottom: 8 }}>
+                These entries are fully eligible for every candidate above — Frustration doesn&rsquo;t block
+                unlocking a second charged move or an Elite TM swap of the SLOT it&rsquo;s in. Only Frustration
+                itself, the move currently held, can&rsquo;t be removed or replaced here:
+              </p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {run.data.frustrationNotices.map((n) => (
+                  <li key={n.entryId} style={{ marginBottom: 4 }}>
+                    <strong>{n.speciesName}</strong>: {n.notice}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <RosterSecondChargedMoveTable candidates={run.data.secondChargedMove} entryNameById={entryNameById} />
           <RosterEliteTmSection
             kind="fast"
@@ -2157,6 +2181,17 @@ function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlan
         </div>
       )}
 
+      {plan.bestBuddyRecommendation && (
+        <div className="blocked-gain-callout" style={{ borderLeftColor: "var(--info)" }}>
+          <strong style={{ color: "var(--info)" }}>Best Buddy recommendation (free — no stardust/candy)</strong>
+          Slot {plan.bestBuddyRecommendation.slotIndex + 1} ({plan.bestBuddyRecommendation.speciesName}): +
+          {plan.bestBuddyRecommendation.deltaTeamDps.toFixed(2)} team DPS if made your active Best Buddy, evaluated
+          against the roster AFTER every step above. This is the single, joint pick — honoring the real one-Best-Buddy-
+          per-trainer limit the ranked list above deliberately does not enforce. &ldquo;Free&rdquo; means no
+          stardust/candy cost tracked here; the real walking distance to earn it is not modelled.
+        </div>
+      )}
+
       <div className="result-card">
         <dl>
           <dt>Baseline team DPS (roster as-is)</dt>
@@ -2549,6 +2584,62 @@ function SingleRaidResultsSection({
             </p>
           </CollapsibleSection>
 
+          {data.bestBuddyCandidates.length > 0 && (
+            <CollapsibleSection id="pu-best-buddy" heading="Best Buddy candidates (no stardust/candy cost)" defaultOpen>
+              <p className="caveats" style={{ marginBottom: 12 }}>
+                Best Buddy&rsquo;s +1 effective level costs ZERO stardust and ZERO candy, so it can&rsquo;t be ranked
+                by either of this tab&rsquo;s cost-efficiency axes and never appears in the ranked table below —
+                these rows are its own free-standing list. &ldquo;No cost&rdquo; means no stardust/candy specifically
+                — the real walking distance to actually earn Best Buddy status is real and simply not modelled here.
+                Each row is a real paired simulation with ONLY that one slot&rsquo;s Best Buddy flag flipped on,
+                evaluated INDEPENDENTLY as if it were the only Best Buddy candidate — but only ONE Pokémon can be
+                your trainer&rsquo;s active Best Buddy at a time in the real game, so more than one row can show a
+                gain here without all being simultaneously achievable. The fixed-budget plan below picks at most one.
+              </p>
+              {(() => {
+                const best = data.bestBuddyCandidates.reduce((a, b) => (b.deltaTeamDps > a.deltaTeamDps ? b : a));
+                return (
+                  <p className="caveats" style={{ color: "var(--text)", marginBottom: 12 }}>
+                    Biggest gain: Slot {best.slotIndex + 1} ({best.speciesName}), {best.deltaTeamDps >= 0 ? "+" : ""}
+                    {best.deltaTeamDps.toFixed(2)} team DPS as Best Buddy
+                    {best.deltaExceedsNoise ? "" : " — but this is within this run's noise floor, not a confirmed real gain"}.
+                  </p>
+                );
+              })()}
+              <div className="table-scroll">
+                <table className="time-series-table">
+                  <thead>
+                    <tr>
+                      <th>Slot</th>
+                      <th>Species</th>
+                      <th>Δ team DPS as Best Buddy</th>
+                      <th>Clears noise floor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.bestBuddyCandidates.map((c) => (
+                      <tr key={c.slotIndex}>
+                        <td>{c.slotIndex + 1}</td>
+                        <td>{c.speciesName}</td>
+                        <td>
+                          {c.deltaTeamDps >= 0 ? "+" : ""}
+                          {c.deltaTeamDps.toFixed(2)}
+                        </td>
+                        <td>
+                          {c.deltaExceedsNoise ? (
+                            <span className="badge badge-free">free — real gain</span>
+                          ) : (
+                            "≈0 (within noise)"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CollapsibleSection>
+          )}
+
           {plan && <SingleRaidBudgetPlanSection plan={plan} slotSpecies={slotSpecies} />}
 
           <CollapsibleSection
@@ -2728,7 +2819,9 @@ function SingleRaidResultsSection({
           candy-cost override (candy/XL-candy only — stardust is genuinely unchanged at every level) via a generic
           per-species override mechanism; Eternatus is the only entry the live GAME_MASTER dump carries one for, so
           this mechanism is untested against a second overridden species. Best Buddy status (a real +1 level beyond
-          the normal level-50 cap) is not modelled in this tab. The Shadow-side
+          the normal level-50 cap) is now surfaced as its own free, no-stardust/no-candy candidate list (&ldquo;Best
+          Buddy candidates&rdquo; above, and the fixed-budget plan&rsquo;s own at-most-one recommendation) — it still
+          never competes on either cost-efficiency axis, since it costs neither. The Shadow-side
           candy rounding rule is [inferred from the Purified rule, not independently confirmed] — see powerUp.ts's own
           top doc comment. Stardust and candy/XL-candy efficiency are kept as two separate numbers on purpose (see the
           "Rank by" control) — they are not fungible resources for a real player, so this tool never blends them into
@@ -3492,7 +3585,11 @@ export function PowerUpOptimizerView() {
               never modeled: a regular TM&rsquo;s outcome is random and not confirmed uniform, and Frustration
               removal is only actionable during a real-world &ldquo;Taken Over&rdquo; event this tool has no live
               calendar for. There is no joint budget allocator across move changes (unlike the fixed-budget plan
-              above for power-ups) — each candidate is priced as if it were the only thing you buy.
+              above for power-ups) — each candidate is priced as if it were the only thing you buy. An entry
+              currently holding Frustration gets its own static, informational notice above the tables (never a
+              live &ldquo;is that event running right now&rdquo; check, which would make a share link&rsquo;s
+              answer depend on when it&rsquo;s opened) — it is NOT excluded from the candidates above; only its
+              held Frustration itself is stuck.
               </p>
             </details>
             </div>

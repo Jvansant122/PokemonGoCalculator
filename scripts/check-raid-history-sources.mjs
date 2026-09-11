@@ -113,23 +113,47 @@ for (const value of stale) {
 // anchored on raidHistory.json, which is accumulate-only and never shrinks.
 //
 // The invariant worth asserting is the FRAGILITY direction, not its inverse. A
-// shadow species with no raidHistory row has no durable anchor: it exists only
-// because something transient mentioned it (today's live feed, or a third-party
-// archive that could change), and it will disappear when that stops. The
-// reverse check — "every history row has a species" — would be near-tautological
-// here, since synthesis reads that same file.
+// shadow species with no raidHistory row AND no first-party GAME_MASTER
+// `shadow` block has no durable anchor: it exists only because something
+// transient mentioned it (today's live feed, or a third-party archive that
+// could change), and it will disappear when that stops. The reverse check —
+// "every history row has a species" — would be near-tautological here, since
+// synthesis reads that same file.
+//
+// A shadow species can ALSO be anchored by GAME_MASTER's own first-party
+// `shadow` block (2026-09-11, IDEAS.md #15 — "Shadow forms exist only for
+// species that have been shadow raid bosses"), which is stronger evidence
+// than a third-party raid archive, not weaker, and is the ONLY anchor that
+// can ever cover a Team GO Rocket grunt-only shadow (e.g. Shadow Alolan
+// Sandshrew) — raidHistory.json is structurally raid-shaped and can never
+// record one. sync-data.ts writes the base-species-id list this anchor
+// implies to data/normalized/shadowFirstPartyAnchors.json (see that file's
+// own doc comment in sync-data.ts) specifically so this check can see it
+// without re-running the sync pipeline itself.
 const speciesPath = path.join(repoRoot, 'data/normalized/species.json');
+const shadowFirstPartyAnchorsPath = path.join(repoRoot, 'data/normalized/shadowFirstPartyAnchors.json');
 if (fs.existsSync(speciesPath)) {
   const species = JSON.parse(fs.readFileSync(speciesPath, 'utf8'));
   const shadowIds = species.map((s) => s.id).filter((id) => id.endsWith('-shadow'));
-  const anchored = new Set(rows.map((r) => r.speciesId));
-  const unanchored = shadowIds.filter((id) => !anchored.has(id));
+  const anchoredByHistory = new Set(rows.map((r) => r.speciesId));
+  let firstPartyAnchoredShadowIds = new Set();
+  if (fs.existsSync(shadowFirstPartyAnchorsPath)) {
+    const baseIds = JSON.parse(fs.readFileSync(shadowFirstPartyAnchorsPath, 'utf8'));
+    firstPartyAnchoredShadowIds = new Set(baseIds.map((baseId) => `${baseId}-shadow`));
+  } else {
+    console.log(`warn  ${shadowFirstPartyAnchorsPath} does not exist — first-party GAME_MASTER shadow anchoring cannot be checked this run (treated as zero, not skipped).`);
+  }
+  const unanchored = shadowIds.filter((id) => !anchoredByHistory.has(id) && !firstPartyAnchoredShadowIds.has(id));
+  const anchoredByFirstPartyOnly = shadowIds.filter((id) => !anchoredByHistory.has(id) && firstPartyAnchoredShadowIds.has(id));
   console.log('');
-  console.log(`shadow species: ${shadowIds.length}, anchored in raidHistory: ${shadowIds.length - unanchored.length}`);
+  console.log(
+    `shadow species: ${shadowIds.length}, anchored in raidHistory: ${shadowIds.length - unanchored.length - anchoredByFirstPartyOnly.length}, ` +
+      `anchored ONLY by GAME_MASTER's first-party shadow block: ${anchoredByFirstPartyOnly.length}`,
+  );
   if (unanchored.length > 0) {
     const shown = unanchored.slice(0, 10).join(', ') + (unanchored.length > 10 ? ', ...' : '');
     fail(
-      `${unanchored.length} shadow species have NO raidHistory row, so they are carried only by a ` +
+      `${unanchored.length} shadow species have NO raidHistory row and NO first-party GAME_MASTER shadow block, so they are carried only by a ` +
         `transient source and will vanish when it stops mentioning them: ${shown}`,
     );
   }

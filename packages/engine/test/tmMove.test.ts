@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canLearnSecondChargedMove,
+  frustrationLockNotice,
   generateEliteTmCandidates,
   generateSecondChargedMoveCandidates,
   isSecondChargedMoveEligibleByDefault,
@@ -518,5 +519,52 @@ describe("blocked-slot edge cases", () => {
       pricing: { kmBuddyDistance: 1, isStarterOrBabyFlatRate: false, modifiers: { isShadow: false, isPurified: false } },
     });
     expect(second).toEqual({ blocked: true, reason: "This slot is empty." });
+  });
+});
+
+// --- frustrationLockNotice (IDEAS.md #24) ----------------------------------
+describe("frustrationLockNotice", () => {
+  const FRUSTRATION: ChargedMove = {
+    id: "frustration",
+    name: "Frustration",
+    type: "normal",
+    power: 10,
+    energyCost: 33,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+  };
+  const RETURN: ChargedMove = {
+    id: "return",
+    name: "Return",
+    type: "normal",
+    power: 25,
+    energyCost: 33,
+    durationSeconds: 0.5,
+    vulnerableWindowSeconds: 0.5,
+  };
+
+  it("returns a static notice for a move literally named Frustration", () => {
+    const notice = frustrationLockNotice(FRUSTRATION);
+    expect(notice).not.toBeNull();
+    expect(notice).toMatch(/Frustration/);
+    expect(notice).toMatch(/Taken Over/i);
+  });
+
+  it("is case-insensitive on the move name", () => {
+    expect(frustrationLockNotice({ ...FRUSTRATION, name: "frustration" })).not.toBeNull();
+    expect(frustrationLockNotice({ ...FRUSTRATION, name: "FRUSTRATION" })).not.toBeNull();
+  });
+
+  it("returns null for Return — also un-TM-able, but this project has no source for an event-gated removal path for it specifically", () => {
+    expect(frustrationLockNotice(RETURN)).toBeNull();
+  });
+
+  it("returns null for an ordinary, fully-TM-targetable move", () => {
+    expect(frustrationLockNotice(CHARGED_CURRENT)).toBeNull();
+  });
+
+  it("never returns the same text/shape as an eligibility/exclusion reason — always a plain string or null, never {blocked, reason}", () => {
+    const notice = frustrationLockNotice(FRUSTRATION);
+    expect(typeof notice).toBe("string");
   });
 });

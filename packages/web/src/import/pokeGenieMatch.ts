@@ -400,7 +400,22 @@ function buildRosterEntry(row: PokeGenieRow, species: SpeciesDefinition): Roster
  * never silently dropped.
  */
 export function matchPokeGenieRows(rows: PokeGenieRow[], registry: SpeciesSource): RosterImportResult {
-  const allSpecies = registry.all();
+  // Excludes "-shadow"-suffixed SpeciesDefinitions from the matching pool —
+  // an owned Shadow individual is represented by `costModifiers.isShadow`
+  // (set below from the CSV's own "Shadow/Purified" column), never by
+  // resolving to a distinct Shadow SpeciesDefinition; those exist for raid-
+  // boss modelling (see shadowVariant.ts), not roster/attacker
+  // representation. Before 2026-09-11's shadow-synthesis widening
+  // (data-sync, IDEAS.md #15) this was latent-but-harmless: only 4 of 108
+  // Shadow variants shared an id-segment with a REGIONAL_GENDER_FORM_TOKENS
+  // token, so `candidatesByFormToken`'s prefix match almost never saw one.
+  // 520 Shadow variants (now covering most regional forms, e.g.
+  // "raticate-alola-shadow") made the collision real: a plain "Raticate
+  // (Alola)" CSV row's "alola" form-token search returned BOTH
+  // "raticate-alola" and "raticate-alola-shadow" as candidates, made the
+  // match ambiguous, and silently fell through to the wrong (base
+  // "raticate") species via the bare-name fallback.
+  const allSpecies = registry.all().filter((s) => !s.isShadow);
   const dexIndex = buildDexIndex(allSpecies);
 
   const matched: RosterEntry[] = [];

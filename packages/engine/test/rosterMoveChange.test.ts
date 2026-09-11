@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { powerUpCostTableFromGameMaster, type PowerUpCostTable } from "../src/powerUp.js";
 import { runRosterMoveChangeCandidates, type RosterMoveChangeInputs } from "../src/rosterMoveChange.js";
 import { runRosterPlanner, type RosterEntry } from "../src/rosterPlanner.js";
-import type { IVSpread } from "../src/types.js";
+import type { ChargedMove, IVSpread } from "../src/types.js";
 import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_SETTINGS } from "./fixtures/powerUpCosts.js";
 import {
   BOSS_ONE,
@@ -265,5 +265,72 @@ describe("runRosterMoveChangeCandidates — input validation", () => {
     const pool = fieldedTeam();
     const result = runRosterMoveChangeCandidates(baseInputs(pool));
     expect(result.teamRaidCallCount).toBeGreaterThan(0);
+  });
+});
+
+// --- frustrationNotices (IDEAS.md #24) --------------------------------------
+describe("runRosterMoveChangeCandidates — frustrationNotices", () => {
+  const FRUSTRATION: ChargedMove = {
+    id: "tm-frustration",
+    name: "Frustration",
+    type: "normal",
+    power: 10,
+    energyCost: 33,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+  };
+  const FRUSTRATION_SPECIES = makeMultiMoveSpecies("tm-frustration-holder", {
+    chargedMoves: [FRUSTRATION, CHARGED_MOVE_STRONG, CHARGED_MOVE_WEAK],
+  });
+
+  it("reports an entry whose CURRENT charged move is Frustration, with a static notice mentioning Frustration and a Taken Over event", () => {
+    const pool = [
+      entry("frustration-holder", FRUSTRATION_SPECIES, 30, { chargedMoveId: FRUSTRATION.id, knownChargedMoveIds: [FRUSTRATION.id] }),
+      ...fieldedTeam().slice(1),
+    ];
+    const result = runRosterMoveChangeCandidates(baseInputs(pool));
+    const row = result.frustrationNotices.find((n) => n.entryId === "frustration-holder");
+    expect(row).toBeDefined();
+    expect(row!.notice).toMatch(/Frustration/);
+    expect(row!.notice).toMatch(/Taken Over/i);
+  });
+
+  it("does NOT block second-charged-move candidates for a Frustration holder — only the SEPARATE, action-scoped Elite-Charged-TM exclusion legitimately fires for it", () => {
+    const pool = [
+      entry("frustration-holder", FRUSTRATION_SPECIES, 30, { chargedMoveId: FRUSTRATION.id, knownChargedMoveIds: [FRUSTRATION.id] }),
+      ...fieldedTeam().slice(1),
+    ];
+    const result = runRosterMoveChangeCandidates(baseInputs(pool));
+    // A second charged move can still be unlocked normally — Frustration
+    // itself is never touched by that action, so nothing about it blocks
+    // this candidate.
+    expect(result.secondChargedMove.some((c) => c.entryId === "frustration-holder")).toBe(true);
+    // The pre-existing `excluded` entry this pool DOES legitimately produce
+    // is scoped to Elite Charged TM specifically (Frustration really can't
+    // be replaced by ANY TM outside the event) — a narrower, correct,
+    // ALREADY-EXISTING fact, not the broad "ineligible for move changes"
+    // exclusion frustrationNotices exists to avoid implying.
+    const excludedRow = result.excluded.find((e) => e.entryId === "frustration-holder");
+    expect(excludedRow).toBeDefined();
+    expect(excludedRow!.reason).toMatch(/Taken Over/i);
+  });
+
+  it("does not report an entry whose moveset is defaulted, even if its CHARGED move happens to be Frustration — a guessed move must never be asserted as confirmed", () => {
+    const pool = [
+      entry("frustration-defaulted", FRUSTRATION_SPECIES, 30, {
+        chargedMoveId: FRUSTRATION.id,
+        movesetIsDefaulted: true,
+        knownChargedMoveIds: undefined,
+      }),
+      ...fieldedTeam().slice(1),
+    ];
+    const result = runRosterMoveChangeCandidates(baseInputs(pool));
+    expect(result.frustrationNotices.some((n) => n.entryId === "frustration-defaulted")).toBe(false);
+  });
+
+  it("does not report an ordinary roster with no Frustration holder at all", () => {
+    const pool = fieldedTeam();
+    const result = runRosterMoveChangeCandidates(baseInputs(pool));
+    expect(result.frustrationNotices).toEqual([]);
   });
 });

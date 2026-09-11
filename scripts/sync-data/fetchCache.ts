@@ -344,6 +344,18 @@ export interface GameMasterFetchResult {
  * derived fact instead of a guess. See that field's own doc comment for the
  * per-species (pokemonId-enum-keyed), not per-candy-family, caveat.
  *
+ * As of 2026-09-11, each pokemonSettings template's `shadow` block is ALSO
+ * retained verbatim (GameMasterPokemonRecord.shadow) — previously discarded
+ * entirely, this is first-party evidence that the EXACT (pokemonId, form)
+ * pair can be a Shadow Pokémon at all, consumed by sync-data.ts's
+ * Shadow-variant durable synthesis section as a fourth evidence source
+ * alongside raidHistory.json/Pokebattler-legacy/Bulbapedia (IDEAS.md #15,
+ * "Shadow forms exist only for species that have been shadow raid bosses" —
+ * this closes that gap for grunt-only shadows like Alolan Sandshrew, which
+ * none of the other three sources can ever see). See
+ * RawGameMasterPokemonSettingsFull.shadow's doc comment (rawShapes.ts) for
+ * the field shape and the purification-cost caveat.
+ *
  * Deliberately reads `moveSettings`, NEVER `combatMove` — GAME_MASTER carries
  * TWO separate move-stat tables for the same move name: `moveSettings` (PvE,
  * what this engine's raid/gym damage math needs) and `combatMove` (PvP/
@@ -449,6 +461,16 @@ export async function fetchGameMasterData(rawDir: string): Promise<GameMasterFet
           // GameMasterPokemonRecord.kmBuddyDistance's doc comment
           // (rawShapes.ts) for the per-species-vs-per-family caveat.
           kmBuddyDistance: ps.kmBuddyDistance,
+          // 2026-09-11, "Shadow forms exist only for species that have been
+          // shadow raid bosses" scope widening (IDEAS.md #15) — see
+          // RawGameMasterPokemonSettingsFull.shadow's doc comment
+          // (rawShapes.ts) for what this is/isn't evidence of and why
+          // purificationStardustNeeded/purificationCandyNeeded are captured
+          // but not yet interpreted by this pipeline. Passed through
+          // verbatim (undefined stays undefined) rather than defaulted —
+          // unlike upgradeSettings above, there's no "reasonable default" for
+          // whether a species has shadow evidence at all.
+          shadow: ps.shadow,
           tempEvoOverrides: (ps.tempEvoOverrides ?? [])
             .filter((o) => o.stats && o.tempEvoId)
             .map((o) => {

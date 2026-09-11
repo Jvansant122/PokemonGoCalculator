@@ -103,6 +103,8 @@ describe("runRosterPlanner — signature pinning (§3.5)", () => {
         "enragedAtRaidSeconds",
         "endedAtRaidSeconds",
         "faintedAtSeconds",
+        "holdChargedMoveDodgeCostEvents",
+        "holdChargedMoveDodgeCostSeconds",
         "ownDamageDealt",
         "ownDamageTrajectory",
         "secondsActive",

@@ -16,6 +16,7 @@ import {
 } from "./rosterPlanner.js";
 import {
   canLearnSecondChargedMove,
+  frustrationLockNotice,
   generateEliteTmCandidates,
   generateSecondChargedMoveCandidates,
   isSpeciesTmEligible,
@@ -281,11 +282,39 @@ export interface RosterMoveChangeExcludedEntry {
   reason: string;
 }
 
+/**
+ * IDEAS.md #24 — a STATIC, non-event-checking notice for a pool entry whose
+ * current charged move is Frustration (see tmMove.ts's frustrationLockNotice
+ * for the full contract, including why this is narrower than the full
+ * un-TM-able set). Structurally SEPARATE from `excluded` above — a
+ * Frustration holder is NOT excluded from move-change candidates (it can
+ * still gain a second charged move normally; only Frustration ITSELF is
+ * stuck) — so this can never be mistaken for, or accidentally merged with,
+ * an exclusion reason.
+ */
+export interface RosterFrustrationNotice {
+  entryId: string;
+  speciesId: string;
+  speciesName: string;
+  notice: string;
+}
+
 export interface RosterMoveChangeResult {
   secondChargedMove: RosterSecondChargedMoveCandidate[];
   eliteTm: RosterEliteTmCandidate[];
   /** Pool entries excluded from EVERY move-change candidate (moveset unknown, species un-TM-able) — never silently dropped, per the plan's central rule. An entry may ALSO appear here even if it produced no candidates for an orthogonal reason (e.g. already knows its second charged move) — see each entry's own `reason`. */
   excluded: RosterMoveChangeExcludedEntry[];
+  /**
+   * Every pool entry whose CURRENTLY held charged move is Frustration — see
+   * RosterFrustrationNotice. Computed once per entry (not per boss, not
+   * per fielded/benched status — this is a fact about the entry's own
+   * moveset), and ONLY for an entry with a KNOWN, non-defaulted moveset
+   * (`!entry.movesetIsDefaulted`) — a guessed/defaulted move must never be
+   * asserted as "confirmed Frustration." An entry can appear here AND in
+   * `secondChargedMove`/`eliteTm` (Frustration doesn't block those) — this
+   * array is purely additive information, never an exclusion.
+   */
+  frustrationNotices: RosterFrustrationNotice[];
   /** How many real runTeamRaid calls this sweep actually made — for a caller/skeptic to sanity-check against this module's own scale warnings. */
   teamRaidCallCount: number;
 }
@@ -420,6 +449,22 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
       throw new Error(`Duplicate RosterEntry.entryId "${entry.entryId}" — every pool entry needs a unique id.`);
     }
     seenEntryIds.add(entry.entryId);
+  }
+
+  // Static, non-event-checking Frustration notices (IDEAS.md #24) — one pass
+  // over the whole pool, independent of which boss(es) an entry is fielded
+  // against, since this is a fact about the entry's own current moveset, not
+  // a per-boss evaluation. Gated on a KNOWN moveset for the same reason every
+  // other move-change action is — see moveChangeEligibilityReason above.
+  const frustrationNotices: RosterFrustrationNotice[] = [];
+  for (const entry of pool) {
+    if (entry.movesetIsDefaulted) continue;
+    const currentChargedMove = resolveMove(entry.species.chargedMoves, entry.chargedMoveId);
+    if (!currentChargedMove) continue;
+    const notice = frustrationLockNotice(currentChargedMove);
+    if (notice) {
+      frustrationNotices.push({ entryId: entry.entryId, speciesId: entry.species.id, speciesName: entry.species.name, notice });
+    }
   }
 
   const shared: SharedTeamRaidAssumptions = {
@@ -768,5 +813,5 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
     }
   }
 
-  return { secondChargedMove, eliteTm, excluded, teamRaidCallCount };
+  return { secondChargedMove, eliteTm, excluded, frustrationNotices, teamRaidCallCount };
 }

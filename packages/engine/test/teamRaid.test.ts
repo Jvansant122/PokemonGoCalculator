@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { DODGE_COST_SECONDS } from "../src/breakpoints.js";
 import type { MegaLevel } from "../src/megaLevel.js";
-import { simulateStepwiseBattle } from "../src/simulate.js";
+import { HOLD_CHARGED_MOVE_DODGE_ATTEMPTS, simulateStepwiseBattle } from "../src/simulate.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
 import { DEFAULT_SWAP_COST_SECONDS, MAX_TEAM_RAID_CYCLES, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "../src/teamRaid.js";
 import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
@@ -823,6 +824,79 @@ describe("TeamRaidInputs.friendshipLevel", () => {
     const forever = runOneSlot("forever");
     expect(forever.slots[0]!.secondsActive).toBe(none.slots[0]!.secondsActive);
     expect(forever.slots[0]!.faintedAtSeconds).toBe(none.slots[0]!.faintedAtSeconds);
+  });
+});
+
+// --- TeamRaidSlotResult.holdChargedMoveDodgeCostEvents/Seconds (IDEAS.md #23) --
+//
+// The Team Raid half of the own-charged-move-cast cost the Comparator
+// already surfaces (simulate.ts's StepwiseRunResult.holdChargedMoveDodgeCostEvents/
+// Seconds) — these two fields are copied straight through per fight, never
+// re-derived, so these tests check the copy, not the underlying mechanic
+// itself (already pinned in simulate.test.ts).
+describe("TeamRaidSlotResult.holdChargedMoveDodgeCostEvents / holdChargedMoveDodgeCostSeconds", () => {
+  // Own chargedMove energyCost is unreachable (> MAX_ENERGY) so this slot
+  // never actually casts its own charged move — isolates the "dodge around
+  // the boss's charged hits" cost from holdChargedMoveUntilSafe's OTHER
+  // effect (holding the attacker's own cast), same isolation technique
+  // simulate.test.ts's own holdChargedMoveUntilSafe tests use.
+  const PASSIVE_TANK: SpeciesDefinition = {
+    id: "passive-tank",
+    name: "Passive Tank",
+    types: ["normal"],
+    baseAttack: 50,
+    baseDefense: 300,
+    baseStamina: 800,
+    fastMoves: [WEAK_FAST],
+    chargedMoves: [{ ...WEAK_CHARGED, energyCost: 99999 }],
+  };
+  const chargingBoss: SpeciesDefinition = {
+    id: "charging-boss",
+    name: "Charging Boss",
+    types: ["normal"],
+    baseAttack: 150,
+    baseDefense: 100,
+    baseStamina: 4000, // survives the whole window — exactly one fight, no swap/wipe to complicate the comparison
+    fastMoves: [WEAK_FAST],
+    chargedMoves: [WEAK_CHARGED],
+    statsArePrecomputed: true,
+  };
+
+  function runOneSlot(holdChargedMoveUntilSafe: boolean) {
+    return runTeamRaid(
+      baseInputs({
+        slots: [makeSlot(PASSIVE_TANK)],
+        boss: chargingBoss,
+        dodge: { kind: "perfect" },
+        holdChargedMoveUntilSafe,
+        bossChargedMoveMeanIntervalSeconds: 2,
+        raidTimerSeconds: 30,
+        maxSecondsPerSlot: 30,
+      }),
+    );
+  }
+
+  it("is 0 for every fight when holdChargedMoveUntilSafe is off (the default)", () => {
+    const result = runOneSlot(false);
+    expect(result.slots.length).toBeGreaterThan(0);
+    for (const slot of result.slots) {
+      expect(slot.holdChargedMoveDodgeCostEvents).toBe(0);
+      expect(slot.holdChargedMoveDodgeCostSeconds).toBe(0);
+    }
+  });
+
+  it("is positive and internally consistent when holdChargedMoveUntilSafe is on and the boss actually throws charged moves the attacker dodges", () => {
+    const result = runOneSlot(true);
+    expect(result.slots.length).toBe(1);
+    const slot = result.slots[0]!;
+    expect(slot.holdChargedMoveDodgeCostEvents).toBeGreaterThan(0);
+    // Exactly the relationship simulate.ts's own doc comment states — this
+    // field is that count times the per-event placeholder cost, not an
+    // independently-tracked value.
+    expect(slot.holdChargedMoveDodgeCostSeconds).toBeCloseTo(
+      slot.holdChargedMoveDodgeCostEvents * HOLD_CHARGED_MOVE_DODGE_ATTEMPTS * DODGE_COST_SECONDS,
+      9,
+    );
   });
 });
 

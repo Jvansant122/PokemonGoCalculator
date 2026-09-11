@@ -199,6 +199,46 @@ describe("runTeamRaidScenario (boss moveset sweep, IDEAS #18)", () => {
   });
 });
 
+// IDEAS.md #23 — the Team Raid half of the own-charged-move-cast
+// dodge-vulnerability cost the Comparator already surfaces. Both fields are
+// 0 whenever holdChargedMoveUntilSafe is off (the default scenario's own
+// state, already covered by the "produces a well-formed result" test above);
+// this pins that turning the toggle ON produces a well-formed, non-negative,
+// internally-consistent value instead, so a wiring regression (e.g. the
+// field being dropped from buildTeamRaidInputs) fails this test rather than
+// only being visible by eye in the UI.
+describe("runTeamRaidScenario (holdChargedMoveUntilSafe own-cast dodge cost, IDEAS #23)", () => {
+  it("is exactly 0 across every fight when holdChargedMoveUntilSafe is off", () => {
+    const result = runTeamRaidScenario(DEFAULT_TEAM_ASSUMPTIONS, speciesRegistry);
+    expect(result.data).not.toBeNull();
+    for (const slot of result.data!.slots) {
+      expect(slot.holdChargedMoveDodgeCostEvents).toBe(0);
+      expect(slot.holdChargedMoveDodgeCostSeconds).toBe(0);
+    }
+  });
+
+  it("reports a well-formed, non-negative total when holdChargedMoveUntilSafe is on", () => {
+    const assumptions = { ...DEFAULT_TEAM_ASSUMPTIONS, holdChargedMoveUntilSafe: true };
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.data).not.toBeNull();
+    let totalEvents = 0;
+    let totalSeconds = 0;
+    for (const slot of result.data!.slots) {
+      expectFiniteNumber(slot.holdChargedMoveDodgeCostEvents, "slot.holdChargedMoveDodgeCostEvents");
+      expectFiniteNumber(slot.holdChargedMoveDodgeCostSeconds, "slot.holdChargedMoveDodgeCostSeconds");
+      expect(slot.holdChargedMoveDodgeCostEvents).toBeGreaterThanOrEqual(0);
+      expect(slot.holdChargedMoveDodgeCostSeconds).toBeGreaterThanOrEqual(0);
+      totalEvents += slot.holdChargedMoveDodgeCostEvents;
+      totalSeconds += slot.holdChargedMoveDodgeCostSeconds;
+    }
+    // The default roster/boss/dodge assumptions genuinely attempt at least
+    // one charged-move dodge somewhere across the encounter, so this isn't a
+    // vacuous "always 0" pass.
+    expect(totalEvents).toBeGreaterThan(0);
+    expect(totalSeconds).toBeGreaterThan(0);
+  }, 20_000);
+});
+
 describe("runTeamRaidScenario (showDetailedAssumptions derived-frequency fallback)", () => {
   it("derives effectiveBossChargedMoveFrequencySeconds from the boss's own fast-move charge time when showDetailedAssumptions is false", () => {
     const assumptions = { ...DEFAULT_TEAM_ASSUMPTIONS, showDetailedAssumptions: false };
@@ -217,6 +257,82 @@ describe("runTeamRaidScenario (showDetailedAssumptions derived-frequency fallbac
     const result = runTeamRaidScenario(assumptions, speciesRegistry);
     expect(result.effectiveBossChargedMoveFrequencySeconds).toBe(42);
   });
+});
+
+// IDEAS.md #17b — the engine's Shadow raid enrage (shadow.ts, wired into
+// simulate.ts 2026-09-10) surfaced in the UI for the first time. These pin
+// real, live-verified (via a built-dist Playwright drive, not just this
+// smoke test) numbers against real Shadow raid bosses currently in
+// data/normalized/activeRaids.json, so a future data-sync/registry change
+// that moves these species off the live feed will fail this test loudly
+// rather than silently going untested — see this feature's own report for
+// the exact rendered strings this test's values were read off of.
+describe("Shadow raid enrage timings (IDEAS #17b)", () => {
+  it("runComparatorScenario: a non-Shadow boss (latios-mega, the default target) never enrages — both representativeRun timestamps stay null", () => {
+    const result = runComparatorScenario(COMPARATOR_DEFAULTS, speciesRegistry);
+    for (const c of result.results!) {
+      expect(c.representativeRun.enragedAtSeconds).toBeNull();
+      expect(c.representativeRun.subduedAtSeconds).toBeNull();
+    }
+  });
+
+  it("runComparatorScenario: a real Shadow raid boss (bagon-shadow) enrages mid-fight for the charted (representativeRun) seed, strictly before that run's own faint time", () => {
+    const assumptions = {
+      ...COMPARATOR_DEFAULTS,
+      targetId: "bagon-shadow",
+      bossFastMoveId: "BITE_FAST",
+      bossChargedMoveId: "CRUNCH",
+      candidateAId: "rayquaza-mega",
+      candidateBId: "kartana",
+    };
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.resultsError).toBeNull();
+    const kartana = result.results!.find((c) => c.name === "Kartana")!;
+    expect(kartana.representativeRun.enragedAtSeconds).toBeCloseTo(6.6, 5);
+    // Never subdued within this specific charted run (it faints first) —
+    // still a real, correctly-absent value, not a "never enrages" null.
+    expect(kartana.representativeRun.subduedAtSeconds).toBeNull();
+    expect(kartana.representativeRun.faintedAtSeconds).not.toBeNull();
+    expect(kartana.representativeRun.enragedAtSeconds!).toBeLessThan(kartana.representativeRun.faintedAtSeconds!);
+  });
+
+  it("runTeamRaidScenario: a non-Shadow boss (tyranitar-mega, the default target) never enrages — every slot's raid-clock timestamps stay null", () => {
+    const result = runTeamRaidScenario(DEFAULT_TEAM_ASSUMPTIONS, speciesRegistry);
+    for (const slot of result.data!.slots) {
+      expect(slot.enragedAtRaidSeconds).toBeNull();
+      expect(slot.subduedAtRaidSeconds).toBeNull();
+    }
+  });
+
+  it("runTeamRaidScenario: a real Shadow raid boss (sandslash-alola-shadow) enrages then auto-subdues on the raid-global clock, both strictly before the reported clear time", () => {
+    const assumptions = {
+      ...DEFAULT_TEAM_ASSUMPTIONS,
+      targetId: "sandslash-alola-shadow",
+      bossFastMoveId: "METAL_CLAW_FAST",
+      bossChargedMoveId: "BLIZZARD",
+    };
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expect(result.data!.outcome).toBe("cleared");
+    // The FIRST non-null value across the flat, chronological slots array is
+    // the one genuine raid-wide transition — see TeamRaidView.tsx's own
+    // "Boss enraged" dt/dd for why .find() (not e.g. the last slot, or an
+    // aggregate) is the correct read: simulate.ts's per-run enragePhase
+    // resets to "normal" at the start of every later fight even once the
+    // boss is already carrying enraged-or-worse cumulative damage, so a
+    // later slot in the SAME encounter can also report a non-null
+    // enragedAtRaidSeconds for what is actually a re-detection of the same
+    // already-past transition, not a second real one (flagged to
+    // engine-developer as a real, if currently harmless-for-this-summary,
+    // mismatch against TeamRaidSlotResult.enragedAtRaidSeconds's own doc
+    // comment, which promises null on a repeat).
+    const raidEnragedAtSeconds = result.data!.slots.find((s) => s.enragedAtRaidSeconds !== null)?.enragedAtRaidSeconds ?? null;
+    const raidSubduedAtSeconds = result.data!.slots.find((s) => s.subduedAtRaidSeconds !== null)?.subduedAtRaidSeconds ?? null;
+    expect(raidEnragedAtSeconds).toBeCloseTo(20.1, 5);
+    expect(raidSubduedAtSeconds).toBeCloseTo(143.7, 5);
+    expect(raidEnragedAtSeconds!).toBeLessThan(raidSubduedAtSeconds!);
+    expect(raidSubduedAtSeconds!).toBeLessThan(result.data!.timeToClearSeconds!);
+  }, 20_000);
 });
 
 describe("runSpeciesReportScenario (default scenario)", () => {
@@ -369,6 +485,51 @@ describe("runPowerUpOptimizerScenario (default scenario)", () => {
     for (const s of blocked!.shortfalls) {
       expect(["stardust", "candy", "xlCandy"]).toContain(s.resource);
       expect(s.shortfall).toBeGreaterThan(0);
+    }
+  }, 30_000);
+});
+
+// IDEAS.md #5 — Best Buddy as a cost-less Power-Up Optimizer candidate,
+// single-raid mode only. These pin the two load-bearing shape guarantees the
+// task's own doc comments require: no cost/efficiency fields exist on a
+// BestBuddyCandidate at all (never a fabricated denominator), and at most one
+// bestBuddyRecommendation survives into the joint budget plan.
+describe("runPowerUpOptimizerScenario (Best Buddy candidates, IDEAS #5)", () => {
+  it("produces one real, well-formed candidate per fielded slot not already Best Buddy, with no cost/efficiency fields", () => {
+    const result = runPowerUpOptimizerScenario(PU_DEFAULTS, speciesRegistry);
+    expect(result.data).not.toBeNull();
+    const fieldedSlotCount = PU_DEFAULTS.slots.filter((s) => s.speciesId).length;
+    // None of the default scenario's slots carry an isBestBuddy setting (this
+    // tab has no such per-slot UI control by design — see the task's own
+    // "out of scope" note), so every fielded slot should appear here.
+    expect(result.data!.bestBuddyCandidates.length).toBe(fieldedSlotCount);
+    for (const c of result.data!.bestBuddyCandidates) {
+      expectFiniteNumber(c.deltaTeamDps, "bestBuddyCandidate.deltaTeamDps");
+      expectFiniteNumber(c.summary.teamDps, "bestBuddyCandidate.summary.teamDps");
+      // Deliberately ABSENT, not null/undefined-but-present — a cost or
+      // efficiency field here would be a divide-by-zero waiting to happen.
+      expect("cost" in c).toBe(false);
+      expect("deltaTeamDpsPer1000Stardust" in c).toBe(false);
+      expect("deltaTeamDpsPerCandy" in c).toBe(false);
+    }
+  }, 30_000);
+
+  it("recommends AT MOST ONE slot in the fixed-budget plan, honoring the real one-Best-Buddy-per-trainer constraint", () => {
+    const result = runPowerUpOptimizerScenario(PU_DEFAULTS, speciesRegistry);
+    expect(result.plan).not.toBeNull();
+    const rec = result.plan!.bestBuddyRecommendation;
+    // Shape-only check (same convention as bestBlockedCandidate's own "shape
+    // only" test above) — whether a real, noise-floor-clearing gain exists at
+    // all depends on the specific roster/boss pairing, but whichever it is
+    // must be well-formed and, structurally, can only ever be ONE slot (the
+    // field's own type is a single object or null, never an array).
+    if (rec) {
+      expect(typeof rec.slotIndex).toBe("number");
+      expect(typeof rec.speciesName).toBe("string");
+      expectFiniteNumber(rec.deltaTeamDps, "bestBuddyRecommendation.deltaTeamDps");
+      expect(rec.deltaTeamDps).toBeGreaterThan(result.plan!.noiseFloorTeamDps);
+    } else {
+      expect(rec).toBeNull();
     }
   }, 30_000);
 });
@@ -542,6 +703,45 @@ describe("runRosterPlannerScenario (multi-raid mode)", () => {
     expect(result.data).toBeNull();
     expect(result.blockedReason).toBe("no-bosses");
   });
+
+  // IDEAS.md #24 — no real species in this data layer's static movepool
+  // lists "Frustration" (it's only ever assigned dynamically to a captured,
+  // unpurified Shadow, never a GAME_MASTER-listed learnable move), so this
+  // constructs a synthetic Frustration charged move on a real, already-used
+  // species to exercise the notice path at all — the engine's own
+  // frustrationLockNotice keys purely on `move.name.toLowerCase() === "frustration"`,
+  // so this is a faithful trigger, not a fabricated shortcut around it.
+  it("runRosterMoveChangeScenario reports a static frustrationNotices entry for a KNOWN Frustration moveset, structurally separate from excluded", () => {
+    const houndourSpecies = speciesRegistry.get("houndour");
+    const frustrationMove = { ...houndourSpecies.chargedMoves[0]!, id: "FRUSTRATION", name: "Frustration" };
+    const speciesWithFrustration = { ...houndourSpecies, chargedMoves: [...houndourSpecies.chargedMoves, frustrationMove] };
+    const poolWithFrustration: RosterEntry[] = pool.map((e, i) =>
+      i === 0 ? { ...e, species: speciesWithFrustration, chargedMoveId: "FRUSTRATION", movesetIsDefaulted: false } : e,
+    );
+
+    const mainResult = runRosterPlannerScenario(multiRaidAssumptions, speciesRegistry, poolWithFrustration);
+    expect(mainResult.data).not.toBeNull();
+    const result = runRosterMoveChangeScenario(
+      multiRaidAssumptions,
+      speciesRegistry,
+      poolWithFrustration,
+      mainResult.data!.baselinePerBoss,
+    );
+    expect(result.error).toBeNull();
+    expect(result.data).not.toBeNull();
+    const notice = result.data!.frustrationNotices.find((n) => n.entryId === poolWithFrustration[0]!.entryId);
+    expect(notice).toBeDefined();
+    expect(notice!.speciesId).toBe("houndour");
+    expect(notice!.notice.length).toBeGreaterThan(0);
+    // The notice is static (calendar-named, never a live "is the event
+    // running now" check) and structurally additive — this entry must NOT
+    // also be reported in `excluded` for that same reason (it may still
+    // appear there for an UNRELATED reason, but not for holding Frustration).
+    const excludedForFrustration = result.data!.excluded.find(
+      (e) => e.entryId === poolWithFrustration[0]!.entryId && e.reason.toLowerCase().includes("frustration"),
+    );
+    expect(excludedForFrustration).toBeUndefined();
+  }, 30_000);
 });
 
 describe("runRosterBudgetScenario (multi-raid mode fixed-budget plan, Phase 4)", () => {

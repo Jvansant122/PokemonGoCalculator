@@ -335,8 +335,22 @@ describe("ranking flip: Shadow enrage flips which archetype wins, by team-DPS ra
   it("THE FLIP: with the boss already 50% dealt-down (inside the enraged band from the start), bulky wins on team-DPS rate instead", () => {
     const glass = teamDpsRate(GLASS_CANNON, 1000); // 50% of maxHp=2000 already dealt
     const bulky = teamDpsRate(BULKY, 1000);
-    expect(glass.result.enragedAtSeconds).toBe(0.1); // already inside the band at the very first tick
-    expect(bulky.result.enragedAtSeconds).toBe(0.1);
+    // BUG FIX (2026-09-11, simulate.ts): the boss starts THIS fight already
+    // inside the enraged band (damageDealtBeforeFight alone puts it at 50%
+    // remaining HP, under the 60% threshold) — no ENRAGE TRANSITION ever
+    // occurs during this run, so enragedAtSeconds is correctly null. This
+    // pin used to read 0.1 (a bogus "just enraged at the first tick"), which
+    // was the bug itself: simulateStepwiseBattle used to hardcode its
+    // initial phase to "normal" regardless of the boss's real starting HP,
+    // so the very first tick's phase check always saw a false transition
+    // whenever a fight started pre-damaged into the enraged band. The
+    // ATTACK/DEFENSE stats actually used for damage were never affected by
+    // this bug (computed fresh from the real HP fraction every tick,
+    // independent of the buggy transition bookkeeping) — see this file's
+    // pinned totalDamage/duration/rate values below, all unchanged by the
+    // fix.
+    expect(glass.result.enragedAtSeconds).toBeNull();
+    expect(bulky.result.enragedAtSeconds).toBeNull();
     // Pinned exact values.
     expect(glass.totalDamage).toBe(9);
     expect(glass.duration).toBe(2);
@@ -410,6 +424,93 @@ describe("teamRaid.ts — Shadow enrage carries across a slot handoff via damage
     // transition — proves damageDealtBeforeFight is actually wired from the
     // running bossDamageAccum total, not just accepted-and-ignored.
     expect(result.slots.some((s) => s.enragedAtRaidSeconds !== null)).toBe(true);
+  });
+
+  // BUG FIX (2026-09-11): simulateStepwiseBattle used to hardcode its
+  // initial enrage phase to "normal" regardless of the boss's REAL starting
+  // HP fraction — so once an earlier slot's damage had already pushed the
+  // boss into the enraged (or subdued) band, every LATER slot's very first
+  // tick saw a false transition (comparing the correct current phase against
+  // the wrongly-hardcoded "normal"), reporting a bogus `enragedAtRaidSeconds`
+  // on every one of them. Confirmed live against a real Shadow boss:
+  // web-developer reported 14 of 14 fielded slots showing a non-null
+  // `enragedAtRaidSeconds`, when only the very first was real. This fixture
+  // (found via a throwaway tsx scratch script, deleted after use) produces
+  // exactly that shape with a small, fully-pinned roster: one real enrage
+  // transition during the FIRST fight, then five further fights (two more
+  // wipe-and-revive cycles) that all start already inside the enraged band
+  // and must report `enragedAtRaidSeconds: null` — proving the fix, not just
+  // "at least one slot enraged" (which the pre-existing test above already
+  // covered and does not distinguish a real transition from a repeated bogus
+  // one).
+  it("reports the real enrage transition on exactly the fight it happened in — never re-detected on any later fight", () => {
+    const boss: SpeciesDefinition = {
+      id: "enrage-regression-boss",
+      name: "Enrage Regression Boss",
+      types: ["normal"],
+      baseAttack: 20,
+      baseDefense: 100,
+      baseStamina: 100,
+      fastMoves: [{ id: "erb-fast", name: "ERB Fast", type: "normal", power: 8, energyGain: 0, durationSeconds: 1.0 }],
+      chargedMoves: [],
+      isShadow: true,
+      statsArePrecomputed: true,
+    };
+    const FRAGILE_HITTER: SpeciesDefinition = {
+      id: "fragile-hitter",
+      name: "Fragile Hitter",
+      types: ["normal"],
+      baseAttack: 80,
+      baseDefense: 60,
+      baseStamina: 45,
+      fastMoves: [ATTACKER_FAST],
+      chargedMoves: [ATTACKER_CHARGED],
+    };
+    const level = 20;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+
+    const result = runTeamRaid({
+      slots: [
+        { species: FRAGILE_HITTER, level, ivs },
+        { species: FRAGILE_HITTER, level, ivs },
+        { species: FRAGILE_HITTER, level, ivs },
+      ],
+      boss,
+      level,
+      ivs,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 300,
+      maxSecondsPerSlot: 60,
+      seed: 1,
+    });
+
+    // Pinned: 7 fights total (2 full wipe-and-revive cycles, then the boss
+    // clears mid-fight on the 7th).
+    expect(result.outcome).toBe("cleared");
+    expect(result.slots.length).toBe(7);
+
+    const enragedFights = result.slots.filter((s) => s.enragedAtRaidSeconds !== null);
+    // Exactly ONE real enrage transition across the whole encounter, and it
+    // happened on the very first fight — every later fight (six of them,
+    // including two full slot-handoffs and two wipe-and-revive cycles) must
+    // report null, the core regression this test exists to pin.
+    expect(enragedFights.length).toBe(1);
+    expect(enragedFights[0]).toBe(result.slots[0]);
+    expect(result.slots[0]!.cycleIndex).toBe(0);
+    expect(result.slots[0]!.slotIndex).toBe(0);
+    expect(result.slots[0]!.enragedAtRaidSeconds).toBeCloseTo(8.1, 5);
+    for (const slot of result.slots.slice(1)) {
+      expect(slot.enragedAtRaidSeconds).toBeNull();
+    }
+
+    // Bonus, not the primary regression: the boss's HP keeps dropping across
+    // every fight in this fixture, eventually crossing into the subdued band
+    // too — on the LAST fight only, never re-detected on an earlier one
+    // either (the same bug, in the other direction).
+    const subduedFights = result.slots.filter((s) => s.subduedAtRaidSeconds !== null);
+    expect(subduedFights.length).toBe(1);
+    expect(subduedFights[0]).toBe(result.slots.at(-1));
   });
 
   it("a non-Shadow boss never reports an enrage transition for any slot, even at the same HP pool", () => {

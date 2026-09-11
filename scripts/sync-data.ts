@@ -683,6 +683,20 @@ const typesByDefaultForm = new Map<number, [PokemonType] | [PokemonType, Pokemon
  */
 const speciesIdByGameMasterFormKey = new Map<string, string>();
 /**
+ * Species ids (both the primary loop and the "mechanically-distinct extra
+ * forms" pass below populate this) whose matched GAME_MASTER template
+ * carries a `shadow` block — first-party evidence that pair can exist as a
+ * Shadow Pokémon at all (see GameMasterPokemonRecord.shadow's doc comment).
+ * Read by the "Shadow-variant durable synthesis" section further down this
+ * file as a fourth evidence source alongside raidHistory.json/
+ * Pokebattler-legacy/Bulbapedia (2026-09-11, IDEAS.md #15). Multiple raw
+ * GAME_MASTER templates for the same roster species (e.g. BULBASAUR's bare +
+ * `_NORMAL` + `_FALL_2019` templates, all carrying identical shadow data)
+ * collapse onto this ONE species id automatically, since only one gmRecord is
+ * ever matched per roster species here — no separate dedup step needed.
+ */
+const speciesIdsWithGameMasterShadowBlock = new Set<string>();
+/**
  * GAME_MASTER pokemonId enum -> the DEFAULT-form species id built for that
  * enum (primary loop only — the extra-forms pass deliberately never writes
  * here, since every species it builds is by definition a non-default form).
@@ -871,6 +885,7 @@ for (const stat of normalStats) {
     setKmBuddyDistance(definition, gmRecord.kmBuddyDistance);
     if (gmRecord.form) speciesIdByGameMasterFormKey.set(gmRecord.form, definition.id);
     speciesIdByGameMasterEnum.set(enumName, definition.id);
+    if (gmRecord.shadow) speciesIdsWithGameMasterShadowBlock.add(definition.id);
     pendingEvolutionResolution.push({ definition, gmRecord });
   }
 
@@ -1144,6 +1159,7 @@ for (const [pokemonId, rows] of statsByPokemonId) {
       definition.candyFamilyId = gmExactRecord.familyId;
       setKmBuddyDistance(definition, gmExactRecord.kmBuddyDistance);
       if (gmExactRecord.form) speciesIdByGameMasterFormKey.set(gmExactRecord.form, definition.id);
+      if (gmExactRecord.shadow) speciesIdsWithGameMasterShadowBlock.add(definition.id);
       pendingEvolutionResolution.push({ definition, gmRecord: gmExactRecord });
       // Deliberately NOT registered in speciesIdByGameMasterEnum — that map
       // is reserved for each enum's DEFAULT-form species only (see its own
@@ -1870,9 +1886,9 @@ const shadowSpeciesByBaseId = new Map<string, SpeciesDefinition>();
 // updated to prefer the variant this section creates).
 //
 // This section synthesizes a Shadow variant for every species with RECORDED
-// EVIDENCE of a shadow raid appearance from up to three sources (a fourth,
-// the live feed, is still handled by the activeRaids loop below, unchanged —
-// "keep it" per this task), in order of durability:
+// EVIDENCE of shadow availability from up to four sources (a fifth, the live
+// feed, is still handled by the activeRaids loop below, unchanged — "keep
+// it" per this task), in order of durability:
 //   1. raidHistory.json's OWN already-persisted shadow rows (speciesId
 //      ending "-shadow") — the durable anchor. That file is accumulate-only
 //      and never shrinks, so once a shadow appearance is recorded there this
@@ -1885,6 +1901,18 @@ const shadowSpeciesByBaseId = new Map<string, SpeciesDefinition>();
 //      2026-09-08: every one of its 17 species is already a subset of
 //      Pokebattler's 105), wired in anyway since it's cheap given the
 //      existing {{lop/raid/GO}} row parser.
+//   4. GAME_MASTER's OWN per-template `shadow` block (2026-09-11,
+//      speciesIdsWithGameMasterShadowBlock, populated above as the primary
+//      and extra-forms species-build loops run — see
+//      GameMasterPokemonRecord.shadow's doc comment). This is the ONLY
+//      source of the four that can ever anchor a Team GO Rocket
+//      GRUNT-only shadow (never a raid boss) — e.g. Shadow Alolan Sandshrew,
+//      the case that motivated IDEAS.md #15 ("Shadow forms exist only for
+//      species that have been shadow raid bosses") — since sources 1-3 are
+//      structurally raid-shaped and can never see one. Stronger evidence
+//      than the other three, not weaker: this is GAME_MASTER's own claim
+//      about the exact (pokemonId, form) pair, not a third-party archive's
+//      inference from a raid rotation.
 //
 // MUST run before this file's Pokebattler-legacy and Bulbapedia archive-
 // resolution passes further down (both do, unconditionally, being later in
@@ -1977,10 +2005,19 @@ if (bulbapediaShadowRaidArchiveFetchResult.wikitext) {
   }
 }
 
+// Evidence 4: GAME_MASTER's own per-template `shadow` block — already
+// resolved to real, registered species ids at build time (see
+// speciesIdsWithGameMasterShadowBlock's own doc comment above), so no name
+// lookup is needed here, unlike evidence 2/3 above. This is the only source
+// of the four that can anchor a grunt-only shadow (IDEAS.md #15) — see this
+// section's own doc comment.
+const shadowSeedBaseIdsFromGameMaster = speciesIdsWithGameMasterShadowBlock;
+
 const shadowSeedAllBaseIds = new Set<string>([
   ...shadowSeedBaseIdsFromHistory,
   ...shadowSeedBaseIdsFromPokebattler,
   ...shadowSeedBaseIdsFromBulbapedia,
+  ...shadowSeedBaseIdsFromGameMaster,
 ]);
 
 // Never fabricate: a base id named by evidence above that ISN'T a real,
@@ -2155,6 +2192,17 @@ if (!hasHalfLevels) {
 
 const speciesOutPath = join(NORMALIZED_DIR, "species.json");
 const raidsOutPath = join(NORMALIZED_DIR, "activeRaids.json");
+/**
+ * `check-raid-history-sources.mjs`'s "shadow durability" assertion needs to
+ * know, from committed JSON alone (it never re-runs this pipeline), which
+ * shadow species are anchored by GAME_MASTER's own first-party `shadow`
+ * block rather than by a raidHistory.json row — see this file's "Shadow-
+ * variant durable synthesis" section, evidence source 4. A small array of
+ * BASE species ids (not the "-shadow"-suffixed ones) is the cheapest durable
+ * signal: the check script derives `${baseId}-shadow` itself, same
+ * SHADOW_ID_SUFFIX convention used here. Added 2026-09-11, IDEAS.md #15.
+ */
+const shadowFirstPartyAnchorsOutPath = join(NORMALIZED_DIR, "shadowFirstPartyAnchors.json");
 
 let previousSpecies: SpeciesDefinition[] | null = null;
 let previousRaids: ActiveRaidEntry[] | null = null;
@@ -3078,6 +3126,8 @@ if (!existsSync(NORMALIZED_DIR)) mkdirSync(NORMALIZED_DIR, { recursive: true });
 writeFileSync(speciesOutPath, JSON.stringify(species, null, 2));
 writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
 writeFileSync(raidHistoryOutPath, JSON.stringify(raidHistory, null, 2));
+// See shadowFirstPartyAnchorsOutPath's own doc comment above.
+writeFileSync(shadowFirstPartyAnchorsOutPath, JSON.stringify([...shadowSeedBaseIdsFromGameMaster].sort(), null, 2));
 // See this file's "Power-up (level-up) cost table" section above for why a
 // missing/invalid table this run intentionally leaves any existing file untouched.
 if (powerUpCostTable) {
@@ -3277,7 +3327,7 @@ if (gameMasterCrossChecks.length > 0) {
 }
 console.log(`  - Shadow raid entries (${shadowSpecies.length} distinct species synthesized total): each gets its own SpeciesDefinition (id "<base>-shadow") with isShadow: true and unmultiplied base stats copied from the real base species; the engine's shadowAdjustedBaseStats (packages/engine/src/shadow.ts) applies SHADOW_ATTACK_MULTIPLIER (1.2)/SHADOW_DEFENSE_MULTIPLIER (0.83) at effective-stat time. A Shadow-matched raid is a real, not approximate, match against its own species (previously flagged isApproximate: true against the unboosted base species).`);
 console.log(
-  `  - SHADOW-VARIANT DURABILITY (2026-09-08 fix — see the "Shadow-variant durable synthesis" section in this file): ${shadowSeedDurableCount} of the ${shadowSpecies.length} total were synthesized DURABLY (i.e. would survive this species also dropping out of the live raid feed), from evidence gated on: ${shadowSeedBaseIdsFromHistory.size} already-recorded shadow row(s) in raidHistory.json, ${shadowSeedBaseIdsFromPokebattler.size} distinct species from Pokebattler's RAID_LEVEL_{1,3,5}_SHADOW_LEGACY tiers (${pokebattlerFetchResult.source === "live" ? "fetched live" : "fetch FAILED this run, 0 contributed"}), ${shadowSeedBaseIdsFromBulbapedia.size} distinct species from Bulbapedia's "List of Shadow Raid Boss changes" page (${bulbapediaShadowRaidArchiveFetchResult.wikitext ? "fetched live, thin corroboration" : `fetch FAILED this run (${bulbapediaShadowRaidArchiveFetchResult.error}), 0 contributed`}). ${shadowSpecies.length - shadowSeedDurableCount} additional species were synthesized ONLY from this run's own live raid feed (not yet durable — will be durable from the NEXT run onward once this run's raidHistory.json write lands, per evidence source 1 above; relies on Map's insertion-order iteration to slice these off the end of shadowSpeciesByBaseId, since the pre-seed loop above runs to completion before the activeRaids loop can append any more): ${shadowSpecies.slice(shadowSeedDurableCount).map((s) => s.name).join(", ") || "none"}. Unresolved (reported, never fabricated): ${shadowSeedUnresolvedBaseIds.length} stale raidHistory.json base id(s) (${shadowSeedUnresolvedBaseIds.join(", ") || "none"}), ${shadowSeedPokebattlerUnresolved.length} Pokebattler shadow-legacy raw id(s) (${shadowSeedPokebattlerUnresolved.join(", ") || "none"}), ${shadowSeedBulbapediaUnresolved.length} Bulbapedia shadow-page name(s) (${shadowSeedBulbapediaUnresolved.join(", ") || "none"}).`,
+  `  - SHADOW-VARIANT DURABILITY (2026-09-08 fix, widened to a 4th evidence source 2026-09-11 — see the "Shadow-variant durable synthesis" section in this file): ${shadowSeedDurableCount} of the ${shadowSpecies.length} total were synthesized DURABLY (i.e. would survive this species also dropping out of the live raid feed), from evidence gated on: ${shadowSeedBaseIdsFromHistory.size} already-recorded shadow row(s) in raidHistory.json, ${shadowSeedBaseIdsFromPokebattler.size} distinct species from Pokebattler's RAID_LEVEL_{1,3,5}_SHADOW_LEGACY tiers (${pokebattlerFetchResult.source === "live" ? "fetched live" : "fetch FAILED this run, 0 contributed"}), ${shadowSeedBaseIdsFromBulbapedia.size} distinct species from Bulbapedia's "List of Shadow Raid Boss changes" page (${bulbapediaShadowRaidArchiveFetchResult.wikitext ? "fetched live, thin corroboration" : `fetch FAILED this run (${bulbapediaShadowRaidArchiveFetchResult.error}), 0 contributed`}), ${shadowSeedBaseIdsFromGameMaster.size} distinct species carrying GAME_MASTER's own first-party "shadow" block (IDEAS.md #15 — the only source of the four that can anchor a Team GO Rocket grunt-only shadow like Alolan Sandshrew, never seen by the other three). ${shadowSpecies.length - shadowSeedDurableCount} additional species were synthesized ONLY from this run's own live raid feed (not yet durable — will be durable from the NEXT run onward once this run's raidHistory.json write lands, per evidence source 1 above; relies on Map's insertion-order iteration to slice these off the end of shadowSpeciesByBaseId, since the pre-seed loop above runs to completion before the activeRaids loop can append any more): ${shadowSpecies.slice(shadowSeedDurableCount).map((s) => s.name).join(", ") || "none"}. Unresolved (reported, never fabricated): ${shadowSeedUnresolvedBaseIds.length} stale raidHistory.json base id(s) (${shadowSeedUnresolvedBaseIds.join(", ") || "none"}), ${shadowSeedPokebattlerUnresolved.length} Pokebattler shadow-legacy raw id(s) (${shadowSeedPokebattlerUnresolved.join(", ") || "none"}), ${shadowSeedBulbapediaUnresolved.length} Bulbapedia shadow-page name(s) (${shadowSeedBulbapediaUnresolved.join(", ") || "none"}). data/normalized/shadowFirstPartyAnchors.json written with ${shadowSeedBaseIdsFromGameMaster.size} base id(s) for check-raid-history-sources.mjs's durability assertion.`,
 );
 console.log(`  - Speculative/hypothetical species in use for raid matching: none. This project's 4 hand-authored hypothetical fixtures (Mega Raichu X/Y, Primal Kyogre, Mega Skarmory) were deleted from the engine's product-reachable exports entirely (CLAUDE.md "Standing decisions", 2026-09-06); this sync no longer imports or matches against them. Note separately: GAME_MASTER can in general carry real, well-formed tempEvoOverrides blocks for mega forms Niantic hasn't released YET (a known datamining phenomenon) — this pipeline never surfaces those on their own, since every mega/primal species it builds is still gated against pogoapi's mega_pokemon.json roster, a currently-live ScrapedDuck raid, or the hand-curated RELEASED_MEGA_PRIMAL_ALLOWLIST, never GAME_MASTER's tempEvoOverrides alone. (Falinks/Malamar/Chesnaught/Delphox/Greninja were flagged here as examples of this in an earlier sync's WARNINGS — all 5 have since genuinely shipped and moved to RELEASED_MEGA_PRIMAL_ALLOWLIST this run, see that constant's doc comment for citations; no other specific example is currently known.)`);
 console.log(`  - mega_pokemon.json entries are REAL data (not flagged speculative) but model an ATTACKER (standard level/IV/CPM pipeline), not a raid boss — the real Primal Kyogre entry now normalizes to id "${reservedSpeciesIds.has("kyogre-primal-attacker") ? "kyogre-primal-attacker" : "kyogre-primal"}" (previously forced to "-attacker" to avoid colliding with a hand-tuned boss-mode fixture of the same id that has since been deleted from product data — see above).`);

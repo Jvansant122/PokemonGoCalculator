@@ -1231,6 +1231,21 @@ label.species-picker-hint {
 }
 
 /*
+ * IDEAS.md #5 — the Power-Up Optimizer's Best Buddy candidates (single-raid
+ * mode). Reuses .badge-persists' info-blue hue rather than inventing a
+ * fourth meaning: both badges mark "a genuinely different kind of number
+ * from the rows around it," here because this candidate costs zero
+ * stardust/candy and so carries no cost/efficiency fields at all (see
+ * BestBuddyCandidate's own doc comment) rather than because it persists past
+ * anything.
+ */
+.badge-free {
+  background: rgba(91, 190, 255, 0.15);
+  color: var(--info);
+  border: 1px solid var(--info);
+}
+
+/*
  * Species Report "past/inactive raid" badges. Deliberately NOT reusing
  * .badge-hypothetical for the researched variant: in this project that orange
  * badge means "this species' data itself is speculative," and every past-raid

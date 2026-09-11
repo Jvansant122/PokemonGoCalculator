@@ -106,11 +106,30 @@ The handful of product-level calls that must survive no matter which agent touch
   calculation; that would be mechanically wrong, not just redundant.
 - **Shadow species are synthesized from recorded evidence, not from the live feed alone.**
   `raidHistory.json` is the durable anchor (accumulate-only, never shrinks); Pokebattler's
-  `_SHADOW_LEGACY` tiers and Bulbapedia's Shadow Raid page are the backfill. Anchoring on a
-  third-party archive instead would just relocate the fragility to a different external
-  dependency. Synthesis must run BEFORE the archive-resolution passes, or shadow archive rows
-  fail to resolve for want of a species. Stats are copied RAW — the engine applies
-  1.2 / 5-6ths at effective-stat time, so pre-multiplying double-applies.
+  `_SHADOW_LEGACY` tiers and Bulbapedia's Shadow Raid page are the backfill. **A fourth,
+  first-party anchor was added 2026-09-11 (IDEAS.md #15):** GAME_MASTER's own per-template
+  `shadow` block (`pokemonSettings.shadow`, carrying `purificationStardustNeeded`/
+  `purificationCandyNeeded`/`purifiedChargeMove`/`shadowChargeMove`) is direct evidence that
+  Niantic's own client considers that exact (pokemonId, form) shadow-capable — stronger evidence
+  than a third-party raid archive, not weaker, and the *only* one of the four that can anchor a
+  Team GO Rocket **grunt-only** shadow (e.g. Shadow Alolan Sandshrew), since raid history/
+  Pokebattler/Bulbapedia are all structurally raid-shaped and can never see one. This is not a
+  weakening of the evidence rule — GAME_MASTER is already this project's designated primary
+  source — and it is still evidence-gated: a species carries no `shadow` block gets no shadow
+  variant just because a sibling form does. Anchoring on a third-party archive instead of a
+  recorded source would just relocate the fragility to a different external dependency.
+  Synthesis must run BEFORE the archive-resolution passes, or shadow archive rows fail to
+  resolve for want of a species. Stats are copied RAW — the engine applies 1.2 / 5-6ths at
+  effective-stat time, so pre-multiplying double-applies. `data/normalized/
+  shadowFirstPartyAnchors.json` (base species ids only) exists solely so
+  `check-raid-history-sources` can verify first-party anchoring from committed JSON without
+  re-running the sync; a shadow species must be anchored by a raidHistory.json row OR appear
+  there, never neither. The one-time **purification** cost fields
+  (`purificationStardustNeeded`/`purificationCandyNeeded`) are captured raw in
+  `data/raw/game_master.json` but not yet normalized anywhere — do not confuse them with the
+  recurring Purified **power-up** discount multiplier (`purifiedStardustMultiplier`/
+  `purifiedCandyMultiplier` in `data/normalized/powerUpCosts.json`, MECHANICS.md's "Shadow,
+  Purified and Lucky modifiers"); they are unrelated numbers from unrelated game systems.
 - **A form qualifies for the roster when its stats OR its types differ from its default form.**
   Not stats alone. Several real forms share a stat line but are typed completely differently
   (Hisuian Sneasel is fighting/poison vs base dark/ice; Alolan Vulpix is ice vs fire; Alolan

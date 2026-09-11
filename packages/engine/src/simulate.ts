@@ -702,7 +702,27 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
   // never change from their initial value in that case).
   let liveBossAttackStat = boss.attackStat;
   let liveBossDefenseStat = boss.defenseStat;
-  let enragePhase: "normal" | "enraged" = "normal";
+  // BUG FIX (2026-09-11): this used to hardcode "normal" unconditionally.
+  // shadowEnragePhaseForHpFraction is a PURE function of the boss's CURRENT
+  // remaining-HP fraction, not path-dependent — so the correct initial phase
+  // is whatever that fraction says at t=0, not always "normal". For a
+  // standalone fight (damageDealtBeforeFight 0, or boss.enrage undefined
+  // entirely) this still resolves to "normal", byte-identical to before. The
+  // bug only bit teamRaid.ts's sequential handoff: a boss already enraged
+  // (or already subdued) from an EARLIER slot's damage starts a LATER slot's
+  // fight with its true HP fraction already past a threshold, but the old
+  // hardcoded "normal" made the very first tick's phase comparison below
+  // treat that as a FRESH transition — reporting a bogus enragedAtSeconds (or
+  // subduedAtSeconds) at that later slot's very first tick, even though the
+  // real transition already happened, and was already correctly reported,
+  // during an earlier slot's own fight. Confirmed live (web-developer,
+  // 2026-09-11): 14 of 14 fielded slots against a real Shadow boss reported a
+  // non-null enragedAtRaidSeconds; only the first (20.1s) was real. Web
+  // already works around this by taking the FIRST non-null value across the
+  // slots array, so the rendered headline number is unaffected by this fix.
+  let enragePhase: "normal" | "enraged" = boss.enrage
+    ? shadowEnragePhaseForHpFraction(Math.max(0, 1 - (boss.enrage.damageDealtBeforeFight ?? 0) / boss.enrage.maxHp))
+    : "normal";
   let enragedAtSeconds: number | null = null;
   let subduedAtSeconds: number | null = null;
 
@@ -819,11 +839,25 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
       const remainingHpFraction = Math.max(0, 1 - damageDealtToBossSoFar / boss.enrage.maxHp);
       const phase = shadowEnragePhaseForHpFraction(remainingHpFraction);
       if (phase !== enragePhase) {
-        // Monotonic within one run (boss HP only ever decreases here), so
-        // this can only ever fire normal->enraged then enraged->normal, in
-        // that order — a plain "which direction did it change" check is
-        // enough, no need to separately guard against re-entering an
-        // earlier phase.
+        // Monotonic within THIS SINGLE CALL to simulateStepwiseBattle (boss
+        // HP only ever decreases here), so within one run this can only ever
+        // fire normal->enraged then enraged->normal, in that order — a plain
+        // "which direction did it change" check is enough here, no need to
+        // separately guard against re-entering an earlier phase.
+        //
+        // This does NOT mean `enragePhase`'s INITIAL value above may safely
+        // be hardcoded to "normal" — a team raid's sequential slot handoffs
+        // (teamRaid.ts) call this function once PER FIGHT, carrying the
+        // boss's already-accumulated damage in via
+        // `boss.enrage.damageDealtBeforeFight`, so a LATER fight can
+        // legitimately start already inside the enraged (or already-subdued)
+        // band. `enragePhase`'s initializer above derives the true starting
+        // phase from that carried-in damage for exactly this reason — it was
+        // a real bug (fixed 2026-09-11) when it didn't, reporting a bogus
+        // transition at every later fight's very first tick. Monotonicity
+        // WITHIN this call is what justifies the simple direction check
+        // just below; it says nothing about what phase this call should
+        // START in.
         if (phase === "enraged") enragedAtSeconds = roundedT;
         else subduedAtSeconds = roundedT;
         enragePhase = phase;

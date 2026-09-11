@@ -809,3 +809,50 @@ function buildEliteTmCandidateResult<T extends FastMove | ChargedMove>(
 
   return { blocked: false, candidates };
 }
+
+// ---------------------------------------------------------------------------
+// Part F — Frustration: a static, non-event-checking notice (IDEAS.md #24)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every Shadow Pokémon knows Frustration, and the unconditional exclusion
+ * above (NEVER_TM_TARGETABLE_MOVE_NAMES) correctly, silently blocks it from
+ * ever being a candidate TARGET or being replaced FROM by either action —
+ * but silence there reads as "nothing is wrong here" rather than "this
+ * Pokémon's weakest possible charged move is stuck." This is the STATIC
+ * notice text `frustrationLockNotice` below returns; it names WHEN
+ * Frustration becomes removable in general, calendar terms (an infrequent
+ * NAMED event) and never performs, or implies, a live "is that event running
+ * right now" check — see this file's top doc comment and IDEAS.md #24 for
+ * why such a check must never exist (it would make a share link's answer
+ * depend on when it's opened).
+ */
+export const FRUSTRATION_LOCK_NOTICE_TEXT =
+  'Holds Frustration, which only a real, calendar-gated "Taken Over" event can remove (MECHANICS.md, ' +
+  '"Frustration is event-gated; purification is not") — this tool never checks whether that event is ' +
+  "running right now. A second charged move can still be unlocked normally; Frustration itself just " +
+  "can't be replaced or removed outside that event.";
+
+/**
+ * `null` for any move other than literally "Frustration" — DELIBERATELY
+ * narrower than the full un-TM-able set (NEVER_TM_TARGETABLE_MOVE_NAMES):
+ * Return and the four signature moves are also permanently un-TM-able, but
+ * MECHANICS.md's "Frustration is event-gated" entry only documents an actual
+ * REMOVAL PATH for Frustration specifically — Return is a good move (power
+ * 25, not power 10) nobody is asking to remove, and no source describes a
+ * Taken-Over-style unlock for Return or any signature move. Producing this
+ * notice for those too would assert a removal path this project has no
+ * source for.
+ *
+ * Returns a NOTICE STRING, never a `reason`/`blocked` value — structurally
+ * distinct from every exclusion channel in this file and in
+ * rosterMoveChange.ts's `moveChangeEligibilityReason`, so a caller cannot
+ * fold this into an `excluded`/`blocked` list by accident: a Frustration
+ * holder is NOT ineligible for a move change (it can still gain a second
+ * charged move normally) — this is a purely informational, ADDITIVE signal
+ * about its CURRENT move only.
+ */
+export function frustrationLockNotice(move: FastMove | ChargedMove): string | null {
+  if (move.name.toLowerCase() !== "frustration") return null;
+  return FRUSTRATION_LOCK_NOTICE_TEXT;
+}

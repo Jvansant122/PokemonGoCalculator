@@ -18,6 +18,7 @@ import { CollapsibleSection } from "./CollapsibleSection.js";
 import { LineupBuilderPanel, type LineupBuilderPanelState } from "./LineupBuilderPanel.js";
 import { applyLineupSlotsToTeamAssumptions, runLineupBuilderForTeamRaid } from "./lineupBuilderAction.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
+import { OWN_CAST_DODGE_COST_HINT_CORE } from "./ownCastDodgeCostHint.js";
 import { TeamDamageChart } from "./TeamDamageChart.js";
 import { TeamRaidBreakdownTable } from "./TeamRaidBreakdownTable.js";
 import { getBaseUrl } from "./urlUtils.js";
@@ -91,6 +92,20 @@ import { buildPowerUpOptimizerScenarioUrl } from "./powerUpOptimizerScenario.js"
 // that case reads as an invitation rather than a raw engine error, not
 // because this DEFAULT is expected to be empty.
 const DEFAULT_TARGET_ID = "tyranitar-mega";
+
+/**
+ * IDEAS.md #23 — the Team Raid half of the own-charged-move-cast
+ * dodge-vulnerability cost the Comparator already surfaces (ComparatorView.tsx's
+ * own OWN_CAST_DODGE_COST_HINT). Unlike the Comparator's 200-seed sweep, a
+ * Team Raid encounter is ONE deterministic simulation (runTeamRaid is not
+ * re-seeded/repeated) — so the number this hint describes is that single
+ * run's own total, not a mean across runs, and the caveat says so explicitly
+ * rather than reusing "mean per run" language that wouldn't be true here.
+ */
+const TEAM_OWN_CAST_DODGE_COST_HINT =
+  OWN_CAST_DODGE_COST_HINT_CORE +
+  " Unlike the Comparator's 200-seed sweep, a Team Raid encounter is ONE deterministic simulation — the total below " +
+  "is this exact run's own count/seconds summed across every fight in the encounter, not a mean over repeated runs.";
 
 export const DEFAULT_TEAM_ASSUMPTIONS: TeamAssumptions = {
   slots: [
@@ -609,12 +624,61 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
                         slotSpecies[result.data.clearingSlotIndex]?.name ?? "?"
                       })`}
                 </dd>
+                {(() => {
+                  // Shadow raid enrage — see TeamRaidSlotResult.enragedAtRaidSeconds/
+                  // subduedAtRaidSeconds's doc comment. Both are timestamped on the
+                  // raid-GLOBAL clock (same clock as timeToClearSeconds/timerMarginSeconds
+                  // above), NOT reset per slot — so the first non-null value across every
+                  // fight IS the one time this encounter's boss crossed each threshold
+                  // (the boss's HP only ever falls once, across the whole continuous
+                  // encounter). null for every non-shadow boss, and also null if this run
+                  // never reached the 60% threshold at all (e.g. cleared or wiped first)
+                  // — in either case nothing renders, rather than a misleading 0.0s line.
+                  const raidEnragedAtSeconds = result.data.slots.find((s) => s.enragedAtRaidSeconds !== null)?.enragedAtRaidSeconds ?? null;
+                  const raidSubduedAtSeconds = result.data.slots.find((s) => s.subduedAtRaidSeconds !== null)?.subduedAtRaidSeconds ?? null;
+                  if (raidEnragedAtSeconds === null) return null;
+                  return (
+                    <>
+                      <dt title="Shadow raid boss enrage — the boss's Attack/Defense jump once its remaining HP drops to 60%, and it auto-subdues back to normal at 15%. Timestamped on the raid clock, same as time to clear above.">
+                        Boss enraged
+                      </dt>
+                      <dd>
+                        {raidEnragedAtSeconds.toFixed(1)}s
+                        {raidSubduedAtSeconds !== null
+                          ? ` – subdued at ${raidSubduedAtSeconds.toFixed(1)}s`
+                          : " – still enraged when the raid ended"}
+                      </dd>
+                    </>
+                  );
+                })()}
                 <dt>Wipe count</dt>
                 <dd>{result.data.wipeCount}</dd>
                 <dt>Slots used / faint events</dt>
                 <dd>
                   {result.data.slotsUsed} used, {result.data.slotsFainted} faint events
                 </dd>
+                {assumptions.holdChargedMoveUntilSafe && (() => {
+                  // IDEAS.md #23 — summed across every fight in this encounter
+                  // (TeamRaidBreakdownTable's own rows), since a Team Raid run
+                  // is a single deterministic simulation with no seeds to mean
+                  // over (see TEAM_OWN_CAST_DODGE_COST_HINT's own doc comment).
+                  const totalEvents = result.data.slots.reduce((sum, s) => sum + s.holdChargedMoveDodgeCostEvents, 0);
+                  const totalSeconds = result.data.slots.reduce((sum, s) => sum + s.holdChargedMoveDodgeCostSeconds, 0);
+                  return (
+                    <>
+                      <dt title={TEAM_OWN_CAST_DODGE_COST_HINT}>
+                        Own-cast dodge-vulnerability cost{" "}
+                        <span className="badge badge-unsourced" title={TEAM_OWN_CAST_DODGE_COST_HINT}>
+                          unsourced placeholder
+                        </span>
+                      </dt>
+                      <dd title={TEAM_OWN_CAST_DODGE_COST_HINT}>
+                        ~{totalSeconds.toFixed(2)}s total across this encounter ({totalEvents} event
+                        {totalEvents === 1 ? "" : "s"})
+                      </dd>
+                    </>
+                  );
+                })()}
               </dl>
             </div>
           </CollapsibleSection>

@@ -363,6 +363,40 @@ export interface RawGameMasterPokemonSettingsFull {
    * lookup.
    */
   kmBuddyDistance?: number;
+  /**
+   * First-party evidence that this EXACT (pokemonId, form) pair can exist as
+   * a Shadow Pokémon at all — present on 1,015 pokemonSettings templates
+   * (467 distinct pokemonId values, 45 of them regional forms) in the
+   * 2026-09-11 dump, including `SANDSHREW_ALOLA`/`SANDSHREW_ALOLA_NORMAL`
+   * (there is no released Shadow Alolan Sandslash raid or archive row, so
+   * this is evidence the raidHistory/Pokebattler/Bulbapedia trio structurally
+   * cannot produce — see IDEAS.md #15 and CLAUDE.md's shadow-synthesis
+   * standing decision). Absence means "this template's own data doesn't say
+   * so", not "this Pokémon can never be Shadow" — a sibling template for the
+   * same pokemonId (bare vs. `_NORMAL` vs. an event-form suffix) can carry an
+   * identical block while another doesn't; this pipeline resolves ONE
+   * template per roster species (see resolveGameMasterPokemonRecord), so
+   * multiple raw templates naturally collapse onto one shadow-eligibility
+   * check for a given roster species.
+   *
+   * `purificationStardustNeeded`/`purificationCandyNeeded` are captured here
+   * RAW and are NOT the same thing as the `purifiedStardustMultiplier`/
+   * `purifiedCandyMultiplier` POWER-UP discount in
+   * RawGameMasterPokemonUpgradeSettingsFull — one is the one-time cost to
+   * purify a caught Shadow, the other is a recurring power-up cost multiplier
+   * once already Purified. Do not conflate or use one to "correct" the other
+   * (see MECHANICS.md's "Shadow, Purified and Lucky modifiers", which the
+   * ×0.9/×0.8 figures there predate and are unrelated to). This pipeline does
+   * not interpret these two fields into any normalized output — flagged for
+   * engine-developer, same "capture raw, let the schema owner decide" rule as
+   * every other not-yet-modelled GAME_MASTER field in this file.
+   */
+  shadow?: {
+    purificationStardustNeeded?: number;
+    purificationCandyNeeded?: number;
+    purifiedChargeMove?: string;
+    shadowChargeMove?: string;
+  };
   tempEvoOverrides?: RawGameMasterTempEvoOverrideFull[];
   evolutionBranch?: RawGameMasterEvolutionBranchFull[];
   /**
@@ -597,6 +631,21 @@ export interface GameMasterPokemonRecord {
    * safe, a per-familyId one is not without picking a specific stage.
    */
   kmBuddyDistance?: number;
+  /**
+   * See RawGameMasterPokemonSettingsFull.shadow's doc comment — passed
+   * through verbatim by fetchGameMasterData's extraction (./fetchCache.ts).
+   * Added 2026-09-11 for the "Shadow forms exist only for species that have
+   * been shadow raid bosses" scope widening (IDEAS.md #15): the first-party
+   * evidence anchor consumed by sync-data.ts's Shadow-variant durable
+   * synthesis section, ordered alongside (not replacing) the raidHistory/
+   * Pokebattler/Bulbapedia evidence sources already there.
+   */
+  shadow?: {
+    purificationStardustNeeded?: number;
+    purificationCandyNeeded?: number;
+    purifiedChargeMove?: string;
+    shadowChargeMove?: string;
+  };
   /**
    * This template's own formChange entries, already filtered to move-bearing
    * ones only (see GameMasterFormChangeEntryRecord). Added 2026-09-10.

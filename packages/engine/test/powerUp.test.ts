@@ -269,6 +269,8 @@ describe("teamDamageAtRaidSeconds", () => {
         ownDamageDealt: ownDamageTrajectory.at(-1)?.cumulativeDamage ?? 0,
         chargedAttacksLanded: 0,
         bossChargedHitsTaken: 0,
+        holdChargedMoveDodgeCostEvents: 0,
+        holdChargedMoveDodgeCostSeconds: 0,
         ownDamageTrajectory,
         dodgeFastAttacksLockout: false,
         enragedAtRaidSeconds: null,
@@ -612,6 +614,91 @@ describe("optimizePowerUps", () => {
       expect(result.bestAffordableByStardustEfficiency).toBeNull();
     });
   });
+
+  describe("bestBuddyCandidates (IDEAS.md #5)", () => {
+    it("produces exactly one candidate per fielded slot, none flagged isBestBuddy", () => {
+      const result = optimizePowerUps(baseInputs());
+      expect(result.bestBuddyCandidates).toHaveLength(2);
+      expect(result.bestBuddyCandidates.map((c) => c.slotIndex).sort()).toEqual([0, 1]);
+      for (const c of result.bestBuddyCandidates) {
+        expect(c.speciesId).toBe(HARD_HITTER.id);
+        expect(typeof c.deltaTeamDps).toBe("number");
+        expect(typeof c.deltaExceedsNoise).toBe("boolean");
+      }
+    });
+
+    it("excludes a slot already flagged isBestBuddy: true — never a redundant 'make it Best Buddy again' candidate", () => {
+      const result = optimizePowerUps(baseInputs({ slots: [makeSlot({ isBestBuddy: true }), makeSlot()] }));
+      expect(result.bestBuddyCandidates).toHaveLength(1);
+      expect(result.bestBuddyCandidates[0]!.slotIndex).toBe(1);
+    });
+
+    it("is empty for an empty slot list entry (species: null)", () => {
+      const result = optimizePowerUps(baseInputs({ slots: [makeSlot(), makeSlot({ species: null })] }));
+      expect(result.bestBuddyCandidates).toHaveLength(1);
+      expect(result.bestBuddyCandidates[0]!.slotIndex).toBe(0);
+    });
+
+    it("never appears in, or shares a shape with, the stardust/candy candidates array", () => {
+      const result = optimizePowerUps(baseInputs());
+      for (const c of result.bestBuddyCandidates) {
+        expect((c as unknown as { cost?: unknown }).cost).toBeUndefined();
+        expect((c as unknown as { deltaTeamDpsPer1000Stardust?: unknown }).deltaTeamDpsPer1000Stardust).toBeUndefined();
+        expect((c as unknown as { deltaTeamDpsPerCandy?: unknown }).deltaTeamDpsPerCandy).toBeUndefined();
+      }
+    });
+
+    it("a slot flagged isBestBuddy: true resolves to EXACTLY the same simulated baseline as its level+1 equivalent — regression test for the toTeamRaidSlots forwarding bug", () => {
+      // Before the 2026-09-11 fix, toTeamRaidSlots silently dropped
+      // isBestBuddy entirely, so a caller-preset flag had ZERO effect on any
+      // simulation this module runs (including its own baseline) — it would
+      // have resolved to the PLAIN level-49 baseline instead. Comparing
+      // against a hand-derived equivalent level (BEST_BUDDY_EFFECTIVE_LEVEL_BONUS
+      // is a flat +1 whole level) is exact and immune to the floor-
+      // quantization coincidences a bare "did it change" check can hit (see
+      // this repo's engine-developer memory on Best Buddy/Super Max stacking
+      // tests for the same lesson). Verified by actually running
+      // optimizePowerUps in a throwaway scratch script before pinning this:
+      // the default BOSS's small HP (1500) clears in the SAME integer number
+      // of ticks at both level 49 and 50 (a coarser, "how many casts does it
+      // take" quantization on top of the ordinary per-hit floor one), so a
+      // huge-HP boss (never clears — raw cumulative damage/time instead) and
+      // a high-power moveset are both needed here to reliably distinguish
+      // the two levels.
+      const STRONG_FAST: FastMove = { id: "strong-fast", name: "Strong Fast", type: "normal", power: 15, energyGain: 10, durationSeconds: 1 };
+      const STRONG_CHARGED: ChargedMove = {
+        id: "strong-charged",
+        name: "Strong Charged",
+        type: "normal",
+        power: 150,
+        energyCost: 50,
+        durationSeconds: 2,
+        vulnerableWindowSeconds: 2,
+      };
+      const STRONG_HITTER: SpeciesDefinition = {
+        id: "strong-hitter",
+        name: "Strong Hitter",
+        types: ["normal"],
+        baseAttack: 300,
+        baseDefense: 150,
+        baseStamina: 200,
+        fastMoves: [STRONG_FAST],
+        chargedMoves: [STRONG_CHARGED],
+      };
+      const HUGE_HP_BOSS: SpeciesDefinition = { ...BOSS, id: "huge-hp-boss", name: "Huge HP Boss", baseStamina: 10_000_000 };
+      const strongSlot = (overrides: Partial<PowerUpSlotInput> = {}) => makeSlot({ species: STRONG_HITTER, ...overrides });
+
+      const withFlag = optimizePowerUps(
+        baseInputs({ boss: HUGE_HP_BOSS, slots: [strongSlot({ isBestBuddy: true }), strongSlot()] }),
+      ).baseline;
+      const explicitLevel = optimizePowerUps(
+        baseInputs({ boss: HUGE_HP_BOSS, slots: [strongSlot({ level: 50 }), strongSlot()] }),
+      ).baseline;
+      const unflagged = optimizePowerUps(baseInputs({ boss: HUGE_HP_BOSS, slots: [strongSlot(), strongSlot()] })).baseline;
+      expect(withFlag).toEqual(explicitLevel);
+      expect(withFlag).not.toEqual(unflagged);
+    });
+  });
 });
 
 describe("planPowerUpBudget", () => {
@@ -728,6 +815,52 @@ describe("planPowerUpBudget", () => {
     );
     expect(plan.steps).toHaveLength(0);
     expect(plan.stopReason).toBe("max-level-reached");
+  });
+
+  describe("bestBuddyRecommendation (IDEAS.md #5)", () => {
+    it("is null when every fielded slot already carries isBestBuddy: true — the real one-at-a-time constraint honored structurally", () => {
+      const plan = planPowerUpBudget(
+        baseInputs({
+          slots: [makeSlot({ isBestBuddy: true }), makeSlot({ species: HARD_HITTER_B, isBestBuddy: true })],
+        }),
+      );
+      expect(plan.bestBuddyRecommendation).toBeNull();
+    });
+
+    it("recommends exactly one slot — never more than one, even though both unflagged slots could show a positive delta — when a real, floor-clearing gain exists", () => {
+      // NO_CHARGE_BOSS has no charged move at all, so every seed is jitter-free
+      // and noiseFloorTeamDps is exactly 0 (see this describe block's own
+      // top comment) — any real positive delta clears it deterministically.
+      // A huge-HP variant (never clears — raw cumulative damage/time) avoids
+      // the discrete "same number of casts either way" tie a small-HP boss
+      // can hit across a single level step (see optimizePowerUps'
+      // bestBuddyCandidates regression test above for the same lesson,
+      // verified the same way: actually running planPowerUpBudget first).
+      const HUGE_HP_BOSS: SpeciesDefinition = { ...NO_CHARGE_BOSS, id: "huge-hp-budget-boss", baseStamina: 10_000_000 };
+      const plan = planPowerUpBudget(
+        baseInputs({
+          boss: HUGE_HP_BOSS,
+          stardustOnHand: 0, // no paid step ever commits — isolates the post-search Best Buddy pass from the greedy round loop entirely
+        }),
+      );
+      expect(plan.steps).toHaveLength(0);
+      expect(plan.bestBuddyRecommendation).not.toBeNull();
+      expect(plan.bestBuddyRecommendation!.deltaTeamDps).toBeGreaterThan(0);
+      expect([HARD_HITTER_A.id, HARD_HITTER_B.id]).toContain(plan.bestBuddyRecommendation!.speciesId);
+      // Structurally at most one — the type itself (a single object, not an
+      // array) already guarantees this; this assertion documents the intent.
+      expect(typeof plan.bestBuddyRecommendation!.slotIndex).toBe("number");
+    });
+
+    it("never touches steps/ledger — it costs nothing tracked", () => {
+      const HUGE_HP_BOSS: SpeciesDefinition = { ...NO_CHARGE_BOSS, id: "huge-hp-budget-boss-2", baseStamina: 10_000_000 };
+      const before = planPowerUpBudget(baseInputs({ boss: HUGE_HP_BOSS, stardustOnHand: 0 }));
+      expect(before.bestBuddyRecommendation).not.toBeNull();
+      expect(before.ledger.stardust.spent).toBe(0);
+      expect(before.ledger.sharedRareCandy.spent).toBe(0);
+      expect(before.ledger.sharedRareCandyXl.spent).toBe(0);
+      expect(before.steps).toHaveLength(0);
+    });
   });
 
   it("eventually stops with no-significant-candidate once no further real gain remains, well short of the budget or maxLevel — and reports bestBlockedCandidate: null, since this is the GENUINELY optimal case (ample resources remain, nothing further clears the floor)", () => {

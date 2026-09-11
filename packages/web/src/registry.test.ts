@@ -60,7 +60,17 @@ describe("gated-evolution resolution (registry.ts's resolveEvolutions)", () => {
     expect(umbreon.requiresNighttime).toBe(true);
   });
 
-  it("resolves roughly 110 gated branches across the real synced roster (per data-sync's own measured 2026-09-10 distribution)", () => {
+  it("resolves roughly 133 gated branches across the real synced roster (per data-sync's own measured 2026-09-11 distribution)", () => {
+    // Widened from ~110 (2026-09-10) to ~133 (2026-09-11): a Shadow variant
+    // inherits its base species' evolvesToIds unchanged (getOrCreateShadowVariant's
+    // spread — see CLAUDE.md's shadow-synthesis standing decision) and
+    // resolveEvolutions below runs over the FULL registry, so every species
+    // with both a gated evolution AND a Shadow variant gets counted twice.
+    // 2026-09-11's shadow-synthesis widening (IDEAS.md #15, a first-party
+    // GAME_MASTER `shadow` block anchor) grew Shadow-variant coverage from
+    // 108 to 520 species, which is the entire cause of this legitimate
+    // increase — not a change to resolveEvolutions or evolutionBranch data
+    // itself (extra-form/single-form counts are byte-identical this run).
     let gatedCount = 0;
     let candyOnlyCount = 0;
     for (const species of speciesRegistry.all()) {
@@ -68,7 +78,7 @@ describe("gated-evolution resolution (registry.ts's resolveEvolutions)", () => {
       candyOnlyCount += species.evolutions?.length ?? 0;
     }
     expect(gatedCount).toBeGreaterThan(90);
-    expect(gatedCount).toBeLessThan(130);
+    expect(gatedCount).toBeLessThan(160);
     expect(candyOnlyCount).toBeGreaterThan(400);
   });
 });
