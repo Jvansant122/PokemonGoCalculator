@@ -64,9 +64,8 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   // The tidy default for a fresh scenario — hides the dodge group,
   // holdChargedMoveUntilSafe, minFightLengthSeconds, and
   // bossChargedMoveFrequencySeconds behind their own values (see
-  // Assumptions.showDetailedAssumptions). A DECODED scenario missing this
-  // field entirely is a different case handled in scenarioToAssumptions
-  // below (?? true, NOT this default) — see that guard's own comment.
+  // Assumptions.showDetailedAssumptions). A decoded scenario missing this
+  // field falls back to this same default too — see scenarioToAssumptions.
   showDetailedAssumptions: false,
 };
 
@@ -177,18 +176,14 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // `??` guards a scenario URL encoded before this field existed rather than
     // surfacing `undefined` into the weather <select> above.
     weather: s.weather ?? "none",
-    // INVERTED default versus every other `??` above: an ABSENT value here
-    // means the link was shared before this setting existed, when there was
-    // no advanced/simple split at all — every field this gates was simply
-    // always visible, and the sender's stored bossChargedMoveFrequencySeconds
-    // WAS the real number in force for that run. Defaulting the absent case
-    // to `true` (not DEFAULT_ASSUMPTIONS.showDetailedAssumptions, which is
-    // `false`) preserves that — "a shared link's meaning never silently
-    // changes" (see bossCadence.tsx's identical concern, and
-    // TeamRaidView.tsx's teamScenarioToAssumptions for the exact same
-    // pattern on the sibling tab). Do not "fix" this to match the
-    // DEFAULT_ASSUMPTIONS pattern every other field uses.
-    showDetailedAssumptions: s.showDetailedAssumptions ?? true,
+    // Plain `??` default, same as every other field above — old-link
+    // preservation was the reason this used to invert to `true` (see
+    // CLAUDE.md's "Backward compatibility with OLD share links is NOT
+    // required", 2026-09-10), but that requirement is gone, so this now
+    // matches DEFAULT_ASSUMPTIONS like its siblings. See
+    // TeamRaidView.tsx's teamScenarioToAssumptions for the same collapse on
+    // the sibling tab's own bolt-on field.
+    showDetailedAssumptions: s.showDetailedAssumptions ?? DEFAULT_ASSUMPTIONS.showDetailedAssumptions,
   };
 }
 

@@ -14,32 +14,37 @@
  * table's own already-pinned 39.5 entry to 8 significant figures using the same formula.
  * Full derivation detail: `.claude/agent-memory/pogo-researcher/fact_cpm_table_levels_41_50.md`.
  *
- * Levels 50.5-52 were added 2026-09-09 for a DIFFERENT, NARROWER purpose than
- * the rest of the table — read this before assuming they mean what 1-50 mean.
+ * Levels 50.5-53 were added for a DIFFERENT, NARROWER purpose than the rest
+ * of the table — read this before assuming they mean what 1-50 mean.
  * `MAX_POKEMON_POWER_UP_LEVEL` below (50) remains the real, live-game
  * power-up ceiling — Niantic's Oct 2025 trainer-level-cap blog post
  * explicitly says the raise to 80 "only affects Trainer level and not
  * Pokémon," and the Pokémon cap has been 50 since Nov 2020's GO Beyond
- * update. These four extra entries (51/52 real whole-level values straight
- * from the raw GAME_MASTER array; 50.5/51.5 computed via this file's own
- * half-level formula above) exist SOLELY as effective-level lookup targets
- * for bonuses stacked on top of that level-50 ceiling — Super Max Mega Level
- * 4's "+2 effective levels" CP bonus (see megaLevel.ts's
- * SUPER_MAX_EFFECTIVE_LEVEL_BONUS/effectiveLevelForMegaLevel: a level-48.5-50
- * Pokémon at Super Max needs exactly these four shifted lookups) — NEVER as
- * power-up targets a Pokémon's own level can actually reach. `cpmForLevel`
- * happily resolves these four keys (that's the whole point — a caller who's
- * already computed a valid shifted effective level shouldn't be blocked from
- * looking it up), but nothing in this engine may present 50.5/51/51.5/52 as
- * a selectable POWER-UP level — see MAX_POKEMON_POWER_UP_LEVEL below, and
- * breakpoints.ts's/ivComparison.ts's ALL_LEVELS (both filter against it
- * explicitly rather than trusting this table's own key count). The raw
- * GAME_MASTER array continues with further distinct values through level 54
- * before flatlining at a constant past that (a classic "padded past the real
- * cap" pattern) — 53/54 are deliberately still omitted here, since no
- * modelled bonus in this engine ever needs to shift a level that far (the
- * largest shift, Super Max's +2 applied to a level-50 Pokémon, tops out at
- * exactly 52).
+ * update. These six extra entries (51/52/53 real whole-level values straight
+ * from the raw GAME_MASTER array — see MECHANICS.md's "CPM, and the levels
+ * above 50 in the data", which records 51-55 as 0.8453/0.8503/0.8553/0.8603/
+ * 0.8653; 50.5/51.5/52.5 computed via this file's own half-level formula
+ * above) exist SOLELY as effective-level lookup targets for bonuses stacked
+ * on top of that level-50 ceiling — Super Max Mega Level 4's "+2 effective
+ * levels" CP bonus (see megaLevel.ts's SUPER_MAX_EFFECTIVE_LEVEL_BONUS) and
+ * the Best Buddy CP Boost's "+1 effective level"
+ * (BEST_BUDDY_EFFECTIVE_LEVEL_BONUS), which STACK (a level-50 Super Max mega
+ * that is also its trainer's Best Buddy needs exactly level 53; a
+ * level-49.5 one needs exactly 52.5 — see megaLevel.ts's own doc comment for
+ * the stacking evidence and its confidence tier) — NEVER as power-up targets
+ * a Pokémon's own level can actually reach. `cpmForLevel` happily resolves
+ * these six keys (that's the whole point — a caller who's already computed a
+ * valid shifted effective level shouldn't be blocked from looking it up),
+ * but nothing in this engine may present 50.5-53 as a selectable POWER-UP
+ * level — see MAX_POKEMON_POWER_UP_LEVEL below, and breakpoints.ts's/
+ * ivComparison.ts's ALL_LEVELS (both filter against it explicitly rather
+ * than trusting this table's own key count). The raw GAME_MASTER array
+ * continues with further distinct values through level 54 before
+ * flatlining at a constant past that (a classic "padded past the real cap"
+ * pattern) — 53.5/54 are deliberately still omitted here, since no modelled
+ * bonus in this engine ever needs to shift a level that far (the largest
+ * stacked shift, Super Max's +2 plus Best Buddy's +1 applied to a level-50
+ * Pokémon, tops out at exactly 53).
  */
 export const CPM_TABLE: Record<number, number> = {
   1: 0.094, 1.5: 0.1351374318, 2: 0.16639787, 2.5: 0.192650919,
@@ -69,9 +74,10 @@ export const CPM_TABLE: Record<number, number> = {
   49: 0.8353, 49.5: 0.8378037299988584, 50: 0.8403,
   // --- Effective-level-only lookup targets past the real power-up ceiling
   // (see this table's own doc comment above and MAX_POKEMON_POWER_UP_LEVEL
-  // below) — 51/52 are real GAME_MASTER whole-level values; 50.5/51.5 are
-  // this file's own half-level formula applied to them.
+  // below) — 51/52/53 are real GAME_MASTER whole-level values; 50.5/51.5/52.5
+  // are this file's own half-level formula applied to them.
   50.5: 0.842803707870344, 51: 0.8453, 51.5: 0.8478036860028387, 52: 0.8503,
+  52.5: 0.8528036644423769, 53: 0.8553,
 };
 
 /**

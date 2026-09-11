@@ -25,7 +25,7 @@ describe("CPM_TABLE levels 41-50", () => {
   });
 });
 
-describe("CPM_TABLE levels 50.5-52 (2026-09-09: effective-level lookup targets for bonus stacking, NOT power-up targets)", () => {
+describe("CPM_TABLE levels 50.5-53 (effective-level lookup targets for bonus stacking, NOT power-up targets)", () => {
   // This supersedes an earlier "rejects level 50.5 and beyond" test — that
   // was correct for the OLD decision (table stopped at 50) but the decision
   // has since deliberately changed (Super Max Mega Level's +2-effective-level
@@ -34,26 +34,34 @@ describe("CPM_TABLE levels 50.5-52 (2026-09-09: effective-level lookup targets f
   // ceiling itself is UNCHANGED — see MAX_POKEMON_POWER_UP_LEVEL below and
   // test/megaLevelPowerUpCeiling.test.ts for the regression guard proving
   // powerUp.ts/rosterPlanner.ts never actually offer these as a target.
-  it("accepts levels 51 and 52 with the verified real GAME_MASTER whole-level values", () => {
+  //
+  // EXTENDED 2026-09-10 from 52 to 53 (see cpm.ts's updated doc comment) —
+  // the Best Buddy CP Boost's +1 effective level (megaLevel.ts's
+  // BEST_BUDDY_EFFECTIVE_LEVEL_BONUS) stacks with Super Max's +2, so a
+  // level-50 Super Max mega that is ALSO its trainer's Best Buddy needs
+  // exactly level 53.
+  it("accepts levels 51, 52 and 53 with the verified real GAME_MASTER whole-level values", () => {
     expect(cpmForLevel(51)).toBeCloseTo(0.8453, 10);
     expect(cpmForLevel(52)).toBeCloseTo(0.8503, 10);
+    expect(cpmForLevel(53)).toBeCloseTo(0.8553, 10);
   });
 
-  it("accepts half-levels 50.5 and 51.5, computed via this file's own established half-level formula", () => {
+  it("accepts half-levels 50.5, 51.5 and 52.5, computed via this file's own established half-level formula", () => {
     // Verified by actually running CPM(n+0.5) = sqrt((CPM(n)^2 + CPM(n+1)^2)/2)
     // against the whole-level values above (a throwaway script, not hand
     // arithmetic — see this project's pinned-number discipline).
     expect(cpmForLevel(50.5)).toBeCloseTo(0.842803707870344, 10);
     expect(cpmForLevel(51.5)).toBeCloseTo(0.8478036860028387, 10);
+    expect(cpmForLevel(52.5)).toBeCloseTo(0.8528036644423769, 10);
   });
 
-  it("still rejects level 52.5 and beyond — no modelled bonus ever needs to shift a level that far", () => {
-    expect(() => cpmForLevel(52.5)).toThrow();
-    expect(() => cpmForLevel(53)).toThrow();
+  it("still rejects level 53.5 and beyond — no modelled bonus ever needs to shift a level that far", () => {
+    expect(() => cpmForLevel(53.5)).toThrow();
+    expect(() => cpmForLevel(54)).toThrow();
   });
 
-  it("MAX_POKEMON_POWER_UP_LEVEL stays 50 even though CPM_TABLE's own keys now extend to 52", () => {
+  it("MAX_POKEMON_POWER_UP_LEVEL stays 50 even though CPM_TABLE's own keys now extend to 53", () => {
     expect(MAX_POKEMON_POWER_UP_LEVEL).toBe(50);
-    expect(Math.max(...Object.keys(CPM_TABLE).map(Number))).toBe(52);
+    expect(Math.max(...Object.keys(CPM_TABLE).map(Number))).toBe(53);
   });
 });

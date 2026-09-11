@@ -1,6 +1,7 @@
 import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajectoryPoint } from "./combat.js";
 import type { DodgeBehavior } from "./breakpoints.js";
-import { canReachSuperMax, chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
+import type { FriendshipLevel } from "./damage.js";
+import { canReachSuperMax, chargedMoveAtMegaLevel, effectiveLevelForBestBuddy, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import { effectiveStat, effectiveStatsAtLevel } from "./stats.js";
 import { shadowAdjustedBaseStats, shadowEnragedStats } from "./shadow.js";
 import { typeEffectiveness } from "./typeChart.js";
@@ -260,6 +261,17 @@ export interface ComparisonInputs {
    * `.boost` at all — see resolveCandidateMegaLevel.
    */
   candidateMegaLevel?: [MegaLevel | null, MegaLevel | null];
+  /**
+   * Per-candidate Best Buddy CP Boost, matched by index to `candidates` —
+   * see megaLevel.ts's BEST_BUDDY_EFFECTIVE_LEVEL_BONUS/
+   * effectiveLevelForBestBuddy for the mechanic (a free `+1` effective level,
+   * unrelated to and gated independently of Mega Level — it applies to any
+   * species, mega or not, and STACKS with candidateMegaLevel's Super Max
+   * bonus if both are set for the same candidate). Defaults to
+   * `[false, false]` when omitted, so every existing caller needs zero
+   * changes.
+   */
+  candidateIsBestBuddy?: [boolean, boolean];
   boss: SpeciesDefinition;
   /**
    * Which real raid tier the boss counts as, for real (non-precomputed)
@@ -304,6 +316,23 @@ export interface ComparisonInputs {
    * weather modeled), matching Scenario's default.
    */
   weather?: WeatherCondition;
+  /**
+   * The friendship attack bonus tier assumed for BOTH candidates — see
+   * damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER for the real 5-tier
+   * Gym/Raid ladder this represents. Defaults to "none" (today's behavior:
+   * no friendship bonus modeled), matching Scenario's default.
+   *
+   * UNLIKE weather, this is single-SIDED and single-trainer-scoped: it only
+   * ever boosts a candidate's OWN fast/charged damage (fastDamageOut/
+   * chargedDamageOut below), never the boss's (a raid boss has no "friend"
+   * co-participating with it, and this engine has no multi-trainer modelling
+   * at all — see CLAUDE.md's standing decision ruling out a "Teambuilding
+   * Analyzer"). It is also NOT a team-wide boost like the mega/primal
+   * `boostMultiplier` — setting this only ever changes the two candidates'
+   * own numbers, exactly like weather's per-move `isWeatherBoosted` check,
+   * never anything resembling team-boost attribution.
+   */
+  friendshipLevel?: FriendshipLevel;
 }
 
 export interface CandidateResult {
@@ -342,8 +371,10 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
     dodgeFastAttacks = false,
     bossStartingEnergy = 0,
     weather = "none",
+    friendshipLevel = "none",
     candidateMegaBoostDisabled = [false, false],
     candidateMegaLevel = [null, null],
+    candidateIsBestBuddy = [false, false],
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
@@ -355,7 +386,12 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
 
   return candidates.map((species, i) => {
     const megaLevel = resolveCandidateMegaLevel(species, candidateMegaLevel[i]);
-    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevelForMegaLevel(level, megaLevel));
+    // Best Buddy's +1 effective level stacks with Super Max's +2 — see
+    // megaLevel.ts's BEST_BUDDY_EFFECTIVE_LEVEL_BONUS doc comment. Applied
+    // BEFORE effectiveLevelForMegaLevel per that function's own convention
+    // (order is mathematically inert — both are a flat `+N` shift).
+    const effectiveLevel = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, candidateIsBestBuddy[i]), megaLevel);
+    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevel);
     const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
     const rawChargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
     if (!fastMove || !rawChargedMove) {
@@ -388,18 +424,23 @@ export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
           typeEffectiveness: candidateFastVsBoss,
           megaBoostMultiplier: ownBoostMultiplier(boost, fastMove.type),
           weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+          friendshipLevel,
         },
         chargedDamageOut: {
           stab: species.types.includes(chargedMove.type),
           typeEffectiveness: candidateChargedVsBoss,
           megaBoostMultiplier: ownBoostMultiplier(boost, chargedMove.type),
           weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+          friendshipLevel,
         },
       },
       {
         attackStat: bossAttackStat,
         defenseStat: bossDefenseStat,
         fastMove: bossFastMove,
+        // NO friendshipLevel here — the bonus never applies to the boss's
+        // own damage (a raid boss has no co-participating "friend"). See
+        // ComparisonInputs.friendshipLevel's doc comment.
         damageOut: {
           stab: boss.types.includes(bossFastMove.type),
           typeEffectiveness: bossVsCandidate,
@@ -437,6 +478,8 @@ export interface SustainedComparisonInputs {
   candidateMegaBoostDisabled?: [boolean, boolean];
   /** See ComparisonInputs.candidateMegaLevel — same per-candidate semantics, same resolveCandidateMegaLevel gate on species.boost. Defaults to [null, null]. */
   candidateMegaLevel?: [MegaLevel | null, MegaLevel | null];
+  /** See ComparisonInputs.candidateIsBestBuddy — same per-candidate semantics, stacks with candidateMegaLevel's Super Max bonus. Defaults to [false, false]. */
+  candidateIsBestBuddy?: [boolean, boolean];
   boss: SpeciesDefinition;
   /** See ComparisonInputs.bossRaidTier. */
   bossRaidTier?: RaidTier;
@@ -514,6 +557,8 @@ export interface SustainedComparisonInputs {
   iterations?: number;
   /** See ComparisonInputs.weather. Defaults to "none". */
   weather?: WeatherCondition;
+  /** See ComparisonInputs.friendshipLevel — same single-sided, single-trainer-scoped semantics (never applied to the boss). Defaults to "none". */
+  friendshipLevel?: FriendshipLevel;
 }
 
 export interface SustainedCandidateResult extends DistributionSummary {
@@ -557,8 +602,10 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     maxSeconds = DEFAULT_STEPWISE_MAX_SECONDS,
     iterations = 200,
     weather = "none",
+    friendshipLevel = "none",
     candidateMegaBoostDisabled = [false, false],
     candidateMegaLevel = [null, null],
+    candidateIsBestBuddy = [false, false],
   } = inputs;
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
   const bossMaxHp = bossEffectiveHp(boss, inputs.bossRaidTier, inputs.bossMaxHpOverride);
@@ -569,7 +616,10 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
 
   return candidates.map((species, i) => {
     const megaLevel = resolveCandidateMegaLevel(species, candidateMegaLevel[i]);
-    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevelForMegaLevel(level, megaLevel));
+    // See runComparison's identical comment — Best Buddy's +1 stacks with
+    // Super Max's +2.
+    const effectiveLevel = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, candidateIsBestBuddy[i]), megaLevel);
+    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevel);
     const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
     const rawChargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
     if (!fastMove || !rawChargedMove) {
@@ -602,15 +652,19 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
             typeEffectiveness: candidateFastVsBoss,
             megaBoostMultiplier: ownBoostMultiplier(boost, fastMove.type),
             weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+            friendshipLevel,
           },
           chargedDamageOut: {
             stab: species.types.includes(chargedMove.type),
             typeEffectiveness: candidateChargedVsBoss,
             megaBoostMultiplier: ownBoostMultiplier(boost, chargedMove.type),
             weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+            friendshipLevel,
           },
           holdChargedMoveUntilSafe,
         },
+        // NO friendshipLevel on the boss's own damageOut/chargedMoveDamageOut
+        // below — see SustainedComparisonInputs.friendshipLevel's doc comment.
         boss: {
           attackStat: bossAttackStat,
           defenseStat: bossDefenseStat,

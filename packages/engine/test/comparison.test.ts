@@ -408,6 +408,48 @@ describe("runComparison", () => {
     expect(rainy!.secondsSurvived).toBeLessThan(noWeather!.secondsSurvived);
   });
 
+  it("applies the friendship attack bonus to the candidate's own fast/charged damage, but NEVER to the boss's", () => {
+    const attacker: SpeciesDefinition = {
+      id: "friendship-test-attacker",
+      name: "Friendship Attacker",
+      types: ["normal"],
+      baseAttack: 300,
+      baseDefense: 200,
+      // Deliberately low so the candidate faints inside the fixed
+      // opening-burst window from fast attacks alone (same technique as the
+      // weather-vs-boss test above).
+      baseStamina: 50,
+      fastMoves: [{ id: "af", name: "Attacker Fast", type: "normal", power: 10, energyGain: 10, durationSeconds: 1 }],
+      chargedMoves: [{ id: "ac", name: "Attacker Charged", type: "normal", power: 80, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 }],
+    };
+    const bossFastMove = { id: "bf", name: "Boss Fast", type: "normal" as const, power: 10, energyGain: 0, durationSeconds: 1.5 };
+    const boss: SpeciesDefinition = {
+      id: "friendship-test-boss",
+      name: "Boss",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 150,
+      baseStamina: 20000,
+      fastMoves: [bossFastMove],
+      chargedMoves: [],
+      statsArePrecomputed: true,
+    };
+    const level = 40;
+    const ivs = { attack: 15, defense: 15, stamina: 15 };
+
+    const [none] = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" } });
+    const [forever] = runComparison({ candidates: [attacker], boss, level, ivs, dodge: { kind: "none" }, friendshipLevel: "forever" });
+
+    // The candidate's own fast-move damage is higher under "forever" (its
+    // damage output increased)...
+    expect(forever!.ownFastMoveDamage).toBeGreaterThan(none!.ownFastMoveDamage);
+    // ...but the BOSS's own attack never changes with the candidate's
+    // friendship tier, so the candidate survives EXACTLY as long either way
+    // (same fast-attack cadence/energy economics, no dodge, boss damage
+    // output unaffected).
+    expect(forever!.secondsSurvived).toBe(none!.secondsSurvived);
+  });
+
   it("throws when a boss species is flagged both isShadow and carries a mega/primal boost", () => {
     const impossibleBoss: SpeciesDefinition = {
       id: "impossible-shadow-mega-boss",

@@ -390,7 +390,7 @@ script above, and asks before any `git push`.
 
 ## For session continuity
 
-Four root-level docs, each with a distinct job — keep them in their lanes rather than letting one
+Five root-level docs, each with a distinct job — keep them in their lanes rather than letting one
 absorb another:
 
 - **`CLAUDE.md`** (this file) — durable architecture and standing decisions only. It's re-read by
@@ -406,6 +406,17 @@ absorb another:
   an undocumented mechanic gets rediscovered as a bug. It records real-game bugs too, so we
   neither reproduce them nor mistake one for ours.
 - **`IDEAS.md`** — not-yet-scheduled feature ideas, barebones. Nothing here is committed work.
+  An item that **cannot be built** (blocked on evidence that doesn't exist, or out of scope by a
+  standing decision) gets **removed** rather than lingering — with a row saying why and what would
+  unblock it. The underlying fact stays in `MECHANICS.md` so it isn't rediscovered as a bug.
+- **`LINKS.md`** — a queue of things this project needs that **an agent cannot reach**: pages on
+  hard-blocked domains (`reddit.com`, `thesilphroad.com`), dead ones (`gamepress.gg`), and
+  anything only visible inside the game client. The user fetches them and pastes the text or a
+  screenshot back. **Add a row whenever research dead-ends on ACCESS rather than on effort** —
+  state exactly what's needed from the page, not just its URL, and why it's blocking. A negative
+  answer ("the page is gone", "it doesn't say") is a real result: record it and close the question
+  rather than letting a later session re-chase the same dead end. Move answered rows to its
+  "Closed" section, then into `MECHANICS.md` with sourcing.
 - **`PLAN_*.md`** — one self-contained implementation plan per not-yet-built feature, written for
   a fresh session to pick up cold. **Delete a `PLAN_*.md` once its feature ships** and record the
   resolution in `HANDOFF.md` — every one of these opens with "self-contained plan for a fresh

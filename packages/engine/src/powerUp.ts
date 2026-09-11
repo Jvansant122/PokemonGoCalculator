@@ -784,7 +784,14 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
   const rosterLevel = firstFielded?.level ?? 1;
   const rosterIvs: IVSpread = firstFielded?.ivs ?? { attack: 0, defense: 0, stamina: 0 };
 
-  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier);
+  // rest.bossMaxHpOverride flows straight through into every runTeamRaid
+  // call below via `...rest` (TeamRaidInputs now carries it — see
+  // teamRaid.ts's DEFAULT_SWAP_COST_SECONDS-adjacent addition, 2026-09-10),
+  // so this module's OWN bossHp (used for summarizeResults' non-cleared
+  // fallback denominator) has to honor it too, or the two would silently
+  // disagree for an archived boss target the same way rosterPlanner.ts's
+  // Stage 4 gap once did.
+  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier, rest.bossMaxHpOverride);
   const { defense: bossDefenseStat } = bossEffectiveStats(rest.boss, rest.bossRaidTier);
   const weather = rest.weather ?? "none";
 
@@ -1630,7 +1637,9 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
   const rosterLevel = firstFielded?.level ?? 1;
   const rosterIvs: IVSpread = firstFielded?.ivs ?? { attack: 0, defense: 0, stamina: 0 };
 
-  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier);
+  // See optimizePowerUps' identical comment above this module's other
+  // bossEffectiveHp call — same rest.bossMaxHpOverride pass-through fix.
+  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier, rest.bossMaxHpOverride);
   const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(rest.boss, rest.bossRaidTier);
   const weather = rest.weather ?? "none";
   const bossFastMove = resolveMove(rest.boss.fastMoves, rest.bossFastMoveId);

@@ -505,7 +505,12 @@ export function evaluateMoveChangeTargets(
 ): MoveChangeEvaluationResult {
   const { slots, iterations = 3, seed = 1, ...rest } = inputs;
   const seeds = Array.from({ length: iterations }, (_, i) => seed + i * 7919);
-  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier);
+  // rest.bossMaxHpOverride (inherited via MoveChangeEvaluationInputs extends
+  // TeamRaidInputs) flows through to every runTeamRaid call below via
+  // `...rest` — this module's OWN bossHp (summarizeResults' non-cleared
+  // fallback denominator) has to honor it too, same fix as powerUp.ts's two
+  // equivalent call sites.
+  const bossHp = bossEffectiveHp(rest.boss, rest.bossRaidTier, rest.bossMaxHpOverride);
 
   const baselineResults = seeds.map((s) => runTeamRaid({ ...rest, slots, seed: s }));
   const baseline = summarizeResults(baselineResults, bossHp, rest.raidTimerSeconds);

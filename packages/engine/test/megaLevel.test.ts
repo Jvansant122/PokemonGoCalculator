@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { fromGameMasterMove, type RawGameMasterMove } from "../src/gamemaster.js";
 import {
+  BEST_BUDDY_EFFECTIVE_LEVEL_BONUS,
   canReachSuperMax,
   chargedMoveAtMegaLevel,
+  effectiveLevelForBestBuddy,
   effectiveLevelForMegaLevel,
   MEGA_LEVEL_PLUS_MOVE_POWER_MULTIPLIER,
   SUPER_MAX_EFFECTIVE_LEVEL_BONUS,
@@ -50,6 +52,53 @@ describe("effectiveLevelForMegaLevel", () => {
     expect(effectiveLevelForMegaLevel(49, "super-max")).toBe(51);
     expect(effectiveLevelForMegaLevel(49.5, "super-max")).toBe(51.5);
     expect(effectiveLevelForMegaLevel(50, "super-max")).toBe(52);
+  });
+});
+
+describe("BEST_BUDDY_EFFECTIVE_LEVEL_BONUS / effectiveLevelForBestBuddy", () => {
+  it("is +1 effective level", () => {
+    expect(BEST_BUDDY_EFFECTIVE_LEVEL_BONUS).toBe(1);
+  });
+
+  it.each<[boolean | null | undefined]>([[false], [null], [undefined]])(
+    "leaves level unchanged when isBestBuddy is %s",
+    (isBestBuddy) => {
+      expect(effectiveLevelForBestBuddy(1, isBestBuddy)).toBe(1);
+      expect(effectiveLevelForBestBuddy(50, isBestBuddy)).toBe(50);
+    },
+  );
+
+  it("adds exactly +1 effective level when isBestBuddy is true", () => {
+    expect(effectiveLevelForBestBuddy(1, true)).toBe(2);
+    expect(effectiveLevelForBestBuddy(49.5, true)).toBe(50.5);
+    expect(effectiveLevelForBestBuddy(50, true)).toBe(51);
+  });
+
+  it("has no gate at all — applies identically regardless of any species/boost concept (it takes no species argument)", () => {
+    // effectiveLevelForBestBuddy's signature itself proves this: it only
+    // ever takes (level, isBestBuddy), never a species — so there is
+    // structurally no way for it to special-case a non-mega species.
+    expect(effectiveLevelForBestBuddy(30, true)).toBe(31);
+  });
+
+  it("STACKS with Super Max's +2 when composed the way every orchestration call site does — a level-50 Super Max mega that is also Best Buddy reaches exactly 53", () => {
+    const level = 50;
+    const isBestBuddy = true;
+    const megaLevel: MegaLevel = "super-max";
+    const composed = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, isBestBuddy), megaLevel);
+    expect(composed).toBe(53);
+  });
+
+  it("stacks at the fractional level too — 49.5 stacked reaches exactly 52.5", () => {
+    const composed = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(49.5, true), "super-max");
+    expect(composed).toBe(52.5);
+  });
+
+  it("composition order doesn't matter — both bonuses are a flat +N shift", () => {
+    const bestBuddyFirst = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(50, true), "super-max");
+    const megaLevelFirst = effectiveLevelForBestBuddy(effectiveLevelForMegaLevel(50, "super-max"), true);
+    expect(bestBuddyFirst).toBe(megaLevelFirst);
+    expect(bestBuddyFirst).toBe(53);
   });
 });
 

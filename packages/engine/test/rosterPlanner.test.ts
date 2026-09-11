@@ -46,6 +46,12 @@ function baseInputs(overrides: Partial<RosterPlannerInputs> = {}): Omit<RosterPl
     raidTimerSeconds: 300,
     screenIterations: 4,
     iterations: 5,
+    // Pinned at 0, not teamRaid.ts's new DEFAULT_SWAP_COST_SECONDS (1.0) —
+    // this file's acceptance tests pin exact empirically-verified noise-floor
+    // and multi-level-jump numbers unrelated to the swap-cost mechanic; a
+    // nonzero swap cost between multi-slot teams would perturb them for no
+    // reason relevant to what each test actually checks.
+    swapCostSeconds: 0,
     ...overrides,
   };
 }

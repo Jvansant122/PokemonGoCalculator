@@ -71,3 +71,4 @@
 - [Bugfix: Power-Up -> Team Raid mean-collapse](bugfix_powerup_to_teamraid_meancollapse.md) — mirrored teamRaidExport's per-slot override; live-verified 125.7s(bug)->89.6s(fixed) vs plan's 89.8s claim
 - [Roster tab (7th): hand-entry, editing, gzip save code](feature_roster_tab_hand_entry_and_save_code.md) — real duplicate-table bug caught live; SpeciesPicker/MoveSelect e2e picker gotchas; scripts/-blocked check-scenario-roundtrip.mjs gap
 - [TM Move Change Optimizer (Power-Up Optimizer, single-raid only)](feature_tm_move_change_optimizer_powerup_tab.md) — merged-ranked-table technique, mega kmBuddyDistance gap fix, full Roster-tab-loop Playwright verification
+- [Best-moveset toggle + progress no-op + inverted-default cleanup](feature_best_moveset_toggle_and_inverted_default_cleanup.md) — effectiveMoveIds gated on *IsDefaulted, badge-consistency bug caught pre-ship, 3 fields collapsed to plain defaults

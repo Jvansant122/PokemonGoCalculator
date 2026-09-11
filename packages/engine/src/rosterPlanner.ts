@@ -20,7 +20,7 @@ import {
   type PowerUpResourceCost,
 } from "./powerUp.js";
 import type { SpeciesReportBossTarget } from "./speciesReport.js";
-import { MAX_TEAM_RAID_SLOTS, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "./teamRaid.js";
+import { DEFAULT_SWAP_COST_SECONDS, MAX_TEAM_RAID_SLOTS, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "./teamRaid.js";
 import { typeEffectiveness } from "./typeChart.js";
 import type { ChargedMove, FastMove, IVSpread, SpeciesDefinition } from "./types.js";
 import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
@@ -195,27 +195,24 @@ import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
  * would be better if powered up," and neverCompetitive is what stops this
  * from silently ignoring the bulk of a 164-entry pool.
  *
- * === A real gap this phase found, NOT fixed here (flagged per the task's
- * "stop and report it" instruction) ==========================================
+ * === A real gap this phase found — RESOLVED 2026-09-10 ======================
  *
  * `SpeciesReportBossTarget.bossMaxHpOverride` (comparison.ts's
  * `bossEffectiveHp` third parameter) lets a historical/archived boss target
  * be simulated at its REAL recorded HP instead of today's tier-derived
- * default — `runSustainedComparison` (Stage 1's screen) honors it via
- * `SustainedComparisonInputs.bossMaxHpOverride`. `TeamRaidInputs` (Stage 4)
- * has NO equivalent field at all — `runTeamRaid` always calls
- * `bossEffectiveHp(boss, bossRaidTier)` internally with no override
- * parameter, so its OWN clear-timer detection (`outcome`/
- * `clearsWithinTimer`/`timeToClearSeconds`) cannot honor an override no
- * matter what this module passes in. This module still computes ITS OWN
- * `bossHp` (fed into `summarizeResults`, which only touches the NON-cleared
- * fallback branch's denominator) via the correct
- * `bossEffectiveHp(target.species, target.tier, target.bossMaxHpOverride)`,
- * which partially mitigates this for a run that never clears — but a run
- * that DOES clear still clears against the WRONG (today's tier) HP
- * internally. `teamRaid.ts` needs the same `bossMaxHpOverride` hook
- * `comparison.ts`'s `SustainedComparisonInputs` already has; this module
- * cannot add it (teamRaid.ts is off-limits this phase).
+ * default — `runSustainedComparison` (Stage 1's screen) has always honored it
+ * via `SustainedComparisonInputs.bossMaxHpOverride`. `TeamRaidInputs`
+ * (Stage 4) previously had NO equivalent field, so Stage 4's own
+ * clear-timer detection (`outcome`/`clearsWithinTimer`/`timeToClearSeconds`)
+ * could not honor an override no matter what this module passed in — this
+ * module's own `bossHp` (fed into `summarizeResults`'s non-cleared fallback
+ * branch) was correct via `bossEffectiveHp(target.species, target.tier,
+ * target.bossMaxHpOverride)`, but a run that DID clear still cleared against
+ * the WRONG (today's tier) HP internally. `teamRaid.ts` now carries the same
+ * `bossMaxHpOverride` hook `SustainedComparisonInputs` already had, and
+ * `runFullRosterCached`'s Stage 4 `runTeamRaid` call below passes
+ * `target.bossMaxHpOverride` through — this module needed zero other changes
+ * to pick it up.
  */
 
 /** One entry in the caller's whole-roster pool — a single POOL ENTRY, not a species (the same species can appear more than once; real raids permit duplicates). */
@@ -374,7 +371,7 @@ export interface RosterPlannerInputs {
   weather?: WeatherCondition;
   /** Real-world raid countdown, shared across every boss's team-raid simulation. */
   raidTimerSeconds: number;
-  /** See teamRaid.ts's TeamRaidInputs.swapCostSeconds. Also the denominator term in Stage 1's screen score. Defaults to 0. */
+  /** See teamRaid.ts's TeamRaidInputs.swapCostSeconds. Also the denominator term in Stage 1's screen score. Defaults to DEFAULT_SWAP_COST_SECONDS (1.0), same as runTeamRaid itself — the two stay consistent (see screenScoreFor's `?? DEFAULT_SWAP_COST_SECONDS` fallback). */
   swapCostSeconds?: number;
   /** See teamRaid.ts's TeamRaidInputs.reviveCostSeconds. Defaults to 0. */
   reviveCostSeconds?: number;
@@ -631,7 +628,7 @@ function screenScoreFor(
     iterations: screenIterations,
   });
 
-  const score = result!.meanTotalDamage / (result!.meanSecondsSurvived + (shared.swapCostSeconds ?? 0));
+  const score = result!.meanTotalDamage / (result!.meanSecondsSurvived + (shared.swapCostSeconds ?? DEFAULT_SWAP_COST_SECONDS));
   cache.set(key, score);
   return score;
 }
@@ -819,6 +816,15 @@ function runFullRosterCached(
       slots,
       boss: target.species,
       bossRaidTier: target.tier,
+      // Closes the gap this module's own top doc comment used to flag (see
+      // "A real gap this phase found, NOT fixed here" above, now resolved
+      // 2026-09-10): teamRaid.ts's TeamRaidInputs finally has the same
+      // bossMaxHpOverride hook SustainedComparisonInputs (Stage 1's screen,
+      // wired at screenScoreFor above) already had, so Stage 4's own
+      // clear-timer detection now honors an archived boss's real recorded HP
+      // too, not just the `bossHp` this function receives for the
+      // non-cleared fallback branch below.
+      bossMaxHpOverride: target.bossMaxHpOverride,
       bossFastMoveId: target.bossFastMoveId,
       bossChargedMoveId: target.bossChargedMoveId,
       // Every slot supplies its own level/ivs override (toSlotInput) — these

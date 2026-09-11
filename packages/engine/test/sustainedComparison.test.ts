@@ -373,6 +373,41 @@ describe("runSustainedComparison: candidateMegaLevel (Super Max effective-level 
     const [withSuperMaxRequested] = runSustainedComparison({ ...common, candidates: [nonMegaAttacker], candidateMegaLevel: ["super-max", null] });
     expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
   });
+
+  // These two tests deliberately use an EQUIVALENCE check (candidateIsBestBuddy
+  // at level 50 must match an explicit level 51/53 with no candidateIsBestBuddy)
+  // rather than a strict "damage went up" comparison — floor() can legitimately
+  // absorb a one-level shift for a given power/stat combination without
+  // crossing a breakpoint (verified directly: at these particular stats/power,
+  // the effective level 52->53 shift does NOT change the floored per-hit fast
+  // damage at all), so a "greater than" assertion here would be a fragile,
+  // fixture-dependent coincidence rather than a real correctness check of the
+  // wiring itself. Equality against a hand-computed equivalent level is exact
+  // and immune to that.
+  it("candidateIsBestBuddy's +1 effective level applies to a NON-mega candidate too (unlike candidateMegaLevel, no .boost gate)", () => {
+    const [withBestBuddyAtLevel50] = runSustainedComparison({ ...common, candidates: [nonMegaAttacker], candidateIsBestBuddy: [true, false] });
+    const [explicitLevel51] = runSustainedComparison({ ...common, level: 51, candidates: [nonMegaAttacker] });
+    expect(withBestBuddyAtLevel50).toEqual(explicitLevel51);
+  });
+
+  it("candidateIsBestBuddy STACKS with candidateMegaLevel's Super Max bonus — a level-50 Super Max mega that is also Best Buddy computes at effective level 53, matching an explicit level-51 Super Max mega", () => {
+    const [superMaxAndBestBuddyAtLevel50] = runSustainedComparison({
+      ...common,
+      candidates: [megaAttacker],
+      candidateMegaLevel: ["super-max", null],
+      candidateIsBestBuddy: [true, false],
+    });
+    // effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(50, true), "super-max")
+    //   = effectiveLevelForMegaLevel(51, "super-max") = 53
+    // effectiveLevelForMegaLevel(51, "super-max") directly = 53 too.
+    const [explicitLevel51SuperMax] = runSustainedComparison({
+      ...common,
+      level: 51,
+      candidates: [megaAttacker],
+      candidateMegaLevel: ["super-max", null],
+    });
+    expect(superMaxAndBestBuddyAtLevel50).toEqual(explicitLevel51SuperMax);
+  });
 });
 
 describe("runSustainedComparison: candidateDodge / candidateDodgeFastAttacks per-candidate override", () => {

@@ -143,6 +143,27 @@ export interface PowerUpOptimizerAssumptions {
    * default deliberately differs from DEFAULT_ASSUMPTIONS.
    */
   multiRaidSignificanceMode: RosterSignificanceMode;
+  /**
+   * Multi-raid mode only — IDEAS.md #11. When true, any pool entry whose
+   * fast/charged move was GUESSED at import time (`fastMoveIsDefaulted`/
+   * `chargedMoveIsDefaulted`, import/pokeGenieMatch.ts) is simulated on its
+   * species' own highest-approximate-DPS move instead of `[0]` — see
+   * run/runRosterPlanner.ts's `effectiveMoveIds` for the exact rule and why
+   * it can never disagree with a hand-fixed Roster-tab entry (fixing an
+   * entry there clears both `*IsDefaulted` flags, which is what actually
+   * gates this substitution — there's no separate state to keep in sync).
+   *
+   * Two different questions, deliberately not conflated: OFF (the default)
+   * answers "what should I power up TONIGHT" — the Pokémon you actually
+   * have, including its real unknown moveset. ON answers "what's worth
+   * INVESTING in" — a defaulted entry is no longer penalized for a moveset
+   * this tool never actually confirmed. Scoped to multi-raid mode only: the
+   * single-raid TM/second-charged-move optimizer (run/runPowerUpOptimizer.ts)
+   * is a separate code path that must keep pricing only a moveset it
+   * actually observed — see effectiveMoveIds' own doc comment for why this
+   * function has no call site there.
+   */
+  multiRaidUseBestAvailableMoveset: boolean;
   /** TM inventory — see powerUpOptimizerScenario.ts's own field doc comment. `null` = unknown, never gates candidate generation (single-raid mode only computes these candidates today; see run/runPowerUpOptimizer.ts). */
   fastTmOnHand: number | null;
   chargedTmOnHand: number | null;
@@ -307,6 +328,26 @@ export function PowerUpOptimizerAssumptionPanel({
               />{" "}
               Also count a candidate that only helps against one boss, even if it doesn&rsquo;t move the average
             </label>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label className="species-picker-hint">
+              <input
+                type="checkbox"
+                checked={value.multiRaidUseBestAvailableMoveset}
+                onChange={(e) => set("multiRaidUseBestAvailableMoveset", e.target.checked)}
+              />{" "}
+              For an entry with an unknown moveset, assume its best available move instead of penalizing it for a
+              guess
+            </label>
+            <p
+              className="species-picker-hint"
+              title="OFF (default): what should I power up TONIGHT — simulates the Pokemon you actually have, guessed moveset and all. ON: what's worth INVESTING in — an entry the import never confirmed a moveset for is no longer under-ranked for that alone. Fixing an entry's moveset by hand on the Roster tab always overrides this, in either state."
+            >
+              Off answers &ldquo;what should I power up tonight&rdquo; (the roster you actually have). On answers
+              &ldquo;what&rsquo;s worth investing in&rdquo; (don&rsquo;t penalize a guess). An entry you&rsquo;ve
+              fixed by hand on the Roster tab is never affected either way.
+            </p>
           </div>
 
           <div style={{ marginTop: 12 }}>

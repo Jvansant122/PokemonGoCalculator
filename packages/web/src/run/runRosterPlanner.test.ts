@@ -2,7 +2,27 @@ import { describe, expect, it } from "vitest";
 import type { SpeciesDefinition } from "@pogo-analyzer/engine";
 import type { RosterEntry } from "../import/pokeGenieMatch.js";
 import { activeRaidBossOptions, pastRaidBossOptions, speciesRegistry } from "../registry.js";
-import { resolveBossTarget, toEngineRosterPool } from "./runRosterPlanner.js";
+import { effectiveMoveIds, resolveBossTarget, toEngineRosterPool } from "./runRosterPlanner.js";
+
+/** A species with a movepool wide enough to have a genuine "best by power/duration" answer, unlike fakeSpecies' single-move pools below. */
+function fakeSpeciesWithMoveChoices(id: string): SpeciesDefinition {
+  return {
+    id,
+    name: id,
+    types: ["normal"],
+    baseAttack: 100,
+    baseDefense: 100,
+    baseStamina: 100,
+    fastMoves: [
+      { id: "TACKLE", name: "Tackle", type: "normal", power: 5, energyGain: 5, durationSeconds: 0.5 },
+      { id: "QUICK_ATTACK", name: "Quick Attack", type: "normal", power: 10, energyGain: 6, durationSeconds: 0.5 },
+    ],
+    chargedMoves: [
+      { id: "BODY_SLAM", name: "Body Slam", type: "normal", power: 50, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+      { id: "HYPER_BEAM", name: "Hyper Beam", type: "normal", power: 150, energyCost: 100, durationSeconds: 3.7, vulnerableWindowSeconds: 3.7 },
+    ],
+  };
+}
 
 function fakeSpecies(id: string, boost?: SpeciesDefinition["boost"]): SpeciesDefinition {
   return {
@@ -114,5 +134,74 @@ describe("toEngineRosterPool", () => {
   it("does NOT resolve a candyFamilyId for a non-mega entry — leaves it unset so the engine falls back to species.candyFamilyId itself", () => {
     const [entry] = toEngineRosterPool([fakeImportedEntry()]);
     expect(entry!.candyFamilyId).toBeUndefined();
+  });
+
+  it("leaves fastMoveId/chargedMoveId untouched when useBestAvailableMoveset is omitted or false — the toggle's OFF default", () => {
+    const entry = fakeImportedEntry({
+      species: fakeSpeciesWithMoveChoices("houndour"),
+      fastMoveId: "TACKLE",
+      chargedMoveId: "BODY_SLAM",
+      fastMoveIsDefaulted: true,
+      chargedMoveIsDefaulted: true,
+    });
+    const [withoutArg] = toEngineRosterPool([entry]);
+    const [explicitFalse] = toEngineRosterPool([entry], false);
+    expect(withoutArg!.fastMoveId).toBe("TACKLE");
+    expect(withoutArg!.chargedMoveId).toBe("BODY_SLAM");
+    expect(explicitFalse!.fastMoveId).toBe("TACKLE");
+    expect(explicitFalse!.chargedMoveId).toBe("BODY_SLAM");
+  });
+
+  it("substitutes the highest power/duration move ONLY for a slot still flagged as defaulted, when the toggle is on (IDEAS.md #11)", () => {
+    const entry = fakeImportedEntry({
+      species: fakeSpeciesWithMoveChoices("houndour"),
+      fastMoveId: "TACKLE",
+      chargedMoveId: "BODY_SLAM",
+      fastMoveIsDefaulted: true,
+      chargedMoveIsDefaulted: true,
+    });
+    const [substituted] = toEngineRosterPool([entry], true);
+    expect(substituted!.fastMoveId).toBe("QUICK_ATTACK");
+    expect(substituted!.chargedMoveId).toBe("HYPER_BEAM");
+  });
+
+  it("never substitutes a move the user actually confirmed, even with the toggle on — a hand-fixed Roster-tab entry is immune by construction", () => {
+    const entry = fakeImportedEntry({
+      species: fakeSpeciesWithMoveChoices("houndour"),
+      fastMoveId: "TACKLE",
+      chargedMoveId: "BODY_SLAM",
+      fastMoveIsDefaulted: false,
+      chargedMoveIsDefaulted: false,
+    });
+    const [result] = toEngineRosterPool([entry], true);
+    expect(result!.fastMoveId).toBe("TACKLE");
+    expect(result!.chargedMoveId).toBe("BODY_SLAM");
+  });
+
+  it("substitutes only the ONE defaulted slot when just one of fast/charged is unknown", () => {
+    const entry = fakeImportedEntry({
+      species: fakeSpeciesWithMoveChoices("houndour"),
+      fastMoveId: "TACKLE",
+      chargedMoveId: "BODY_SLAM",
+      fastMoveIsDefaulted: false,
+      chargedMoveIsDefaulted: true,
+    });
+    const [result] = toEngineRosterPool([entry], true);
+    expect(result!.fastMoveId).toBe("TACKLE");
+    expect(result!.chargedMoveId).toBe("HYPER_BEAM");
+  });
+});
+
+describe("effectiveMoveIds", () => {
+  it("is the exact function toEngineRosterPool delegates to — same result for the same inputs", () => {
+    const entry = fakeImportedEntry({
+      species: fakeSpeciesWithMoveChoices("houndour"),
+      fastMoveId: "TACKLE",
+      chargedMoveId: "BODY_SLAM",
+      fastMoveIsDefaulted: true,
+      chargedMoveIsDefaulted: true,
+    });
+    expect(effectiveMoveIds(entry, true)).toEqual({ fastMoveId: "QUICK_ATTACK", chargedMoveId: "HYPER_BEAM" });
+    expect(effectiveMoveIds(entry, false)).toEqual({ fastMoveId: "TACKLE", chargedMoveId: "BODY_SLAM" });
   });
 });

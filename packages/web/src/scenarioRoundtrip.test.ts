@@ -102,7 +102,8 @@ describe("ComparatorScenario round-trip", () => {
     weather: "rainy",
     // Non-default: DEFAULT_ASSUMPTIONS's own value is `false` (the tidy
     // default for a fresh scenario) — see the dedicated absent-decode test
-    // below for the OTHER, inverted-default direction this field needs.
+    // below for the plain-default fallback this field now shares with every
+    // other field.
     showDetailedAssumptions: true,
   };
 
@@ -151,24 +152,21 @@ describe("ComparatorScenario round-trip", () => {
       dodge: { kind: "none" },
       partySize: 4,
       teammateDps: 26.5,
-      // A link this old predates the advanced/simple split existing at all —
-      // every field it gates was simply always visible, so the sender's
-      // stored bossChargedMoveFrequencySeconds (COMPARATOR_DEFAULTS's own
-      // 15, since `minimal` above doesn't set it either) WAS the real number
-      // in force. Decodes to `true`, not COMPARATOR_DEFAULTS's `false` — see
+      // Plain default, same as every other omitted field on this minimal
+      // scenario (COMPARATOR_DEFAULTS's own `false`) — see
       // comparatorScenarioToAssumptions's own comment on this `??` guard.
-      showDetailedAssumptions: true,
+      showDetailedAssumptions: false,
     });
   });
 
-  it("decodes an absent showDetailedAssumptions to true, not DEFAULT_ASSUMPTIONS's false (an old link's stored bossChargedMoveFrequencySeconds must not silently swap for the derived value)", () => {
+  it("decodes an absent showDetailedAssumptions to COMPARATOR_DEFAULTS's false, the same plain fallback as every other field", () => {
     const withoutDetailFlag = { ...comparatorAssumptionsToScenario(nonDefault) } as Partial<ComparatorScenario>;
     delete withoutDetailFlag.showDetailedAssumptions;
     const url = buildScenarioUrl("http://example.test/", withoutDetailFlag as ComparatorScenario);
     const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
     expect(decoded).not.toBeNull();
     const roundTripped = comparatorScenarioToAssumptions(decoded!);
-    expect(roundTripped.showDetailedAssumptions).toBe(true);
+    expect(roundTripped.showDetailedAssumptions).toBe(false);
   });
 });
 
@@ -278,22 +276,20 @@ describe("TeamScenario round-trip", () => {
       // teamScenarioToAssumptions's own comment on these two `??` guards.
       swapCostSeconds: 0,
       reviveCostSeconds: 0,
-      // Same reasoning, inverted: an absent showDetailedAssumptions means
-      // this link predates the simple/derived-frequency mode, so the
-      // sender's stored bossChargedMoveFrequencySeconds was the real number
-      // in force — decodes to `true`, not DEFAULT_TEAM_ASSUMPTIONS's `false`.
-      showDetailedAssumptions: true,
+      // Plain default, same as every other omitted field on this minimal
+      // scenario (DEFAULT_TEAM_ASSUMPTIONS's own `false`).
+      showDetailedAssumptions: false,
     });
   });
 
-  it("decodes an absent showDetailedAssumptions to true, not DEFAULT_TEAM_ASSUMPTIONS's false (an old link's stored bossChargedMoveFrequencySeconds must not silently swap for the derived value)", () => {
+  it("decodes an absent showDetailedAssumptions to DEFAULT_TEAM_ASSUMPTIONS's false, the same plain fallback as every other field", () => {
     const withoutDetailFlag = { ...assumptionsToTeamScenario(nonDefault) } as Partial<TeamScenarioWithShadow>;
     delete withoutDetailFlag.showDetailedAssumptions;
     const url = buildTeamScenarioUrl("http://example.test/", withoutDetailFlag as TeamScenarioWithShadow);
     const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
     expect(decoded).not.toBeNull();
     const roundTripped = teamScenarioToAssumptions(decoded!);
-    expect(roundTripped.showDetailedAssumptions).toBe(true);
+    expect(roundTripped.showDetailedAssumptions).toBe(false);
   });
 });
 
@@ -483,6 +479,8 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     multiRaidMegaLevel: "high",
     // Non-default: PU_DEFAULTS is "aggregate-only".
     multiRaidSignificanceMode: "aggregate-or-per-boss",
+    // Non-default: PU_DEFAULTS is false (IDEAS.md #11).
+    multiRaidUseBestAvailableMoveset: true,
     // Non-default: PU_DEFAULTS has all four TM counts as null (unknown).
     fastTmOnHand: 3,
     chargedTmOnHand: 1,
@@ -529,23 +527,21 @@ describe("PowerUpOptimizerScenario round-trip", () => {
       })),
       targetId: "tyranitar-mega",
       dodge: { kind: "none" },
-      // A link this old predates the significance-mode toggle existing at
-      // all — every candidate that cleared a single boss's own noise floor
-      // simply counted, so decode to "aggregate-or-per-boss", not
-      // PU_DEFAULTS's own stricter "aggregate-only" — see
+      // Plain default, same as every other omitted field on this minimal
+      // scenario (PU_DEFAULTS's own "aggregate-only") — see
       // puScenarioToAssumptions's own comment on this `??` guard.
-      multiRaidSignificanceMode: "aggregate-or-per-boss",
+      multiRaidSignificanceMode: "aggregate-only",
     });
   });
 
-  it('decodes an absent multiRaidSignificanceMode to "aggregate-or-per-boss", not PU_DEFAULTS\'s "aggregate-only" (an old link\'s per-boss-significant candidates must not silently vanish from the table)', () => {
+  it('decodes an absent multiRaidSignificanceMode to PU_DEFAULTS\'s "aggregate-only", the same plain fallback as every other field', () => {
     const withoutModeFlag = { ...puAssumptionsToScenario(nonDefault) } as Partial<PowerUpOptimizerScenario>;
     delete withoutModeFlag.multiRaidSignificanceMode;
     const url = buildPowerUpOptimizerScenarioUrl("http://example.test/", withoutModeFlag as PowerUpOptimizerScenario);
     const decoded = parsePowerUpOptimizerScenarioFromUrl(url);
     expect(decoded).not.toBeNull();
     const roundTripped = puScenarioToAssumptions(decoded!);
-    expect(roundTripped.multiRaidSignificanceMode).toBe("aggregate-or-per-boss");
+    expect(roundTripped.multiRaidSignificanceMode).toBe("aggregate-only");
   });
 });
 

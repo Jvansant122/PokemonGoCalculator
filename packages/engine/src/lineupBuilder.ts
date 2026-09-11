@@ -3,7 +3,14 @@ import { bossEffectiveHp, resolveMove, runSustainedComparison } from "./comparis
 import type { MegaLevel } from "./megaLevel.js";
 import { noiseFloorFor, summarizeResults, type PowerUpEncounterSummary } from "./powerUp.js";
 import type { RaidTier } from "./raidBoss.js";
-import { MAX_TEAM_RAID_SLOTS, runTeamRaid, type TeamRaidInputs, type TeamRaidResult, type TeamRaidSlotInput } from "./teamRaid.js";
+import {
+  DEFAULT_SWAP_COST_SECONDS,
+  MAX_TEAM_RAID_SLOTS,
+  runTeamRaid,
+  type TeamRaidInputs,
+  type TeamRaidResult,
+  type TeamRaidSlotInput,
+} from "./teamRaid.js";
 import type { IVSpread, SpeciesDefinition } from "./types.js";
 import type { WeatherCondition } from "./weather.js";
 
@@ -107,12 +114,14 @@ import type { WeatherCondition } from "./weather.js";
  * compositions rather than skipping the counter increment, so cache hits
  * never perturb later evaluations' seeds.
  *
- * KNOWN GAP shared with rosterPlanner.ts's Stage 4 (see that module's top
- * doc comment): `TeamRaidInputs` has no `bossMaxHpOverride` hook, so this
- * module cannot honor a historical/archived boss's real recorded HP the way
- * `runSustainedComparison`'s Stage 1 screen can — every lineup here is
- * always evaluated against TODAY's tier-derived boss HP. Not fixed here
- * (same `teamRaid.ts`-owns-this-gap reasoning as rosterPlanner.ts).
+ * RESOLVED 2026-09-10 (previously a KNOWN GAP shared with rosterPlanner.ts's
+ * Stage 4 — see that module's top doc comment): `teamRaid.ts`'s
+ * `TeamRaidInputs` now carries the same `bossMaxHpOverride` hook
+ * `SustainedComparisonInputs` already had, so `LineupBuilderInputs.bossMaxHpOverride`
+ * below is honored both by Stage 1's screen (`runSustainedComparison`) and by
+ * every `runTeamRaid` call this module makes (`evaluateLineup`) — a
+ * historical/archived boss's real recorded HP is no longer silently dropped
+ * in favor of today's tier-derived default partway through this module.
  */
 
 /** One entry in the caller's OWN roster (not the whole imported pool necessarily — a caller may pre-filter, e.g. to `isFullyEvolved` entries only, before calling in). */
@@ -141,6 +150,8 @@ export interface LineupBuilderInputs {
   boss: SpeciesDefinition;
   /** See teamRaid.ts's TeamRaidInputs.bossRaidTier. */
   bossRaidTier?: RaidTier;
+  /** See teamRaid.ts's TeamRaidInputs.bossMaxHpOverride — honored both by Stage 1's screen and every Stage 2 runTeamRaid evaluation. */
+  bossMaxHpOverride?: number;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move. */
   bossFastMoveId?: string | null;
   /** Boss charged-move selection. Omit/null defaults to the boss's first charged move. */
@@ -167,7 +178,7 @@ export interface LineupBuilderInputs {
   weather?: WeatherCondition;
   /** Real-world raid countdown, shared across the whole encounter. */
   raidTimerSeconds: number;
-  /** See teamRaid.ts's TeamRaidInputs.swapCostSeconds. Also the denominator term in the Stage 1 screen score. Defaults to 0. */
+  /** See teamRaid.ts's TeamRaidInputs.swapCostSeconds. Also the denominator term in the Stage 1 screen score. Defaults to DEFAULT_SWAP_COST_SECONDS (1.0), same as runTeamRaid itself — Stage 1's score and every Stage 2 runTeamRaid call share this exact resolved value. */
   swapCostSeconds?: number;
   /** See teamRaid.ts's TeamRaidInputs.reviveCostSeconds. Defaults to 0. */
   reviveCostSeconds?: number;
@@ -344,6 +355,7 @@ export function runLineupBuilder(inputs: LineupBuilderInputs): LineupBuilderResu
     pool,
     boss,
     bossRaidTier,
+    bossMaxHpOverride,
     bossFastMoveId,
     bossChargedMoveId,
     dodge,
@@ -354,7 +366,7 @@ export function runLineupBuilder(inputs: LineupBuilderInputs): LineupBuilderResu
     bossChargedMoveCadence,
     weather = "none",
     raidTimerSeconds,
-    swapCostSeconds = 0,
+    swapCostSeconds = DEFAULT_SWAP_COST_SECONDS,
     reviveCostSeconds = 0,
     maxSecondsPerSlot,
     seed = 1,
@@ -378,7 +390,7 @@ export function runLineupBuilder(inputs: LineupBuilderInputs): LineupBuilderResu
     }
   }
 
-  const bossHp = bossEffectiveHp(boss, bossRaidTier);
+  const bossHp = bossEffectiveHp(boss, bossRaidTier, bossMaxHpOverride);
 
   // --- Stage 1: screen the whole pool, once each, against this one boss ----
   const screenedPool: LineupShortlistEntry[] = pool
@@ -390,6 +402,7 @@ export function runLineupBuilder(inputs: LineupBuilderInputs): LineupBuilderResu
         candidateMegaLevel: [entry.canMega ? (megaLevel ?? null) : null, null],
         boss,
         bossRaidTier,
+        bossMaxHpOverride,
         bossFastMoveId,
         bossChargedMoveId,
         level: entry.level,
@@ -429,6 +442,7 @@ export function runLineupBuilder(inputs: LineupBuilderInputs): LineupBuilderResu
         slots,
         boss,
         bossRaidTier,
+        bossMaxHpOverride,
         bossFastMoveId,
         bossChargedMoveId,
         // Every slot supplies its own level/ivs (toSlotInput) — these

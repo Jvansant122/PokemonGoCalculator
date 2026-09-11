@@ -64,12 +64,16 @@ export interface TeamScenario {
    */
   raidTimerSeconds: number;
   /**
-   * Seconds of raid clock a forced post-faint swap-in costs. No real fixed
-   * value is documented for this in-game, so this type declares no default of
-   * its own. packages/web's Team Raid Simulator seeds it at 0.5s, behind that
-   * tab's "More detailed assumptions" checkbox — an explicit,
-   * honestly-uncertain user-adjustable knob rather than a silently fabricated
-   * "realistic" default.
+   * Seconds of raid clock a forced post-faint swap-in costs. A real,
+   * first-party value now exists — `BATTLE_SETTINGS.swapDurationMs = 1000`
+   * (see teamRaid.ts's `DEFAULT_SWAP_COST_SECONDS` and MECHANICS.md's
+   * "Swapping Pokémon costs a real, first-party 1.0s") — but this FIELD
+   * remains required with no default of its own (a `TeamScenario` is always
+   * fully decoded from an explicit value; only `runTeamRaid`'s own optional
+   * `TeamRaidInputs.swapCostSeconds` has a default). Which literal
+   * `packages/web` seeds a NEW, never-before-configured Team Raid scenario
+   * with is that package's own call — as of 2026-09-10 that number should be
+   * `DEFAULT_SWAP_COST_SECONDS` (1.0), not the previous 0.5s placeholder.
    */
   swapCostSeconds: number;
   /**

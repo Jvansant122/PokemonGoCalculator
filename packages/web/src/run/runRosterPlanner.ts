@@ -134,6 +134,70 @@ export function resolveBossTarget(id: string, registry: SpeciesRegistry): Weight
 }
 
 /**
+ * Approximate, context-free "move DPS" (power / duration) — the SAME
+ * intrinsic-only metric MoveSelect.tsx's own `approximateDps` already shows
+ * next to every move option (deliberately not folding in STAB/type
+ * effectiveness against a specific opponent, since "best available" is a
+ * property of the species' own movepool, not a matchup). Not exported from
+ * MoveSelect.tsx (a component file), so re-implemented here rather than
+ * reaching into it — see effectiveMoveIds below for the one caller.
+ */
+function highestApproximateDpsMoveId<T extends { id: string; power: number; durationSeconds: number }>(moves: T[]): string | null {
+  if (moves.length === 0) return null;
+  let best = moves[0]!;
+  let bestDps = best.durationSeconds > 0 ? best.power / best.durationSeconds : 0;
+  for (const move of moves.slice(1)) {
+    const dps = move.durationSeconds > 0 ? move.power / move.durationSeconds : 0;
+    if (dps > bestDps) {
+      best = move;
+      bestDps = dps;
+    }
+  }
+  return best.id;
+}
+
+/**
+ * IDEAS.md #11 ("a 'best available moveset' toggle") — resolves the fast/
+ * charged move id one pool entry actually simulates WITH, honoring
+ * `PowerUpOptimizerAssumptions.multiRaidUseBestAvailableMoveset`.
+ *
+ * Only ever substitutes a slot that is ACTUALLY still defaulted
+ * (`fastMoveIsDefaulted`/`chargedMoveIsDefaulted`, import/pokeGenieMatch.ts)
+ * — never a slot the user has stated for real. This is what keeps the toggle
+ * from contradicting the Roster tab's own hand-fix flow: editing an entry
+ * there (rosterEntryDraft.ts) always writes BOTH flags back to `false`
+ * ("moveset/level/IVs are always marked fully KNOWN, never inheriting the
+ * default-moveset badge a blank CSV column earns"), so a corrected entry is
+ * structurally immune to this substitution the moment it's fixed — there is
+ * no separate "trust this guess less" state to reconcile, the flag itself IS
+ * the reconciliation.
+ *
+ * Deliberately narrow in scope: multi-raid mode only (see
+ * PowerUpOptimizerAssumptionPanel.tsx's own field doc comment for why). The
+ * single-raid TM/second-charged-move optimizer (PLAN_tm_move_change_optimizer.md)
+ * is a wholly separate code path (run/runPowerUpOptimizer.ts, never this
+ * module) that only ever prices a moveset the tool actually observed on a
+ * hand-built 6-slot roster — this function has no call site there and must
+ * not gain one, or the toggle becomes exactly the "price a moveset we never
+ * observed" back door CLAUDE.md's TM section rules out.
+ */
+export function effectiveMoveIds(
+  entry: Pick<ImportedRosterEntry, "species" | "fastMoveId" | "chargedMoveId" | "fastMoveIsDefaulted" | "chargedMoveIsDefaulted">,
+  useBestAvailableMoveset: boolean,
+): { fastMoveId: string | null; chargedMoveId: string | null } {
+  return {
+    fastMoveId:
+      useBestAvailableMoveset && entry.fastMoveIsDefaulted
+        ? (highestApproximateDpsMoveId(entry.species.fastMoves) ?? entry.fastMoveId)
+        : entry.fastMoveId,
+    chargedMoveId:
+      useBestAvailableMoveset && entry.chargedMoveIsDefaulted
+        ? (highestApproximateDpsMoveId(entry.species.chargedMoves) ?? entry.chargedMoveId)
+        : entry.chargedMoveId,
+  };
+}
+
+/**
  * Web-layer import pool entries (import/pokeGenieMatch.ts's `RosterEntry` —
  * species-matched Poke Genie rows) into the engine's own `RosterEntry` shape
  * (rosterPlanner.ts) — a straight field-for-field carry-over EXCEPT
@@ -148,15 +212,20 @@ export function resolveBossTarget(id: string, registry: SpeciesRegistry): Weight
  * mechanic at all, and while the CSV matcher should never produce that
  * combination, a hand-edited/corrupted imported JSON roster (rosterPool.ts's
  * file-import path) could.
+ *
+ * `useBestAvailableMoveset` (default `false`, preserving every existing
+ * caller/test unchanged) applies `effectiveMoveIds` above to each entry
+ * before handing it to the engine — see that function's own doc comment.
  */
-export function toEngineRosterPool(pool: ImportedRosterEntry[]): EngineRosterEntry[] {
+export function toEngineRosterPool(pool: ImportedRosterEntry[], useBestAvailableMoveset = false): EngineRosterEntry[] {
   return pool.map((e) => {
     const canMega = e.canMega && !!e.species.boost;
+    const { fastMoveId, chargedMoveId } = effectiveMoveIds(e, useBestAvailableMoveset);
     return {
       entryId: e.entryId,
       species: e.species,
-      fastMoveId: e.fastMoveId,
-      chargedMoveId: e.chargedMoveId,
+      fastMoveId,
+      chargedMoveId,
       level: e.level,
       ivs: e.ivs,
       costModifiers: e.costModifiers,
@@ -215,7 +284,7 @@ export function resolveRosterPlannerInputs(
   }
 
   const inputs: RosterPlannerInputs = {
-    pool: toEngineRosterPool(pool),
+    pool: toEngineRosterPool(pool, a.multiRaidUseBestAvailableMoveset),
     targets,
     costTable: powerUpCostTable,
     stardustOnHand: Math.max(0, Math.floor(Number.isFinite(a.stardustOnHand) ? a.stardustOnHand : 0)),

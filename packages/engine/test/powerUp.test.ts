@@ -364,6 +364,12 @@ describe("optimizePowerUps", () => {
       stardustOnHand: 1_000_000,
       iterations: 2,
       seed: 1,
+      // Pinned at 0, not teamRaid.ts's new DEFAULT_SWAP_COST_SECONDS (1.0) —
+      // this describe block's fixtures/assertions are about noise-floor and
+      // affordability logic, not the swap-cost mechanic, and several of them
+      // pin an exact tiny delta sign/magnitude that a nonzero swap cost
+      // between this file's two-slot rosters would otherwise perturb.
+      swapCostSeconds: 0,
       ...overrides,
     };
   }

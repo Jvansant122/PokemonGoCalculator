@@ -56,6 +56,7 @@ import {
   type SecondChargedMoveCandidateDisplay,
 } from "./run/runPowerUpOptimizer.js";
 import {
+  effectiveMoveIds,
   resolveRosterPlannerInputs,
   type RosterBudgetPlanRunResult,
   type RosterPlannerBlockedReason,
@@ -167,6 +168,10 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   // powerUpOptimizerScenario.ts's own field doc comment for why an ABSENT
   // decoded value deliberately does NOT fall back to this default.
   multiRaidSignificanceMode: "aggregate-only",
+  // "What should I power up TONIGHT" (the honest reading of the Pokémon a
+  // player actually has) is the tidy default for a fresh scenario — see
+  // PowerUpOptimizerAssumptions.multiRaidUseBestAvailableMoveset.
+  multiRaidUseBestAvailableMoveset: false,
   // Unknown, not zero — see powerUpOptimizerScenario.ts's own field doc
   // comment. A fresh page load has no way to know a real player's TM
   // inventory, and second-charged-move/Elite TM candidates are still
@@ -219,6 +224,7 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     candyByFamilyId: a.candyByFamilyId,
     multiRaidMegaLevel: a.multiRaidMegaLevel,
     multiRaidSignificanceMode: a.multiRaidSignificanceMode,
+    multiRaidUseBestAvailableMoveset: a.multiRaidUseBestAvailableMoveset,
     fastTmOnHand: a.fastTmOnHand,
     chargedTmOnHand: a.chargedTmOnHand,
     eliteFastTmOnHand: a.eliteFastTmOnHand,
@@ -295,16 +301,11 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     // `??` guards a link built before this field existed rather than
     // surfacing `undefined` into the multi-raid Mega Level <select>.
     multiRaidMegaLevel: s.multiRaidMegaLevel ?? DEFAULT_ASSUMPTIONS.multiRaidMegaLevel,
-    // INVERTED default versus every other `??` above — same precedent as
-    // Comparator/Team Raid's own showDetailedAssumptions (see this field's
-    // own doc comment in powerUpOptimizerScenario.ts). An absent value means
-    // the link predates this toggle, when every candidate that cleared a
-    // single boss's own noise floor already counted — decode to
-    // "aggregate-or-per-boss", NOT DEFAULT_ASSUMPTIONS.multiRaidSignificanceMode
-    // (which is "aggregate-only", this tab's own stricter default for a
-    // FRESH scenario). Do not "fix" this to match every other field's `??
-    // DEFAULT_ASSUMPTIONS...` pattern.
-    multiRaidSignificanceMode: s.multiRaidSignificanceMode ?? "aggregate-or-per-boss",
+    // Plain `??` default, same as every other field above — see this
+    // field's own doc comment in powerUpOptimizerScenario.ts for why this no
+    // longer inverts to "aggregate-or-per-boss".
+    multiRaidSignificanceMode: s.multiRaidSignificanceMode ?? DEFAULT_ASSUMPTIONS.multiRaidSignificanceMode,
+    multiRaidUseBestAvailableMoveset: s.multiRaidUseBestAvailableMoveset ?? DEFAULT_ASSUMPTIONS.multiRaidUseBestAvailableMoveset,
     // `?? null` (not `?? DEFAULT_ASSUMPTIONS...`, though they're the same
     // value here) — an explicitly-shared `null` ("unknown") and an absent
     // field from an old link both mean the same thing for these fields, so
@@ -2210,14 +2211,22 @@ export function PowerUpOptimizerView() {
   // from the hydrated pool, joined by entryId" shape as entryIdentities
   // above — see rosterMovesetBadge.ts's own top doc comment for the full
   // story and why this is a web-only join, not an engine change.
+  //
+  // Feeds `effectiveMoveIds` (run/runRosterPlanner.ts) the SAME
+  // `multiRaidUseBestAvailableMoveset` flag the sweep itself uses (IDEAS.md
+  // #11) — this is what keeps this badge's "assumed X" tooltip from
+  // disagreeing with which move the simulation actually ran, once the toggle
+  // is on: the badge would otherwise keep naming `chargedMoves[0]` while the
+  // engine silently used the species' best-available move instead.
   const entryMovesetBadges = useMemo(() => {
     const map = new Map<string, MovesetDefaultBadgeInfo>();
     for (const entry of hydratedPool) {
-      const badge = movesetDefaultBadge(entry);
+      const { fastMoveId, chargedMoveId } = effectiveMoveIds(entry, assumptions.multiRaidUseBestAvailableMoveset);
+      const badge = movesetDefaultBadge({ ...entry, fastMoveId, chargedMoveId });
       if (badge) map.set(entry.entryId, badge);
     }
     return map;
-  }, [hydratedPool]);
+  }, [hydratedPool, assumptions.multiRaidUseBestAvailableMoveset]);
 
   // Distinct candyFamilyId values present in the roster pool, each with a
   // representative species name — feeds the assumption panel's minimal
@@ -2328,6 +2337,7 @@ export function PowerUpOptimizerView() {
       candyByFamilyId: {},
       multiRaidMegaLevel: null,
       multiRaidSignificanceMode: "aggregate-only",
+      multiRaidUseBestAvailableMoveset: false,
       // Placeholders — runPowerUpOptimizerScenario never reads TM inventory
       // (it's purely a render-layer "within your stock" framing, see
       // PowerUpOptimizerAssumptions' own field doc comments), so these
@@ -2421,6 +2431,7 @@ export function PowerUpOptimizerView() {
       // wiring is already correct the moment that engine gap closes.
       multiRaidMegaLevel: assumptions.multiRaidMegaLevel,
       multiRaidSignificanceMode: assumptions.multiRaidSignificanceMode,
+      multiRaidUseBestAvailableMoveset: assumptions.multiRaidUseBestAvailableMoveset,
       stardustOnHand: assumptions.stardustOnHand,
       rareCandyOnHand: assumptions.rareCandyOnHand,
       rareCandyXlOnHand: assumptions.rareCandyXlOnHand,
@@ -2442,6 +2453,7 @@ export function PowerUpOptimizerView() {
       assumptions.candyByFamilyId,
       assumptions.multiRaidMegaLevel,
       assumptions.multiRaidSignificanceMode,
+      assumptions.multiRaidUseBestAvailableMoveset,
       assumptions.stardustOnHand,
       assumptions.rareCandyOnHand,
       assumptions.rareCandyXlOnHand,
@@ -2728,6 +2740,21 @@ export function PowerUpOptimizerView() {
             <details className="prose-details">
               <summary>Raid timer</summary>
               <p>Real, documented per-tier raid countdown — see raidBoss.ts&rsquo;s RAID_TIER_TABLE.</p>
+            </details>
+            <details className="prose-details">
+              <summary>Best-available-moveset toggle</summary>
+              <p>
+              A real Poke Genie export routinely has NO recorded charged move for the majority of its rows — every
+              such entry simulates on its species&rsquo; own first fast/charged move by default, which under-ranks it
+              even when a cheap TM would fix it. This toggle only ever substitutes the highest raw power/duration
+              move (the same intrinsic rating MoveSelect shows next to every move option — no STAB, no type
+              effectiveness against this boss set) for a slot the import genuinely never recorded; a moveset you
+              fixed by hand on the Roster tab is unaffected in either state, since fixing it there clears the
+              &ldquo;defaulted&rdquo; flag this toggle keys off. Turning it ON answers a different question than
+              OFF does (&ldquo;what&rsquo;s worth investing in&rdquo; vs. &ldquo;what should I power up tonight&rdquo;) —
+              neither is more &ldquo;correct,&rdquo; they answer different things. The single-raid TM/second-move
+              optimizer above is unaffected either way — it only ever prices a moveset it actually observed.
+              </p>
             </details>
             </div>
           </CollapsibleSection>

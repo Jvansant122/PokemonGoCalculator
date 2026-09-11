@@ -1,7 +1,8 @@
 import { bossEffectiveHp, bossEffectiveStats, bossEnrageStats, ownBoostMultiplier, resolveCandidateMegaLevel, resolveMove } from "./comparison.js";
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { DamageTrajectoryPoint } from "./combat.js";
-import { chargedMoveAtMegaLevel, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
+import type { FriendshipLevel } from "./damage.js";
+import { chargedMoveAtMegaLevel, effectiveLevelForBestBuddy, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
 import type { RaidTier } from "./raidBoss.js";
 import {
   DEFAULT_STEPWISE_MAX_SECONDS,
@@ -79,6 +80,32 @@ export const MAX_TEAM_RAID_SLOTS = 6;
  */
 export const MAX_TEAM_RAID_CYCLES = 1000;
 
+/**
+ * The real, first-party cost of a faint-triggered auto-swap:
+ * `BATTLE_SETTINGS.swapDurationMs = 1000` (GAME_MASTER, fetched 2026-09-09,
+ * `[first-party]`) — see MECHANICS.md's "Swapping Pokémon costs a real,
+ * first-party 1.0s" section. Was defaulted to 0 before 2026-09-10 on the
+ * (since-disproven) premise that no official value existed.
+ *
+ * This value's applicability was confirmed for exactly the path this module
+ * models — a mid-roster auto-swap triggered by a faint — via the user's own
+ * raid screen recording (2026-09-10): Mega Mewtwo faints at ~54.10s, the next
+ * Pokémon lands its first (0.5s) attack at ~55.6s, and 1.5s = 1.0s swap +
+ * 0.5s attack reproduces that gap exactly. The 1.0s is measured from HP-zero
+ * and SUBSUMES both the death and spawn animations (frames show only a spawn
+ * sparkle, with the HUD still naming the fainted Pokémon, while the boss is
+ * already taking damage) — do NOT add animation time on top of this value,
+ * that would double-count.
+ *
+ * STILL UNKNOWN, and deliberately not assumed here: whether a **manual**
+ * mid-raid swap (not triggered by a faint) costs the same 1.0s. This module
+ * only ever pays swapCostSeconds on a forced post-faint swap-in, so that gap
+ * doesn't currently matter to anything this engine computes — but do not
+ * reuse this constant for a hypothetical manual-swap feature without
+ * re-checking that assumption first.
+ */
+export const DEFAULT_SWAP_COST_SECONDS = 1.0;
+
 export interface TeamRaidSlotInput {
   /** The species fielded in this slot, or null/undefined for an empty slot that never enters the fight. */
   species: SpeciesDefinition | null | undefined;
@@ -129,6 +156,21 @@ export interface TeamRaidSlotInput {
    * zero changes.
    */
   megaLevel?: MegaLevel;
+  /**
+   * This slot's own Best Buddy CP Boost (see megaLevel.ts's
+   * BEST_BUDDY_EFFECTIVE_LEVEL_BONUS/effectiveLevelForBestBuddy) — a free
+   * `+1` effective level, orthogonal to and gated independently of
+   * `megaLevel` above (applies to ANY species, mega or not, and STACKS with
+   * Super Max's `+2` if both are set for the same slot). Only one Pokémon
+   * can be a trainer's active buddy at a time in the real game, so setting
+   * this `true` on more than one slot is a caller error this module does NOT
+   * currently validate against (unlike `isMega`) — real Pokémon GO enforces
+   * it account-wide the same way, but nothing about a single team-raid
+   * simulation run is actually wrong if more than one slot claims it; the
+   * result is just not achievable by any real single trainer. `undefined`/
+   * omitted/`false` means no bonus (today's behavior, byte-identical).
+   */
+  isBestBuddy?: boolean;
 }
 
 export interface TeamRaidInputs {
@@ -145,6 +187,21 @@ export interface TeamRaidInputs {
    * DEFAULT_REAL_RAID_TIER as the true last resort).
    */
   bossRaidTier?: RaidTier;
+  /**
+   * Override for the boss's effective max HP for THIS encounter — mirrors
+   * comparison.ts's SustainedComparisonInputs.bossMaxHpOverride exactly (see
+   * bossEffectiveHp's own doc comment for the full contract: a real, sourced
+   * historical HP figure for one specific past encounter — e.g. a
+   * `raidHistory.json` row's `eraHp` — NOT a tuning knob, and it overrides HP
+   * only, never the tier's own attackDefenseMultiplier). Without this,
+   * runTeamRaid's own clear-timer detection compares accumulated damage
+   * against TODAY's tier HP even when `boss`/`bossRaidTier` describe a
+   * retired encounter, understating old tier-2 raids by up to 3.0x and old
+   * tier-4 raids by up to 2.5x (the 2020-08-27 tier merge). Omitted/undefined
+   * is byte-identical to before this field existed. A non-finite or
+   * non-positive value throws (see bossEffectiveHp).
+   */
+  bossMaxHpOverride?: number;
   /** Boss fast-move selection. Omit/null defaults to the boss's first fast move. */
   bossFastMoveId?: string | null;
   /** Boss charged-move selection. Omit/null defaults to the boss's first charged move. */
@@ -186,16 +243,28 @@ export interface TeamRaidInputs {
   bossStartingEnergy?: number;
   /** Active weather, applied per-move to both sides — see weather.ts. Defaults to "none". */
   weather?: WeatherCondition;
+  /**
+   * See comparison.ts's SustainedComparisonInputs.friendshipLevel for the
+   * full contract — the real Gym/Raid friendship attack bonus (damage.ts's
+   * FRIENDSHIP_ATTACK_BONUS_MULTIPLIER), single-SIDED (the currently fielded
+   * slot's own fast/charged damage only, never the boss's) and
+   * single-trainer-scoped (never a team-wide boost, and never anything
+   * touching another slot). Applies identically to whichever slot is
+   * currently fielded, every slot, every cycle — the trainer's own friend
+   * doesn't stop co-participating just because the trainer swapped which of
+   * their OWN Pokémon is active. Defaults to "none".
+   */
+  friendshipLevel?: FriendshipLevel;
   /** Real-world raid countdown: 180s for Tier 1/3, 300s for Mega/Legendary/Primal raids (community-consensus real numbers). The single, shared clock across every cycle — see this module's top doc comment. */
   raidTimerSeconds: number;
   /**
    * Seconds of raid clock a forced post-faint swap-in costs (mid-roster,
-   * no lobby return). No real fixed value is documented for this in-game (a
-   * "brief revival screen pause" of unconfirmed, likely player-reaction-
-   * time-driven duration) — defaults to 0 (fastest-possible play), an
-   * honest placeholder rather than a fabricated "realistic" number.
-   * User-adjustable. Distinct from reviveCostSeconds below, which is paid
-   * only once per FULL-roster wipe, not per individual faint.
+   * no lobby return). Defaults to DEFAULT_SWAP_COST_SECONDS (1.0) — see that
+   * constant's own doc comment for the sourcing (a real, first-party
+   * `BATTLE_SETTINGS.swapDurationMs`, confirmed 2026-09-10 to apply to this
+   * exact faint-triggered auto-swap path). User-adjustable. Distinct from
+   * reviveCostSeconds below, which is paid only once per FULL-roster wipe,
+   * not per individual faint.
    */
   swapCostSeconds?: number;
   /**
@@ -397,8 +466,9 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
     bossChargedMoveWarmupSeconds,
     bossStartingEnergy = 0,
     weather = "none",
+    friendshipLevel = "none",
     raidTimerSeconds,
-    swapCostSeconds = 0,
+    swapCostSeconds = DEFAULT_SWAP_COST_SECONDS,
     reviveCostSeconds = 0,
     maxSecondsPerSlot = Math.max(DEFAULT_STEPWISE_MAX_SECONDS, raidTimerSeconds),
     seed = 1,
@@ -411,7 +481,7 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
   // flat per-tier pool, NOT boss.baseStamina run through effectiveStat/CPM
   // — only a precomputed boss (this project's hypothetical fixtures/
   // hand-authored test bosses) reads baseStamina straight through.
-  const bossHp = bossEffectiveHp(boss, bossRaidTier);
+  const bossHp = bossEffectiveHp(boss, bossRaidTier, inputs.bossMaxHpOverride);
   // Shadow raid enrage — see simulate.ts's StepwiseBoss.enrage and
   // comparison.ts's bossEnrageStats. null for every non-shadow boss.
   const bossEnrage = bossEnrageStats(boss);
@@ -493,7 +563,11 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
       // effective-level lookup on top of that (Super Max's CP bonus — see
       // megaLevel.ts), gated on this slot's OWN species carrying `.boost`.
       const megaLevel = resolveCandidateMegaLevel(species, slot.megaLevel);
-      const stats = effectiveStatsAtLevel(species, slot.ivs ?? ivs, effectiveLevelForMegaLevel(slot.level ?? level, megaLevel));
+      // Best Buddy's +1 effective level (this slot's own isBestBuddy) stacks
+      // with Super Max's +2 above — see megaLevel.ts's
+      // BEST_BUDDY_EFFECTIVE_LEVEL_BONUS doc comment.
+      const slotEffectiveLevel = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(slot.level ?? level, slot.isBestBuddy), megaLevel);
+      const stats = effectiveStatsAtLevel(species, slot.ivs ?? ivs, slotEffectiveLevel);
       const fastMove = resolveMove(species.fastMoves, slot.fastMoveId);
       const rawChargedMove = resolveMove(species.chargedMoves, slot.chargedMoveId);
       if (!fastMove || !rawChargedMove) {
@@ -520,16 +594,21 @@ export function runTeamRaid(inputs: TeamRaidInputs): TeamRaidResult {
           typeEffectiveness: fastVsBoss,
           megaBoostMultiplier: ownBoostMultiplier(species.boost, fastMove.type),
           weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+          friendshipLevel,
         },
         chargedDamageOut: {
           stab: species.types.includes(chargedMove.type),
           typeEffectiveness: chargedVsBoss,
           megaBoostMultiplier: ownBoostMultiplier(species.boost, chargedMove.type),
           weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+          friendshipLevel,
         },
         holdChargedMoveUntilSafe,
       };
 
+      // NO friendshipLevel on the boss's own damageOut/chargedMoveDamageOut
+      // below — see TeamRaidInputs.friendshipLevel's doc comment (the bonus
+      // never applies to the boss's damage).
       const bossForSlot: StepwiseBoss = {
         attackStat: bossAttackStat,
         defenseStat: bossDefenseStat,

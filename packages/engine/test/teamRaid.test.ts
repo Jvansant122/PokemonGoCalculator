@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { MegaLevel } from "../src/megaLevel.js";
 import { simulateStepwiseBattle } from "../src/simulate.js";
 import { effectiveStatsAtLevel } from "../src/stats.js";
-import { MAX_TEAM_RAID_CYCLES, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "../src/teamRaid.js";
+import { DEFAULT_SWAP_COST_SECONDS, MAX_TEAM_RAID_CYCLES, runTeamRaid, type TeamRaidInputs, type TeamRaidSlotInput } from "../src/teamRaid.js";
 import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
 
 const LEVEL = 30;
@@ -224,6 +224,11 @@ describe("runTeamRaid", () => {
         slots: [makeSlot(FRAGILE), makeSlot(HARD_HITTER)],
         boss,
         raidTimerSeconds: 180,
+        // Explicit 0 here — this test is about clear-attribution/HP carryover
+        // across a slot handoff, not the swap-cost mechanic (see teamRaid.ts's
+        // DEFAULT_SWAP_COST_SECONDS, now 1.0), so it's pinned rather than left
+        // to the default.
+        swapCostSeconds: 0,
       }),
     );
 
@@ -234,7 +239,7 @@ describe("runTeamRaid", () => {
     expect(result.wipeCount).toBe(0);
     expect(result.clearingCycleIndex).toBe(0);
     expect(result.clearingSlotIndex).toBe(1);
-    // Slot 2 started right where slot 1's clock left off (no swap cost by default).
+    // Slot 2 started right where slot 1's clock left off (swapCostSeconds pinned to 0 above).
     expect(result.slots[1]!.startedAtRaidSeconds).toBe(result.slots[0]!.endedAtRaidSeconds);
     // The finishing blow landed after slot 1's damage was already banked —
     // slot 1 alone didn't reach the boss's full HP pool.
@@ -265,6 +270,33 @@ describe("runTeamRaid", () => {
     );
 
     expect(result.slots[1]!.startedAtRaidSeconds).toBe(result.slots[0]!.endedAtRaidSeconds! + 3);
+  });
+
+  it("defaults swapCostSeconds to DEFAULT_SWAP_COST_SECONDS (1.0) when omitted, sourced from BATTLE_SETTINGS.swapDurationMs", () => {
+    const boss: SpeciesDefinition = {
+      id: "two-slot-boss-default-swap",
+      name: "Two Slot Boss (default swap cost)",
+      types: ["normal"],
+      baseAttack: 150,
+      baseDefense: 100,
+      baseStamina: 100,
+      fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal", power: 15, energyGain: 0, durationSeconds: 0.5 }],
+      chargedMoves: [],
+      statsArePrecomputed: true,
+    };
+
+    // baseInputs() deliberately does NOT set swapCostSeconds here, so this
+    // exercises runTeamRaid's own default directly.
+    const result = runTeamRaid(
+      baseInputs({
+        slots: [makeSlot(FRAGILE), makeSlot(HARD_HITTER)],
+        boss,
+        raidTimerSeconds: 180,
+      }),
+    );
+
+    expect(DEFAULT_SWAP_COST_SECONDS).toBe(1.0);
+    expect(result.slots[1]!.startedAtRaidSeconds).toBe(result.slots[0]!.endedAtRaidSeconds! + DEFAULT_SWAP_COST_SECONDS);
   });
 
   it("pays reviveCostSeconds (not swapCostSeconds) when looping back after a full wipe", () => {
@@ -515,6 +547,63 @@ describe("runTeamRaid", () => {
     expect(result.outcome).toBe("timerExpired");
     expect(result.timeToClearSeconds).toBeNull();
   });
+
+  it("honors bossMaxHpOverride for a real (non-precomputed) boss's clear-timer detection, overriding the tier's default HP", () => {
+    // Same real-tier boss shape as the test above, but this time the caller
+    // supplies a real recorded historical HP figure far BELOW the "Mega
+    // Raids" tier default (9000) — small enough that HARD_HITTER genuinely
+    // can clear it within the timer. Without bossMaxHpOverride wired through
+    // (see comparison.ts's bossEffectiveHp third parameter), runTeamRaid
+    // would keep comparing accumulated damage against the tier default and
+    // this would still read as timerExpired.
+    const realBoss: SpeciesDefinition = {
+      id: "real-tier-hp-override-test-boss",
+      name: "Real Tier HP Override Boss",
+      types: ["normal"],
+      baseAttack: 10,
+      baseDefense: 300,
+      baseStamina: 137,
+      fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 0.5 }],
+      chargedMoves: [],
+    };
+
+    const result = runTeamRaid(
+      baseInputs({
+        slots: [makeSlot(HARD_HITTER)],
+        boss: realBoss,
+        bossRaidTier: "Mega Raids",
+        bossMaxHpOverride: 50,
+        raidTimerSeconds: 180,
+      }),
+    );
+
+    expect(result.outcome).toBe("cleared");
+    expect(result.timeToClearSeconds).not.toBeNull();
+  });
+
+  it("bossMaxHpOverride throws for a non-finite or non-positive value, same as bossEffectiveHp itself", () => {
+    const boss: SpeciesDefinition = {
+      id: "override-validation-boss",
+      name: "Override Validation Boss",
+      types: ["normal"],
+      baseAttack: 10,
+      baseDefense: 300,
+      baseStamina: 137,
+      fastMoves: [{ id: "boss-fast", name: "Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 0.5 }],
+      chargedMoves: [],
+    };
+
+    expect(() =>
+      runTeamRaid(
+        baseInputs({
+          slots: [makeSlot(HARD_HITTER)],
+          boss,
+          bossMaxHpOverride: 0,
+          raidTimerSeconds: 180,
+        }),
+      ),
+    ).toThrow(/finite, positive/i);
+  });
 });
 
 describe("TeamRaidSlotInput.megaLevel", () => {
@@ -588,6 +677,62 @@ describe("TeamRaidSlotInput.megaLevel", () => {
     const withSuperMaxRequested = runOneSlot(nonMegaAttacker, "super-max");
     expect(withSuperMaxRequested).toEqual(withoutMegaLevel);
   });
+
+  it("isBestBuddy's +1 effective level applies even to a NON-mega slot (unlike megaLevel, no .boost gate)", () => {
+    const withoutBestBuddy = runTeamRaid({
+      slots: [makeSlot(nonMegaAttacker)],
+      boss: weakBoss,
+      level: 50,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      maxSecondsPerSlot: 60,
+    });
+    const withBestBuddy = runTeamRaid({
+      slots: [makeSlot(nonMegaAttacker, { isBestBuddy: true })],
+      boss: weakBoss,
+      level: 50,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      maxSecondsPerSlot: 60,
+    });
+    expect(withoutBestBuddy.slots[0]!.ownDamageDealt).toBeGreaterThan(0);
+    expect(withBestBuddy.slots[0]!.ownDamageDealt).toBeGreaterThan(withoutBestBuddy.slots[0]!.ownDamageDealt);
+  });
+
+  it("isBestBuddy STACKS with Super Max — a level-50 Super Max mega slot that is also Best Buddy computes at effective level 53, matching an explicit level-51 Super Max slot", () => {
+    // Equivalence check, not a "greater than" one — see the equivalent
+    // sustainedComparison.test.ts test's own comment for why: floor() can
+    // legitimately leave a one-level shift's floored damage unchanged for a
+    // given power/stat pairing, so equality against a hand-computed
+    // equivalent level is the exact, fixture-independent check.
+    // effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(50, true), "super-max")
+    //   = effectiveLevelForMegaLevel(51, "super-max") = 53, same as level 51 directly.
+    const superMaxAndBestBuddyAtLevel50 = runTeamRaid({
+      slots: [makeSlot(megaAttacker, { megaLevel: "super-max", isBestBuddy: true })],
+      boss: weakBoss,
+      level: 50,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      maxSecondsPerSlot: 60,
+    });
+    const explicitLevel51SuperMaxAtLevel51 = runTeamRaid({
+      slots: [makeSlot(megaAttacker, { megaLevel: "super-max" })],
+      boss: weakBoss,
+      level: 51,
+      ivs: { attack: 15, defense: 15, stamina: 15 },
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      maxSecondsPerSlot: 60,
+    });
+    expect(superMaxAndBestBuddyAtLevel50.slots[0]!.ownDamageDealt).toBe(explicitLevel51SuperMaxAtLevel51.slots[0]!.ownDamageDealt);
+  });
 });
 
 describe("TeamRaidSlotResult.dodgeFastAttacksLockout", () => {
@@ -632,5 +777,51 @@ describe("TeamRaidSlotResult.dodgeFastAttacksLockout", () => {
     for (const slot of result.slots) {
       expect(slot.dodgeFastAttacksLockout).toBe(false);
     }
+  });
+});
+
+describe("TeamRaidInputs.friendshipLevel", () => {
+  const weakBoss: SpeciesDefinition = {
+    id: "friendship-test-boss",
+    name: "Friendship Test Boss",
+    types: ["normal"],
+    baseAttack: 20,
+    baseDefense: 50,
+    baseStamina: 1_000_000, // never clears within maxSecondsPerSlot — isolates ownDamageDealt across the whole window
+    fastMoves: [WEAK_FAST],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function runOneSlot(friendshipLevel: TeamRaidInputs["friendshipLevel"]) {
+    return runTeamRaid({
+      slots: [makeSlot(HARD_HITTER)],
+      boss: weakBoss,
+      level: LEVEL,
+      ivs: IVS,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      maxSecondsPerSlot: 60,
+      friendshipLevel,
+    });
+  }
+
+  it("boosts the fielded slot's own damage output when set", () => {
+    const none = runOneSlot(undefined);
+    const forever = runOneSlot("forever");
+    expect(none.slots[0]!.ownDamageDealt).toBeGreaterThan(0);
+    expect(forever.slots[0]!.ownDamageDealt).toBeGreaterThan(none.slots[0]!.ownDamageDealt);
+  });
+
+  it("never affects the boss's own damage output against the slot", () => {
+    // WEAK_BOSS's attack/defense are fixed regardless of the trainer's
+    // friendship tier — a non-mega-boosted, non-dodging slot's own
+    // secondsActive (driven purely by how much damage the BOSS deals to it)
+    // must be identical no matter what friendshipLevel is requested.
+    const none = runOneSlot(undefined);
+    const forever = runOneSlot("forever");
+    expect(forever.slots[0]!.secondsActive).toBe(none.slots[0]!.secondsActive);
+    expect(forever.slots[0]!.faintedAtSeconds).toBe(none.slots[0]!.faintedAtSeconds);
   });
 });

@@ -45,7 +45,10 @@ import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_
 
 describe("the power-up ceiling stays 50 even though CPM_TABLE now has effective-level-only entries past it", () => {
   it("sanity: CPM_TABLE really does extend past 50 (otherwise these tests would pass trivially, proving nothing)", () => {
-    expect(Math.max(...Object.keys(CPM_TABLE).map(Number))).toBe(52);
+    // 53, not 52, since 2026-09-10 — the Best Buddy CP Boost's +1 effective
+    // level stacks with Super Max's +2 (see megaLevel.ts's
+    // BEST_BUDDY_EFFECTIVE_LEVEL_BONUS), so the table's own ceiling moved too.
+    expect(Math.max(...Object.keys(CPM_TABLE).map(Number))).toBe(53);
     expect(MAX_POKEMON_POWER_UP_LEVEL).toBe(50);
   });
 

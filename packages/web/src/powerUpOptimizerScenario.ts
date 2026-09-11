@@ -155,15 +155,22 @@ export interface PowerUpOptimizerScenario {
    * way, per CLAUDE.md's ranking-flip thesis.
    *
    * Optional so a link built before this field existed decodes to
-   * `"aggregate-or-per-boss"` (PowerUpOptimizerView.tsx's
-   * scenarioToAssumptions), NOT this tab's own `DEFAULT_ASSUMPTIONS` value
-   * of `"aggregate-only"` — same inverted-default precedent as
-   * `showDetailedAssumptions` on the Comparator/Team Raid tabs: an old
-   * link's sender saw the pre-toggle behavior (today's
-   * "aggregate-or-per-boss"), so an absent field must keep meaning that,
-   * not silently adopt the new stricter default.
+   * `DEFAULT_ASSUMPTIONS.multiRaidSignificanceMode` (`"aggregate-only"`),
+   * same plain fallback as every other field (PowerUpOptimizerView.tsx's
+   * scenarioToAssumptions). Used to invert to `"aggregate-or-per-boss"` so
+   * an old link's meaning never silently changed; that requirement is gone
+   * — see CLAUDE.md's "Backward compatibility with OLD share links is NOT
+   * required" (2026-09-10).
    */
   multiRaidSignificanceMode?: RosterSignificanceMode;
+  /**
+   * Multi-raid mode only — IDEAS.md #11, see
+   * PowerUpOptimizerAssumptions.multiRaidUseBestAvailableMoveset for the full
+   * contract. Optional/defaults to `false` (today's implicit behavior: every
+   * entry simulates on its recorded, possibly-defaulted moveset) so a link
+   * shared before this field existed decodes cleanly.
+   */
+  multiRaidUseBestAvailableMoveset?: boolean;
   /**
    * TM inventory (PLAN_tm_move_change_optimizer.md web half) — account-wide,
    * like rareCandyOnHand/rareCandyXlOnHand, not per-slot. `null` (the

@@ -205,6 +205,73 @@ have round-tripped perfectly and been **ignored at simulation time**. Fixed.
   numeric damage for any move, and shows no Mega Level badge. The needed evidence is a still of the
   **move-detail screen** for a Pokémon of known Mega Level.
 
+### Session end 2026-09-10: Roster tab, TM candidates, IDEAS backlog — and what's left
+
+The Roster tab plan is complete, and its file has been removed.
+
+`PLAN_tm_move_change_optimizer.md` is **still pending**: its single-raid half is built, multi-raid
+is not yet done, so the file deliberately stays at the root.
+
+**Shipped this batch:** Roster tab (7th, `view=roster`/`rt`) with hand-entry, CSV import moved
+there, and a gzip save code (164-entry roster → 8,313 chars, 89.8% smaller, versioned, fails
+legibly when truncated). TM/second-charged-move candidates for single-raid. `kmBuddyDistance`
+synced. Best-available-moveset toggle. Shadow enrage, lineup builder, party-size flip, Team Raid
+boss-moveset sweep, multi-raid boss picker, four cross-tab links. Swap cost → **1.0s**,
+`bossMaxHpOverride`, the friendship attack bonus, Best Buddy +1.
+
+**143 assumption fields across 7 tabs**, 22 nested in per-slot arrays. Engine 534 / web 289 /
+scripts 227 tests, 26 e2e specs.
+
+## THE IMPORTANT PART FOR A FRESH SESSION
+
+### Engine inputs that exist but are NOT yet reachable from the UI
+
+`engine-developer` added these and they round-trip through **nothing** — no `Scenario` field, so
+no user can set them and no share link carries them. Wiring them is a `web-developer` job via the
+**`add-scenario-assumption`** skill:
+
+- `friendshipLevel` on `ComparisonInputs` / `SustainedComparisonInputs` / `TeamRaidInputs`
+  (5-tier ladder: none/good/great/ultra/best/forever).
+- `candidateIsBestBuddy` (Comparator) and `TeamRaidSlotInput.isBestBuddy`.
+- `bossMaxHpOverride` on `TeamRaidInputs` / `LineupBuilderInputs`.
+
+⚠️ The friendship and Best Buddy inputs are **deliberately bounded**: not wired into
+`rosterPlanner.ts`, `lineupBuilder.ts`, `speciesReport.ts`, `ivComparison.ts`, `breakpoints.ts`,
+or `powerUp.ts`'s Stage-1 screen. That is a known, stated gap, not an oversight — decide
+deliberately before widening it.
+
+### Two things worth knowing before trusting a number
+
+- **Best Buddy's +1 stacking with Super Max is single-source.** The only evidence is one GitHub
+  gist comment — the *same* source already cited for Super Max's own +2. So it is not independent
+  corroboration of the stacking claim; it rides along with a claim it cannot confirm.
+- **The swap-cost change moved pinned numbers in three tests.** Each was isolated with an explicit
+  `swapCostSeconds: 0` because none of those tests is *about* swap cost — the numbers were not
+  re-derived. If one of those later looks wrong, that is why.
+
+### Remaining IDEAS work, already grouped into three non-conflicting lanes
+
+Grouped by file ownership so three agents can run concurrently in one worktree without collisions:
+
+| Lane | Items | Files owned |
+| :--- | :--- | :--- |
+| **A** | #9 evolve-then-power-up (**highest value** — 6 of 8 "never competitive" entries on the real sample are blocked on "evolve first", none on moveset); #3 "add a 7th"; #13 `onProgress` hook | `powerUp.ts`, `rosterPlanner.ts` |
+| **B** | #20 own-cast cost line; #21 dodge-miss sensitivity; asymmetric move delay | `simulate.ts` |
+| **C** | #12 re-select six after a wipe; #16 fold Team Raid's `showDetailedAssumptions` onto `TeamScenario` | `teamRaid.ts`, `teamScenario.ts` |
+
+Web-only and independent: #6 more iterations / worker for single-raid.
+Needs a **data** task: the Eternatus 30× candy override (confirmed absent from
+`data/normalized/powerUpCosts.json`).
+Needs a **user scope call**: #15 shadow forms beyond raid bosses — not blocked on effort, it is a
+deliberate change of evidence anchor.
+
+### `LINKS.md` — five questions blocked on ACCESS, not effort
+
+New file. `reddit.com` / `thesilphroad.com` are hard-blocked to this tooling and `gamepress.gg` is
+dead, so no amount of agent time closes these. Top item: a screenshot of a **move-detail screen**
+showing a "+" move's damage at a known Mega Level — one reading retires a multiplier four
+research rounds failed to source.
+
 ## Next
 
 1. **PLAN_roster_tab.md** — built 2026-09-10 (see the section above), but still needs its

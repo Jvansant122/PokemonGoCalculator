@@ -25,23 +25,23 @@ nothing. The cost table comes from GAME_MASTER's own `POKEMON_UPGRADE_SETTINGS` 
 `LUCKY_POKEMON_SETTINGS` templates (pogoapi's endpoint turned out to be unnecessary),
 interpreted only by the engine's `powerUpCostTableFromGameMaster`.
 
-**Scope decision, restated:** the user chose to prototype WITHOUT login first (2026-09-08),
-reversing the 2026-09-07 "login before the optimizer" sequencing. The roster round-trips
-through the `pu` query param like every other tab. Real persistence is still
-[`PLAN_login_and_roster_persistence.md`](PLAN_login_and_roster_persistence.md) — unchanged,
-still pending, and now purely additive on top of a working tab ("remember my roster" rather
-than "share a link").
+**Scope decision, settled 2026-09-10: there is no login and there will not be one.** The
+Firebase/Firestore plan was deleted at the user's instruction. Cross-device transfer is a
+self-contained copyable save code on the **Roster tab** (7th tab, shipped 2026-09-10), which now
+owns the roster outright — hand-entry, CSV import, editing, save/load. This app stays a static
+site with no backend and no accounts.
 
 **Not a Teambuilding-Analyzer conflict**: one trainer's own roster, same single-trainer framing
 as the Team Raid Simulator. Nothing here staggers megas across trainers.
 
 Remaining ideas, in rough value order (none scheduled):
 
-1. **Login + roster persistence** — the plan above. Signed-out must stay fully functional.
-2. **Multi-step plans.** v1 ranks single-slot power-ups only. A greedy "spend this whole budget"
-   plan (repeatedly take the best affordable candidate, re-baseline, repeat) is the obvious
-   next step and needs no new engine primitive — `optimizePowerUps` already returns the
-   re-baselined summary per candidate.
+1. ~~**Login + roster persistence**~~ — **REMOVED 2026-09-10.** Superseded by the Roster tab's
+   save code; no backend, no accounts. See above.
+2. ~~**Multi-step plans**~~ — **DONE.** `planPowerUpBudget` (single-raid) and `planRosterBudget`
+   (multi-raid) are exactly this: repeatedly take the best affordable candidate, re-baseline,
+   repeat. Kept deliberately separate from the ranked table, which prices each candidate *as if
+   it were the only purchase* — the two answer different questions and must not be merged.
 3. **"Add a 7th" candidates.** Compare powering up an owned slot against replacing it with a
    hypothetical new catch at level 20/25 (raid catch levels) — the original idea's "5 + a
    hypothetical 6th" framing. Needs a roster-swap candidate type alongside the level-up one.
@@ -55,67 +55,44 @@ Remaining ideas, in rough value order (none scheduled):
 
 ## Unmodelled real mechanics
 
-Each of these is a real, recorded game mechanic this engine does **not** model. They live in
-`MECHANICS.md` with sourcing and a "not modelled" note; this is the scheduling view of the same
-list. None is a bug — each is a deliberate, dated gap.
+Real, recorded game mechanics this engine does **not** model. Each lives in `MECHANICS.md` with
+sourcing and a "not modelled" note; this is the scheduling view. None is a bug.
+
+**Four items were REMOVED from this list on 2026-09-10** on the user's instruction — *"if it cant
+be modeled then remove it"*. They are not forgotten, only unscheduled: each remains in
+`MECHANICS.md` as a dated record, so an anomalous result gets recognised instead of
+re-investigated from scratch. Do not re-add them here without the specific evidence named below.
+
+| Removed | Why it cannot be built | What would unblock it |
+| :--- | :--- | :--- |
+| Energy-driven boss cadence by default | The denominator of the boss's 50% charged-move roll has no source; ours is a reasoned inference. Re-attempted across four research rounds, most recently 2026-09-10. | A source establishing the denominator, ideally sanity-checked against a real raid log. |
+| Dodge damage scaling with remaining HP | One Silph Road observation, flagged by its own authors as needing confirmation, with **no formula**. reddit.com and thesilphroad.com are both hard-blocked to this tooling — a ceiling, not a research gap. | A formula from any reachable source. |
+| Super Mega Raids | Structurally group content: a fixed 7-10 shields with one break per trainer. Modelling it properly is multi-trainer, which is a standing-decision exclusion. | Nothing — this is a scope boundary, not missing evidence. The tier stays caveated. |
+| The 0.5s combat cycle | Nothing is mis-timed: 0.5 is exactly representable on our finer 0.1s tick. There is no error to fix. | A demonstrated case where the finer tick produces a wrong result. |
 
 Ordered by how much they'd change results, not by effort.
 
-1. **Turn the energy-driven boss cadence on by default.** Already built and shipped behind a
-   toggle (`bossChargedMoveCadence`), off by default. Flipping it costs nothing to implement —
-   the blocker is evidential, not technical. What would need to be true first: the denominator of
-   the boss's 50% charged-move roll established from a source (ours is a reasoned inference), and
-   ideally the ~15-34% survival impact sanity-checked against a real raid log. See
-   `MECHANICS.md`'s "OPEN QUESTION" section. Do not flip it just because it is more faithful in
-   principle — that silently re-baselines every number and every previously-shared link.
+1. **Asymmetric move delay.** Fast moves apply their 1s/1.5s delay at the END of the animation;
+   charged moves at the BEGINNING. So the fast move following a boss's charged move arrives
+   quickly. All move durations are currently treated uniformly. This shifts the fine structure of
+   when damage lands, which matters most for dodge timing.
 
-2. **Asymmetric move delay.** Fast moves apply their 1s/1.5s delay at the END of the animation;
-   charged moves apply it at the BEGINNING. So the fast move following a boss's charged move
-   arrives quickly. Currently all move durations are treated uniformly. This shifts the fine
-   structure of when damage lands, which matters most for dodge timing.
+2. **The 0.7s dodge window — RESOLVED 2026-09-10, nothing to build.** It is a different quantity
+   from the first-party `dodgeDurationMs: 500` this engine models: 500 ms is the **invulnerability
+   window once a dodge executes**, ~700 ms is the **human reaction window** to input one. This
+   engine's dodge model is perfect-play and has no reaction window to attach it to. The adjacent
+   per-move `damageWindowStartMs`/`EndMs` idea was separately chased and **rejected on the
+   merits** — since the Sept 2024 rework raid damage lands on regular 0.5s intervals and no longer
+   observes those timers, so `vulnerableWindowSeconds = durationSeconds` is correct, not a
+   placeholder. Do not reopen either without a contradicting source.
 
-3. **The 0.7s dodge window** — and a per-move damage-window idea that was investigated and
-   **closed**. Dodge damage (0.25) and its 0.5s cost are both confirmed first-party now; the
-   ~0.7s window itself is still unmodelled and unsourced. The tempting adjacent idea — extracting
-   the per-move `damageWindowStartMs`/`damageWindowEndMs` fields that 399 of 403 GAME_MASTER move
-   templates carry — was chased down on 2026-09-09 and **rejected on the merits**: since the Sept
-   2024 rework, raid damage lands on regular 0.5s intervals and no longer observes those timers.
-   The engine setting `vulnerableWindowSeconds = durationSeconds` is therefore correct, not a
-   placeholder. See `MECHANICS.md`'s Dodging entry. Do not reopen without a contradicting source.
-
-4. **Dodge damage may scale with remaining HP.** Silph Road observed a player surviving 8 dodged
-   Paybacks where 4-5 was expected. They flag it as needing confirmation and have no formula.
-   **Do not implement until confirmed** — it is recorded so anomalous survivability reports are
-   recognised rather than re-investigated from scratch.
-
-5. **The 0.5s combat cycle.** Since the Sept 2024 rework the real game runs on 0.5s cycles; our
-   simulator uses a finer 0.1s tick. Nothing is mis-timed (0.5 is representable at 0.1), but the
-   engine permits event boundaries the real game would snap. No known error from this today.
-
-6. **A real 1.0s Pokémon swap cost.** `BATTLE_SETTINGS.swapDurationMs = 1000`, first-party
-   (2026-09-09). `teamRaid.ts` defaults `swapCostSeconds` to `0` because no official value was
-   known to exist; one does now. Changing the default re-baselines every shared Team Raid link,
-   so it needs a deliberate call. Still open: whether it applies to faint-triggered auto-swaps,
-   manual swaps, or both.
-
-7. **The friendship attack bonus (3/5/7/10/12%).** A real raid multiplier, confirmed first-party,
+3. **The friendship attack bonus (3/5/7/10/12%).** A real raid multiplier, confirmed first-party,
    currently inert in `damage.ts` behind a `bestBuddy` field that is never set and a code comment
-   that has the raid/PvP scope backwards. Wiring it up means a new `Scenario` assumption
-   (`add-scenario-assumption`), and it is single-trainer-scoped like weather — not a team-boost
-   mechanic. Fix the wrong comment regardless of whether the feature is built.
+   that has the raid/PvP scope backwards. Single-trainer-scoped like weather — **not** a team-boost
+   mechanic. Fix the wrong comment regardless of whether the feature ships.
 
-8. **Super Mega Raids may not belong in a single-trainer tool at all.** A fixed 7-10 shields per
-   boss, one break per trainer, and a reported 8-10 trainer minimum make this tier structurally
-   group content: every other `RaidTier` can in principle be soloed given enough time, this one
-   cannot. (Note the client does *not* mark it in-person-only — `RAID_LEVEL_4/5_MEGA_ENHANCED` are
-   absent from `unsupportedRemoteRaidLevels`, so Super Mega Raids do support remote play. It is
-   the shield rule that forces a crowd, not the lobby rules.) The honest options are excluding or
-   caveating the tier, not modelling the shield phase — and the engine currently applies one flat
-   multiplier for the whole fight, so it simulates the tier as materially easier than it really
-   is. A product call, not a bug fix.
-
-Standing caveat for all of the above: the sourcing is ~2 years old and Niantic re-tunes raid
-internals without notice. Re-verify before building on any of it.
+Standing caveat: this sourcing is ~2 years old and Niantic re-tunes raid internals without notice.
+Re-verify before building on any of it.
 
 ---
 

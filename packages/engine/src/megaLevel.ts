@@ -273,6 +273,64 @@ export function effectiveLevelForMegaLevel(level: number, megaLevel: MegaLevel |
 }
 
 /**
+ * The Best Buddy CP Boost — `POKEMON_UPGRADE_SETTINGS.defaultCpBoostAdditionalLevel`
+ * (GAME_MASTER, fetched 2026-09-09, `[first-party]`; see MECHANICS.md's
+ * "Power-up (level-up) costs" section). A free, cost-less `+1` EFFECTIVE
+ * LEVEL granted while a Pokémon is currently its trainer's active buddy at
+ * the "Best Buddy" friendship tier — completely UNRELATED to the friendship
+ * ATTACK bonus (damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER, a Gym/Raid
+ * co-participating-friend mechanic). Two entirely different real mechanics
+ * share the "Best Buddy" name; do not conflate them, and note damage.ts
+ * deliberately removed a `bestBuddy` boolean field once already because its
+ * name collided with THIS mechanic (see that file's own history).
+ *
+ * Unlike Super Max's effective-level bonus, this is NOT gated on `.boost`,
+ * `canReachSuperMax`, or any mega/primal mechanic at all — Best Buddy is a
+ * property of the Pokémon-trainer relationship, orthogonal to Mega
+ * Evolution, and applies to any species whatsoever (a non-mega attacker can
+ * be a Best Buddy too). `effectiveLevelForBestBuddy` below is therefore a
+ * PURE, species-agnostic, ungated function exactly like
+ * `effectiveLevelForMegaLevel` — no gate belongs in this file at all; a
+ * caller composes the two by chaining
+ * `effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, isBestBuddy), megaLevel)`.
+ *
+ * STACKING WITH SUPER MAX — `[community-consensus]`, single independent
+ * source: a GitHub gist comment (gist.github.com/Mygod/71ac34368f66f0d3de469fbaeed386c4,
+ * the SAME source already cited for SUPER_MAX_EFFECTIVE_LEVEL_BONUS's own
+ * magnitude) states Mega Level 4 ("Super Max") "brings them up to level 52
+ * (level 53 with best buddy bonus)" — i.e. the two bonuses ADD (+2 then +1,
+ * or +1 then +1 for a level-50 Pokémon and its trainer's Best Buddy, both at
+ * Super Max: 50+2+1=53). This is the ONLY source this project has found that
+ * states the stacking explicitly; it is the same tier of evidence as the
+ * Super Max bonus's own magnitude (one community source, not first-party,
+ * not independently corroborated a second time for the STACKING claim
+ * specifically — the magnitude of the Super Max bonus alone has a second,
+ * independent corroborating source; the stacking behavior does not). Treat
+ * this as `[community-consensus, single-source]` — weaker than the Super Max
+ * magnitude claim it rides alongside. cpm.ts's CPM_TABLE was extended to 53
+ * specifically to make this stacked lookup resolvable; if the stacking claim
+ * is ever contradicted, that extension (52.5/53) becomes dead — SEE cpm.ts's
+ * own doc comment before removing it, since 51-52.5 stay load-bearing for
+ * Super Max alone regardless.
+ */
+export const BEST_BUDDY_EFFECTIVE_LEVEL_BONUS = 1;
+
+/**
+ * The level to actually look up for a Pokémon's Best Buddy CP Boost — see
+ * BEST_BUDDY_EFFECTIVE_LEVEL_BONUS's doc comment for the full mechanic,
+ * scope and stacking-with-Super-Max evidence. `isBestBuddy` of
+ * `false`/`null`/`undefined` returns `level` unchanged. Deliberately has no
+ * species/boost gate at all (see that doc comment) — apply this BEFORE
+ * `effectiveLevelForMegaLevel` when composing the two, e.g.
+ * `effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, isBestBuddy), megaLevel)`
+ * (order doesn't actually matter mathematically — both are a flat `+N`
+ * shift — but this is the convention every call site in this engine uses).
+ */
+export function effectiveLevelForBestBuddy(level: number, isBestBuddy: boolean | null | undefined): number {
+  return isBestBuddy ? level + BEST_BUDDY_EFFECTIVE_LEVEL_BONUS : level;
+}
+
+/**
  * Returns `move` as it would read at `megaLevel` — i.e. with `power` scaled
  * by MEGA_LEVEL_PLUS_MOVE_POWER_MULTIPLIER when `move.isPlusMove` is true,
  * rounded to the nearest whole number (real move power values in this game

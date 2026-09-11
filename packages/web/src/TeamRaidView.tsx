@@ -144,10 +144,12 @@ export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
    */
   bossChargedMoveCadence?: BossChargedMoveCadence;
   /**
-   * Same extension pattern again. UNLIKE every other optional field on this
-   * type, an ABSENT value here decodes to `true`, not
-   * DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions (`false`) — see
-   * teamScenarioToAssumptions below for why.
+   * Same extension pattern again. Decodes with the same plain `??
+   * DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions` fallback as every
+   * other optional field on this type — see teamScenarioToAssumptions
+   * below. (Used to invert to `true` so an old link's meaning never
+   * silently changed; that requirement is gone, see CLAUDE.md's "Backward
+   * compatibility with OLD share links is NOT required", 2026-09-10.)
    */
   showDetailedAssumptions?: boolean;
 }
@@ -244,17 +246,10 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     // as showDetailedAssumptions's inverted default below.
     swapCostSeconds: s.swapCostSeconds ?? 0,
     reviveCostSeconds: s.reviveCostSeconds ?? 0,
-    // INVERTED default versus every other `??` above: an ABSENT value here
-    // means the link was shared before this setting existed, when there was
-    // no "simple/derived" mode at all — the sender's stored
-    // bossChargedMoveFrequencySeconds WAS the real number in force for that
-    // run. Defaulting the absent case to `true` (not
-    // DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions, which is `false`)
-    // preserves that stored value instead of silently swapping it for a
-    // newly-derived one — "a shared link's meaning never silently changes"
-    // (see bossCadence.tsx's identical concern). Do not "fix" this to match
-    // the DEFAULT_TEAM_ASSUMPTIONS pattern every other field uses.
-    showDetailedAssumptions: s.showDetailedAssumptions ?? true,
+    // Plain `??` default, same as every other field above — see
+    // TeamScenarioWithShadow's own doc comment for why this no longer needs
+    // to invert to `true`.
+    showDetailedAssumptions: s.showDetailedAssumptions ?? DEFAULT_TEAM_ASSUMPTIONS.showDetailedAssumptions,
   };
 }
 
