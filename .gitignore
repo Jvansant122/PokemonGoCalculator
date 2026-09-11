@@ -12,3 +12,9 @@ packages/web/playwright-report/
 # dropped in here. Deliberately name-free.
 *message*.txt
 *messages*.txt
+
+# Stray scratch dumps written to the repo root with a flattened absolute path
+# (an 18 MB raw GAME_MASTER dump reached a commit this way on 2026-09-10).
+# Scratch files belong in the session scratchpad, never here.
+/Users*AppData*
+*gm_dump.json
