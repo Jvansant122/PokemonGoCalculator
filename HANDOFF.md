@@ -417,12 +417,13 @@ since built and deleted (no `PLAN_*.md` remains at the root), and (4) `IDEAS.md`
 (evolve-then-power-up) shipped 2026-09-10 and is in that file's Shipped table. Only one item is
 not accounted for:
 
-- **Dodge-lockout UI** — the old entry claimed "engine detection has landed, nothing surfaces it
-  yet." A 2026-09-11 grep of `packages/engine/src` found no such detection under `dodgeLockout`,
-  `dodgeWindow`, `cannotDodge`, `dodgeImpossible`, `dodgeUnavailable`, or `unavoidable` — only an
-  unrelated "animation lockout" comment on `Move.durationSeconds`. That is a **null grep, not a
-  finding**: it may have been named something else, or removed. Someone picking this up should
-  establish whether the engine-side detection exists at all before scoping UI for it.
+- **Dodge-lockout UI — RESOLVED 2026-09-11, there is nothing to build on.** The old entry claimed
+  "engine detection has landed, nothing surfaces it yet." That claim was false. `git log -S` across
+  all history shows `lockout` appearing in `packages/engine` only in the initial commit, as an
+  unrelated comment on `Move.durationSeconds` ("including the animation lockout"), and `dodgeLock`
+  has never existed anywhere under `packages/`. No dodge-lockout detection was ever built, so there
+  is no engine output waiting to be surfaced. If this is wanted, it is an engine feature first —
+  not a UI task. Removed from the next-list rather than carried forward as phantom work.
 
 ## 2026-09-09: multi-raid, whole-roster Power-Up Optimizer — SHIPPED
 

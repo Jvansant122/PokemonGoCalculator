@@ -69,11 +69,23 @@ an unpurified Shadow holds Frustration. Options, needing a deliberate call:
    movepools untouched. Weaker, but zero blast radius.
 3. Leave it. The code is harmless and already correct if the data ever changes.
 
-⚠️ **Suspected live consequence of doing nothing**, not yet confirmed: a Poke Genie CSV row for an
-unpurified Shadow probably *does* say "Frustration", which our matcher cannot resolve — so it
-lands in `unmatchedMoveNames` and earns the **"unrecognised"** badge, which by its own definition
-means "our data gap, not the player's problem". If so, that is a real, already-visible defect
-rather than a hypothetical. Worth confirming against a real export before choosing an option.
+✅ **CONFIRMED 2026-09-11 — this is a live, already-visible defect, not a hypothesis.** An earlier
+version of this entry called the consequence "suspected, not yet confirmed" and said to check a
+real export first. That check is unnecessary: the committed real Poke Genie export
+(`packages/web/src/import/test/pokeGenieSample.csv`, row 20) already carries a **Purified** Alolan
+Raticate whose `Charge Move` column reads literally `Return`. Our matcher cannot resolve it, so the
+row falls back to the species' first charged move (`CRUNCH`), sets `movesetIsDefaulted`, and reports
+`Return` in `unmatchedMoveNames` — earning the **"unrecognised"** badge, which by its own definition
+means "our data gap, not the player's problem". This is pinned by two already-passing tests in
+`pokeGenieMatch.test.ts` (~lines 243 and 383), so it has been true and visible since the import
+shipped.
+
+The Frustration/Shadow half runs the identical code path and will behave identically; no shadow row
+exists in the sample export to demonstrate it directly, but nothing about the mechanism differs.
+**So the decision below no longer has a confirmation step in front of it** — pick an option. Note
+that option 1 would fix the Return case too (a Purified Pokémon's real charged move IS Return), and
+that a defaulted moveset silently changes which move the whole simulation runs, so this is a
+correctness issue on that row, not only a cosmetic badge.
 
 ## Unmodelled real mechanics
 
