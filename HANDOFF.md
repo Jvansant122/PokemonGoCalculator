@@ -47,9 +47,8 @@ design. `.claude/agent-memory/` belongs to the agents; only one factually wrong 
 measure before scheduling; single-raid gains were all inside the noise floor) and #24 (Frustration
 notice — needs a user call between the three options listed there). No `PLAN_*.md` pending.
 
-**Uncommitted as of writing.** This whole cleanup (16 code/comment files, `CLAUDE.md`, this file, one
-corrected line in `.claude/agent-memory/code-simplifier/MEMORY.md`) is in the working tree, not
-committed and not pushed. `npm run verify` and `npm run test:e2e` both passed locally on it.
+**Shipped in `990a5f7`, deployed green** (`deploy.yml` run #68, `success` in 2m44s). `npm run verify` and
+`npm run test:e2e` both passed locally before the push. Working tree clean.
 
 
 ## 2026-09-11 (later): the full moveset sweep, and an audit that found three real bugs
