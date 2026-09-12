@@ -86,3 +86,5 @@
 - [Fact: Shadow Sandslash grunt-only example expired](fact_shadow_sandslash_grunt_example_expired.md) — MECHANICS.md corrected 2026-09-11: it's now a live 3★ Shadow Raid boss; flags unresolved CLAUDE.md Sandshrew-vs-Sandslash mismatch
 - [Checkpoint: full audit 2026-09-11](project_audit_2026-09-11_checkpoint.md) — 1.3/1.1 boost reconfirmed, 59/2 mega/primal roster complete, no new feature proposal; read before re-deriving any of this
 - [Proposal: Shadow Raid enrage simulation](proposal_shadow_raid_enrage_simulation.md) — **UPDATED: now BUILT** (IDEAS.md #17/#17b, was "pending" in earlier memory)
+- [Finding: dodge-fast-attacks lockout never surfaced in UI](finding_dodge_fast_attacks_lockout_never_surfaced.md) — UI pass 2026-09-11; engine field built for exactly this, zero web consumers, real misleading 0-damage result
+- [Finding: friendship bonus wired into only 2 of 7 tabs](finding_friendship_bonus_only_two_of_seven_tabs.md) — UI pass 2026-09-11; cheap fix (same calculateDamage primitive as weather), but flags a ladder-vs-simulation trap in powerUp.ts
