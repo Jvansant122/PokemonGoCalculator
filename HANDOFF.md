@@ -86,9 +86,28 @@ live app) — verified, not yet built:
   `"none"` becomes a real breakpoint at `"good"`, and the planner never tried it, reporting
   `no-significant-candidate` regardless of input.
 
-  **Still open:** `rosterPlanner.ts` has NO `friendshipLevel` field at all, so the Power-Up
-  Optimizer's **multi-raid** mode cannot model it. The control is visible but **disabled** there
-  with an explicit hint rather than silently inert. That gap is the next piece.
+  **Multi-raid closed the same day.** `rosterPlanner.ts` and `rosterMoveChange.ts` had no
+  `friendshipLevel` field at all (they don't extend `TeamRaidInputs`, so this was never the same
+  omission as `powerUp.ts`'s); both now carry it, through the roster planner's screen and full
+  simulation and through the move-change module's FIELDED and BENCHED paths including the cheap
+  `benchedProxyDamagePerSecond` pre-filter — the proxy and the real simulation must not disagree
+  about the same candidate. The ladder-shaped gap existed here too and is fixed. The disabled
+  control and its hint are gone. **A hand-built inputs object silently missing a field its
+  siblings forward structurally is now the third occurrence of that shape today** (`powerUp.ts`'s
+  ladder, `planPowerUpBudget`'s dominated-level search, `runRosterMoveChange.ts`) — worth
+  suspecting first when a setting appears wired but doesn't move numbers.
+
+  **Measured consequence, documented not "fixed": multi-raid significance verdicts move with
+  friendship, non-monotonically** — 150/127/173 of 360 candidates significant at
+  none/good/forever on a real 60-entry, 17-boss sweep, with 6.5-15.6% of directly-comparable
+  candidates flipping. Two mechanisms: the per-boss noise floor is
+  `2 * teamDpsStdDev * sqrt(2/iterations)` and `teamDps` comes from CLEAR TIME, so a stronger team
+  clears more consistently and the floor **shrinks** as friendship rises (aggregate 0.1556 ->
+  0.1394) — the opposite of the uniform-scaling intuition; and `floor()` makes each delta a
+  question of which discrete breakpoint is crossed, so some deltas change SIGN (ratio range
+  -3.39x to +9.5x). Correct behaviour from correct pieces. The tab now carries a
+  "Significance and friendship" caveat saying so. Full detail in
+  `.claude/agent-memory/engine-developer/measurement_friendship_multiraid_significance_interaction.md`.
 
 - **Design fixes from the player pass — SHIPPED.** Team Raid's boss-moveset-risk box was red under
   a green "Cleared" headline; it now defaults to a new `--caution` amber and takes red only when
