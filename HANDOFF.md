@@ -121,6 +121,40 @@ live app) — verified, not yet built:
   Optimizer's mode toggle now stacks full-width under 480px. Roster's summary-card verbosity was
   NOT addressed — still open, lowest priority of the four.
 
+- **A post-batch `skeptic` pass found the tab the lockout work MISSED, and it was the worst
+  instance.** `PowerUpOptimizerView.tsx` was the only result-bearing view with zero references to
+  `dodgeFastAttackLockout.ts` — scoped out by mistake, because the morning's task named the three
+  tabs whose engine results carry the flag and nobody checked that this tab also shows simulated
+  numbers. With the tab's OWN DEFAULT boss (Tyranitar, Bite at exactly 0.5s) and dodge-fast-attacks
+  on, it rendered Team DPS 0.0, every delta +0.00, and concluded **"this roster may already be past
+  its useful power-up headroom"** — a confident WRONG conclusion, strictly worse than the Comparator
+  bug fixed the same morning, which merely failed to explain a zero. Fixed in `83c9255`: proactive
+  toggle-level warning in both modes, and on results the false conclusion is REPLACED, not
+  supplemented. A second instance ("genuinely done, not just out of money") was found in the
+  budget-plan section during the fix. `scripts/run-scenario.ts` had the same shape under different
+  words and now prints the caveat too — CLI/UI agreement is that script's entire purpose.
+
+  **Still open (needs a DESIGN call, not just code):** multi-raid's result-level conclusion is
+  still ungated, because `RosterPerBossImpact` carries no per-boss lockout flag — the field would
+  have to originate in `rosterPlanner.ts`. The hard part isn't the plumbing: with SOME bosses in a
+  set locked out and others not, "this plan is done" is PARTIALLY true, so a boolean gate is the
+  wrong shape. All-locked should suppress; partially-locked should qualify with the count.
+
+  The rest of that pass checked out clean under active attempts to break it: the friendship
+  invariant (Defense-mode grid byte-identical with friendship changed, control absent from that
+  mode's DOM entirely), all three new fields round-tripping by VALUE on fresh-tab decode, the tie
+  sentence on a real forced tie, and Species Report's lockout count/badges/footnote agreeing (9 =
+  9 = 9 of 17). One honest limitation: the 0.6s boundary case is untestable because `species.json`
+  contains no 0.6s fast move — durations are 500ms-aligned, so the boundary is structurally
+  unreachable in real data.
+
+- **`code-simplifier` after the batch:** no further instances of the hand-built-inputs bug shape
+  (it traced every outgoing/incoming construction site). Two stale comments from the deletion
+  removed. Its one substantive finding is parked as **IDEAS #25**: the 12-site damage-modifier
+  duplication is real, but only a typed PAIR of builders is worth building (outgoing REQUIRING
+  `friendshipLevel`, incoming with no such parameter, so the mistake becomes a type error) — one
+  builder with an optional field would recreate the exact shape that caused three defects that day.
+
 - **`.claude/` changes:** `meta-researcher` added (11th agent, capped at three priced
   recommendations per pass, retirement in scope, proposes only). `engine-verifier` gained a
   step-zero check for this machine's vitest worker-OOM failure shape ("Zone Allocation failed"
