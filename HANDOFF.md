@@ -62,22 +62,56 @@ live app) — verified, not yet built:
   row badge, a footnote counting affected rows, and a "Data quality flags" line. Comparator's
   "Known caveats" panel gained the ≤0.5s entry it was missing. No `Scenario` field touched: both
   fixes read an already-computed engine flag or call an already-exported pure predicate.
-- **Friendship (up to 1.12x, real raid mechanic) reaches only 2 of 7 tabs.** Absent from Species
-  Report, IV Breakpoints, Attack/Defense Breakpoints and the Power-Up Optimizer —
-  `friendshipLevel` appears 0× in `speciesReport.ts`/`breakpoints.ts`/`powerUp.ts`. `pogo-player`
-  argued against a uniform rollout: a caveat is honest enough on the two aggregate-ranking tabs, but
-  the two breakpoint tabs sell an *exact* floored crossing that a pre-floor multiplier can move.
-  **Measure whether a friendship-driven breakpoint shift is observable before scheduling either.**
-  Note the trap: `PowerUpOptimizerInputs` inherits `friendshipLevel` structurally, so the
-  simulation would honour it immediately while `powerUp.ts`'s separate breakpoint-ladder recompute
-  would keep ignoring it — reintroducing the exact ladder-vs-simulation disagreement the Mega Level
-  work was built to fix. Adding the control to four tabs also means four codecs and
-  `check-scenario-roundtrip` (`add-scenario-assumption` skill).
-- **Design, all web-side:** Team Raid's "Cleared" headline sits above a *red* box explaining the
-  moveset risk (right copy, wrong colour — amber); at 375px the tab strip renders with no tab marked
-  active after a resize/rotate or a deep link; the Power-Up Optimizer's Single/Multi-raid toggle
-  overflows into a second nested horizontal scroll; the Roster summary card spends a lot of vertical
-  space on five one-digit integers.
+- **Friendship — MEASURED, then SHIPPED on three tabs.** It reached only the Comparator and Team
+  Raid. `engine-developer` measured the impact rather than guessing: on the 0-15 IV x level grids
+  **32-89% of cells change their floored damage at Good Friend (1.03x) alone**, 92-100% at Forever
+  Friend, and `powerUpDamageLadder`'s own headline breakpoint moved in 236/300 tested cases —
+  while Species Report is genuinely stable (Spearman >=0.989 over 771 bosses, identical top-10,
+  with a determinism control proving that wasn't noise). **The split is per-FEATURE, not per-tab:**
+  a feature reading ONE floored value needs a real control; one summing many floored hits into a
+  distribution needs a caveat. So IV Breakpoints, Attack/Defense Breakpoints and the Power-Up
+  Optimizer got a real `FriendshipSelect`, and Species Report got a caveat sentence.
+  Round-trip coverage went 152 -> 155 fields across 7 tabs, with non-default values per the
+  `add-scenario-assumption` checklist.
+
+  Three things worth not relearning: (1) **no engine threading was needed** — `attackDamageGrid`,
+  `defenseDamageGrid`, `findFastMoveBreakpoints` and `compareIvSpreads` all already take
+  `damageModifiers: Omit<DamageInputs, …>` and `DamageInputs.friendshipLevel` already existed, so
+  this was pure web wiring. (2) **Friendship is the attacker's own bonus and never the boss's** —
+  every `defenseDamageGrid`/`incomingDamageModifiers` site deliberately omits it and now says so
+  in a comment; wiring it there would inflate incoming damage while looking plausible on screen.
+  (3) The one real engine defect was `powerUp.ts`: the ladder call site in `optimizePowerUps` AND
+  `planPowerUpBudget`'s dominated-level search both ignored the `friendshipLevel` their sibling
+  `runTeamRaid` calls forwarded. The second was behavioural, not cosmetic — a level dominated at
+  `"none"` becomes a real breakpoint at `"good"`, and the planner never tried it, reporting
+  `no-significant-candidate` regardless of input.
+
+  **Still open:** `rosterPlanner.ts` has NO `friendshipLevel` field at all, so the Power-Up
+  Optimizer's **multi-raid** mode cannot model it. The control is visible but **disabled** there
+  with an explicit hint rather than silently inert. That gap is the next piece.
+
+- **Design fixes from the player pass — SHIPPED.** Team Raid's boss-moveset-risk box was red under
+  a green "Cleared" headline; it now defaults to a new `--caution` amber and takes red only when
+  the raid actually failed (the box IS reused under a failed headline — `verdictVaries` is
+  independent of `outcome` — so hardcoding amber would have been wrong the other way). The mobile
+  tab strip kept its active tab off-screen after a resize or a deep link; fixed on mount and
+  resize, **and on `document.fonts.ready`** — the Inter swap widens every tab button (~50px of
+  `scrollWidth`) a few hundred ms after mount and silently pushed the centred tab back off-screen.
+  That one was only findable by driving the live page; jsdom cannot reproduce it, so it is
+  documented in agent memory rather than pinned by a test that would pass vacuously. The Power-Up
+  Optimizer's mode toggle now stacks full-width under 480px. Roster's summary-card verbosity was
+  NOT addressed — still open, lowest priority of the four.
+
+- **`.claude/` changes:** `meta-researcher` added (11th agent, capped at three priced
+  recommendations per pass, retirement in scope, proposes only). `engine-verifier` gained a
+  step-zero check for this machine's vitest worker-OOM failure shape ("Zone Allocation failed"
+  alongside all-passing tests = environment noise; rerun with
+  `--pool=forks --poolOptions.forks.singleFork=true`) — that fact lived only in the user's
+  cross-session memory, which Task-spawned subagents do not inherit. Deliberately NOT a skill: the
+  `skills:` frontmatter preload field is real and verified against current docs, but a skill costs
+  a line in every session's listing and this fact is needed by exactly one agent.
+  `add-scenario-assumption`'s claim that the round-trip checker covered only six tabs was stale and
+  is corrected.
 
 **`meta-researcher` added** (11th agent) — scouts the Claude Code platform for capabilities this
 repo isn't using, capped at three priced recommendations per pass, retirement in scope, proposes
