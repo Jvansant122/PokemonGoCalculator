@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { dodgeFastAttackLockoutResultNote, dodgeFastAttackLockoutWarning } from "./dodgeFastAttackLockout.js";
+import {
+  dodgeFastAttackLockoutResultNote,
+  dodgeFastAttackLockoutWarning,
+  multiRaidLockoutConclusionGuard,
+} from "./dodgeFastAttackLockout.js";
 
 // Real data point cited throughout this fix — Mega Tyranitar's Bite is
 // exactly on the DODGE_COST_SECONDS (0.5s) boundary (see MECHANICS.md's "A
@@ -42,5 +46,42 @@ describe("dodgeFastAttackLockoutResultNote", () => {
     expect(note).not.toBeNull();
     expect(note).toContain("Bite");
     expect(note).toContain("Dodge lockout active");
+  });
+});
+
+describe("multiRaidLockoutConclusionGuard", () => {
+  it("suppresses the conclusion when every swept boss is locked", () => {
+    const guard = multiRaidLockoutConclusionGuard(3, 3);
+    expect(guard.suppress).toBe(true);
+    expect(guard.qualifier).toBeNull();
+  });
+
+  it("does not suppress and has no qualifier when no boss is locked", () => {
+    const guard = multiRaidLockoutConclusionGuard(0, 5);
+    expect(guard.suppress).toBe(false);
+    expect(guard.qualifier).toBeNull();
+  });
+
+  it("keeps the conclusion but names the count when only some bosses are locked, with plural phrasing for count > 1", () => {
+    const guard = multiRaidLockoutConclusionGuard(2, 5);
+    expect(guard.suppress).toBe(false);
+    expect(guard.qualifier).not.toBeNull();
+    expect(guard.qualifier).toContain("2 of 5");
+    expect(guard.qualifier).toContain("3");
+    expect(guard.qualifier).toContain("are dodge-locked");
+    expect(guard.qualifier).toContain("their own fast moves recycle");
+  });
+
+  it("does not suppress on a zero-boss sweep (nothing to be locked)", () => {
+    const guard = multiRaidLockoutConclusionGuard(0, 0);
+    expect(guard.suppress).toBe(false);
+    expect(guard.qualifier).toBeNull();
+  });
+
+  it("uses singular phrasing for exactly one locked boss out of several", () => {
+    const guard = multiRaidLockoutConclusionGuard(1, 4);
+    expect(guard.qualifier).toContain("1 of 4 boss");
+    expect(guard.qualifier).toContain("is dodge-locked");
+    expect(guard.qualifier).toContain("its own fast move recycles");
   });
 });

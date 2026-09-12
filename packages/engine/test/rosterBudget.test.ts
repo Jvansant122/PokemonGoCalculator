@@ -424,7 +424,10 @@ describe("candidateClearsBudgetFloor — significanceMode (synthetic evalResult,
   // simulated case — see the cross-check test below that ties the two
   // together on real data).
   function perBossImpact(deltaTeamDps: number): RosterPerBossImpact {
-    return { bossId: "b", bossName: "b", deltaTeamDps, rankBefore: null, rankAfter: null, simulated: true };
+    // dodgeFastAttacksLockout is irrelevant to this significance-gate algebra
+    // probe — always false, same as every scenario in this describe block
+    // (dodge: { kind: "none" }, dodgeFastAttacks unset in baseInputs).
+    return { bossId: "b", bossName: "b", deltaTeamDps, rankBefore: null, rankAfter: null, simulated: true, dodgeFastAttacksLockout: false };
   }
   function evalResult(perBossDeltas: number[]): RosterBudgetCandidateEval {
     const perBoss = perBossDeltas.map(perBossImpact);

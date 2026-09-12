@@ -33,7 +33,7 @@ import {
 } from "./PowerUpOptimizerAssumptionPanel.js";
 import { BOSS_CADENCE_HINT } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
-import { dodgeFastAttackLockoutResultNote } from "./dodgeFastAttackLockout.js";
+import { dodgeFastAttackLockoutResultNote, multiRaidLockoutConclusionGuard } from "./dodgeFastAttackLockout.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import {
   buildPowerUpOptimizerScenarioUrl,
@@ -1919,6 +1919,14 @@ function MultiRaidBudgetPlanSection({
   progress,
 }: MultiRaidBudgetPlanSectionProps) {
   const familyLabel = (familyId: string) => rosterFamilyOptions.find((f) => f.familyId === familyId)?.label ?? familyId;
+  // See multiRaidLockoutConclusionGuard's own doc comment — a boss SET's
+  // lockout is a count, not a boolean, so this plan's "nothing further
+  // measurably helps" conclusion below is suppressed entirely only when
+  // EVERY swept boss is locked, and merely qualified when only some are.
+  const lockoutGuard = useMemo(
+    () => (run?.data ? multiRaidLockoutConclusionGuard(run.data.lockedBossCount, run.targets.length) : null),
+    [run],
+  );
 
   return (
     <CollapsibleSection id="pu-multi-budget-plan" heading="Fixed-budget plan" defaultOpen>
@@ -1985,12 +1993,22 @@ function MultiRaidBudgetPlanSection({
               {rosterBlockedCandidateSentence(run.data.bestBlockedCandidate)} This plan stopped here because that
               upgrade isn&rsquo;t affordable yet — not because it wouldn&rsquo;t help.
             </div>
+          ) : lockoutGuard?.suppress ? (
+            <div className="blocked-gain-callout">
+              <strong>Can&rsquo;t be judged right now</strong>
+              Every boss in this set is dodge-locked — each one&rsquo;s own fast move recycles too fast to
+              fast-dodge while &ldquo;Also dodge boss&rsquo;s fast attacks?&rdquo; is on — so every simulated step
+              above reads as ≈0 team DPS for that reason, not because this plan is genuinely finished. Resolve the
+              lockout (or turn off &ldquo;Also dodge boss&rsquo;s fast attacks?&rdquo;) before trusting a
+              &ldquo;nothing further helps&rdquo; conclusion from this boss set.
+            </div>
           ) : (
             <div className="blocked-gain-callout">
               <strong>Nothing further measurably helps</strong>
               Beyond the steps below, no further useful power-up anywhere on this roster clears the ±
               {run.data.noiseFloorTeamDps.toFixed(2)} team-DPS noise floor against this boss set and budget — this
               plan is genuinely done, not just out of money.
+              {lockoutGuard?.qualifier && <> {lockoutGuard.qualifier}</>}
             </div>
           )}
 

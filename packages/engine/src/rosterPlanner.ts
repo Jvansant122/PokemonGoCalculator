@@ -1,4 +1,4 @@
-import type { DodgeBehavior } from "./breakpoints.js";
+import { fastMoveCadenceTooFastToDodge, type DodgeBehavior } from "./breakpoints.js";
 import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove, runSustainedComparison } from "./comparison.js";
 import type { FriendshipLevel } from "./damage.js";
 import type { MegaLevel } from "./megaLevel.js";
@@ -550,6 +550,23 @@ export interface RosterPerBossImpact {
   rankAfter: number | null;
   /** False means this boss was genuinely SKIPPED — no runTeamRaid call was made for it at all, and deltaTeamDps above is a real, exact, computed 0 (this entry neither entered nor was already on this boss's team). True means a real Stage 4 paired simulation produced deltaTeamDps. */
   simulated: boolean;
+  /**
+   * See `bossDodgeFastAttacksLockout`'s doc comment — true when this boss's
+   * own fast move is too fast to fast-dodge (`breakpoints.ts`'s
+   * `fastMoveCadenceTooFastToDodge`) AND this sweep's `dodgeFastAttacks`
+   * setting is on, meaning NOTHING fielded against this boss (baseline or
+   * candidate alike) can land a sustained fast-move damage stream while
+   * dodging it. A config-level fact, not a per-candidate one — every
+   * `RosterPerBossImpact` naming this same boss across every candidate row
+   * carries the identical value. Exists so a caller (the Power-Up
+   * Optimizer's multi-raid UI) can stop stating "no further power-up clears
+   * the noise floor against this boss set" as if it were a real conclusion
+   * when some/all of the boss set structurally can't be dodge-fast-attacked
+   * in the first place — see `RosterPlanResult.lockedBossCount`/
+   * `RosterBudgetPlan.lockedBossCount` for the aggregate a caller would
+   * otherwise have to re-derive by filtering every candidate's `perBoss`.
+   */
+  dodgeFastAttacksLockout: boolean;
 }
 
 export interface RosterPowerUpCandidate {
@@ -752,6 +769,21 @@ export interface RosterPlanResult {
   neverCompetitive: RosterNeverCompetitiveEntry[];
   /** One row per RosterPlannerInputs.hypotheticalCatches, in the same order — `[]` when that input was omitted/empty. See RosterHypotheticalCatchImpact. */
   hypotheticalCatches: RosterHypotheticalCatchImpact[];
+  /**
+   * Count of `targets` whose own resolved fast move is too fast to
+   * fast-dodge while `dodgeFastAttacks` is on — see
+   * `RosterPerBossImpact.dodgeFastAttacksLockout`'s doc comment. A plain
+   * fact, not a policy: `0` means every boss in this sweep supports the
+   * fast-dodge assumption normally; equal to `targets.length` means ALL of
+   * them are locked, so a "no further power-up helps" conclusion drawn from
+   * this sweep can't be trusted; anything in between means only some are.
+   * Deliberately NOT a bare boolean or a pre-baked "this plan is
+   * meaningless" verdict — whether a partial lockout should suppress or
+   * merely qualify a UI's conclusion is a display decision left entirely to
+   * the caller (see `dodgeFastAttacksLockout`'s field doc for the intended
+   * split).
+   */
+  lockedBossCount: number;
 }
 
 /**
@@ -819,6 +851,31 @@ export function toSlotInput(entry: RosterEntry, megaLevel: MegaLevel | undefined
 
 function teamKeyFor(entries: RosterEntry[]): string {
   return entries.map((e) => `${e.entryId}@${e.level}`).join(",");
+}
+
+/**
+ * Per-boss, config-level fact (no RNG, no simulation, no candidate involved)
+ * — true exactly when `dodgeFastAttacks` is on AND this boss's own resolved
+ * fast move recycles at or faster than `DODGE_COST_SECONDS`
+ * (breakpoints.ts's `fastMoveCadenceTooFastToDodge`), i.e. every attacker
+ * fielded against this boss is structurally unable to ever land a sustained
+ * fast-move damage stream while dodging it — the same mechanic
+ * simulate.ts's `StepwiseRunResult.dodgeFastAttacksLockout` and
+ * teamRaid.ts's `TeamRaidSlotResult.dodgeFastAttacksLockout` already surface
+ * on a single run. Single-raid `powerUp.ts` already exposes this same fact
+ * (shipped in `83c9255`); multi-raid mode had NO equivalent because
+ * `RosterPerBossImpact` carried no such field — this closes that gap.
+ *
+ * Depends only on (this boss's resolved fast move, the roster-wide
+ * `dodgeFastAttacks` setting) — never on which candidate/entry is being
+ * evaluated — so every `RosterPerBossImpact` naming a given boss carries the
+ * SAME value, and it is safe (and intended) to compute this array ONCE per
+ * `targets` list rather than re-deriving it at every candidate/boss pairing.
+ */
+function bossDodgeFastAttacksLockout(target: WeightedRaidTarget, dodgeFastAttacks: boolean | undefined): boolean {
+  if (!dodgeFastAttacks) return false;
+  const bossFastMove = resolveMove(target.species.fastMoves, target.bossFastMoveId);
+  return bossFastMove !== undefined && fastMoveCadenceTooFastToDodge(bossFastMove.durationSeconds);
 }
 
 // --- Stage 1: cheap screen ----------------------------------------------------
@@ -1394,6 +1451,11 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
 
   // --- Stage 1 + 2: baseline screen & team selection, per boss --------------
   const bossHpByTarget = targets.map((t) => bossEffectiveHp(t.species, t.tier, t.bossMaxHpOverride));
+  // Config-level, per-boss fact — see bossDodgeFastAttacksLockout's doc
+  // comment. Computed once here (never per-candidate) since it depends only
+  // on (this boss's resolved fast move, shared.dodgeFastAttacks).
+  const bossDodgeFastAttacksLockoutByTarget = targets.map((t) => bossDodgeFastAttacksLockout(t, shared.dodgeFastAttacks));
+  const lockedBossCount = bossDodgeFastAttacksLockoutByTarget.filter(Boolean).length;
 
   const scoredAllByTarget: { entry: RosterEntry; score: number }[][] = [];
   const baselineTeamsByTarget: RosterEntry[][] = [];
@@ -1470,7 +1532,15 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
       const touched = measuredScore > sixthPlace;
 
       if (!touched) {
-        return { bossId: target.species.id, bossName: target.species.name, deltaTeamDps: 0, rankBefore: null, rankAfter: null, simulated: false };
+        return {
+          bossId: target.species.id,
+          bossName: target.species.name,
+          deltaTeamDps: 0,
+          rankBefore: null,
+          rankAfter: null,
+          simulated: false,
+          dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+        };
       }
 
       const candidateTeam = selectTeam([...scoredAllByTarget[ti]!, { entry: virtualEntry, score: measuredScore }]);
@@ -1479,7 +1549,15 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
       const deltaTeamDps = candidateSummary.teamDps - baseline.summary.teamDps;
       const rankAfterIdx = candidateTeam.findIndex((e) => e.entryId === virtualEntry.entryId);
       const rankAfter = rankAfterIdx >= 0 ? rankAfterIdx + 1 : null;
-      return { bossId: target.species.id, bossName: target.species.name, deltaTeamDps, rankBefore: null, rankAfter, simulated: true };
+      return {
+        bossId: target.species.id,
+        bossName: target.species.name,
+        deltaTeamDps,
+        rankBefore: null,
+        rankAfter,
+        simulated: true,
+        dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+      };
     });
 
     const meanDeltaTeamDps =
@@ -1756,7 +1834,15 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
       const rankBefore = fieldedIdx >= 0 ? fieldedIdx + 1 : null;
 
       if (!d.touchedTargetIndices.includes(ti)) {
-        return { bossId: target.species.id, bossName: target.species.name, deltaTeamDps: 0, rankBefore, rankAfter: rankBefore, simulated: false };
+        return {
+          bossId: target.species.id,
+          bossName: target.species.name,
+          deltaTeamDps: 0,
+          rankBefore,
+          rankAfter: rankBefore,
+          simulated: false,
+          dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+        };
       }
 
       let candidateTeam: RosterEntry[];
@@ -1774,7 +1860,15 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
       const rankAfterIdx = candidateTeam.findIndex((e) => e.entryId === d.entry.entryId);
       const rankAfter = rankAfterIdx >= 0 ? rankAfterIdx + 1 : null;
 
-      return { bossId: target.species.id, bossName: target.species.name, deltaTeamDps, rankBefore, rankAfter, simulated: true };
+      return {
+        bossId: target.species.id,
+        bossName: target.species.name,
+        deltaTeamDps,
+        rankBefore,
+        rankAfter,
+        simulated: true,
+        dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+      };
     });
 
     const meanDeltaTeamDps =
@@ -1851,6 +1945,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     benchedButPromising,
     neverCompetitive,
     hypotheticalCatches,
+    lockedBossCount,
   };
 }
 
@@ -2210,6 +2305,8 @@ export interface RosterBudgetPlan {
    * the FULL pool); they just never become power-up candidates here.
    */
   excludedEntries: RosterNeverCompetitiveEntry[];
+  /** See RosterPlanResult.lockedBossCount — identical meaning/formula, computed over this same `targets` list. */
+  lockedBossCount: number;
 }
 
 /**
@@ -2378,6 +2475,9 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
   // `scoredAllByTarget`/`currentTeamsByTarget` are MUTATED in place as the
   // search commits steps, rather than staying fixed for one call. ----------
   const bossHpByTarget = targets.map((t) => bossEffectiveHp(t.species, t.tier, t.bossMaxHpOverride));
+  // See runRosterPlanner's identical computation / bossDodgeFastAttacksLockout's doc comment.
+  const bossDodgeFastAttacksLockoutByTarget = targets.map((t) => bossDodgeFastAttacksLockout(t, shared.dodgeFastAttacks));
+  const lockedBossCount = bossDodgeFastAttacksLockoutByTarget.filter(Boolean).length;
 
   const scoredAllByTarget: { entry: RosterEntry; score: number }[][] = targets.map((target, ti) =>
     pool.map((entry) => ({ entry, score: getScreenScore(entry, entry.level, target, ti) })),
@@ -2555,7 +2655,15 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
       }
 
       if (!touched) {
-        perBoss.push({ bossId: target.species.id, bossName: target.species.name, deltaTeamDps: 0, rankBefore, rankAfter: rankBefore, simulated: false });
+        perBoss.push({
+          bossId: target.species.id,
+          bossName: target.species.name,
+          deltaTeamDps: 0,
+          rankBefore,
+          rankAfter: rankBefore,
+          simulated: false,
+          dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+        });
         continue;
       }
       touchedTargetIndices.push(ti);
@@ -2574,7 +2682,15 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
       const deltaTeamDps = candidateSummary.teamDps - currentTeamSummaryByTarget[ti]!.teamDps;
       const rankAfterIdx = candidateTeam.findIndex((e) => e.entryId === entry.entryId);
       const rankAfter = rankAfterIdx >= 0 ? rankAfterIdx + 1 : null;
-      perBoss.push({ bossId: target.species.id, bossName: target.species.name, deltaTeamDps, rankBefore, rankAfter, simulated: true });
+      perBoss.push({
+        bossId: target.species.id,
+        bossName: target.species.name,
+        deltaTeamDps,
+        rankBefore,
+        rankAfter,
+        simulated: true,
+        dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+      });
     }
 
     const meanDeltaTeamDps =
@@ -2971,5 +3087,6 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     stopReason,
     bestBlockedCandidate,
     excludedEntries,
+    lockedBossCount,
   };
 }

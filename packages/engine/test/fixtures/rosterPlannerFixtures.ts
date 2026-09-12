@@ -52,6 +52,24 @@ export const BOSS_TWO: SpeciesDefinition = {
   baseStamina: 9000,
 };
 
+/**
+ * A fast move at EXACTLY DODGE_COST_SECONDS (0.5s) — the just-above-boundary
+ * `fastMoveCadenceTooFastToDodge` case breakpoints.ts's own doc comment calls
+ * out (`<=`, not `<`). `data/normalized/species.json` has no 0.6s fast move
+ * at all (real durations are 500ms-aligned), so there is no real synced
+ * species that can stand in for this case — see
+ * rosterPlanner's dodge-lockout tests.
+ */
+export const HALF_SECOND_FAST_MOVE: FastMove = { ...FAST_MOVE, id: "test-tackle-half-second", durationSeconds: 0.5 };
+
+/** Same shape as BOSS_ONE, but its fast move is exactly at the fast-dodge lockout boundary (see HALF_SECOND_FAST_MOVE). */
+export const BOSS_HALF_SECOND_FAST_MOVE: SpeciesDefinition = {
+  ...BOSS_ONE,
+  id: "test-roster-boss-half-second",
+  name: "Test Roster Boss Half Second",
+  fastMoves: [HALF_SECOND_FAST_MOVE],
+};
+
 /** Builds a hand-authored attacker SpeciesDefinition, all sharing FAST_MOVE/CHARGED_MOVE and pure-normal typing — see this file's top doc comment. */
 export function makeAttacker(
   id: string,

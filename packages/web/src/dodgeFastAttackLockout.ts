@@ -53,3 +53,50 @@ export function dodgeFastAttackLockoutResultNote(fastMove: Pick<FastMove, "name"
     `fast attacks?" (or this candidate's own override) to see real numbers against this boss.`
   );
 }
+
+/**
+ * The multi-raid BOSS-SET analogue of `dodgeFastAttackLockoutResultNote`
+ * above — a boss SET's lockout is a COUNT
+ * (`RosterPlanResult.lockedBossCount`/`RosterBudgetPlan.lockedBossCount`),
+ * not a single fast move, because a set can be PARTIALLY locked: some bosses
+ * support the dodge-fast-attacks assumption normally while others
+ * structurally can't (see rosterPlanner.ts's own doc comment on
+ * `dodgeFastAttacksLockout`/`lockedBossCount` for why this is deliberately
+ * not a boolean). A caller stating a whole-sweep conclusion ("nothing
+ * further measurably helps") needs to know which of three states it's in,
+ * not just whether lockout happened at all:
+ *
+ * - every swept boss locked (`lockedBossCount === totalBossCount`, and at
+ *   least one boss exists): the conclusion is meaningless, not merely
+ *   incomplete — NOTHING fielded against ANY boss in the set could land
+ *   sustained fast-move damage, so `suppress: true` tells the caller to
+ *   replace the conclusion with a can't-be-judged callout entirely, the same
+ *   policy `dodgeFastAttackLockoutResultNote` already applies to a single
+ *   boss/candidate.
+ * - some locked, some not (`0 < lockedBossCount < totalBossCount`): the
+ *   conclusion stays genuinely TRUE for the unlocked bosses — those rows
+ *   really did contribute real, non-zero deltas to the aggregate — so
+ *   `suppress: false` with a non-null `qualifier` sentence naming the count,
+ *   for the caller to APPEND to (never replace) its existing conclusion.
+ * - none locked: `suppress: false`, `qualifier: null` — say nothing extra.
+ */
+export function multiRaidLockoutConclusionGuard(
+  lockedBossCount: number,
+  totalBossCount: number,
+): { suppress: boolean; qualifier: string | null } {
+  if (totalBossCount > 0 && lockedBossCount === totalBossCount) {
+    return { suppress: true, qualifier: null };
+  }
+  if (lockedBossCount > 0) {
+    const unlockedBossCount = totalBossCount - lockedBossCount;
+    return {
+      suppress: false,
+      qualifier:
+        `${lockedBossCount} of ${totalBossCount} boss${totalBossCount === 1 ? "" : "es"} in this set ` +
+        `${lockedBossCount === 1 ? "is" : "are"} dodge-locked (${lockedBossCount === 1 ? "its own fast move recycles" : "their own fast moves recycle"} too fast ` +
+        `to fast-dodge while "Also dodge boss's fast attacks?" is on) and contribute ≈0 to every candidate's delta — this ` +
+        `verdict reflects only the other ${unlockedBossCount} boss${unlockedBossCount === 1 ? "" : "es"}.`,
+    };
+  }
+  return { suppress: false, qualifier: null };
+}
