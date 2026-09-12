@@ -232,7 +232,7 @@ describe("runSustainedComparison", () => {
     expect(sweep[1]!.results[0]!.meanSecondsSurvived).toBeLessThanOrEqual(sweep[0]!.results[0]!.meanSecondsSurvived);
   });
 
-  it("only boosts a candidate's own move when its type matches boostedType, in the sustained path too (Fix 3, same gating as runComparison)", () => {
+  it("only boosts a candidate's own move when its type matches boostedType, in the sustained path too (Fix 3)", () => {
     const fastMoveOnType = { id: "fast-on", name: "Fast On", type: "fire" as const, power: 10, energyGain: 20, durationSeconds: 1 };
     const chargedMoveOffType = {
       id: "charged-off",
@@ -462,7 +462,7 @@ describe("runSustainedComparison: candidateMegaLevel (Super Max effective-level 
 
 describe("runSustainedComparison: candidateDodge / candidateDodgeFastAttacks per-candidate override", () => {
   // CANDIDATE_ALPHA/BETA's pinned 150 effective HP dies to BOSS_TIDE's fast
-  // move alone by 7.5s (see scenarioA.test.ts) — well before any charged-move
+  // move alone by 7.5s — well before any charged-move
   // dodge behavior could matter, so a much bulkier variant is needed here to
   // actually observe a dodge-driven survival difference. Only baseStamina
   // differs from the pinned fixture.

@@ -87,6 +87,27 @@ that option 1 would fix the Return case too (a Purified Pokémon's real charged 
 that a defaulted moveset silently changes which move the whole simulation runs, so this is a
 correctness issue on that row, not only a cosmetic badge.
 
+### 25. A typed PAIR of damage-modifier builders (never one builder with an optional field)
+
+Raised by `code-simplifier` 2026-09-12, deliberately parked rather than built. The outgoing
+damage-modifier literal (`stab`/`typeEffectiveness`/`megaBoostMultiplier`/`weatherBoosted`/
+`friendshipLevel`) is hand-built at **12 call sites** across `comparison.ts`, `teamRaid.ts`,
+`powerUp.ts` (x2), `rosterPlanner.ts` and `rosterMoveChange.ts` — real, ~6-lines-each duplication.
+
+**Do not "just extract a helper".** That exact shape produced THREE real bugs in one day
+(2026-09-12: `powerUp.ts`'s ladder, `planPowerUpBudget`'s dominated-level search,
+`runRosterMoveChange.ts`) — a field-by-field object silently missing a field its siblings forward
+via spread. One builder with an optional `friendshipLevel` recreates precisely the
+"looks covered but isn't" failure. The only version worth building is **two structurally distinct
+functions**: an outgoing builder that REQUIRES `friendshipLevel`, and an incoming builder whose
+signature has no such parameter at all, so wiring the attacker's own bonus into the boss's damage
+becomes a type error instead of a code-review question.
+
+**Why it is parked:** the current state is 12 correct sites, each with an explicit comment at the
+incoming ones saying why they omit the field, and an audit confirmed all 12 correct. The refactor
+touches correctness-critical code across both packages for a readability gain. Worth doing when
+something else already opens those files; not worth a dedicated churn pass.
+
 ## Unmodelled real mechanics
 
 Real, recorded game mechanics this engine does **not** model. Each lives in `MECHANICS.md` with

@@ -1,11 +1,13 @@
 import {
   type DodgeBehavior,
+  fastMoveCadenceTooFastToDodge,
   type FriendshipLevel,
   type MegaLevel,
   type RosterSignificanceMode,
   type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
+import { useMemo } from "react";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { NumberField } from "./NumberField.js";
 import { FriendshipSelect } from "./FriendshipSelect.js";
@@ -17,8 +19,10 @@ import { WeatherSelect } from "./WeatherSelect.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
 import { BossSetPanel } from "./BossSetPanel.js";
+import { dodgeFastAttackLockoutWarning } from "./dodgeFastAttackLockout.js";
 import type { PowerUpOptimizerMode, PowerUpRankBy } from "./powerUpOptimizerScenario.js";
 import { resolveMultiRaidBossIds } from "./multiRaidBossSet.js";
+import { speciesRegistry } from "./registry.js";
 
 /**
  * Soft sanity threshold for candy/XL-candy/stardust fields, which have no
@@ -307,6 +311,31 @@ export function PowerUpOptimizerAssumptionPanel({
     ? (bossSpecies.chargedMoves.find((m) => m.id === value.bossChargedMoveId) ?? bossSpecies.chargedMoves[0])
     : undefined;
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
+
+  // See dodgeFastAttackLockout.ts — single-raid mode only, `bossSpecies` IS
+  // the one resolved target boss in that mode.
+  const selectedBossFastMove = bossSpecies
+    ? (bossSpecies.fastMoves.find((m) => m.id === value.bossFastMoveId) ?? bossSpecies.fastMoves[0])
+    : undefined;
+  const fastAttackLockoutWarning = dodgeFastAttackLockoutWarning(selectedBossFastMove);
+
+  // Multi-raid mode has no single "the boss" to key the warning above off of
+  // — this counts how many of the CURRENTLY-selected boss SET would hit the
+  // lockout with their own FIRST fast move (pure per-species arithmetic, no
+  // simulation needed — same shortcut as SpeciesReportView's own identical
+  // fastAttackLockoutBossCount). NOTE: unlike every other tab with this
+  // warning, this tab's multi-raid RESULTS carry no equivalent per-boss
+  // lockout flag at all (RosterPerBossImpact has no such field — this tab's
+  // own rosterPlanner.ts summary never captured it) — this is proactive-only,
+  // a real, currently-unfilled gap, not a display choice.
+  const multiRaidFastAttackLockoutBossCount = useMemo(() => {
+    let count = 0;
+    for (const id of value.multiRaidBossIds) {
+      const fastMove = speciesRegistry.has(id) ? speciesRegistry.get(id).fastMoves[0] : undefined;
+      if (fastMove && fastMoveCadenceTooFastToDodge(fastMove.durationSeconds)) count++;
+    }
+    return count;
+  }, [value.multiRaidBossIds]);
 
   // Type-effectiveness opponents for the move pickers below (display-only —
   // see MoveSelect.tsx's own `opponents` prop doc comment), single-raid
@@ -938,6 +967,18 @@ export function PowerUpOptimizerAssumptionPanel({
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
+          {value.mode === "single-raid" && fastAttackLockoutWarning && (
+            <p className="species-picker-warning">{fastAttackLockoutWarning}</p>
+          )}
+          {value.mode === "multi-raid" && multiRaidFastAttackLockoutBossCount > 0 && (
+            <p className="species-picker-warning">
+              {multiRaidFastAttackLockoutBossCount} of the currently-selected bosses have a fast move that recycles
+              at 0.5s or faster — dodging every fast attack is physically impossible against those, so turning this
+              on locks out fast-move damage entirely for any fight against them. This tab&rsquo;s multi-raid results
+              don&rsquo;t currently flag which simulated fights hit the lockout per boss — treat a suspiciously low
+              or zeroed Δ team DPS against one of those bosses as a possible cause, not a confirmed real effect.
+            </p>
+          )}
         </div>
 
         <div className="field">

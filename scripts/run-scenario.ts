@@ -31,6 +31,7 @@ import type { Assumptions } from "../packages/web/src/AssumptionPanel.js";
 import { parseScenarioFromUrl, parseTeamScenarioFromUrl } from "@pogo-analyzer/engine";
 import { resolveBoost, runComparatorScenario } from "../packages/web/src/run/runComparator.js";
 import { computeRankingFlip } from "../packages/web/src/rankingFlip.js";
+import { dodgeFastAttackLockoutResultNote } from "../packages/web/src/dodgeFastAttackLockout.js";
 
 import {
   DEFAULT_TEAM_ASSUMPTIONS,
@@ -306,12 +307,27 @@ function main(): void {
       }
       const d = result.data!;
       const best = d.bestAffordableByStardustEfficiency;
+      // Same config-level fact the tab itself surfaces (see
+      // PowerUpOptimizerView.tsx / dodgeFastAttackLockout.ts): a boss fast
+      // move at <=0.5s cannot be fast-dodged at all, so "nothing improves
+      // team DPS" below is an artifact of the toggle, not a conclusion about
+      // the roster. CLI and UI must agree on that — a pasteable share link is
+      // meant to reproduce what the reporter saw, and a CLI that states the
+      // false conclusion the UI now suppresses would defeat that.
+      const puLockoutNote =
+        assumptions.dodgeFastAttacks && result.bossSpecies
+          ? dodgeFastAttackLockoutResultNote(
+              result.bossSpecies.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? result.bossSpecies.fastMoves[0],
+            )
+          : null;
       summary = [
         `Power-Up Optimizer vs ${result.bossSpecies!.name} (${fmt(result.bossHp, 0)} HP)`,
         `  Baseline team DPS: ${fmt(d.baseline.teamDps, 2)} (+/-${fmt(d.noiseFloorTeamDps, 2)} noise floor, ${d.iterations} seeds); clear rate ${fmt(d.baseline.clearRate * 100, 0)}%`,
         best
           ? `  Best stardust efficiency: Slot ${best.slotIndex + 1} (${best.speciesName}) Lv ${best.fromLevel} -> ${best.toLevel} (+${fmt(best.deltaTeamDps, 2)} team DPS, ${fmt(best.deltaTeamDpsPer1000Stardust ?? null, 3)} per 1000 stardust).`
-          : `  Nothing affordable improves team DPS beyond the +/-${fmt(d.noiseFloorTeamDps, 2)} noise floor.`,
+          : puLockoutNote
+            ? `  Nothing reads as an improvement, but that cannot be judged right now — ${puLockoutNote}`
+            : `  Nothing affordable improves team DPS beyond the +/-${fmt(d.noiseFloorTeamDps, 2)} noise floor.`,
       ];
       if (result.plan) {
         const p = result.plan;
@@ -321,7 +337,9 @@ function main(): void {
             `(${p.ledger.stardust.remaining.toLocaleString()} stardust / ${p.ledger.sharedRareCandy.remaining} Rare Candy / ${p.ledger.sharedRareCandyXl.remaining} Rare Candy XL left).`,
           p.bestBlockedCandidate
             ? `    BLOCKED, NOT DONE: ${blockedCandidateSentence(p.bestBlockedCandidate)}`
-            : `    Nothing further measurably helps beyond this plan's own steps.`,
+            : puLockoutNote
+              ? `    Cannot be judged right now: every simulated step reads as ~0 team DPS because of the dodge lockout above, not because the plan is finished.`
+              : `    Nothing further measurably helps beyond this plan's own steps.`,
         );
       }
       jsonResult = result;

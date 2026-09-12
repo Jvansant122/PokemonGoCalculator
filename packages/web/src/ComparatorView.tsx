@@ -496,8 +496,13 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                 });
                 const ownDps = c.meanSecondsSurvived > 0 ? c.meanTotalDamage / c.meanSecondsSurvived : null;
                 const ownPlusTeam = c.meanTotalDamage + teamContribution;
+                // Key qualified with the index, not just c.id — nothing stops a user
+                // picking the SAME species for both candidates, which would otherwise
+                // fire React's "two children with the same key" warning (both candidates
+                // still render correctly regardless, but it's a real key-uniqueness
+                // violation by React's own semantics).
                 return (
-                  <div key={c.id} className={`result-card ${i === 0 ? "x" : "y"}`}>
+                  <div key={`${c.id}-${i}`} className={`result-card ${i === 0 ? "x" : "y"}`}>
                     <h3>
                       {species.candidates?.[i] && <SpeciesIcon s={species.candidates[i]} />} {c.name}
                       <SpeciesBadges

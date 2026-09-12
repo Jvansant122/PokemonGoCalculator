@@ -3,6 +3,7 @@ import {
   bossChargedMoveReadySeconds,
   bossEffectiveHp,
   buildTeamScenarioUrl,
+  fastMoveCadenceTooFastToDodge,
   MAX_TEAM_RAID_SLOTS,
   type EliteTmCandidate,
   type EliteTmKind,
@@ -32,6 +33,7 @@ import {
 } from "./PowerUpOptimizerAssumptionPanel.js";
 import { BOSS_CADENCE_HINT } from "./bossCadence.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { dodgeFastAttackLockoutResultNote } from "./dodgeFastAttackLockout.js";
 import { MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import {
   buildPowerUpOptimizerScenarioUrl,
@@ -484,6 +486,39 @@ function formatResourceSplit(ownSpent: number, sharedSpent: number, sharedLabel:
   if (sharedSpent === 0) return `${ownSpent} yours`;
   if (ownSpent === 0) return `${sharedSpent} ${sharedLabel}`;
   return `${ownSpent} yours + ${sharedSpent} ${sharedLabel}`;
+}
+
+/**
+ * Single-raid mode's "why we can't recommend anything" fallback for the
+ * Recommendation section — see dodgeFastAttackLockout.ts. `PowerUpEncounterSummary`
+ * (this tab's own baseline/candidate summary type) never propagates the
+ * per-run `dodgeFastAttacksLockout` flag that `TeamRaidSlotResult`/
+ * `DistributionSummary` carry elsewhere (Comparator/Team Raid/Species Report
+ * all read that flag straight off their own result types; this tab's
+ * `summarizeResults` just never kept it) — so `dodgeFastAttacksLockoutActive`
+ * here is computed directly from the SAME deterministic inputs the engine
+ * itself checks (`dodgeFastAttacks && fastMoveCadenceTooFastToDodge(bossFastMove)`),
+ * not read off a result field that doesn't exist. This is safe specifically
+ * BECAUSE the fact is config-level, not a simulated one — every run under a
+ * given boss/toggle pairing has the identical lockout state, never
+ * seed-dependent, so there's nothing probabilistic being re-derived here.
+ *
+ * When the lockout is active, EVERY simulated delta reads as ≈0 for a reason
+ * that has nothing to do with this roster's actual power-up headroom — so
+ * the normal "may already be past its useful power-up headroom" conclusion
+ * is actively false in that state, not just unhelpful, and gets replaced
+ * rather than merely supplemented. Exported so this file's own vitest smoke
+ * covers both branches directly.
+ */
+export function noAffordableImprovementSentence(
+  noiseFloorTeamDps: number,
+  dodgeFastAttacksLockoutActive: boolean,
+  fastAttackLockoutResultNote: string | null,
+): string {
+  if (dodgeFastAttacksLockoutActive && fastAttackLockoutResultNote) {
+    return `${fastAttackLockoutResultNote} That's also why nothing here reads as an improvement — this says nothing about whether this roster still has real power-up headroom against this boss.`;
+  }
+  return `Nothing affordable improves team DPS beyond the ±${noiseFloorTeamDps.toFixed(2)} noise floor — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss.`;
 }
 
 /**
@@ -2146,6 +2181,9 @@ function runMultiRaidTrackedComputation<TData>(
 interface SingleRaidBudgetPlanSectionProps {
   plan: NonNullable<PowerUpOptimizerRunResult["plan"]>;
   slotSpecies: (SpeciesDefinition | null)[];
+  /** See SingleRaidResultsSectionProps' own field of the same name — this section shares the exact same lockout state, since it's re-simulating the same roster/boss/toggle pairing. */
+  dodgeFastAttacksLockoutActive: boolean;
+  fastAttackLockoutResultNote: string | null;
 }
 
 /**
@@ -2159,7 +2197,12 @@ interface SingleRaidBudgetPlanSectionProps {
  * plan has always appeared inline between those two, and moving it after
  * the ranked table would be a real, if small, ordering change.
  */
-function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlanSectionProps) {
+function SingleRaidBudgetPlanSection({
+  plan,
+  slotSpecies,
+  dodgeFastAttacksLockoutActive,
+  fastAttackLockoutResultNote,
+}: SingleRaidBudgetPlanSectionProps) {
   return (
     <CollapsibleSection id="pu-single-budget-plan" heading="Fixed-budget power-up plan" defaultOpen>
       <p className="caveats" style={{ marginBottom: 12 }}>
@@ -2175,11 +2218,23 @@ function SingleRaidBudgetPlanSection({ plan, slotSpecies }: SingleRaidBudgetPlan
         the FINAL floor, in effect when the search stopped.
       </p>
 
+      {dodgeFastAttacksLockoutActive && fastAttackLockoutResultNote && (
+        <p className="species-picker-warning">{fastAttackLockoutResultNote}</p>
+      )}
+
       {plan.bestBlockedCandidate ? (
         <div className="blocked-gain-callout">
           <strong>Blocked, not done</strong>
           {blockedCandidateSentence(plan.bestBlockedCandidate)} This plan stopped
           here because that upgrade isn't affordable yet — not because it wouldn't help.
+        </div>
+      ) : dodgeFastAttacksLockoutActive ? (
+        <div className="blocked-gain-callout">
+          <strong>Can&rsquo;t be judged right now</strong>
+          Every simulated step above reads as ≈0 team DPS because of the dodge lockout
+          noted above, not because this plan is genuinely finished — resolve the lockout
+          (or turn off &ldquo;Also dodge boss&rsquo;s fast attacks?&rdquo;) before trusting
+          this &ldquo;nothing further helps&rdquo; conclusion.
         </div>
       ) : (
         <div className="blocked-gain-callout">
@@ -2342,6 +2397,9 @@ interface SingleRaidResultsSectionProps {
   eliteTmBlocked: EliteTmBlockedSlot[];
   eliteFastTmOnHand: number | null;
   eliteChargedTmOnHand: number | null;
+  /** See dodgeFastAttackLockout.ts and noAffordableImprovementSentence's own doc comment — computed once in the top-level view (from assumptions + bossSpecies alone, never from `data`) and threaded down here and into SingleRaidBudgetPlanSection so both surfaces agree. */
+  dodgeFastAttacksLockoutActive: boolean;
+  fastAttackLockoutResultNote: string | null;
 }
 
 /**
@@ -2438,6 +2496,8 @@ function SingleRaidResultsSection({
   eliteTmBlocked,
   eliteFastTmOnHand,
   eliteChargedTmOnHand,
+  dodgeFastAttacksLockoutActive,
+  fastAttackLockoutResultNote,
 }: SingleRaidResultsSectionProps) {
   return (
     <>
@@ -2487,6 +2547,9 @@ function SingleRaidResultsSection({
                 <span className="stat-tile-value">{data.baseline.teamDps.toFixed(1)}</span>
                 <span className="stat-tile-unit">team DPS</span>
               </div>
+              {dodgeFastAttacksLockoutActive && fastAttackLockoutResultNote && (
+                <p className="species-picker-warning">{fastAttackLockoutResultNote}</p>
+              )}
               <dl>
                 <dt>Boss HP</dt>
                 <dd>{data.bossHp.toLocaleString()}</dd>
@@ -2564,7 +2627,7 @@ function SingleRaidResultsSection({
           <CollapsibleSection id="pu-recommendation" heading="Recommendation" defaultOpen>
             <p className="caveats" style={{ color: "var(--text)" }}>
               {!data.bestAffordableByDelta && !data.bestAffordableByStardustEfficiency
-                ? `Nothing affordable improves team DPS beyond the ±${data.noiseFloorTeamDps.toFixed(2)} noise floor — try raising stardust/candy on hand, or this roster may already be past its useful power-up headroom against this boss.`
+                ? noAffordableImprovementSentence(data.noiseFloorTeamDps, dodgeFastAttacksLockoutActive, fastAttackLockoutResultNote)
                 : (
                     <>
                       {data.bestAffordableByStardustEfficiency && (
@@ -2649,7 +2712,14 @@ function SingleRaidResultsSection({
             </CollapsibleSection>
           )}
 
-          {plan && <SingleRaidBudgetPlanSection plan={plan} slotSpecies={slotSpecies} />}
+          {plan && (
+            <SingleRaidBudgetPlanSection
+              plan={plan}
+              slotSpecies={slotSpecies}
+              dodgeFastAttacksLockoutActive={dodgeFastAttacksLockoutActive}
+              fastAttackLockoutResultNote={fastAttackLockoutResultNote}
+            />
+          )}
 
           <CollapsibleSection
             id="pu-ranked-candidates"
@@ -3012,6 +3082,22 @@ export function PowerUpOptimizerView() {
   }, [bossSpecies, assumptions.bossFastMoveId, selectedBossChargedMove, bossStartingEnergy]);
 
   const bossHp = useMemo(() => (bossSpecies ? bossEffectiveHp(bossSpecies, bossRaidTier) : null), [bossSpecies, bossRaidTier]);
+
+  // See dodgeFastAttackLockout.ts and noAffordableImprovementSentence's own
+  // doc comment above — single-raid mode ONLY. This tab's own baseline/
+  // candidate summary type (PowerUpEncounterSummary) never propagates the
+  // per-run dodgeFastAttacksLockout flag other tabs' result types carry, so
+  // this is computed directly from the boss's resolved fast move and the
+  // shared dodgeFastAttacks toggle — a config-level fact that's identical
+  // for the baseline AND every candidate/plan step re-simulated against this
+  // same boss, never something that needs reading off a result at all.
+  const selectedBossFastMove = useMemo(() => {
+    if (!bossSpecies) return undefined;
+    return bossSpecies.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? bossSpecies.fastMoves[0];
+  }, [bossSpecies, assumptions.bossFastMoveId]);
+  const dodgeFastAttacksLockoutActive =
+    assumptions.dodgeFastAttacks && !!selectedBossFastMove && fastMoveCadenceTooFastToDodge(selectedBossFastMove.durationSeconds);
+  const fastAttackLockoutResultNote = dodgeFastAttackLockoutResultNote(selectedBossFastMove);
 
   // The expensive part: one full paired team-raid comparison per fielded
   // slot x half-level-above-current x iteration (see optimizePowerUps' own
@@ -3488,6 +3574,8 @@ export function PowerUpOptimizerView() {
           eliteTmBlocked={result.eliteTmBlocked}
           eliteFastTmOnHand={assumptions.eliteFastTmOnHand}
           eliteChargedTmOnHand={assumptions.eliteChargedTmOnHand}
+          dodgeFastAttacksLockoutActive={dodgeFastAttacksLockoutActive}
+          fastAttackLockoutResultNote={fastAttackLockoutResultNote}
         />
       )}
 

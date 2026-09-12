@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { budgetStopReasonSentence } from "./PowerUpOptimizerView.js";
+import { budgetStopReasonSentence, noAffordableImprovementSentence } from "./PowerUpOptimizerView.js";
 
 describe("budgetStopReasonSentence", () => {
   // TS2366 (missing switch case) is the type-level guard; this locks in the
@@ -24,5 +24,31 @@ describe("budgetStopReasonSentence", () => {
     const sentences = reasons.map((r) => budgetStopReasonSentence(r, 2.25));
     for (const s of sentences) expect(s.length).toBeGreaterThan(0);
     expect(new Set(sentences).size).toBe(sentences.length);
+  });
+});
+
+describe("noAffordableImprovementSentence", () => {
+  // Locks in the priority bug from the skeptic pass (2026-09-12): a
+  // fast-attack-dodge lockout zeroes every simulated delta, and the ORIGINAL
+  // "may already be past its useful power-up headroom" sentence read as a
+  // confident, false conclusion about the roster rather than naming the
+  // actual (config-level) cause — see dodgeFastAttackLockout.ts.
+  it("without an active lockout: unchanged 'past its useful power-up headroom' wording", () => {
+    const sentence = noAffordableImprovementSentence(1.5, false, null);
+    expect(sentence).toMatch(/past its useful power-up headroom/);
+    expect(sentence).toMatch(/±1\.50/);
+  });
+
+  it("with an active lockout: REPLACES the headroom conclusion with the lockout note, never claims headroom", () => {
+    const note = "Dodge lockout active: Bite recycles every 0.5s, too fast to fast-dodge — this result reflects zero fast-move damage for the rest of the fight, not a bad matchup.";
+    const sentence = noAffordableImprovementSentence(0, true, note);
+    expect(sentence).toContain(note);
+    expect(sentence).not.toMatch(/past its useful power-up headroom/);
+    expect(sentence).toMatch(/says nothing about whether this roster still has real power-up headroom/);
+  });
+
+  it("active flag but a null note (boss fast move not yet resolved) falls back to the ordinary sentence rather than rendering an empty explanation", () => {
+    const sentence = noAffordableImprovementSentence(2, true, null);
+    expect(sentence).toMatch(/past its useful power-up headroom/);
   });
 });
