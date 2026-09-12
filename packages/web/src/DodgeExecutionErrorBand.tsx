@@ -1,5 +1,6 @@
 import type { DodgeExecutionErrorBandPoint } from "./run/dodgeExecutionErrorSweep.js";
 import { niceStep, formatTick } from "./chartAxisUtils.js";
+import { computeDodgeExecutionErrorLeader } from "./dodgeExecutionErrorLeader.js";
 
 interface Props {
   points: DodgeExecutionErrorBandPoint[];
@@ -61,16 +62,12 @@ export function DodgeExecutionErrorBand({ points, names }: Props) {
   // non-zero and opposite" discipline as rankingFlip.ts's own crossing scan,
   // just over 6 discrete samples instead of 200 continuous ones. Deliberately
   // NOT claiming to find the exact crossing accuracy — only that one exists
-  // somewhere between two specific sampled points.
-  const leaderAt = (p: DodgeExecutionErrorBandPoint) => (p.a.meanTotalDamage >= p.b.meanTotalDamage ? "a" : "b");
-  let flipBetween: [number, number] | null = null;
-  for (let i = 1; i < ordered.length; i++) {
-    if (leaderAt(ordered[i]!) !== leaderAt(ordered[i - 1]!)) {
-      flipBetween = [accuracyFor(ordered[i - 1]!.missedFraction), accuracyFor(ordered[i]!.missedFraction)];
-      break;
-    }
-  }
-  const finalLeaderIsA = leaderAt(ordered[ordered.length - 1]!) === "a";
+  // somewhere between two specific sampled points. Extracted into
+  // dodgeExecutionErrorLeader.ts (own unit tests there) — see its doc comment
+  // for the three-way ("a"/"b"/"tie") fix to the same wrong-statement-on-a-tie
+  // bug class fixed in rankingFlip.ts's computeRankingFlip.
+  const { flipBetween, finalLeader, finalTieIsBothZero } = computeDodgeExecutionErrorLeader(ordered);
+  const leaderName = (leader: "a" | "b" | "tie") => (leader === "a" ? names[0] : leader === "b" ? names[1] : null);
 
   return (
     <div>
@@ -115,11 +112,17 @@ export function DodgeExecutionErrorBand({ points, names }: Props) {
       {flipBetween ? (
         <p className="crossover-note crossover-note--flip">
           Own total damage leadership flips somewhere between {flipBetween[0].toFixed(0)}% and {flipBetween[1].toFixed(0)}% dodge accuracy;{" "}
-          {finalLeaderIsA ? names[0] : names[1]} leads at the worst-tested accuracy (50%).
+          {leaderName(finalLeader) === null ? "neither candidate leads" : `${leaderName(finalLeader)} leads`} at the worst-tested accuracy (50%).
+        </p>
+      ) : finalLeader === "tie" ? (
+        <p className="crossover-note crossover-note--steady">
+          {finalTieIsBothZero
+            ? "Both candidates dealt zero own total damage across the tested 50-100% accuracy band under these assumptions — check the dodge and moveset settings above before reading a winner into this."
+            : `No leadership flip across the tested 50-100% accuracy band — ${names[0]} and ${names[1]} are tied on own total damage throughout.`}
         </p>
       ) : (
         <p className="crossover-note crossover-note--steady">
-          No leadership flip across the tested 50-100% accuracy band — {finalLeaderIsA ? names[0] : names[1]} leads on own total damage
+          No leadership flip across the tested 50-100% accuracy band — {leaderName(finalLeader)} leads on own total damage
           throughout.
         </p>
       )}

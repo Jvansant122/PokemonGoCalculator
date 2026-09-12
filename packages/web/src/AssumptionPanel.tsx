@@ -10,6 +10,7 @@ import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { WeatherSelect } from "./WeatherSelect.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
+import { dodgeFastAttackLockoutWarning } from "./dodgeFastAttackLockout.js";
 
 export interface Assumptions {
   candidateAId: string;
@@ -253,10 +254,13 @@ function CandidateDodgeOverride({
   value,
   index,
   onChange,
+  fastAttackLockoutWarning,
 }: {
   value: Assumptions;
   index: 0 | 1;
   onChange: (next: Assumptions) => void;
+  /** See AssumptionPanel's own `fastAttackLockoutWarning` — same boss-fast-move-keyed warning, shown here too since this override has its own independent "Fast-attack dodge: Yes/No" select. */
+  fastAttackLockoutWarning: string | null;
 }) {
   const dodgeOverride = value.candidateDodge[index];
   const fastOverride = value.candidateDodgeFastAttacks[index];
@@ -336,6 +340,7 @@ function CandidateDodgeOverride({
             <option value="no">Fast-attack dodge: No</option>
             <option value="yes">Fast-attack dodge: Yes</option>
           </select>
+          {fastAttackLockoutWarning && <p className="species-picker-warning">{fastAttackLockoutWarning}</p>}
         </>
       )}
     </div>
@@ -386,6 +391,14 @@ export function AssumptionPanel({
     ? (bossSpecies.chargedMoves.find((m) => m.id === value.bossChargedMoveId) ?? bossSpecies.chargedMoves[0])
     : undefined;
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
+  const selectedBossFastMove = bossSpecies
+    ? (bossSpecies.fastMoves.find((m) => m.id === value.bossFastMoveId) ?? bossSpecies.fastMoves[0])
+    : undefined;
+  // See dodgeFastAttackLockout.ts's own doc comment — keyed off the boss's
+  // fast move alone, so this warns the moment a qualifying boss is selected,
+  // before the shared or either per-candidate "dodge fast attacks" toggle is
+  // even switched on.
+  const fastAttackLockoutWarning = dodgeFastAttackLockoutWarning(selectedBossFastMove);
 
   // The "other trainers" party inputs below only affect anything when at
   // least one candidate has a live mega/primal boost to attribute team damage
@@ -526,7 +539,7 @@ export function AssumptionPanel({
                   </label>
                 );
               })()}
-              {value.showDetailedAssumptions && <CandidateDodgeOverride value={value} index={0} onChange={onChange} />}
+              {value.showDetailedAssumptions && <CandidateDodgeOverride value={value} index={0} onChange={onChange} fastAttackLockoutWarning={fastAttackLockoutWarning} />}
             </>
           )}
         </div>
@@ -609,7 +622,7 @@ export function AssumptionPanel({
                   </label>
                 );
               })()}
-              {value.showDetailedAssumptions && <CandidateDodgeOverride value={value} index={1} onChange={onChange} />}
+              {value.showDetailedAssumptions && <CandidateDodgeOverride value={value} index={1} onChange={onChange} fastAttackLockoutWarning={fastAttackLockoutWarning} />}
             </>
           )}
         </div>
@@ -777,6 +790,7 @@ export function AssumptionPanel({
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </select>
+              {fastAttackLockoutWarning && <p className="species-picker-warning">{fastAttackLockoutWarning}</p>}
             </div>
           </>
         )}

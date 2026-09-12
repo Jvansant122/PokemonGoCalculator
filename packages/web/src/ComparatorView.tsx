@@ -23,6 +23,7 @@ import { PartySizeFlipView } from "./PartySizeFlipView.js";
 import { SensitivityView } from "./SensitivityView.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
+import { dodgeFastAttackLockoutResultNote } from "./dodgeFastAttackLockout.js";
 import { getBaseUrl } from "./urlUtils.js";
 import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatchedActiveRaids } from "./registry.js";
 import { resolveBoost, runComparatorScenario } from "./run/runComparator.js";
@@ -370,6 +371,16 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
   const bossMovesetSweep = runResult.bossMovesetSweep;
   const partySizeFlip = runResult.partySizeFlip;
   const dodgeExecutionErrorBand = runResult.dodgeExecutionErrorBand;
+  // See dodgeFastAttackLockout.ts — resolved the same way AssumptionPanel
+  // resolves the boss's selected fast move, purely for this result-card
+  // note's wording (naming the real move/duration); the engine's own
+  // `dodgeFastAttacksLockout` flag on each candidate result is what actually
+  // GATES whether the note renders, so this can never disagree with what
+  // the simulation itself detected.
+  const selectedBossFastMove = species.boss
+    ? (species.boss.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? species.boss.fastMoves[0])
+    : undefined;
+  const fastAttackLockoutResultNote = dodgeFastAttackLockoutResultNote(selectedBossFastMove);
 
   function handleShare() {
     // Also pins `view=comparator` so reloading/sharing this link doesn't land
@@ -494,6 +505,9 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
                         isShadow={effectiveIsShadow(species.candidates?.[i], assumptions.candidateShadow[i] ?? false)}
                       />
                     </h3>
+                    {c.dodgeFastAttacksLockout && fastAttackLockoutResultNote && (
+                      <p className="species-picker-warning">{fastAttackLockoutResultNote}</p>
+                    )}
                     <div className="stat-tile-headline">
                       <span className="stat-tile-value">{ownDps === null ? "n/a" : ownDps.toFixed(1)}</span>
                       <span className="stat-tile-unit">own DPS</span>
@@ -793,7 +807,12 @@ export function ComparatorView({ prefill = null, onConsumedPrefill }: Comparator
           see the sensitivity panel. Raid targets marked "approximate" use a documented stand-in species' stats
           (e.g. a Shadow-prefixed raid boss matched to its non-Shadow base stats) because no better data exists yet
           — treat those results as directional, not exact. Species marked "hypothetical" are not live-game content
-          at all.
+          at all. A boss fast move that recycles at 0.5s or faster (DODGE_COST_SECONDS itself) cannot be fast-dodged
+          at all: with "Also dodge boss's fast attacks?" on against such a boss, the candidate's own fast-move
+          eligibility gets pushed back at least as fast as real time elapses, so it never fires again — literally
+          zero fast-move damage for the rest of the fight, not a bad matchup. This is correct, arithmetic-forced
+          behavior, not a bug (see MECHANICS.md's "A boss fast move at &le;0.5s cannot be fast-dodged at all" for the
+          full derivation) — the toggle warns you before you read a zeroed result card into it.
           </p>
         </details>
         <details className="prose-details">

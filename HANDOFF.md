@@ -50,7 +50,18 @@ live app) — verified, not yet built:
   Tyranitar, Bite at 500ms, dodge-fast-attacks on) the chart caption still claims a winner —
   `rankingFlip.ts`'s `finalLeader` uses `x >= y`, so `0 >= 0` names candidate X. Any exact tie
   misreports, not just the lockout case, while the moveset-roll table in the same view correctly
-  prints `tied`. **This is the next thing being built.**
+  prints `tied`. **SHIPPED the same day** — `rankingFlip.ts`'s `finalLeader` is now `string | null`
+  with a `finalTieIsBothZero` flag, so a both-zero result reads "Neither candidate dealt any
+  own+team damage in this window under these assumptions" instead of naming a winner; the same
+  `>=`-tie bug was found and fixed independently in `DodgeExecutionErrorBand.tsx` (its leader logic
+  extracted to `dodgeExecutionErrorLeader.ts` to be testable). The lockout itself is now surfaced
+  from the shared `dodgeFastAttackLockout.ts` in three places per tab where applicable: at the
+  toggle (keyed off the boss's real fast move, so it warns BEFORE the toggle is switched on),
+  inline on the zeroed result card, and — on Species Report, where a per-row warning alone would
+  drown in a ~600-boss sweep — as a live qualifying-boss count at the toggle, a `dodge lockout`
+  row badge, a footnote counting affected rows, and a "Data quality flags" line. Comparator's
+  "Known caveats" panel gained the ≤0.5s entry it was missing. No `Scenario` field touched: both
+  fixes read an already-computed engine flag or call an already-exported pure predicate.
 - **Friendship (up to 1.12x, real raid mechanic) reaches only 2 of 7 tabs.** Absent from Species
   Report, IV Breakpoints, Attack/Defense Breakpoints and the Power-Up Optimizer —
   `friendshipLevel` appears 0× in `speciesReport.ts`/`breakpoints.ts`/`powerUp.ts`. `pogo-player`

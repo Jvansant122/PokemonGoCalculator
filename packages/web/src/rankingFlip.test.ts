@@ -75,4 +75,44 @@ describe("computeRankingFlip", () => {
     expect(result.finalLeader).toBe("Y");
     expect(result.crossingLeader).toBe("Y");
   });
+
+  /**
+   * The bug this task fixes: both candidates dealt zero own+team damage the
+   * whole window (e.g. a fast-attack-dodge lockout against a boss whose fast
+   * move recycles too quickly — see dodgeFastAttackLockout.ts) used to fall
+   * into the old `>=` comparison and silently declare X the "leader" on a
+   * 0-vs-0 tie. `finalLeader` must be null, and `finalTieIsBothZero` must be
+   * true so a caller can say "neither dealt any damage" rather than "tied."
+   */
+  it("reports a null leader (not X) when both candidates are stuck at zero the whole window", () => {
+    const x = series("X", [
+      { atSeconds: 0, cumulativeDamage: 0 },
+      { atSeconds: 10, cumulativeDamage: 0 },
+    ]);
+    const y = series("Y", [
+      { atSeconds: 0, cumulativeDamage: 0 },
+      { atSeconds: 10, cumulativeDamage: 0 },
+    ]);
+    const result = computeRankingFlip(x, y, 0, 0, 0, 10);
+    expect(result.crossing).toBeNull();
+    expect(result.crossingLeader).toBeNull();
+    expect(result.finalLeader).toBeNull();
+    expect(result.finalTieIsBothZero).toBe(true);
+  });
+
+  /** A genuine nonzero exact tie is still a tie (finalLeader null) but is NOT the "both zero" case — the two must stay distinguishable. */
+  it("reports a null leader but finalTieIsBothZero=false for a genuine nonzero tie", () => {
+    const x = series("X", [
+      { atSeconds: 0, cumulativeDamage: 0 },
+      { atSeconds: 10, cumulativeDamage: 150 },
+    ]);
+    const y = series("Y", [
+      { atSeconds: 0, cumulativeDamage: 0 },
+      { atSeconds: 10, cumulativeDamage: 150 },
+    ]);
+    const result = computeRankingFlip(x, y, 0, 0, 0, 10);
+    expect(result.crossing).toBeNull();
+    expect(result.finalLeader).toBeNull();
+    expect(result.finalTieIsBothZero).toBe(false);
+  });
 });

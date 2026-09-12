@@ -4,6 +4,7 @@ import {
   MAX_POKEMON_POWER_UP_LEVEL,
   RAID_TIER_TABLE,
   defaultRaidTierForSpecies,
+  fastMoveCadenceTooFastToDodge,
   type DodgeBehavior,
   type MegaLevel,
   type SpeciesDefinition,
@@ -266,6 +267,30 @@ export function SpeciesReportView({
   // one below — unchecking the last box should hide the (possibly stale)
   // table and show this message immediately, not 300ms later.
   const noTiersSelected = allTiersPresent.length > 0 && assumptions.includedTiers !== null && assumptions.includedTiers.length === 0;
+
+  // How many of the CURRENTLY-selected boss set (tier filter + past-raids
+  // toggle, both live — not the debounced sweep) would hit the fast-attack
+  // dodge lockout (see dodgeFastAttackLockout.ts/MECHANICS.md's "A boss fast
+  // move at <=0.5s cannot be fast-dodged at all") — every boss here fights
+  // with its own FIRST fast move only (see this view's own "Boss movesets"
+  // caveat below), so this is pure per-species arithmetic and needs no
+  // simulation, unlike the debounced sweep itself. Computed regardless of
+  // `assumptions.dodgeFastAttacks`'s OWN current value — same "warn before
+  // the risky combination is even switched on" rationale as the other two
+  // tabs' toggle-level warning.
+  const fastAttackLockoutBossCount = useMemo(() => {
+    const activeIncluded = bossOptions.filter((b) => tierIsIncluded(assumptions.includedTiers, b.tier));
+    const pastIncluded = assumptions.includePastRaids
+      ? pastRaidOptions.filter((r) => tierIsIncluded(assumptions.includedTiers, r.tier))
+      : [];
+    const ids = new Set([...activeIncluded.map((b) => b.id), ...pastIncluded.map((r) => r.id)]);
+    let count = 0;
+    for (const id of ids) {
+      const fastMove = resolveSpecies(id)?.fastMoves[0];
+      if (fastMove && fastMoveCadenceTooFastToDodge(fastMove.durationSeconds)) count++;
+    }
+    return count;
+  }, [bossOptions, pastRaidOptions, assumptions.includedTiers, assumptions.includePastRaids]);
 
   function toggleTier(tier: string) {
     const current = assumptions.includedTiers ?? allTiersPresent;
@@ -604,6 +629,14 @@ export function SpeciesReportView({
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
+            {fastAttackLockoutBossCount > 0 && (
+              <p className="species-picker-warning">
+                {fastAttackLockoutBossCount} of the currently-selected bosses have a fast move that recycles at 0.5s or
+                faster — dodging every fast attack is physically impossible against those, so turning this on makes their
+                rows below reflect a permanent lockout (zero fast-move damage), not a weak matchup. Flagged per-row in the
+                table below.
+              </p>
+            )}
           </div>
 
           <WeatherSelect
@@ -860,6 +893,14 @@ export function SpeciesReportView({
                         </span>
                       )}
                       <SpeciesBadges isShadow={bossSpecies?.isShadow} />
+                      {row.sustained.dodgeFastAttacksLockout && (
+                        <span
+                          className="badge badge-dodge-lockout"
+                          title="This boss's fast move recycles too quickly to fast-dodge (see MECHANICS.md) — with 'Also dodge each boss's fast attacks?' on, this row's sustained damage/survival reflect a permanent lockout (zero fast-move damage), not a weak matchup."
+                        >
+                          dodge lockout
+                        </span>
+                      )}
                     </td>
                     <td>{row.offensiveTypeMatchup.toFixed(3)}x</td>
                     <td>
@@ -901,6 +942,18 @@ export function SpeciesReportView({
             </tbody>
           </table>
           </div>
+          {(() => {
+            const lockedCount = sortedRows.filter((r) => r.sustained.dodgeFastAttacksLockout).length;
+            if (lockedCount === 0) return null;
+            return (
+              <p className="caveats" style={{ marginTop: 8 }}>
+                {lockedCount} of {sortedRows.length} rows above are flagged "dodge lockout": that boss's fast move recycles
+                at 0.5s or faster, so with "Also dodge each boss's fast attacks?" on, this species landed zero fast-move
+                damage against it — a permanent lockout the assumptions caused, not a genuinely weak matchup. See "Data
+                quality flags" under Known caveats below.
+              </p>
+            );
+          })()}
         </CollapsibleSection>
       )}
 
@@ -976,7 +1029,11 @@ export function SpeciesReportView({
           documented stand-in species' stats because no better data exists yet — treat those rows as directional, not
           exact. A row's tier label marked "fallback" means the feed/history's own tier string wasn't one this engine
           recognizes, so the simulation used this species' own rarity/boost/lastKnownRaidTier to guess instead — not
-          necessarily that raid's real current tier.
+          necessarily that raid's real current tier. A row marked "dodge lockout" means that boss's own fast move
+          recycles at 0.5s or faster (DODGE_COST_SECONDS itself) — with "Also dodge each boss's fast attacks?" on,
+          dodging it is physically impossible and the attacker's own fast move never fires again, so that row's
+          damage/survival reflect a permanent, arithmetic-forced lockout caused by these assumptions, not a genuinely
+          weak matchup (see MECHANICS.md's "A boss fast move at &le;0.5s cannot be fast-dodged at all").
           </p>
         </details>
         <details className="prose-details">

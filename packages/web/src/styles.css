@@ -1231,6 +1231,20 @@ label.species-picker-hint {
 }
 
 /*
+ * MECHANICS.md's "A boss fast move at <=0.5s cannot be fast-dodged at all" —
+ * SpeciesReportView's per-row flag for a boss whose fast move qualifies (see
+ * dodgeFastAttackLockout.ts). Reuses .badge-approximate/.badge-unsourced's
+ * exact warn hue (same "distrust this number, it's flagged for a reason"
+ * family) under its own name, since the cause here is a different, more
+ * specific fact than either of those two.
+ */
+.badge-dodge-lockout {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--warn);
+  border: 1px solid var(--warn);
+}
+
+/*
  * IDEAS.md #5 — the Power-Up Optimizer's Best Buddy candidates (single-raid
  * mode). Reuses .badge-persists' info-blue hue rather than inventing a
  * fourth meaning: both badges mark "a genuinely different kind of number

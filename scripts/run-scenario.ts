@@ -190,7 +190,11 @@ function main(): void {
         `  ${b!.name}: mean survival ${fmt(b!.meanSecondsSurvived)}s, mean total damage ${fmt(b!.meanTotalDamage, 0)}`,
         flip.crossing
           ? `  Ranking flips at ~${fmt(flip.crossing.t)}s into the fight; ${flip.finalLeader} leads by the end of the ${fmt(result.chartMaxSeconds)}s window.`
-          : `  No crossing in this window; ${flip.finalLeader} leads throughout.`,
+          : flip.finalLeader === null
+            ? flip.finalTieIsBothZero
+              ? `  Neither candidate dealt any own+team damage in this window under these assumptions — check the dodge/moveset settings above before reading a winner into this.`
+              : `  No crossing in this window; ${a!.name} and ${b!.name} are tied throughout.`
+            : `  No crossing in this window; ${flip.finalLeader} leads throughout.`,
         `  Sensitivity: nearest flip is "${result.sensitivity[0]?.label}" (${result.sensitivity[0]?.distanceLabel}).`,
       ];
       jsonResult = result;

@@ -28,6 +28,7 @@ import { runTeamRaidScenario } from "./run/runTeamRaid.js";
 import { teamAssumptionsToPowerUpOptimizerAssumptions, TEAM_RAID_EXPORT_MISSING_NOTE } from "./teamRaidExport.js";
 import { assumptionsToScenario as powerUpAssumptionsToScenario } from "./PowerUpOptimizerView.js";
 import { buildPowerUpOptimizerScenarioUrl } from "./powerUpOptimizerScenario.js";
+import { dodgeFastAttackLockoutResultNote } from "./dodgeFastAttackLockout.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates a
 // real result immediately, not an empty form — mirrors the comparator's own
@@ -433,6 +434,15 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
   const failureSummary = runResult.failureSummary;
   const bossMovesetSweep = runResult.bossMovesetSweep;
   const result = { data: runResult.data, error: runResult.error };
+  // See dodgeFastAttackLockout.ts — resolved the same way
+  // TeamAssumptionPanel resolves the boss's selected fast move, purely for
+  // this result note's wording; which slots actually hit the lockout is
+  // read straight off the engine's own per-slot `dodgeFastAttacksLockout`
+  // flag below, never re-derived here.
+  const selectedBossFastMove = bossSpecies
+    ? (bossSpecies.fastMoves.find((m) => m.id === assumptions.bossFastMoveId) ?? bossSpecies.fastMoves[0])
+    : undefined;
+  const fastAttackLockoutResultNote = dodgeFastAttackLockoutResultNote(selectedBossFastMove);
 
   function handleShare() {
     // Stamps `view=team-raid` alongside the `ts` param so reloading this
@@ -646,6 +656,18 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
                   {result.data.timeToClearSeconds !== null ? "time to clear" : failureSummary ? "of boss HP dealt" : "time to clear"}
                 </span>
               </div>
+              {fastAttackLockoutResultNote &&
+                (() => {
+                  const lockedSlots = result.data.slots.filter((s) => s.dodgeFastAttacksLockout);
+                  if (lockedSlots.length === 0) return null;
+                  const lockedNames = [...new Set(lockedSlots.map((s) => s.speciesName))].join(", ");
+                  return (
+                    <p className="species-picker-warning">
+                      {fastAttackLockoutResultNote} Affected {lockedSlots.length} of {result.data.slots.length} fight
+                      {result.data.slots.length === 1 ? "" : "s"} this encounter ({lockedNames}).
+                    </p>
+                  );
+                })()}
               <dl>
                 <dt>Time to clear</dt>
                 <dd>

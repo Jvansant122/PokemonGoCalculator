@@ -11,8 +11,28 @@ export interface RankingFlipResult {
   crossing: { t: number; value: number } | null;
   /** Whichever candidate leads immediately after `crossing` — same fact `finalLeader` is derived from, so the two can never disagree. Null only when `crossing` is null. */
   crossingLeader: string | null;
-  /** Whoever leads at the end of the sampled window — derived from `crossing`'s own post-flip sign when a crossing exists, otherwise from the final sampled totals directly. */
-  finalLeader: string;
+  /**
+   * Whoever leads at the end of the sampled window — derived from
+   * `crossing`'s own post-flip sign when a crossing exists, otherwise from
+   * the final sampled totals directly. `null` means an exact tie at the
+   * final sample with no crossing ever found — see `finalTieIsBothZero` to
+   * distinguish "both dealt zero damage" from a genuine nonzero tie. A
+   * crossing (by definition a sign flip between two nonzero deltas) can
+   * never itself end in a tie, so this is only ever null in the no-crossing
+   * branch.
+   */
+  finalLeader: string | null;
+  /**
+   * True only when `finalLeader` is null AND both candidates' final sampled
+   * total is exactly zero — e.g. a dodge-fast-attacks lockout (see
+   * dodgeFastAttackLockout.ts) against a boss whose fast move recycles too
+   * quickly to dodge, which can zero out BOTH candidates' own damage at
+   * once. Always false when finalLeader is non-null. Distinguishing this
+   * from a genuine nonzero tie matters because "tied" implies two real,
+   * comparable results, while "both zero" usually means the assumptions
+   * (not the matchup) are the actual story.
+   */
+  finalTieIsBothZero: boolean;
 }
 
 /**
@@ -60,7 +80,17 @@ export function computeRankingFlip(
     }
   }
 
-  const finalLeader = crossingLeader ?? (totals[totals.length - 1]!.x >= totals[totals.length - 1]!.y ? x.name : y.name);
+  // No crossing found: derive the final leader from the last sample's totals
+  // directly, but an exact tie (`===`, not `>=`) is NOT a leader — the old
+  // `>=` here silently named x the "leader" on a 0-0 tie (and any other
+  // exact tie), which is a wrong statement on screen, not a rounding
+  // nicety. `finalLeader` stays null in that case; `finalTieIsBothZero`
+  // distinguishes "both dealt zero damage" (usually a configuration problem,
+  // e.g. a dodge-fast-attacks lockout) from a genuine nonzero tie.
+  const last = totals[totals.length - 1]!;
+  const finalTied = last.x === last.y;
+  const finalLeader = crossingLeader ?? (finalTied ? null : last.x > last.y ? x.name : y.name);
+  const finalTieIsBothZero = crossingLeader === null && finalTied && last.x === 0;
 
-  return { crossing, crossingLeader, finalLeader };
+  return { crossing, crossingLeader, finalLeader, finalTieIsBothZero };
 }

@@ -173,7 +173,7 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
   // reasoning (AUDIT_2026-09-08.md finding 0) — extracted there so a
   // non-rendering caller (the run-scenario CLI, vitest) can compute the same
   // headline without needing an SVG to render.
-  const { crossing, finalLeader } = computeRankingFlip(x, y, teammateDps, partySize, matchingTeammateCount, maxSeconds);
+  const { crossing, finalLeader, finalTieIsBothZero } = computeRankingFlip(x, y, teammateDps, partySize, matchingTeammateCount, maxSeconds);
 
   // Final tally: how much of each candidate's total came from its own
   // damage versus the team's boosted contribution — the ratio the chart's
@@ -254,6 +254,12 @@ export function DamageOverTimeChart({ x, y, teammateDps, partySize, matchingTeam
         <p className="crossover-note crossover-note--flip">
           Ranking flips at ~{crossing.t.toFixed(1)}s into the fight; {finalLeader} leads by the end of this window ({partySize}{" "}
           other trainer{partySize === 1 ? "" : "s"} in this raid, {matchingTeammateCount} matching type, {teammateDps} DPS each).
+        </p>
+      ) : finalLeader === null ? (
+        <p className="crossover-note crossover-note--steady">
+          {finalTieIsBothZero
+            ? "Neither candidate dealt any own+team damage in this window under these assumptions — check the dodge and moveset settings above before reading a winner into this chart."
+            : `No crossing in this window under these assumptions — ${x.name} and ${y.name} are tied throughout (${partySize} other trainer${partySize === 1 ? "" : "s"} in this raid, ${matchingTeammateCount} matching type, ${teammateDps} DPS each).`}
         </p>
       ) : (
         <p className="crossover-note crossover-note--steady">

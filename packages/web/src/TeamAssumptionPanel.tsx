@@ -18,6 +18,7 @@ import { FriendshipSelect } from "./FriendshipSelect.js";
 import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { effectiveIsShadow, shadowToggleUiState } from "./shadowToggle.js";
 import { BOSS_FREQUENCY_INAPPLICABLE_HINT, BossCadenceSelect, type BossChargedMoveCadence } from "./bossCadence.js";
+import { dodgeFastAttackLockoutWarning } from "./dodgeFastAttackLockout.js";
 
 /** One roster slot's own configuration — mirrors teamScenario.ts's TeamScenarioSlot exactly, field for field. */
 export interface TeamSlotAssumption {
@@ -263,6 +264,13 @@ export function TeamAssumptionPanel({
     ? (bossSpecies.chargedMoves.find((m) => m.id === value.bossChargedMoveId) ?? bossSpecies.chargedMoves[0])
     : undefined;
   const bossChargedMoveIsUndodgeable = selectedBossChargedMove?.perfectlyDodgeable === false;
+  const selectedBossFastMove = bossSpecies
+    ? (bossSpecies.fastMoves.find((m) => m.id === value.bossFastMoveId) ?? bossSpecies.fastMoves[0])
+    : undefined;
+  // See dodgeFastAttackLockout.ts — this toggle is shared across the whole
+  // roster (unlike the Comparator, there's no per-slot override), so one
+  // check here covers every slot.
+  const fastAttackLockoutWarning = dodgeFastAttackLockoutWarning(selectedBossFastMove);
 
   // Type-effectiveness opponents for the move pickers below (display-only —
   // see MoveSelect.tsx's own `opponents` prop doc comment). Each slot's own
@@ -541,6 +549,7 @@ export function TeamAssumptionPanel({
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
+          {fastAttackLockoutWarning && <p className="species-picker-warning">{fastAttackLockoutWarning}</p>}
         </div>
 
         <div className="field">
