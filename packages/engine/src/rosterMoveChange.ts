@@ -1,4 +1,5 @@
 import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove } from "./comparison.js";
+import type { FriendshipLevel } from "./damage.js";
 import type { MegaLevel } from "./megaLevel.js";
 import {
   RARE_CANDY_TO_CANDY_RATIO,
@@ -185,6 +186,25 @@ export interface RosterMoveChangeInputs {
   bossChargedMoveMeanIntervalSeconds: number;
   bossChargedMoveCadence?: TeamRaidInputs["bossChargedMoveCadence"];
   weather?: WeatherCondition;
+  /**
+   * See teamRaid.ts's TeamRaidInputs.friendshipLevel / rosterPlanner.ts's
+   * RosterPlannerInputs.friendshipLevel for the full contract — the real
+   * Gym/Raid friendship attack bonus, single-SIDED (an entry's own outgoing
+   * fast/charged damage only, never a boss's) and ROSTER-WIDE, same "one
+   * shared assumption across the whole pool and every boss" convention as
+   * `dodge`/`weather`/`megaLevel` above. Threaded into the FIELDED path via
+   * `moveChangeBase`/`...shared` (tmMove.ts's generators already forward
+   * `MoveChangeEvaluationInputs.friendshipLevel` — that type `extends
+   * TeamRaidInputs`, so it needed no change there) and into the BENCHED
+   * path's own `benchedProxyDamagePerSecond` proxy AND its real paired
+   * `runTeamRaid` evaluation. A caller comparing a `RosterMoveChangeResult`
+   * row against a `RosterPlannerInputs`/`RosterBudgetInputs` sweep on the
+   * same pool/boss set should pass the SAME value to both — see
+   * fix_powerup_ladder_friendship_omission.md for the disagreement this
+   * closes the same way for a different module. Defaults to "none", so
+   * every existing caller is byte-for-byte unchanged.
+   */
+  friendshipLevel?: FriendshipLevel;
   raidTimerSeconds: number;
   swapCostSeconds?: number;
   reviveCostSeconds?: number;
@@ -217,6 +237,8 @@ interface SharedTeamRaidAssumptions {
   holdChargedMoveUntilSafe?: boolean;
   bossChargedMoveMeanIntervalSeconds: number;
   bossChargedMoveCadence?: TeamRaidInputs["bossChargedMoveCadence"];
+  /** See RosterMoveChangeInputs.friendshipLevel — spread onto both moveChangeBase (FIELDED path) and teamRaidBase (BENCHED path's real paired evaluation) via `...shared`. */
+  friendshipLevel?: FriendshipLevel;
   raidTimerSeconds: number;
   swapCostSeconds?: number;
   reviveCostSeconds?: number;
@@ -349,14 +371,24 @@ function buildBossProxyContext(target: WeightedRaidTarget, weather: WeatherCondi
  * that internal helper, to avoid coupling this file to rosterPlanner.ts's
  * caching internals for a 2-line arithmetic composition). Used ONLY to rank
  * which benched (entry, candidate move) pairs are worth a REAL paired
- * simulation — never itself reported as a team-DPS value.
+ * simulation — never itself reported as a team-DPS value. `friendshipLevel`
+ * is folded into the OUTGOING modifiers only (never `incoming*`) — same
+ * attacker-only contract as everywhere else this field appears; this proxy
+ * must agree with the real `runTeamRaid` evaluation below on which
+ * candidates look promising, the exact property the ladder-vs-simulation
+ * fix in powerUp.ts (fix_powerup_ladder_friendship_omission.md) exists to
+ * preserve.
+ *
+ * Exported (2026-09-12) purely for direct test access — same rationale as
+ * rosterPlanner.ts's entryBossMetricsInputs export.
  */
-function benchedProxyDamagePerSecond(
+export function benchedProxyDamagePerSecond(
   entry: RosterEntry,
   fastMove: FastMove,
   chargedMove: ChargedMove,
   boss: BossProxyContext,
   megaLevel: MegaLevel | undefined,
+  friendshipLevel: FriendshipLevel | undefined,
 ): number {
   const metrics = powerUpLevelMetrics({
     species: entry.species,
@@ -370,12 +402,14 @@ function benchedProxyDamagePerSecond(
       typeEffectiveness: typeEffectiveness(fastMove.type, boss.bossSpecies.types),
       megaBoostMultiplier: ownBoostMultiplier(entry.species.boost, fastMove.type),
       weatherBoosted: isWeatherBoosted(fastMove.type, boss.weather),
+      friendshipLevel,
     },
     outgoingChargedMoveDamageModifiers: {
       stab: entry.species.types.includes(chargedMove.type),
       typeEffectiveness: typeEffectiveness(chargedMove.type, boss.bossSpecies.types),
       megaBoostMultiplier: ownBoostMultiplier(entry.species.boost, chargedMove.type),
       weatherBoosted: isWeatherBoosted(chargedMove.type, boss.weather),
+      friendshipLevel,
     },
     bossFastMove: boss.bossFastMove,
     bossChargedMove: boss.bossChargedMove,
@@ -473,6 +507,7 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
     holdChargedMoveUntilSafe: rest.holdChargedMoveUntilSafe,
     bossChargedMoveMeanIntervalSeconds: rest.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: rest.bossChargedMoveCadence,
+    friendshipLevel: rest.friendshipLevel,
     raidTimerSeconds: rest.raidTimerSeconds,
     swapCostSeconds: rest.swapCostSeconds,
     reviveCostSeconds: rest.reviveCostSeconds,
@@ -643,7 +678,7 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
       const weakestFastMove = resolveMove(weakestEntry.species.fastMoves, weakestEntry.fastMoveId);
       const weakestChargedMove = resolveMove(weakestEntry.species.chargedMoves, weakestEntry.chargedMoveId);
       if (weakestFastMove && weakestChargedMove) {
-        const weakestProxy = benchedProxyDamagePerSecond(weakestEntry, weakestFastMove, weakestChargedMove, bossCtx, megaLevel);
+        const weakestProxy = benchedProxyDamagePerSecond(weakestEntry, weakestFastMove, weakestChargedMove, bossCtx, megaLevel, rest.friendshipLevel);
 
         for (const entry of pool) {
           if (fieldedIds.has(entry.entryId)) continue;
@@ -662,7 +697,7 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
               if (entry.knownChargedMoveIds.includes(m.id) || !isTmTargetableMove(m)) continue;
               if (!canLearnSecondChargedMove(entry.species, { isShadow: entry.costModifiers.isShadow, isPurified: entry.costModifiers.isPurified }))
                 continue;
-              const proxyGain = benchedProxyDamagePerSecond(entry, currentFastMove, m, bossCtx, megaLevel) - weakestProxy;
+              const proxyGain = benchedProxyDamagePerSecond(entry, currentFastMove, m, bossCtx, megaLevel, rest.friendshipLevel) - weakestProxy;
               if (proxyGain > 0) benchedProxyResults.push({ entry, targetIndex: ti, kind: "second-charged", move: m, proxyGain });
             }
           }
@@ -670,7 +705,7 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
           if (isTmTargetableMove(currentFastMove)) {
             for (const m of entry.species.fastMoves) {
               if (m.id === currentFastMove.id || !isTmTargetableMove(m)) continue;
-              const proxyGain = benchedProxyDamagePerSecond(entry, m, currentChargedMove, bossCtx, megaLevel) - weakestProxy;
+              const proxyGain = benchedProxyDamagePerSecond(entry, m, currentChargedMove, bossCtx, megaLevel, rest.friendshipLevel) - weakestProxy;
               if (proxyGain > 0) benchedProxyResults.push({ entry, targetIndex: ti, kind: "elite-fast", move: m, proxyGain });
             }
           }
@@ -678,7 +713,7 @@ export function runRosterMoveChangeCandidates(inputs: RosterMoveChangeInputs): R
           if (isTmTargetableMove(currentChargedMove)) {
             for (const m of entry.species.chargedMoves) {
               if (m.id === currentChargedMove.id || !isTmTargetableMove(m)) continue;
-              const proxyGain = benchedProxyDamagePerSecond(entry, currentFastMove, m, bossCtx, megaLevel) - weakestProxy;
+              const proxyGain = benchedProxyDamagePerSecond(entry, currentFastMove, m, bossCtx, megaLevel, rest.friendshipLevel) - weakestProxy;
               if (proxyGain > 0) benchedProxyResults.push({ entry, targetIndex: ti, kind: "elite-charged", move: m, proxyGain });
             }
           }

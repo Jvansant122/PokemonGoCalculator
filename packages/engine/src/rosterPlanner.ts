@@ -1,5 +1,6 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import { bossEffectiveHp, bossEffectiveStats, ownBoostMultiplier, resolveMove, runSustainedComparison } from "./comparison.js";
+import type { FriendshipLevel } from "./damage.js";
 import type { MegaLevel } from "./megaLevel.js";
 import {
   RARE_CANDY_TO_CANDY_RATIO,
@@ -422,6 +423,26 @@ export interface RosterPlannerInputs {
   bossChargedMoveCadence?: TeamRaidInputs["bossChargedMoveCadence"];
   /** Applied per-move to both sides against every boss — see weather.ts. Defaults to "none". */
   weather?: WeatherCondition;
+  /**
+   * See teamRaid.ts's TeamRaidInputs.friendshipLevel for the full contract —
+   * the real Gym/Raid friendship attack bonus, single-SIDED (every eligible
+   * pool entry's own outgoing fast/charged damage only, never a boss's) and
+   * ROSTER-WIDE here, same "one shared assumption across the whole pool and
+   * every boss" convention as `dodge`/`weather`/`megaLevel` above — a real
+   * import runs 100-200 entries, so a per-entry friendship picker would be
+   * as unusable as a per-entry Mega Level one (see `megaLevel`'s own doc
+   * comment). Threaded into every screen (screenScoreFor's
+   * runSustainedComparison call), every Stage-3 proxy
+   * (entryBossMetricsInputs' outgoing modifiers, feeding powerUpLevelMetrics/
+   * usefulPowerUpLevelsAbove), and every Stage-4 simulation
+   * (runFullRosterCached's runTeamRaid call) identically, so the ranked
+   * table/budget plan and the underlying simulation never disagree about
+   * this field the way `powerUp.ts`'s ladder once silently did (see
+   * fix_powerup_ladder_friendship_omission.md). Defaults to "none", so every
+   * existing caller/share-link that predates this field is byte-for-byte
+   * unchanged.
+   */
+  friendshipLevel?: FriendshipLevel;
   /** Real-world raid countdown, shared across every boss's team-raid simulation. */
   raidTimerSeconds: number;
   /** See teamRaid.ts's TeamRaidInputs.swapCostSeconds. Also the denominator term in Stage 1's screen score. Defaults to DEFAULT_SWAP_COST_SECONDS (1.0), same as runTeamRaid itself — the two stay consistent (see screenScoreFor's `?? DEFAULT_SWAP_COST_SECONDS` fallback). */
@@ -811,6 +832,8 @@ interface SharedAssumptions {
   bossChargedMoveMeanIntervalSeconds: number;
   bossChargedMoveCadence?: TeamRaidInputs["bossChargedMoveCadence"];
   weather: WeatherCondition;
+  /** See RosterPlannerInputs.friendshipLevel — the same roster-wide value, threaded through screenScoreFor/entryBossMetricsInputs/runFullRosterCached. */
+  friendshipLevel?: FriendshipLevel;
   raidTimerSeconds: number;
   swapCostSeconds?: number;
   reviveCostSeconds?: number;
@@ -856,6 +879,7 @@ function screenScoreFor(
     bossChargedMoveMeanIntervalSeconds: shared.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: shared.bossChargedMoveCadence,
     weather: shared.weather,
+    friendshipLevel: shared.friendshipLevel,
     iterations: screenIterations,
   });
 
@@ -936,12 +960,22 @@ function estimateOrMeasureScore(
   return scaled ?? measureFallback();
 }
 
-/** Everything powerUpLevelMetrics/usefulPowerUpLevelsAbove need for one (entry, boss) pair, built once and cached (see getMetricsInputs) since only `level` varies call to call. `megaLevel` is the roster-wide RosterPlannerInputs.megaLevel setting — forwarded onto PowerUpLevelMetricsParams.megaLevel unchanged, so the Stage-3 proxy (proxyDps, built from this function's output) stays on the same effective stats/move power as Stage 4's actual runTeamRaid simulation. */
-function entryBossMetricsInputs(
+/**
+ * Everything powerUpLevelMetrics/usefulPowerUpLevelsAbove need for one (entry, boss) pair, built once and cached (see getMetricsInputs) since only `level` varies call to call. `megaLevel` is the roster-wide RosterPlannerInputs.megaLevel setting — forwarded onto PowerUpLevelMetricsParams.megaLevel unchanged, so the Stage-3 proxy (proxyDps, built from this function's output) stays on the same effective stats/move power as Stage 4's actual runTeamRaid simulation. `friendshipLevel` is the roster-wide RosterPlannerInputs.friendshipLevel setting, folded into the OUTGOING modifiers only (see below) — same attacker-only contract as TeamRaidInputs.friendshipLevel, and the exact omission `fix_powerup_ladder_friendship_omission.md` closed for powerUp.ts's own dominated-level search; entryBossMetricsInputs' output feeds that identical usefulPowerUpLevelsAbove/powerUpLevelMetrics machinery here.
+ *
+ * Exported (2026-09-12) purely for direct test access — this module has no
+ * OTHER caller for it (unlike toSlotInput/resolveCandyFamilyId, which
+ * rosterMoveChange.ts genuinely reuses); it lets rosterPlanner.test.ts feed
+ * this function's REAL output into usefulPowerUpLevelsAbove/powerUpLevelMetrics
+ * directly, proving the friendshipLevel wiring against the actual production
+ * code path rather than a hand-reconstructed stand-in.
+ */
+export function entryBossMetricsInputs(
   entry: RosterEntry,
   target: WeightedRaidTarget,
   weather: WeatherCondition,
   megaLevel: MegaLevel | undefined,
+  friendshipLevel: FriendshipLevel | undefined,
 ): Omit<PowerUpLevelMetricsParams, "level"> {
   const fastMove = resolveMove(entry.species.fastMoves, entry.fastMoveId);
   const chargedMove = resolveMove(entry.species.chargedMoves, entry.chargedMoveId);
@@ -964,12 +998,14 @@ function entryBossMetricsInputs(
       typeEffectiveness: typeEffectiveness(fastMove.type, target.species.types),
       megaBoostMultiplier: ownBoostMultiplier(entry.species.boost, fastMove.type),
       weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+      friendshipLevel,
     },
     outgoingChargedMoveDamageModifiers: {
       stab: entry.species.types.includes(chargedMove.type),
       typeEffectiveness: typeEffectiveness(chargedMove.type, target.species.types),
       megaBoostMultiplier: ownBoostMultiplier(entry.species.boost, chargedMove.type),
       weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+      friendshipLevel,
     },
     bossFastMove,
     bossChargedMove,
@@ -1234,6 +1270,7 @@ function runFullRosterCached(
       bossChargedMoveMeanIntervalSeconds: shared.bossChargedMoveMeanIntervalSeconds,
       bossChargedMoveCadence: shared.bossChargedMoveCadence,
       weather: shared.weather,
+      friendshipLevel: shared.friendshipLevel,
       raidTimerSeconds: shared.raidTimerSeconds,
       swapCostSeconds: shared.swapCostSeconds,
       reviveCostSeconds: shared.reviveCostSeconds,
@@ -1306,6 +1343,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     bossChargedMoveMeanIntervalSeconds: rest.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: rest.bossChargedMoveCadence,
     weather,
+    friendshipLevel: rest.friendshipLevel,
     raidTimerSeconds: rest.raidTimerSeconds,
     swapCostSeconds: rest.swapCostSeconds,
     reviveCostSeconds: rest.reviveCostSeconds,
@@ -1323,7 +1361,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     const key = `${entry.entryId}|${targetIndex}`;
     let v = metricsInputsCache.get(key);
     if (!v) {
-      v = entryBossMetricsInputs(entry, target, weather, shared.megaLevel);
+      v = entryBossMetricsInputs(entry, target, weather, shared.megaLevel, shared.friendshipLevel);
       metricsInputsCache.set(key, v);
     }
     return v;
@@ -2233,6 +2271,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     bossChargedMoveMeanIntervalSeconds: rest.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: rest.bossChargedMoveCadence,
     weather,
+    friendshipLevel: rest.friendshipLevel,
     raidTimerSeconds: rest.raidTimerSeconds,
     swapCostSeconds: rest.swapCostSeconds,
     reviveCostSeconds: rest.reviveCostSeconds,
@@ -2256,7 +2295,7 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     const key = `${entry.entryId}|${targetIndex}`;
     let v = metricsInputsCache.get(key);
     if (!v) {
-      v = entryBossMetricsInputs(entry, target, weather, shared.megaLevel);
+      v = entryBossMetricsInputs(entry, target, weather, shared.megaLevel, shared.friendshipLevel);
       metricsInputsCache.set(key, v);
     }
     return v;

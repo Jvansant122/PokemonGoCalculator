@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { runSustainedComparison } from "../src/comparison.js";
 import type { MegaLevel } from "../src/megaLevel.js";
-import { noiseFloorFor, powerUpCostTableFromGameMaster, type PowerUpCostTable } from "../src/powerUp.js";
-import { runRosterPlanner, type RosterEntry, type RosterPlannerInputs } from "../src/rosterPlanner.js";
+import { noiseFloorFor, powerUpCostTableFromGameMaster, powerUpLevelMetrics, usefulPowerUpLevelsAbove, type PowerUpCostTable } from "../src/powerUp.js";
+import { entryBossMetricsInputs, runRosterPlanner, type RosterEntry, type RosterPlannerInputs } from "../src/rosterPlanner.js";
 import { runTeamRaid, type TeamRaidInputs } from "../src/teamRaid.js";
 import type { IVSpread } from "../src/types.js";
 import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_SETTINGS } from "./fixtures/powerUpCosts.js";
@@ -634,5 +634,102 @@ describe("RosterPlannerInputs.megaLevel — roster-wide (2026-09-09 follow-up: G
     const explicitBase = runRosterPlanner({ ...baseInputs({ megaLevel: "base" as MegaLevel }), pool, targets: [{ species: BOSS_ONE }] });
     expect(explicitUndefined).toEqual(omitted);
     expect(explicitBase).toEqual(omitted);
+  });
+});
+
+// --- RosterPlannerInputs.friendshipLevel (2026-09-12) -----------------------
+//
+// Closes the gap flagged in fix_powerup_ladder_friendship_omission.md:
+// rosterPlanner.ts had NO friendshipLevel field at all (unlike powerUp.ts,
+// which had the field but two call sites silently dropped it). Mirrors
+// megaLevel's own three-test shape immediately above, plus the two extra
+// properties that specifically bit powerUp.ts last time: the attacker-only
+// invariant (never an incoming/boss-side modifier) and the dominated-level
+// SEARCH actually receiving the field (not just the final simulation).
+describe("RosterPlannerInputs.friendshipLevel — roster-wide (2026-09-12)", () => {
+  it("changes the baseline team's simulated team DPS", () => {
+    const pool = strongTeam(20);
+    const withoutFriendship = runRosterPlanner({ ...baseInputs(), pool, targets: [{ species: BOSS_ONE }] });
+    const withForever = runRosterPlanner({ ...baseInputs({ friendshipLevel: "forever" }), pool, targets: [{ species: BOSS_ONE }] });
+    expect(withForever.baselinePerBoss[0]!.summary.teamDps).toBeGreaterThan(withoutFriendship.baselinePerBoss[0]!.summary.teamDps);
+  });
+
+  it("omitting friendshipLevel is byte-identical to explicit undefined/'none' (defaults constraint)", () => {
+    const pool = strongTeam(20);
+    const omitted = runRosterPlanner({ ...baseInputs(), pool, targets: [{ species: BOSS_ONE }] });
+    const explicitUndefined = runRosterPlanner({ ...baseInputs({ friendshipLevel: undefined }), pool, targets: [{ species: BOSS_ONE }] });
+    const explicitNone = runRosterPlanner({ ...baseInputs({ friendshipLevel: "none" }), pool, targets: [{ species: BOSS_ONE }] });
+    expect(explicitUndefined).toEqual(omitted);
+    expect(explicitNone).toEqual(omitted);
+  });
+
+  // entryBossMetricsInputs is this module's own equivalent of powerUp.ts's
+  // hand-built modifier objects — the exact shape that silently dropped
+  // friendshipLevel there. Exercises the REAL production function (exported
+  // 2026-09-12 for this purpose), not a hand-reconstructed stand-in.
+  it("entryBossMetricsInputs folds friendshipLevel into OUTGOING damage only — incoming damage and survival counts never move", () => {
+    const strongEntry: RosterEntry = {
+      entryId: "e1",
+      species: STRONG_SPECIES[0]!,
+      fastMoveId: null,
+      chargedMoveId: null,
+      level: 20,
+      ivs: IVS,
+      costModifiers: NO_MODIFIERS,
+      canMega: false,
+      ivsAreApproximate: false,
+      levelIsApproximate: false,
+      movesetIsDefaulted: false,
+    };
+    const target = { species: BOSS_ONE };
+
+    const noneInputs = entryBossMetricsInputs(strongEntry, target, "none", undefined, "none");
+    const foreverInputs = entryBossMetricsInputs(strongEntry, target, "none", undefined, "forever");
+    const none = powerUpLevelMetrics({ ...noneInputs, level: 20 });
+    const forever = powerUpLevelMetrics({ ...foreverInputs, level: 20 });
+
+    expect(forever.outgoingFastDamage).toBeGreaterThan(none.outgoingFastDamage);
+    expect(forever.outgoingChargedDamage).toBeGreaterThan(none.outgoingChargedDamage);
+    expect(forever.incomingFastDamage).toBe(none.incomingFastDamage);
+    expect(forever.incomingChargedDamage).toBe(none.incomingChargedDamage);
+    expect(forever.survivalFastHits).toBe(none.survivalFastHits);
+    expect(forever.survivalChargedHits).toBe(none.survivalChargedHits);
+  });
+
+  // The exact disagreement class fix_powerup_ladder_friendship_omission.md
+  // closed for powerUp.ts's own dominated-level search, reproduced here for
+  // rosterPlanner.ts's usefulPowerUpLevelsAbove call (feeding both
+  // runRosterPlanner's Stage 3 candidate generation and planRosterBudget's
+  // own search — see rosterBudget.test.ts for the end-to-end proof on the
+  // budget planner). Fixture verified via a throwaway script against the
+  // real calculateDamage/effectiveStatsAtLevel: STRONG_SPECIES[0] (baseAttack
+  // 220/baseDefense 120/baseStamina 180) vs BOSS_ONE (baseAttack 200/
+  // baseDefense 150, statsArePrecomputed) — going from level 25.5 to 26 is a
+  // genuine no-op (every one of outgoing fast/charged, incoming fast/charged,
+  // and both survival-hit counts is IDENTICAL) at friendshipLevel "none", but
+  // a real breakpoint (outgoingChargedDamage 46 -> 47) at "good".
+  it("usefulPowerUpLevelsAbove sees a friendship-only breakpoint that's invisible at 'none'", () => {
+    const strongEntry: RosterEntry = {
+      entryId: "e1",
+      species: STRONG_SPECIES[0]!,
+      fastMoveId: null,
+      chargedMoveId: null,
+      level: 25.5,
+      ivs: IVS,
+      costModifiers: NO_MODIFIERS,
+      canMega: false,
+      ivsAreApproximate: false,
+      levelIsApproximate: false,
+      movesetIsDefaulted: false,
+    };
+    const target = { species: BOSS_ONE };
+
+    const noneInputs = entryBossMetricsInputs(strongEntry, target, "none", undefined, "none");
+    const goodInputs = entryBossMetricsInputs(strongEntry, target, "none", undefined, "good");
+    const noneLevels = usefulPowerUpLevelsAbove({ ...noneInputs, table: TABLE, fromLevel: 25.5, maxLevel: 26 });
+    const goodLevels = usefulPowerUpLevelsAbove({ ...goodInputs, table: TABLE, fromLevel: 25.5, maxLevel: 26 });
+
+    expect(noneLevels).toEqual([]);
+    expect(goodLevels).toEqual([26]);
   });
 });

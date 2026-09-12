@@ -625,3 +625,78 @@ describe("RosterBudgetInputs.megaLevel — roster-wide (2026-09-09 follow-up: Ga
     expect(explicitBase).toEqual(omitted);
   });
 });
+
+// --- RosterBudgetInputs.friendshipLevel (2026-09-12) ------------------------
+//
+// See rosterPlanner.test.ts's own "RosterPlannerInputs.friendshipLevel"
+// describe block for the attacker-only-invariant test (entryBossMetricsInputs
+// is shared by both entry points, so that test covers this module too) —
+// this block covers what's specific to planRosterBudget: the baseline moves,
+// defaults are byte-identical, and — the property that broke last time in
+// powerUp.ts's planPowerUpBudget — the dominated-level SEARCH itself
+// (usefulLevelsForEntry, feeding the round loop) actually receives
+// friendshipLevel, not just the final simulation.
+describe("RosterBudgetInputs.friendshipLevel — roster-wide (2026-09-12)", () => {
+  it("changes the do-nothing baseline's simulated team DPS", () => {
+    const pool = strongTeam(20);
+    const withoutFriendship = planRosterBudget({ ...baseInputs({ stardustOnHand: 0 }), pool, targets: [{ species: BOSS_ONE }] });
+    const withForever = planRosterBudget({
+      ...baseInputs({ stardustOnHand: 0, friendshipLevel: "forever" }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+    expect(withForever.baselinePerBoss[0]!.summary.teamDps).toBeGreaterThan(withoutFriendship.baselinePerBoss[0]!.summary.teamDps);
+  });
+
+  it("omitting friendshipLevel is byte-identical to explicit undefined/'none' (defaults constraint)", () => {
+    const pool = strongTeam(20);
+    const omitted = planRosterBudget({ ...baseInputs({ stardustOnHand: 0 }), pool, targets: [{ species: BOSS_ONE }] });
+    const explicitUndefined = planRosterBudget({
+      ...baseInputs({ stardustOnHand: 0, friendshipLevel: undefined }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+    const explicitNone = planRosterBudget({
+      ...baseInputs({ stardustOnHand: 0, friendshipLevel: "none" }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    });
+    expect(explicitUndefined).toEqual(omitted);
+    expect(explicitNone).toEqual(omitted);
+  });
+
+  // Same fixture as rosterPlanner.test.ts's "usefulPowerUpLevelsAbove sees a
+  // friendship-only breakpoint" test (STRONG_SPECIES[0] 25.5 -> 26 against
+  // BOSS_ONE, verified via a throwaway script to be a genuine no-op at
+  // friendshipLevel "none" but a real charged-move breakpoint at "good"), run
+  // here through the REAL planRosterBudget end to end with a single-entry
+  // pool and maxLevel: 26 so this is the ONLY candidate the search could ever
+  // consider. At "none" the search never sees ANY useful level at all and
+  // stops immediately with "max-level-reached" (PowerUpBudgetStopReason's own
+  // doc comment: "No fielded slot has ANY useful level left below maxLevel").
+  // At "good" the search DOES see the level-26 candidate, evaluates it for
+  // real, and stops with "no-significant-candidate" instead — a single
+  // half-level jump on a solo entry is real but too small to clear the noise
+  // floor, so this fixture deliberately proves the search REACHED the
+  // candidate rather than proving it got committed (rosterBudget.test.ts's
+  // "a multi-level jump is committed..." block above already covers
+  // commitment on a different fixture). If a future edit reintroduces the
+  // omission, this test starts reading "max-level-reached" at "good" too.
+  it("the dominated-level search itself sees a friendship-only breakpoint — stopReason differs between 'none' and 'good' even with no step committed", () => {
+    const pool = [entry("solo", STRONG_SPECIES[0]!, 25.5)];
+    const candyByFamilyId = generousCandyFor(pool);
+    const inputs = {
+      ...baseInputs({ candyByFamilyId, rareCandyOnHand: 10_000, rareCandyXlOnHand: 10_000, maxLevel: 26, iterations: 20 }),
+      pool,
+      targets: [{ species: BOSS_ONE }],
+    };
+
+    const none = planRosterBudget({ ...inputs, friendshipLevel: "none" });
+    const good = planRosterBudget({ ...inputs, friendshipLevel: "good" });
+
+    expect(none.stopReason).toBe("max-level-reached");
+    expect(none.steps.length).toBe(0);
+    expect(good.stopReason).toBe("no-significant-candidate");
+    expect(good.steps.length).toBe(0);
+  });
+});

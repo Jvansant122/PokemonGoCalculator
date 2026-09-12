@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { powerUpCostTableFromGameMaster, type PowerUpCostTable } from "../src/powerUp.js";
-import { runRosterMoveChangeCandidates, type RosterMoveChangeInputs } from "../src/rosterMoveChange.js";
+import { benchedProxyDamagePerSecond, runRosterMoveChangeCandidates, type RosterMoveChangeInputs } from "../src/rosterMoveChange.js";
 import { runRosterPlanner, type RosterEntry } from "../src/rosterPlanner.js";
 import type { ChargedMove, IVSpread } from "../src/types.js";
 import { NO_MODIFIERS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT, RAW_POKEMON_UPGRADE_SETTINGS } from "./fixtures/powerUpCosts.js";
@@ -332,5 +332,75 @@ describe("runRosterMoveChangeCandidates — frustrationNotices", () => {
     const pool = fieldedTeam();
     const result = runRosterMoveChangeCandidates(baseInputs(pool));
     expect(result.frustrationNotices).toEqual([]);
+  });
+});
+
+// --- RosterMoveChangeInputs.friendshipLevel (2026-09-12) --------------------
+//
+// This module had NO friendshipLevel field at all before this pass (flagged
+// in fix_powerup_ladder_friendship_omission.md as a larger, separate gap from
+// powerUp.ts's two silently-dropped call sites). Closed via `...shared` on
+// BOTH moveChangeBase (FIELDED path — tmMove.ts's generators already forward
+// it structurally, since MoveChangeEvaluationInputs extends TeamRaidInputs)
+// AND teamRaidBase (BENCHED path's own real paired runTeamRaid calls), plus
+// the cheap benchedProxyDamagePerSecond screen.
+describe("RosterMoveChangeInputs.friendshipLevel", () => {
+  it("moves a FIELDED second-charged-move candidate's deltaTeamDps", () => {
+    const pool = fieldedTeam();
+    const none = runRosterMoveChangeCandidates(baseInputs(pool, { friendshipLevel: "none" }));
+    const forever = runRosterMoveChangeCandidates(baseInputs(pool, { friendshipLevel: "forever" }));
+
+    const noneCandidate = none.secondChargedMove.find(
+      (c) => c.fielded && c.entryId === "team-0" && c.newChargedMoveId === CHARGED_MOVE_STRONG.id,
+    )!;
+    const foreverCandidate = forever.secondChargedMove.find(
+      (c) => c.fielded && c.entryId === "team-0" && c.newChargedMoveId === CHARGED_MOVE_STRONG.id,
+    )!;
+    expect(noneCandidate).toBeDefined();
+    expect(foreverCandidate).toBeDefined();
+    expect(foreverCandidate.deltaTeamDps).not.toBe(noneCandidate.deltaTeamDps);
+  });
+
+  it("moves a BENCHED candidate's deltaTeamDps (real paired runTeamRaid evaluation, not just the cheap screen)", () => {
+    const pool = [...fieldedTeam(50), entry("bench", MULTI_MOVE_BENCH_SPECIES, 50, { fastMoveId: FAST_MOVE_WEAK.id, chargedMoveId: CHARGED_MOVE_WEAK.id })];
+    const none = runRosterMoveChangeCandidates(baseInputs(pool, { friendshipLevel: "none" }));
+    const forever = runRosterMoveChangeCandidates(baseInputs(pool, { friendshipLevel: "forever" }));
+
+    // Same candidate identity (kind + newChargedMoveId) exists in BOTH runs —
+    // see "a benched entry provably appears with fielded: false" above, which
+    // already establishes this exact candidate (bench, second-charged-move,
+    // -> CHARGED_MOVE_STRONG) is real at the default (no friendship) setting.
+    const noneRow = none.secondChargedMove.find((c) => !c.fielded && c.entryId === "bench" && c.newChargedMoveId === CHARGED_MOVE_STRONG.id)!;
+    const foreverRow = forever.secondChargedMove.find((c) => !c.fielded && c.entryId === "bench" && c.newChargedMoveId === CHARGED_MOVE_STRONG.id)!;
+    expect(noneRow).toBeDefined();
+    expect(foreverRow).toBeDefined();
+    // Not necessarily an INCREASE — friendship boosts the DISPLACED fielded
+    // slot's own outgoing damage too, so the delta (candidate - baseline)
+    // can move either way depending on the two slots' relative moveset gains.
+    // The wiring claim under test is only that friendshipLevel reaches this
+    // real paired evaluation at all.
+    expect(foreverRow.deltaTeamDps).not.toBe(noneRow.deltaTeamDps);
+  });
+
+  it("benchedProxyDamagePerSecond (the cheap pre-filter) increases with friendshipLevel", () => {
+    const bossCtx = {
+      bossSpecies: BOSS_ONE,
+      bossAttackStat: BOSS_ONE.baseAttack,
+      bossDefenseStat: BOSS_ONE.baseDefense,
+      bossFastMove: BOSS_ONE.fastMoves[0]!,
+      bossChargedMove: BOSS_ONE.chargedMoves[0],
+      weather: "none" as const,
+    };
+    const bench = entry("bench-proxy", MULTI_MOVE_BENCH_SPECIES, 30);
+    const none = benchedProxyDamagePerSecond(bench, FAST_MOVE_WEAK, CHARGED_MOVE_STRONG, bossCtx, undefined, "none");
+    const forever = benchedProxyDamagePerSecond(bench, FAST_MOVE_WEAK, CHARGED_MOVE_STRONG, bossCtx, undefined, "forever");
+    expect(forever).toBeGreaterThan(none);
+  });
+
+  it("omitting friendshipLevel is byte-identical to explicit 'none' (defaults constraint)", () => {
+    const pool = fieldedTeam();
+    const omitted = runRosterMoveChangeCandidates(baseInputs(pool));
+    const explicitNone = runRosterMoveChangeCandidates(baseInputs(pool, { friendshipLevel: "none" }));
+    expect(explicitNone).toEqual(omitted);
   });
 });
