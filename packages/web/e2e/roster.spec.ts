@@ -116,9 +116,10 @@ test("roster: a save code round-trips a roster exactly, and a corrupted code fai
   expect(code.startsWith("pogo-roster-v1:")).toBe(true);
   await expect(page.getByText(/% smaller than the raw JSON/)).toBeVisible();
 
-  // Clear the roster (the pre-existing CSV-import panel's own control).
-  await page.locator("summary", { hasText: "Import a whole roster" }).click();
-  await page.getByRole("button", { name: "Clear stored roster" }).click();
+  // Clear the roster via the Roster summary panel's two-step confirm.
+  await page.getByRole("button", { name: "Clear roster" }).click();
+  await expect(page.getByText(/Clear all 1 entry\?/)).toBeVisible();
+  await page.getByRole("button", { name: "Confirm clear" }).click();
   await expect(page.getByText("0 Pokémon in your roster", { exact: false })).toBeVisible();
 
   // Paste the code back, replacing the (now-empty) roster.
@@ -135,6 +136,75 @@ test("roster: a save code round-trips a roster exactly, and a corrupted code fai
   await page.getByRole("button", { name: "Load", exact: true }).click();
   await expect(page.getByText(/truncated or edited/)).toBeVisible();
   await expect(page.getByText("1 Pokémon in your roster", { exact: false })).toBeVisible();
+});
+
+/**
+ * "Assumptions" collapses by default on the Power-Up Optimizer — see
+ * multi-raid.spec.ts's identical helper for why `.evaluate` (not `.click()`
+ * on the summary) is used here.
+ */
+async function expandAssumptions(page: Page) {
+  const details = page.getByRole("heading", { name: "Assumptions", exact: true }).locator("xpath=ancestor::details[1]");
+  await details.evaluate((el) => {
+    (el as HTMLDetailsElement).open = true;
+  });
+}
+
+test("roster: 'Clear roster' is disabled when empty, gates behind a two-step confirm, is cancelable, and its blast radius empties the Power-Up Optimizer multi-raid mode and Team Raid Lineup Builder too", async ({
+  page,
+}) => {
+  const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+  await page.goto("/?view=roster");
+  await expect(page.getByText("0 Pokémon in your roster", { exact: false })).toBeVisible();
+
+  // Requirement 1: disabled/hidden when the roster is already empty, the same
+  // gating handleGenerateCode's button already uses.
+  const clearButton = page.getByRole("button", { name: "Clear roster" });
+  await expect(clearButton).toBeDisabled();
+
+  // Import a real multi-entry roster (same fixture multi-raid.spec.ts uses).
+  await page.locator("summary", { hasText: "Import a whole roster" }).click();
+  await page.locator("#roster-import-paste").fill(sampleCsv);
+  await page.getByRole("button", { name: "Import pasted CSV" }).click();
+  await expect(page.locator("summary", { hasText: /Import a whole roster.*[1-9]\d* Pokémon stored/ })).toBeVisible();
+
+  const countText = await page.getByText(/Pokémon in your roster/).innerText();
+  const importedCount = Number(countText.match(/^(\d+)/)?.[1]);
+  expect(importedCount).toBeGreaterThan(1);
+
+  await expect(clearButton).toBeEnabled();
+
+  // Cancel must leave the roster fully intact — no partial clear.
+  await clearButton.click();
+  await expect(page.getByText(new RegExp(`Clear all ${importedCount} entries\\?`))).toBeVisible();
+  await expect(page.getByText(/copy your save code first/)).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByText(`${importedCount} Pokémon in your roster`, { exact: false })).toBeVisible();
+
+  // Now actually confirm.
+  await clearButton.click();
+  await page.getByRole("button", { name: "Confirm clear" }).click();
+  await expect(page.getByText(new RegExp(`Cleared your roster — removed ${importedCount} entries`))).toBeVisible();
+  await expect(page.getByText("0 Pokémon in your roster", { exact: false })).toBeVisible();
+  await expect(clearButton).toBeDisabled();
+
+  // Blast radius: the Power-Up Optimizer's multi-raid mode reads the SAME
+  // pool fresh on mount and must show its own "no roster" empty state, never
+  // stale data or an error.
+  await page.goto("/?view=power-up-optimizer");
+  await expandAssumptions(page);
+  await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
+  await expect(page.getByText(/No roster imported in this browser yet/)).toBeVisible();
+
+  // ...and the Team Raid Simulator's Lineup Builder.
+  await page.goto("/?view=team-raid");
+  await page.getByRole("button", { name: "Build best lineup from my imported roster" }).click();
+  await expect(page.getByText(/No imported roster/)).toBeVisible();
+  await expect(page.getByText("Best lineup (filled below)")).not.toBeVisible();
+
+  expect(consoleErrors, `console errors: ${consoleErrors.join("; ")}`).toEqual([]);
+  expect(pageErrors, `page errors: ${pageErrors.join("; ")}`).toEqual([]);
 });
 
 test("roster: a share link restores the display setting only, never the roster itself", async ({ page, browser }) => {

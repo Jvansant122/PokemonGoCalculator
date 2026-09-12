@@ -4,7 +4,6 @@ import { matchPokeGenieRows, type RosterImportResult, type UnmatchedPokeGenieRow
 import {
   dehydrateRosterEntry,
   deserializeRosterPoolFromJson,
-  emptyRosterPool,
   hydrateRosterPool,
   RosterPoolFormatError,
   saveRosterPool,
@@ -134,15 +133,6 @@ export function RosterImportPanel({ pool, onPoolChange }: Props) {
     downloadTextFile(`pogo-roster-pool-${new Date().toISOString().slice(0, 10)}.json`, serializeRosterPoolToJson(pool), "application/json");
   }
 
-  function handleClear() {
-    const next = emptyRosterPool();
-    saveRosterPool(next);
-    onPoolChange(next);
-    setSummary(null);
-    setErrorMessage(null);
-    setPersistWarning(null);
-  }
-
   return (
     <details>
       <summary>Import a whole roster (Poke Genie CSV) — {hydratedEntries.length} Pokémon stored in this browser</summary>
@@ -151,7 +141,9 @@ export function RosterImportPanel({ pool, onPoolChange }: Props) {
         Feeds the Power-Up Optimizer's multi-raid mode and Team Raid Simulator's Lineup Builder. This roster is
         stored ONLY in this browser's local storage, never in a share link (see the save code section below for the
         deliberate, user-driven way to move it to another device). See the &ldquo;Your roster&rdquo; table below for
-        every imported (and hand-added) entry, with edit/delete controls — not duplicated here.
+        every imported (and hand-added) entry, with edit/delete controls — not duplicated here. To wipe the whole
+        stored roster (imported and hand-added entries alike), use the &ldquo;Clear roster&rdquo; control in the
+        Roster summary panel above.
       </p>
 
       {errorMessage && <p className="error-text">{errorMessage}</p>}
@@ -209,9 +201,6 @@ export function RosterImportPanel({ pool, onPoolChange }: Props) {
       <div className="share-row" style={{ marginTop: 8 }}>
         <button type="button" onClick={handleExportJson} disabled={hydratedEntries.length === 0}>
           Export roster as JSON
-        </button>
-        <button type="button" onClick={handleClear} disabled={hydratedEntries.length === 0}>
-          Clear stored roster
         </button>
       </div>
 

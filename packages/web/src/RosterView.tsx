@@ -22,6 +22,7 @@ import {
 } from "./rosterScenario.js";
 import {
   dehydrateRosterEntry,
+  emptyRosterPool,
   hydrateRosterPool,
   loadRosterPool,
   mergeRosterPools,
@@ -29,6 +30,7 @@ import {
   saveRosterPool,
   type RosterPool,
 } from "./rosterPool.js";
+import { canClearRoster, rosterClearConfirmMessage } from "./rosterClearConfirm.js";
 import { decodeRosterSaveCode, encodeRosterSaveCode } from "./rosterSaveCode.js";
 import { getBaseUrl } from "./urlUtils.js";
 import { runRosterScenario } from "./run/runRoster.js";
@@ -84,6 +86,7 @@ export function RosterView() {
   const [draft, setDraftRaw] = useState<RosterEntryDraft>(emptyRosterEntryDraft);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const [savedCode, setSavedCode] = useState<string | null>(null);
   const [codeStats, setCodeStats] = useState<{ originalBytes: number; codeChars: number } | null>(null);
@@ -145,6 +148,23 @@ export function RosterView() {
     persistAndSet({ ...pool, entries: pool.entries.filter((e) => e.entryId !== entryId) });
     if (editingEntryId === entryId) resetForm();
     setStatusMessage(`Removed ${name} from your roster.`);
+  }
+
+  /**
+   * Wipes the whole pool — hand-entered and CSV-imported entries alike, it's
+   * one pool (rosterPool.ts) — via the same `persistAndSet` path every other
+   * mutation uses, never a second hand-rolled localStorage write. Only
+   * reachable after the two-step confirm below actually confirms; the count
+   * is captured from `hydratedEntries` BEFORE clearing, for the status
+   * message. Any in-progress edit is reset the same way `handleDelete`
+   * already resets it for a single deleted row — every row is that row here.
+   */
+  function handleClearRoster() {
+    const clearedCount = hydratedEntries.length;
+    persistAndSet(emptyRosterPool());
+    resetForm();
+    setStatusMessage(`Cleared your roster — removed ${clearedCount} entr${clearedCount === 1 ? "y" : "ies"}.`);
+    setConfirmingClear(false);
   }
 
   async function handleGenerateCode() {
@@ -226,6 +246,26 @@ export function RosterView() {
             <option value="species">Species name</option>
             <option value="level">Level (highest first)</option>
           </select>
+        </div>
+
+        <div className="field" style={{ marginTop: 16 }}>
+          {!confirmingClear ? (
+            <button type="button" onClick={() => setConfirmingClear(true)} disabled={!canClearRoster(hydratedEntries.length)}>
+              Clear roster
+            </button>
+          ) : (
+            <div className="note-block">
+              <p className="error-text">{rosterClearConfirmMessage(hydratedEntries.length)}</p>
+              <div className="share-row">
+                <button type="button" onClick={handleClearRoster}>
+                  Confirm clear
+                </button>
+                <button type="button" onClick={() => setConfirmingClear(false)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
