@@ -41,19 +41,9 @@ interface Props {
   idPrefix: string;
   value: FriendshipLevel;
   onChange: (next: FriendshipLevel) => void;
-  /**
-   * Disables the control without hiding it — used by the Power-Up
-   * Optimizer's multi-raid mode, whose engine module (rosterPlanner.ts) has
-   * no friendshipLevel field at all (see runPowerUpOptimizer.ts's own doc
-   * comment). Keeping the control visible-but-disabled, rather than hiding
-   * it outright, matches this tab's existing boss-cadence-frequency
-   * precedent (a disabled NumberField plus an explanatory hint) instead of a
-   * silent disappearance a user could mistake for "this got removed."
-   */
-  disabled?: boolean;
 }
 
-export function FriendshipSelect({ idPrefix, value, onChange, disabled = false }: Props) {
+export function FriendshipSelect({ idPrefix, value, onChange }: Props) {
   return (
     <div className="field">
       <label htmlFor={`${idPrefix}-friendship`}>Friendship level (with a co-participating friend)</label>
@@ -62,7 +52,6 @@ export function FriendshipSelect({ idPrefix, value, onChange, disabled = false }
         value={value}
         onChange={(e) => onChange(e.target.value as FriendshipLevel)}
         title={FRIENDSHIP_HINT}
-        disabled={disabled}
       >
         {FRIENDSHIP_ORDER.map((f) => (
           <option key={f} value={f}>

@@ -105,19 +105,17 @@ export interface PowerUpOptimizerScenario {
   holdChargedMoveUntilSafe: boolean;
   weather: WeatherCondition;
   /**
-   * Single-raid mode only — `rosterPlanner.ts` (the multi-raid engine
-   * module) has NO friendshipLevel field at all (confirmed by grep, zero
-   * matches), so this is inert there; the panel disables (not hides) its own
-   * control in multi-raid mode with an explicit note, and this field is
-   * carried through the multi-raid path as an unread placeholder rather than
-   * gating which fields exist on the scenario. See
-   * run/runPowerUpOptimizer.ts's own doc comment for where this actually
-   * reaches the engine (both `optimizePowerUps`' ranked candidates AND its
-   * `powerUpDamageLadder` per-slot headline, and `planPowerUpBudget` —
-   * `PowerUpOptimizerInputs extends TeamRaidInputs`, which already declares
-   * `friendshipLevel`, see 5be01ce). Optional so a link shared before this
-   * field existed decodes via `??` rather than surfacing `undefined`.
-   * Defaults to `"none"`, matching today's implicit (no bonus) behavior.
+   * Shared by both modes — `rosterPlanner.ts` (the multi-raid engine module)
+   * gained its own roster-wide `friendshipLevel` field (see
+   * RosterPlannerInputs' own doc comment), so this single top-level scenario
+   * field now reaches both engine call shapes: single-raid's
+   * `optimizePowerUps`/`powerUpDamageLadder`/`planPowerUpBudget` (see
+   * run/runPowerUpOptimizer.ts) and multi-raid's `runRosterPlanner`/
+   * `planRosterBudget`/`runRosterMoveChangeCandidates` (see
+   * run/runRosterPlanner.ts's `resolveRosterPlannerInputs` and
+   * run/runRosterMoveChange.ts). Optional so a link shared before this field
+   * existed decodes via `??` rather than surfacing `undefined`. Defaults to
+   * `"none"`, matching today's implicit (no bonus) behavior.
    */
   friendshipLevel?: FriendshipLevel;
   bossChargedMoveFrequencySeconds: number;

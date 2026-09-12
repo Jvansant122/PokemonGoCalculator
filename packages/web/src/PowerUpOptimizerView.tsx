@@ -150,8 +150,7 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   dodgeFastAttacks: false,
   holdChargedMoveUntilSafe: false,
   weather: "none",
-  // Single-raid mode only — see PowerUpOptimizerAssumptions.friendshipLevel's
-  // own doc comment for why multi-raid mode disables this control.
+  // Shared by both modes — see PowerUpOptimizerAssumptions.friendshipLevel's own doc comment.
   friendshipLevel: "none",
   bossChargedMoveFrequencySeconds: 15,
   bossChargedMoveCadence: "fixed-interval",
@@ -3145,11 +3144,13 @@ export function PowerUpOptimizerView() {
       bossStartsPrimed: false,
       bossStartingEnergyFraction: 0,
       rankBy: "stardust",
-      // Placeholder — rosterPlanner.ts (the multi-raid engine) has no
-      // friendshipLevel field at all, see PowerUpOptimizerAssumptions'
-      // own doc comment; the panel disables its friendship control in this
-      // mode rather than reading this value for anything.
-      friendshipLevel: "none",
+      // Real (no longer a placeholder): rosterPlanner.ts gained a
+      // roster-wide friendshipLevel field (see RosterPlannerInputs' own doc
+      // comment) — resolveRosterPlannerInputs threads this through to both
+      // engine calls, same shared roster-wide value the single-raid path
+      // above already reads off the SAME `PowerUpOptimizerAssumptions.friendshipLevel`
+      // field, no second Scenario field.
+      friendshipLevel: assumptions.friendshipLevel,
       // Placeholders on THIS memo — resolveRosterPlannerInputs (the main
       // sweep) never reads any of the four TM inventory fields. The
       // move-change sweep DOES read eliteFastTmOnHand/eliteChargedTmOnHand,
@@ -3197,6 +3198,7 @@ export function PowerUpOptimizerView() {
       assumptions.multiRaidMaxBossCount,
       assumptions.multiRaidBossIds,
       assumptions.candyByFamilyId,
+      assumptions.friendshipLevel,
       assumptions.multiRaidMegaLevel,
       assumptions.multiRaidSignificanceMode,
       assumptions.multiRaidUseBestAvailableMoveset,
@@ -3574,6 +3576,19 @@ export function PowerUpOptimizerView() {
             <details className="prose-details">
               <summary>Raid timer</summary>
               <p>Real, documented per-tier raid countdown — see raidBoss.ts&rsquo;s RAID_TIER_TABLE.</p>
+            </details>
+            <details className="prose-details">
+              <summary>Significance and friendship</summary>
+              <p>
+              Each candidate&rsquo;s noise floor is measured from THIS run&rsquo;s own seed-to-seed clear-time
+              variance, not from the size of the underlying gain — so raising friendship (or any other assumption
+              that makes clears more or less consistent) can shift which candidates are flagged significant, in
+              EITHER direction, without the underlying ranking having changed. Measured on a real 60-entry/17-boss
+              sweep: 150 of 360 candidates were significant at &ldquo;None,&rdquo; 127 at &ldquo;Good,&rdquo; and
+              173 at &ldquo;Forever Friend&rdquo; — non-monotonic, because a stronger team also clears more
+              consistently (a lower noise floor) even as floored per-hit breakpoints shift which side of a
+              threshold each candidate&rsquo;s delta lands on.
+              </p>
             </details>
             <details className="prose-details">
               <summary>Best-available-moveset toggle</summary>

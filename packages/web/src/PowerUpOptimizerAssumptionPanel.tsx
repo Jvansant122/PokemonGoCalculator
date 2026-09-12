@@ -131,11 +131,12 @@ export interface PowerUpOptimizerAssumptions {
   holdChargedMoveUntilSafe: boolean;
   weather: WeatherCondition;
   /**
-   * Single-raid mode only — see powerUpOptimizerScenario.ts's own field doc
-   * comment for why `rosterPlanner.ts` (multi-raid) has no equivalent. The
-   * panel keeps the control visible but disabled in multi-raid mode with an
-   * explicit note, same "don't silently disappear a setting" precedent as
-   * this file's own boss-charged-move-frequency field.
+   * Roster-wide, shared across BOTH modes — `rosterPlanner.ts` (multi-raid)
+   * gained its own `friendshipLevel` field alongside the single-raid
+   * `runTeamRaid`/`optimizePowerUps`/`planPowerUpBudget` path this already
+   * fed, so one top-level field now reaches both engine call shapes. See
+   * run/runRosterPlanner.ts's `resolveRosterPlannerInputs` for the multi-raid
+   * wiring and run/runPowerUpOptimizer.ts for the single-raid one.
    */
   friendshipLevel: FriendshipLevel;
   bossChargedMoveFrequencySeconds: number;
@@ -1017,21 +1018,7 @@ export function PowerUpOptimizerAssumptionPanel({
 
         <WeatherSelect idPrefix="pu" value={value.weather} onChange={(w) => set("weather", w)} />
 
-        <div>
-          <FriendshipSelect
-            idPrefix="pu"
-            value={value.friendshipLevel}
-            onChange={(f) => set("friendshipLevel", f)}
-            disabled={value.mode === "multi-raid"}
-          />
-          {value.mode === "multi-raid" && (
-            <p className="species-picker-hint">
-              Multi-raid mode doesn't model friendship yet — rosterPlanner.ts (the engine module behind this mode) has
-              no friendshipLevel field at all. This setting only affects single-raid mode's ranked candidates and
-              per-slot ladder.
-            </p>
-          )}
-        </div>
+        <FriendshipSelect idPrefix="pu" value={value.friendshipLevel} onChange={(f) => set("friendshipLevel", f)} />
 
         <BossCadenceSelect idPrefix="pu" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 

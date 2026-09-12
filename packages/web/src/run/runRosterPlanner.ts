@@ -344,6 +344,13 @@ export function resolveRosterPlannerInputs(
     bossChargedMoveMeanIntervalSeconds: a.bossChargedMoveFrequencySeconds,
     bossChargedMoveCadence: a.bossChargedMoveCadence,
     weather: a.weather,
+    // Roster-wide, same "one shared assumption across the whole pool and
+    // every boss" convention as dodge/weather/megaLevel below — see
+    // rosterPlanner.ts's own RosterPlannerInputs.friendshipLevel doc comment.
+    // The SAME PowerUpOptimizerAssumptions.friendshipLevel field the
+    // single-raid path already threads (run/runPowerUpOptimizer.ts) now also
+    // reaches this path — no second Scenario field.
+    friendshipLevel: a.friendshipLevel,
     raidTimerSeconds: a.raidTimerSeconds,
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,

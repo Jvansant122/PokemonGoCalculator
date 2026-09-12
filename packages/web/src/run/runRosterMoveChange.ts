@@ -121,6 +121,7 @@ export function resolveRosterMoveChangeInputs(
     bossChargedMoveMeanIntervalSeconds: inputs.bossChargedMoveMeanIntervalSeconds,
     bossChargedMoveCadence: inputs.bossChargedMoveCadence,
     weather: inputs.weather,
+    friendshipLevel: inputs.friendshipLevel,
     raidTimerSeconds: inputs.raidTimerSeconds,
     swapCostSeconds: inputs.swapCostSeconds,
     reviveCostSeconds: inputs.reviveCostSeconds,

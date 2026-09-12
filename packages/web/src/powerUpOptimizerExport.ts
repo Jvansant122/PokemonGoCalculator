@@ -163,7 +163,7 @@ export function powerUpOptimizerAssumptionsToTeamAssumptions(
     // defaults, same as a fresh Team Raid scenario, rather than inventing a
     // value this source tab never expressed an opinion on. friendshipLevel
     // USED to be a third one but is carried verbatim above now that the
-    // source tab has its own (single-raid-only) copy of that field.
+    // source tab has its own (roster-wide, both-modes) copy of that field.
     bossMaxHpOverrideEnabled: false,
     reselectAfterWipeEnabled: false,
   };
