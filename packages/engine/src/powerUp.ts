@@ -1015,12 +1015,19 @@ export function optimizePowerUps(inputs: PowerUpOptimizerInputs): PowerUpOptimiz
         typeEffectiveness: typeEffectiveness(fastMove.type, rest.boss.types),
         megaBoostMultiplier: ownBoostMultiplier(slot.species.boost, fastMove.type),
         weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+        // See TeamRaidInputs.friendshipLevel — outgoing (attacker's own) damage
+        // only, never the boss's. Missing this made the ladder's headline
+        // (nextFastBreakpoint/nextChargedBreakpoint) disagree with the actual
+        // runTeamRaid simulation a few dozen lines below, which already
+        // forwards friendshipLevel via `...rest`.
+        friendshipLevel: rest.friendshipLevel,
       },
       chargedMoveDamageModifiers: {
         stab: slot.species.types.includes(chargedMove.type),
         typeEffectiveness: typeEffectiveness(chargedMove.type, rest.boss.types),
         megaBoostMultiplier: ownBoostMultiplier(slot.species.boost, chargedMove.type),
         weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+        friendshipLevel: rest.friendshipLevel,
       },
       table: costTable,
       modifiers: slot.costModifiers,
@@ -1944,13 +1951,27 @@ export function planPowerUpBudget(inputs: PowerUpBudgetInputs): PowerUpBudgetPla
         typeEffectiveness: typeEffectiveness(fastMove.type, rest.boss.types),
         megaBoostMultiplier: ownBoostMultiplier(slot.species.boost, fastMove.type),
         weatherBoosted: isWeatherBoosted(fastMove.type, weather),
+        // See TeamRaidInputs.friendshipLevel — outgoing (attacker's own)
+        // damage only. Without this, usefulPowerUpLevelsAbove's
+        // dominated-level search (below) could misclassify a level as
+        // "dominated" using un-friendship-boosted outgoing damage, while
+        // runFullRoster's actual runTeamRaid simulation (which forwards
+        // friendshipLevel via `...rest`) would see a real breakpoint —
+        // silently excluding a genuinely useful level from the search.
+        friendshipLevel: rest.friendshipLevel,
       } satisfies OutgoingDamageModifiers,
       outgoingChargedMoveDamageModifiers: {
         stab: slot.species.types.includes(chargedMove.type),
         typeEffectiveness: typeEffectiveness(chargedMove.type, rest.boss.types),
         megaBoostMultiplier: ownBoostMultiplier(slot.species.boost, chargedMove.type),
         weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
+        friendshipLevel: rest.friendshipLevel,
       } satisfies OutgoingDamageModifiers,
+      // NO friendshipLevel on either incoming modifier set below — the bonus
+      // applies only to the attacker's own outgoing damage, never the boss's
+      // (see TeamRaidInputs.friendshipLevel's doc comment; this mirrors
+      // teamRaid.ts's own boss damageOut/chargedMoveDamageOut, which never
+      // sets it either).
       incomingFastMoveDamageModifiers: {
         stab: rest.boss.types.includes(bossFastMove.type),
         typeEffectiveness: typeEffectiveness(bossFastMove.type, slot.species.types),

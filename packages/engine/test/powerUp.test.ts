@@ -1803,3 +1803,296 @@ describe("planPowerUpBudget — megaLevel now reaches the actual simulation (202
     expect(planPowerUpBudget(inputsWithout(undefined))).toEqual(omitted);
   });
 });
+
+// === friendshipLevel reaching the ladder/search (2026-09-12 fix) ==========
+// Both optimizePowerUps' displayed ladder and planPowerUpBudget's internal
+// dominated-level search used to hand-build their own outgoing damage
+// modifiers WITHOUT forwarding TeamRaidInputs.friendshipLevel, even though
+// every runTeamRaid call a few lines away already honored it via `...rest`.
+// See MEMORY's measurement_friendship_bonus_breakpoint_impact for how often
+// this actually flips a real breakpoint (not an edge case). Same shape of
+// bug, and same "agrees exactly with a direct call" test discipline, as the
+// megaLevel describe blocks directly above.
+describe("optimizePowerUps — the displayed ladder reflects friendshipLevel (2026-09-12 fix)", () => {
+  const table = powerUpCostTableFromGameMaster(RAW_POKEMON_UPGRADE_SETTINGS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT);
+  const ivs = { attack: 10, defense: 10, stamina: 10 };
+  // Species typed OFF the fast move's type (stab: false) and vs. a
+  // same-typed boss (typeEffectiveness: 1) — chosen, via a throwaway script
+  // against the real calculateDamage/effectiveStatsAtLevel (not hand
+  // arithmetic), so that fromLevel 16.5 -> toLevel 17's floored fast-move
+  // damage is UNCHANGED at friendshipLevel "none" (3 -> 3, no breakpoint) but
+  // DOES cross a breakpoint at "good" (3 -> 4) — the exact "silently
+  // disagrees" shape this fix closes.
+  const fastMove: FastMove = { id: "fs-fast", name: "Friendship Fast", type: "normal", power: 10, energyGain: 3, durationSeconds: 1 };
+  const chargedMove: ChargedMove = {
+    id: "fs-charged",
+    name: "Friendship Charged",
+    type: "normal",
+    power: 50,
+    energyCost: 50,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+  };
+  const species: SpeciesDefinition = {
+    id: "fs-species",
+    name: "Friendship Species",
+    types: ["water"],
+    baseAttack: 150,
+    baseDefense: 150,
+    baseStamina: 150,
+    fastMoves: [fastMove],
+    chargedMoves: [chargedMove],
+  };
+  const boss: SpeciesDefinition = {
+    id: "fs-boss",
+    name: "Friendship Boss",
+    types: ["normal"],
+    baseAttack: 1,
+    baseDefense: 150,
+    baseStamina: 1_000_000,
+    fastMoves: [{ id: "fs-boss-fast", name: "Friendship Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 2 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function slotAt(): PowerUpSlotInput {
+    return {
+      species,
+      fastMoveId: null,
+      chargedMoveId: null,
+      isMega: false,
+      level: 16.5,
+      ivs,
+      costModifiers: NO_MODIFIERS,
+      candyOnHand: 1_000_000,
+      xlCandyOnHand: 1_000_000,
+    };
+  }
+
+  function run(friendshipLevel: PowerUpOptimizerInputs["friendshipLevel"]) {
+    return optimizePowerUps({
+      slots: [slotAt()],
+      boss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      maxLevel: 17,
+      friendshipLevel,
+      iterations: 1,
+      seed: 1,
+    });
+  }
+
+  it("a friendship-only breakpoint (invisible at 'none') shows up in the ladder at 'good', and agrees EXACTLY with a direct powerUpDamageLadder call carrying the same friendshipLevel", () => {
+    const none = run("none");
+    const good = run("good");
+
+    // The exact symptom this closes: at "none" there is nothing to power up
+    // to within [16.5, 17] (no breakpoint), but at "good" the SAME power-up
+    // step now crosses one.
+    expect(none.ladders[0]!.nextFastBreakpoint).toBeNull();
+    expect(good.ladders[0]!.nextFastBreakpoint).not.toBeNull();
+    expect(good.ladders[0]!.nextFastBreakpoint!.level).toBe(17);
+    expect(good.ladders[0]!.nextFastBreakpoint!.fastMoveDamage).toBe(4);
+
+    const { defense: bossDefenseStat } = bossEffectiveStats(boss);
+    const expected = powerUpDamageLadder({
+      species,
+      ivs,
+      fromLevel: 16.5,
+      fastMove,
+      chargedMove,
+      bossDefenseStat,
+      fastMoveDamageModifiers: {
+        stab: species.types.includes(fastMove.type),
+        typeEffectiveness: typeEffectiveness(fastMove.type, boss.types),
+        megaBoostMultiplier: ownBoostMultiplier(species.boost, fastMove.type),
+        weatherBoosted: isWeatherBoosted(fastMove.type, "none"),
+        friendshipLevel: "good",
+      },
+      chargedMoveDamageModifiers: {
+        stab: species.types.includes(chargedMove.type),
+        typeEffectiveness: typeEffectiveness(chargedMove.type, boss.types),
+        megaBoostMultiplier: ownBoostMultiplier(species.boost, chargedMove.type),
+        weatherBoosted: isWeatherBoosted(chargedMove.type, "none"),
+        friendshipLevel: "good",
+      },
+      table,
+      modifiers: NO_MODIFIERS,
+      maxLevel: 17,
+    });
+    expect(good.ladders[0]).toEqual(expected);
+  });
+
+  it("omitting friendshipLevel is byte-identical to explicit 'none' (defaults constraint)", () => {
+    const omitted = optimizePowerUps({
+      slots: [slotAt()],
+      boss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 60,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      maxLevel: 17,
+      iterations: 1,
+      seed: 1,
+    });
+    expect(run("none")).toEqual(omitted);
+  });
+});
+
+describe("planPowerUpBudget — friendshipLevel reaches the internal dominated-level search, not just the final simulation (2026-09-12 fix)", () => {
+  const table = powerUpCostTableFromGameMaster(RAW_POKEMON_UPGRADE_SETTINGS, RAW_LUCKY_STARDUST_DISCOUNT_PERCENT);
+  const ivs = { attack: 10, defense: 10, stamina: 10 };
+  // Same breakpoint fixture as the optimizePowerUps describe block above —
+  // 16.5 -> 17 is genuinely dominated (no-op) at friendshipLevel "none" but a
+  // real fast-move breakpoint at "good".
+  const species: SpeciesDefinition = {
+    id: "fsb-species",
+    name: "Friendship Budget Species",
+    types: ["water"],
+    baseAttack: 150,
+    baseDefense: 150,
+    baseStamina: 150,
+    fastMoves: [{ id: "fsb-fast", name: "Friendship Budget Fast", type: "normal", power: 10, energyGain: 3, durationSeconds: 1 }],
+    chargedMoves: [
+      { id: "fsb-charged", name: "Friendship Budget Charged", type: "normal", power: 50, energyCost: 50, durationSeconds: 2, vulnerableWindowSeconds: 2 },
+    ],
+  };
+  const tankyBoss: SpeciesDefinition = {
+    id: "fsb-boss",
+    name: "Friendship Budget Boss",
+    types: ["normal"],
+    baseAttack: 1,
+    baseDefense: 150,
+    baseStamina: 1_000_000,
+    fastMoves: [{ id: "fsb-boss-fast", name: "Friendship Budget Boss Fast", type: "normal", power: 1, energyGain: 0, durationSeconds: 2 }],
+    chargedMoves: [],
+    statsArePrecomputed: true,
+  };
+
+  function run(friendshipLevel: PowerUpBudgetInputs["friendshipLevel"]) {
+    return planPowerUpBudget({
+      slots: [
+        {
+          species,
+          fastMoveId: null,
+          chargedMoveId: null,
+          isMega: false,
+          level: 16.5,
+          ivs,
+          costModifiers: NO_MODIFIERS,
+          candyOnHand: 1_000_000,
+          xlCandyOnHand: 1_000_000,
+        },
+      ],
+      boss: tankyBoss,
+      dodge: { kind: "none" },
+      bossChargedMoveMeanIntervalSeconds: 1000,
+      raidTimerSeconds: 180,
+      costTable: table,
+      stardustOnHand: 1_000_000_000,
+      maxLevel: 17,
+      friendshipLevel,
+      iterations: 15,
+      seed: 1,
+    });
+  }
+
+  it("at 'none' the plan correctly finds nothing worth doing (the 16.5->17 step is a genuine no-op); at 'good' the SAME step is a real breakpoint the plan now commits to — before this fix, planPowerUpBudget's search never saw friendshipLevel at all and would have missed it even at 'good'", () => {
+    const none = run("none");
+    const good = run("good");
+
+    expect(none.steps).toHaveLength(0);
+    expect(none.stopReason).toBe("no-significant-candidate");
+    expect(none.finalLevels[0]!.toLevel).toBe(16.5);
+
+    expect(good.steps.length).toBeGreaterThan(0);
+    expect(good.finalLevels[0]!.toLevel).toBe(17);
+  });
+
+  it("omitting friendshipLevel is byte-identical to explicit 'none' (defaults constraint)", () => {
+    expect(run(undefined)).toEqual(run("none"));
+  });
+});
+
+// === friendship never leaks into INCOMING (boss) damage — the correctness
+// constraint both fixes above must preserve. Exercised directly against
+// powerUpLevelMetrics (the exact function usefulPowerUpLevelsAbove/
+// planPowerUpBudget's search calls): setting friendshipLevel only on the
+// OUTGOING modifiers must never move incomingFastDamage/incomingChargedDamage
+// or the survival-hit counts derived from them. ===========================
+describe("powerUpLevelMetrics — friendshipLevel only ever affects outgoing damage (2026-09-12)", () => {
+  const species: SpeciesDefinition = {
+    id: "fsi-species",
+    name: "Friendship Incoming Species",
+    types: ["water"],
+    baseAttack: 150,
+    baseDefense: 150,
+    baseStamina: 150,
+    fastMoves: [],
+    chargedMoves: [],
+  };
+  // power 20/80 (not 10/50) — verified via a throwaway script against the
+  // real calculateDamage/effectiveStatsAtLevel that floor(damage) actually
+  // differs between "none" and "forever" at level 20 for BOTH moves; a
+  // smaller power can floor to the same value at both tiers and would make
+  // this test's first assertion vacuous.
+  const fastMove: FastMove = { id: "fsi-fast", name: "Friendship Incoming Fast", type: "normal", power: 20, energyGain: 3, durationSeconds: 1 };
+  const chargedMove: ChargedMove = {
+    id: "fsi-charged",
+    name: "Friendship Incoming Charged",
+    type: "normal",
+    power: 80,
+    energyCost: 50,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+  };
+  const bossFastMove: FastMove = { id: "fsi-boss-fast", name: "Friendship Incoming Boss Fast", type: "normal", power: 12, energyGain: 0, durationSeconds: 1.5 };
+  const bossChargedMove: ChargedMove = {
+    id: "fsi-boss-charged",
+    name: "Friendship Incoming Boss Charged",
+    type: "normal",
+    power: 80,
+    energyCost: 50,
+    durationSeconds: 2,
+    vulnerableWindowSeconds: 2,
+  };
+  const ivs = { attack: 10, defense: 10, stamina: 10 };
+
+  function metricsAt(friendshipLevel: "none" | "good" | "forever") {
+    return powerUpLevelMetrics({
+      species,
+      ivs,
+      level: 20,
+      fastMove,
+      chargedMove,
+      outgoingFastMoveDamageModifiers: { stab: false, typeEffectiveness: 1, friendshipLevel },
+      outgoingChargedMoveDamageModifiers: { stab: false, typeEffectiveness: 1, friendshipLevel },
+      bossFastMove,
+      bossChargedMove,
+      bossAttackStat: 150,
+      bossDefenseStat: 150,
+      // Deliberately no friendshipLevel here — see this describe block's own
+      // intent. If a future edit ever threads friendshipLevel through to
+      // these, this test's second/third assertions must start failing.
+      incomingFastMoveDamageModifiers: { stab: false, typeEffectiveness: 1 },
+      incomingChargedMoveDamageModifiers: { stab: false, typeEffectiveness: 1 },
+    });
+  }
+
+  it("outgoing damage moves with friendshipLevel, but incoming damage and survival counts never do", () => {
+    const none = metricsAt("none");
+    const forever = metricsAt("forever");
+
+    expect(forever.outgoingFastDamage).toBeGreaterThan(none.outgoingFastDamage);
+    expect(forever.outgoingChargedDamage).toBeGreaterThan(none.outgoingChargedDamage);
+
+    expect(forever.incomingFastDamage).toBe(none.incomingFastDamage);
+    expect(forever.incomingChargedDamage).toBe(none.incomingChargedDamage);
+    expect(forever.survivalFastHits).toBe(none.survivalFastHits);
+    expect(forever.survivalChargedHits).toBe(none.survivalChargedHits);
+  });
+});
