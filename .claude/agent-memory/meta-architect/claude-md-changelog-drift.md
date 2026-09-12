@@ -18,8 +18,9 @@ guardrail beyond the fact itself, and was already fully covered in HANDOFF.md's 
 token cost every session for every agent (see [[project-config-shape]]). Not every "earlier
 version did X" sentence is bloat, though — kept two of this shape because they carry forward-
 looking value beyond narration: (1) the combat-phase-toggle-removal note at the top of the file
-(explains why `simulateOpeningBurst`/`runComparison` still exist despite not being wired into
-the UI — without it they look like dead code), and (2) the "do not reintroduce a fixed
+(it stops the toggle being rebuilt from the founding spec; it ALSO used to explain why
+`simulateOpeningBurst`/`runComparison` existed unwired, but those were deleted 2026-09-11, so
+only the first half still does work), and (2) the "do not reintroduce a fixed
 opening-burst-window default" line in the Combat section (explicitly says don't-do-X and why,
 not just that X used to be true).
 

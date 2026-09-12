@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { simulateOpeningBurst } from "../src/combat.js";
 import {
   boundedJitteredChargedMoveInterval,
   DEFAULT_DODGE_ERROR_MISSED_FRACTIONS,
@@ -47,19 +46,14 @@ const bossNoChargedMove = {
 };
 
 describe("simulateStepwiseBattle", () => {
-  it("matches simulateOpeningBurst's death timing, but reveals the charged attack never actually lands once its cast time is modeled", () => {
-    // simulateOpeningBurst (Phase 1) treats charged moves as instant once
-    // energy is ready — a simplification the spec itself flags as a known
-    // caveat ("the attacker is likely to die during its own charged-move
-    // animation"). Here, energy is ready at t=5.0s but the cast takes 3.5s
-    // (finishing at t=8.5s), and the third Tidal Surge hit kills at exactly
-    // t=7.5s — so the more realistic model shows the attack never lands at
-    // all, which the simplified model silently assumed away.
-    const openingBurst = simulateOpeningBurst(attacker, bossNoChargedMove);
+  it("the charged attack never actually lands once its cast time is modeled, even though energy was ready in time", () => {
+    // Energy is ready at t=5.0s but the cast takes 3.5s (finishing at
+    // t=8.5s), and the third Tidal Surge hit kills at exactly t=7.5s — so the
+    // charged attack never lands at all despite energy having been ready
+    // well before the fatal hit. A simplified model that treats charged
+    // moves as instant once energy is ready (ignoring cast-time
+    // vulnerability) would miss this entirely.
     const stepwise = simulateStepwiseBattle({ attacker, boss: bossNoChargedMove });
-
-    expect(openingBurst.faintedAtSeconds).toBe(7.5);
-    expect(openingBurst.chargedAttacksLanded).toBe(1);
 
     expect(stepwise.faintedAtSeconds).toBe(7.5);
     expect(stepwise.chargedAttacksLanded).toBe(0);

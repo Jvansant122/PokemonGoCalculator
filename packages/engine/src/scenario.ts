@@ -27,7 +27,7 @@ export interface Scenario {
    * all", matched by index to `candidates` — lets a user compare a mega
    * candidate's DPS fairly against a non-mega one. true disables BOTH that
    * candidate's own-damage boost AND its team-damage attribution entirely
-   * (see comparison.ts's ComparisonInputs.candidateMegaBoostDisabled and
+   * (see comparison.ts's SustainedComparisonInputs.candidateMegaBoostDisabled and
    * uptime.ts's convertUptimeToTeamDamage) — a full toggle, not partial.
    * Defaults to [false, false] (today's implicit behavior: every candidate's
    * boost, if any, is always active).

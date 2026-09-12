@@ -462,11 +462,10 @@ export function unmatchedActiveRaids(): { raidName: string; tier: string }[] {
 
 /**
  * Which real raid tier a species currently counts as, per the live raid
- * feed — feeds comparison.ts's ComparisonInputs.bossRaidTier/
- * SustainedComparisonInputs.bossRaidTier so a real (non-precomputed) boss's
- * effective attack/defense/HP use the correct per-tier numbers (see
- * raidBoss.ts's RAID_TIER_TABLE) instead of always assuming
- * DEFAULT_REAL_RAID_TIER. Returns null when the species isn't a CURRENTLY
+ * feed — feeds comparison.ts's SustainedComparisonInputs.bossRaidTier so a
+ * real (non-precomputed) boss's effective attack/defense/HP use the correct
+ * per-tier numbers (see raidBoss.ts's RAID_TIER_TABLE) instead of always
+ * assuming DEFAULT_REAL_RAID_TIER. Returns null when the species isn't a CURRENTLY
  * active raid target at all (e.g. picked from the general species picker
  * rather than the live raid list, or a hypothetical fixture) — the caller
  * falls back to the engine's own DEFAULT_REAL_RAID_TIER in that case, same

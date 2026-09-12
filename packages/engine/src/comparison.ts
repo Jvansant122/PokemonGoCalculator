@@ -1,4 +1,3 @@
-import { bossChargedMoveReadySeconds, simulateOpeningBurst, type DamageTrajectoryPoint } from "./combat.js";
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { FriendshipLevel } from "./damage.js";
 import { canReachSuperMax, chargedMoveAtMegaLevel, effectiveLevelForBestBuddy, effectiveLevelForMegaLevel, type MegaLevel } from "./megaLevel.js";
@@ -21,21 +20,6 @@ import {
 } from "./simulate.js";
 import type { ChargedMove, IVSpread, SpeciesDefinition } from "./types.js";
 import { isWeatherBoosted, type WeatherCondition } from "./weather.js";
-
-/**
- * NOTE (2026-09-06 code-simplifier audit): runComparison/ComparisonInputs/
- * CandidateResult below have zero production callers — packages/web only
- * drives runSustainedComparison/compareAcrossBossMovesets further down in
- * this same file. This is intentional, not dead code: see combat.ts's
- * matching note at the top of that file for why this "Phase 1 opening burst"
- * cluster is kept as a deterministic acceptance-test harness (comparison.test.ts,
- * test/scenarioA.test.ts, test/scenarioB.test.ts, test/bossTiming.test.ts,
- * part of test/simulate.test.ts) pinning the core formula pipeline
- * independent of the sustained engine's randomized boss timing. Do not delete
- * runComparison/ComparisonInputs/CandidateResult as unused without first
- * confirming the exact pinned-number coverage they provide can be reproduced
- * through runSustainedComparison instead.
- */
 
 /**
  * Boss effective attack/defense stats, applying shadow.ts's Shadow
@@ -147,9 +131,8 @@ export function bossEnrageStats(boss: SpeciesDefinition): { attack: number; defe
  * Resolves a move selection by id against a species' available moves, falling
  * back to the first move when the id is omitted, null, or doesn't match —
  * i.e. today's implicit "always use moves[0]" behavior. Shared by
- * runComparison, runSustainedComparison, AND teamRaid.ts's per-slot
- * orchestrator so a candidate/boss/team-slot move choice means the same
- * thing everywhere.
+ * runSustainedComparison AND teamRaid.ts's per-slot orchestrator so a
+ * candidate/boss/team-slot move choice means the same thing everywhere.
  */
 export function resolveMove<T extends { id: string }>(moves: T[], id: string | null | undefined): T | undefined {
   return (id ? moves.find((m) => m.id === id) : undefined) ?? moves[0];
@@ -159,8 +142,8 @@ export function resolveMove<T extends { id: string }>(moves: T[], id: string | n
  * Resolves a candidate's effective boost for this comparison: undefined when
  * the species has no boost mechanic at all, OR when the caller has flagged
  * this specific candidate's boost as disabled (see
- * ComparisonInputs.candidateMegaBoostDisabled) — a full "pretend this species
- * isn't mega/primal boosted at all," not a partial toggle. Every downstream
+ * SustainedComparisonInputs.candidateMegaBoostDisabled) — a full "pretend
+ * this species isn't mega/primal boosted at all," not a partial toggle. Every downstream
  * use (own-damage boost gating below, and the boostMultiplier/boostedType/
  * persistsThroughFaint fields fed to uptime.ts) reads from this, never from
  * species.boost directly, so the disable toggle can't be partially applied.
@@ -229,7 +212,7 @@ export function resolveCandidateMegaLevel(
   return resolved === "super-max" && !canReachSuperMax(species) ? "max" : resolved;
 }
 
-export interface ComparisonInputs {
+export interface SustainedComparisonInputs {
   candidates: SpeciesDefinition[];
   /** Per-candidate fast-move selection, matched by index to `candidates`. Omit or use null for a given index to default to that species' first fast move (today's behavior). */
   candidateFastMoveIds?: (string | null)[];
@@ -249,16 +232,13 @@ export interface ComparisonInputs {
   /**
    * Per-candidate Mega Level (see megaLevel.ts), matched by index to
    * `candidates` — `null`/omitted-per-index means no Mega Level effect for
-   * that candidate (identical to `"base"`). UNLIKE candidateDodge (see
-   * SustainedComparisonInputs below), this is NOT inert during the opening
-   * burst: the candidate's own attack stat (Super Max's effective-level CP
-   * bonus) and its own charged move (a "+" move's scaled power, if selected)
-   * both feed simulateOpeningBurst's attacker profile directly, and the
-   * attacker CAN land its own first charged move inside the opening-burst
-   * window (only the BOSS is restricted to fast moves there — see combat.ts).
-   * Defaults to `[null, null]` when omitted, so every existing caller needs
-   * zero changes. Silently has no effect for a candidate whose species has no
-   * `.boost` at all — see resolveCandidateMegaLevel.
+   * that candidate (identical to `"base"`). The candidate's own attack stat
+   * (Super Max's effective-level CP bonus) and its own charged move (a "+"
+   * move's scaled power, if selected) both feed the stepwise simulation's
+   * attacker profile directly. Defaults to `[null, null]` when omitted, so
+   * every existing caller needs zero changes. Silently has no effect for a
+   * candidate whose species has no `.boost` at all — see
+   * resolveCandidateMegaLevel.
    */
   candidateMegaLevel?: [MegaLevel | null, MegaLevel | null];
   /**
@@ -282,206 +262,6 @@ export interface ComparisonInputs {
    * falling back to DEFAULT_REAL_RAID_TIER ("5-Star Raids") only as the true
    * last resort (species with no rarity data, or Mythic/Ultra Beast).
    */
-  bossRaidTier?: RaidTier;
-  /** Boss fast-move selection. Omit/null defaults to the boss's first fast move (today's behavior). */
-  bossFastMoveId?: string | null;
-  /** Boss charged-move selection. Omit/null defaults to the boss's first charged move (today's behavior). */
-  bossChargedMoveId?: string | null;
-  level: number;
-  ivs: IVSpread;
-  /** Governs dodging the boss's CHARGED attacks only — inert during the opening burst, since the boss never throws one there. */
-  dodge: DodgeBehavior;
-  /** Whether the candidate also attempts to dodge the boss's fast attacks — the only attack type that exists during the opening burst, so this is what actually extends survival here. Costs DODGE_COST_SECONDS per attempt (see breakpoints.ts). Defaults to false. */
-  dodgeFastAttacks?: boolean;
-  /**
-   * How long the "opening burst" window lasts before a real boss would start
-   * throwing charged moves. Defaults to bossChargedMoveReadySeconds(boss's
-   * fast move, boss's first charged move, bossStartingEnergy) — the earliest
-   * physically possible time, not an arbitrary number — so callers only need
-   * to override this explicitly for a scenario that isn't "boss starts
-   * fresh, this is the natural pre-charged-move window."
-   */
-  openingBurstSeconds?: number;
-  /**
-   * Energy the boss already has saved when the fight begins (0-energyCost of
-   * its first charged move) — only affects the derived openingBurstSeconds
-   * default above. Models a mega tagging in mid-fight against a boss an
-   * earlier trainer's mega left partway charged. Defaults to 0.
-   */
-  bossStartingEnergy?: number;
-  /**
-   * Active weather condition, applied per-move (by that move's own type) to
-   * both the candidate's and the boss's damage output independently — see
-   * weather.ts's isWeatherBoosted. Defaults to "none" (today's behavior: no
-   * weather modeled), matching Scenario's default.
-   */
-  weather?: WeatherCondition;
-  /**
-   * The friendship attack bonus tier assumed for BOTH candidates — see
-   * damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER for the real 5-tier
-   * Gym/Raid ladder this represents. Defaults to "none" (today's behavior:
-   * no friendship bonus modeled), matching Scenario's default.
-   *
-   * UNLIKE weather, this is single-SIDED and single-trainer-scoped: it only
-   * ever boosts a candidate's OWN fast/charged damage (fastDamageOut/
-   * chargedDamageOut below), never the boss's (a raid boss has no "friend"
-   * co-participating with it, and this engine has no multi-trainer modelling
-   * at all — see CLAUDE.md's standing decision ruling out a "Teambuilding
-   * Analyzer"). It is also NOT a team-wide boost like the mega/primal
-   * `boostMultiplier` — setting this only ever changes the two candidates'
-   * own numbers, exactly like weather's per-move `isWeatherBoosted` check,
-   * never anything resembling team-boost attribution.
-   */
-  friendshipLevel?: FriendshipLevel;
-}
-
-export interface CandidateResult {
-  id: string;
-  name: string;
-  secondsSurvived: number;
-  chargedAttacksLanded: number;
-  /** Charged-move damage only. */
-  ownChargedDamage: number;
-  /** Fast-move damage dealt to the boss — previously untracked entirely (the fast move's damage was never computed, only its energy gain). */
-  ownFastMoveDamage: number;
-  /** ownChargedDamage + ownFastMoveDamage — the true total damage output, and what feeds the team-contribution/crossover math (uptime.ts) and the damage-over-time chart. */
-  ownTotalDamage: number;
-  /** undefined means this candidate has no boost mechanic active for this comparison — genuinely non-mega, or candidateMegaBoostDisabled was set. See uptime.ts's UptimeConversionInputs.boostMultiplier. */
-  boostMultiplier: number | undefined;
-  boostedType: SpeciesDefinition["types"][number];
-  /** See SpeciesDefinition.boost.persistsThroughFaint (uptime.ts consumes this). Defaults to false when the species has no boost at all. */
-  persistsThroughFaint: boolean;
-  /** Combined fast+charged cumulative damage over time — see combat.ts's OpeningBurstResult.ownDamageTrajectory. */
-  ownDamageTrajectory: DamageTrajectoryPoint[];
-}
-
-/**
- * Runs the opening-burst comparison (see combat.ts) for every candidate against
- * a shared boss under one set of assumptions. This is the single code path
- * both the acceptance tests and the web UI drive, so "what does the tool
- * conclude" can never drift between the two.
- */
-export function runComparison(inputs: ComparisonInputs): CandidateResult[] {
-  const {
-    candidates,
-    boss,
-    level,
-    ivs,
-    dodge,
-    dodgeFastAttacks = false,
-    bossStartingEnergy = 0,
-    weather = "none",
-    friendshipLevel = "none",
-    candidateMegaBoostDisabled = [false, false],
-    candidateMegaLevel = [null, null],
-    candidateIsBestBuddy = [false, false],
-  } = inputs;
-  const { attack: bossAttackStat, defense: bossDefenseStat } = bossEffectiveStats(boss, inputs.bossRaidTier);
-  const bossFastMove = resolveMove(boss.fastMoves, inputs.bossFastMoveId);
-  if (!bossFastMove) throw new Error(`Boss species ${boss.id} has no fast move defined.`);
-  const bossChargedMove = resolveMove(boss.chargedMoves, inputs.bossChargedMoveId);
-  const openingBurstSeconds =
-    inputs.openingBurstSeconds ??
-    (bossChargedMove ? bossChargedMoveReadySeconds(bossFastMove, bossChargedMove, bossStartingEnergy) : 20);
-
-  return candidates.map((species, i) => {
-    const megaLevel = resolveCandidateMegaLevel(species, candidateMegaLevel[i]);
-    // Best Buddy's +1 effective level stacks with Super Max's +2 — see
-    // megaLevel.ts's BEST_BUDDY_EFFECTIVE_LEVEL_BONUS doc comment. Applied
-    // BEFORE effectiveLevelForMegaLevel per that function's own convention
-    // (order is mathematically inert — both are a flat `+N` shift).
-    const effectiveLevel = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, candidateIsBestBuddy[i]), megaLevel);
-    const stats = effectiveStatsAtLevel(species, ivs, effectiveLevel);
-    const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
-    const rawChargedMove = resolveMove(species.chargedMoves, inputs.candidateChargedMoveIds?.[i]);
-    if (!fastMove || !rawChargedMove) {
-      throw new Error(`Candidate ${species.id} needs at least one fast move and one charged move.`);
-    }
-    // A "+" move's power is scaled for this candidate's current Mega Level
-    // (no-op for every ordinary move) — see megaLevel.ts's
-    // chargedMoveAtMegaLevel. Every downstream use of `chargedMove` (damage
-    // calc, energy cost, duration) reads from this already-resolved object.
-    const chargedMove = chargedMoveAtMegaLevel(rawChargedMove, megaLevel);
-    // Fast and charged moves can differ in type (e.g. a Dragon fast move with
-    // a Fire charged move), so STAB/type-effectiveness are computed per-move,
-    // not shared — see combat.ts's AttackerProfile.fastDamageOut doc for the
-    // bug this fixes (previously invisible because every fixture's fast and
-    // charged moves happen to share a type).
-    const candidateFastVsBoss = typeEffectiveness(fastMove.type, boss.types);
-    const candidateChargedVsBoss = typeEffectiveness(chargedMove.type, boss.types);
-    const bossVsCandidate = typeEffectiveness(bossFastMove.type, species.types);
-    const boost = resolveBoost(species, candidateMegaBoostDisabled[i] ?? false);
-
-    const result = simulateOpeningBurst(
-      {
-        hp: stats.stamina,
-        defenseStat: stats.defense,
-        attackStat: stats.attack,
-        fastMove,
-        chargedMove,
-        fastDamageOut: {
-          stab: species.types.includes(fastMove.type),
-          typeEffectiveness: candidateFastVsBoss,
-          megaBoostMultiplier: ownBoostMultiplier(boost, fastMove.type),
-          weatherBoosted: isWeatherBoosted(fastMove.type, weather),
-          friendshipLevel,
-        },
-        chargedDamageOut: {
-          stab: species.types.includes(chargedMove.type),
-          typeEffectiveness: candidateChargedVsBoss,
-          megaBoostMultiplier: ownBoostMultiplier(boost, chargedMove.type),
-          weatherBoosted: isWeatherBoosted(chargedMove.type, weather),
-          friendshipLevel,
-        },
-      },
-      {
-        attackStat: bossAttackStat,
-        defenseStat: bossDefenseStat,
-        fastMove: bossFastMove,
-        // NO friendshipLevel here — the bonus never applies to the boss's
-        // own damage (a raid boss has no co-participating "friend"). See
-        // ComparisonInputs.friendshipLevel's doc comment.
-        damageOut: {
-          stab: boss.types.includes(bossFastMove.type),
-          typeEffectiveness: bossVsCandidate,
-          weatherBoosted: isWeatherBoosted(bossFastMove.type, weather),
-        },
-      },
-      openingBurstSeconds,
-      dodge,
-      dodgeFastAttacks,
-    );
-
-    return {
-      id: species.id,
-      name: species.name,
-      secondsSurvived: result.faintedAtSeconds ?? openingBurstSeconds,
-      chargedAttacksLanded: result.chargedAttacksLanded,
-      ownChargedDamage: result.totalChargedDamage,
-      ownFastMoveDamage: result.totalFastMoveDamage,
-      ownTotalDamage: result.totalChargedDamage + result.totalFastMoveDamage,
-      boostMultiplier: boost?.multiplier,
-      boostedType: boost?.boostedType ?? species.types[0],
-      persistsThroughFaint: boost?.persistsThroughFaint ?? false,
-      ownDamageTrajectory: result.ownDamageTrajectory,
-    };
-  });
-}
-
-export interface SustainedComparisonInputs {
-  candidates: SpeciesDefinition[];
-  /** Per-candidate fast-move selection, matched by index to `candidates`. Omit or use null for a given index to default to that species' first fast move (today's behavior). */
-  candidateFastMoveIds?: (string | null)[];
-  /** Per-candidate charged-move selection — see candidateFastMoveIds. */
-  candidateChargedMoveIds?: (string | null)[];
-  /** See ComparisonInputs.candidateMegaBoostDisabled. Defaults to [false, false]. */
-  candidateMegaBoostDisabled?: [boolean, boolean];
-  /** See ComparisonInputs.candidateMegaLevel — same per-candidate semantics, same resolveCandidateMegaLevel gate on species.boost. Defaults to [null, null]. */
-  candidateMegaLevel?: [MegaLevel | null, MegaLevel | null];
-  /** See ComparisonInputs.candidateIsBestBuddy — same per-candidate semantics, stacks with candidateMegaLevel's Super Max bonus. Defaults to [false, false]. */
-  candidateIsBestBuddy?: [boolean, boolean];
-  boss: SpeciesDefinition;
-  /** See ComparisonInputs.bossRaidTier. */
   bossRaidTier?: RaidTier;
   /**
    * Override for the boss's effective max HP for THIS comparison — see
@@ -546,18 +326,47 @@ export interface SustainedComparisonInputs {
    */
   bossChargedMoveCadence?: BossChargedMoveCadence;
   /**
-   * Defaults to bossChargedMoveReadySeconds(boss's fast move, boss's charged
-   * move, bossStartingEnergy) — see ComparisonInputs.openingBurstSeconds for
-   * why this replaced a flat 0 default.
+   * How long the boss stays fast-move-only before it's able to throw its
+   * first charged move — defaults to bossChargedMoveReadySeconds(boss's fast
+   * move, boss's charged move, bossStartingEnergy), the earliest physically
+   * possible time, not an arbitrary number — so callers only need to
+   * override this explicitly for a scenario that isn't "boss starts fresh,
+   * this is the natural pre-charged-move window."
    */
   bossChargedMoveWarmupSeconds?: number;
-  /** See ComparisonInputs.bossStartingEnergy. Defaults to 0. */
+  /**
+   * Energy the boss already has saved when the fight begins (0-energyCost of
+   * its first charged move) — only affects the derived
+   * bossChargedMoveWarmupSeconds default above. Models a mega tagging in
+   * mid-fight against a boss an earlier trainer's mega left partway charged.
+   * Defaults to 0.
+   */
   bossStartingEnergy?: number;
   maxSeconds?: number;
   iterations?: number;
-  /** See ComparisonInputs.weather. Defaults to "none". */
+  /**
+   * Active weather condition, applied per-move (by that move's own type) to
+   * both the candidate's and the boss's damage output independently — see
+   * weather.ts's isWeatherBoosted. Defaults to "none" (today's behavior: no
+   * weather modeled), matching Scenario's default.
+   */
   weather?: WeatherCondition;
-  /** See ComparisonInputs.friendshipLevel — same single-sided, single-trainer-scoped semantics (never applied to the boss). Defaults to "none". */
+  /**
+   * The friendship attack bonus tier assumed for BOTH candidates — see
+   * damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER for the real 5-tier
+   * Gym/Raid ladder this represents. Defaults to "none" (today's behavior:
+   * no friendship bonus modeled), matching Scenario's default.
+   *
+   * UNLIKE weather, this is single-SIDED and single-trainer-scoped: it only
+   * ever boosts a candidate's OWN fast/charged damage (fastDamageOut/
+   * chargedDamageOut below), never the boss's (a raid boss has no "friend"
+   * co-participating with it, and this engine has no multi-trainer modelling
+   * at all — see CLAUDE.md's standing decision ruling out a "Teambuilding
+   * Analyzer"). It is also NOT a team-wide boost like the mega/primal
+   * `boostMultiplier` — setting this only ever changes the two candidates'
+   * own numbers, exactly like weather's per-move `isWeatherBoosted` check,
+   * never anything resembling team-boost attribution.
+   */
   friendshipLevel?: FriendshipLevel;
 }
 
@@ -582,9 +391,11 @@ export interface SustainedCandidateResult extends DistributionSummary {
 }
 
 /**
- * Phase 5: the sustained-combat counterpart to runComparison. The boss's
- * charged-move timing is randomized (see simulate.ts), so this returns a
- * distribution per candidate rather than one number.
+ * Phase 5: the sustained-combat comparison — the single code path both the
+ * test suite and the web UI drive, so "what does the tool conclude" can
+ * never drift between the two. The boss's charged-move timing is randomized
+ * (see simulate.ts), so this returns a distribution per candidate rather
+ * than one number.
  */
 export function runSustainedComparison(inputs: SustainedComparisonInputs): SustainedCandidateResult[] {
   const {
@@ -616,8 +427,8 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
 
   return candidates.map((species, i) => {
     const megaLevel = resolveCandidateMegaLevel(species, candidateMegaLevel[i]);
-    // See runComparison's identical comment — Best Buddy's +1 stacks with
-    // Super Max's +2.
+    // Best Buddy's +1 effective level stacks with Super Max's +2 — see
+    // megaLevel.ts's BEST_BUDDY_EFFECTIVE_LEVEL_BONUS doc comment.
     const effectiveLevel = effectiveLevelForMegaLevel(effectiveLevelForBestBuddy(level, candidateIsBestBuddy[i]), megaLevel);
     const stats = effectiveStatsAtLevel(species, ivs, effectiveLevel);
     const fastMove = resolveMove(species.fastMoves, inputs.candidateFastMoveIds?.[i]);
@@ -625,9 +436,9 @@ export function runSustainedComparison(inputs: SustainedComparisonInputs): Susta
     if (!fastMove || !rawChargedMove) {
       throw new Error(`Candidate ${species.id} needs at least one fast move and one charged move.`);
     }
-    // See runComparison's identical comment — a "+" move's power is scaled
-    // for this candidate's current Mega Level here, once, before every
-    // downstream use of `chargedMove`.
+    // A "+" move's power is scaled for this candidate's current Mega Level
+    // here, once, before every downstream use of `chargedMove` — see
+    // megaLevel.ts's chargedMoveAtMegaLevel.
     const chargedMove = chargedMoveAtMegaLevel(rawChargedMove, megaLevel);
     const candidateFastVsBoss = typeEffectiveness(fastMove.type, boss.types);
     const candidateChargedVsBoss = typeEffectiveness(chargedMove.type, boss.types);

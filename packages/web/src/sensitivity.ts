@@ -27,15 +27,13 @@ export interface SensitivityCheck {
 }
 
 /**
- * This panel used to run the deterministic opening-burst comparison
- * (runComparison), which meant the boss never threw a charged move at all —
- * so the old binary "Dodging: none<->perfect" check silently could never
- * flip anything (ComparisonInputs.dodge only governs charged-hit dodging),
- * and a boss-cadence check was flat-out impossible (openingBurstSeconds/
- * ComparisonInputs has no bossChargedMoveMeanIntervalSeconds equivalent at
- * all). Switched to runSustainedComparison — the same stepwise/distributional
- * path the live result cards use — so every check here now runs against a
- * model that can actually express what it's supposedly testing.
+ * Every check in this panel runs through `runSustainedComparison` — the same
+ * stepwise/distributional path the live result cards use — so each check is
+ * evaluated against a model that can actually express what it tests: the
+ * dodge check needs a boss that throws charged moves at all (dodging only
+ * ever applies to charged hits), and the boss-cadence check needs
+ * `bossChargedMoveMeanIntervalSeconds` to exist as an input. Both are
+ * properties of the sustained path specifically.
  */
 
 /**
@@ -144,8 +142,8 @@ export function computeSensitivity(
     bossFastMoveId: a.bossFastMoveId,
     bossChargedMoveId: a.bossChargedMoveId,
   };
-  // boostMultiplier/persistsThroughFaint aren't on SustainedCandidateResult
-  // (unlike the old CandidateResult) — read straight off the SpeciesDefinition,
+  // boostMultiplier/persistsThroughFaint aren't on SustainedCandidateResult —
+  // read them straight off the SpeciesDefinition,
   // same as App.tsx's result cards already do. Both are gated by the
   // candidateMegaBoostDisabled toggle (per-candidate) — a disabled or
   // genuinely non-mega candidate has boostMultiplier undefined, which must

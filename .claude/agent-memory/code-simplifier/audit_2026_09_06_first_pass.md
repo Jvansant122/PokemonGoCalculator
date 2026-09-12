@@ -15,12 +15,11 @@ packages (no unreachable-code hints). No TODO/FIXME/XXX anywhere in scanned scop
   `OpeningBurstResult` and `packages/engine/src/comparison.ts` `runComparison`/`ComparisonInputs`/
   `CandidateResult` — the "Phase 1" opening-burst comparator, zero production callers. Kept alive
   only by tests (comparison.test.ts, scenarioA/B.test.ts, bossTiming.test.ts, simulate.test.ts),
-  which frame it as a deliberate acceptance-test harness for the core stats/damage/typeChart
-  formula pipeline. **Flagged with caution, not a clean dead-code call** — plausibly intentional
-  regression-pin infrastructure adjacent to the "no user-selectable combat phase" standing
-  decision. Needs an explicit call: keep as permanent acceptance harness (document explicitly) or
-  fold into runSustainedComparison and retire Phase 1. **Do not re-flag as plain dead-code** —
-  already surfaced once with full context. Not re-audited 2026-09-09 (out of that pass's scope).
+  framed it as a deliberate acceptance-test harness for the core stats/damage/typeChart formula
+  pipeline. **RESOLVED 2026-09-11 — deleted outright** at the user's instruction ("there is no
+  opening salvo"): the whole cluster went, along with scenarioA/B.test.ts and the runComparison
+  half of comparison.test.ts. `combat.ts` now exports only `bossChargedMoveReadySeconds` (live
+  in production) and `DamageTrajectoryPoint`. Nothing left here to audit or re-flag.
 - `packages/web/src/TeamDamageChart.tsx` and `packages/web/src/DamageOverTimeChart.tsx` —
   byte-for-byte-identical `niceStep()` (~7 lines) and `formatTick()` (~4 lines). Reported.
 - Badge JSX duplication (`isHypothetical`/`isShadow` → `<span className="badge badge-...">`,

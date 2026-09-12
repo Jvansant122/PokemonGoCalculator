@@ -9,7 +9,8 @@ metadata:
 
 - [First full audit — 2026-09-06](audit_2026_09_06_first_pass.md) — repo-wide sweep before any
   memory existed. Dead exports (`Combatant`, `energy.ts` trio), the Phase-1
-  opening-burst-comparator caution flag (don't re-flag as plain dead code), chart-axis-helper and
+  opening-burst-comparator caution flag (RESOLVED 2026-09-11 — the cluster was deleted outright),
+  chart-axis-helper and
   badge-JSX duplication, `sync-data.ts`/`IvBreakpointsView.tsx` size notes, standing-decision
   exclusions confirmed.
 - [Multi-raid Power-Up Optimizer batch audit — 2026-09-09](audit_2026_09_09_multiraid_batch.md) —

@@ -52,17 +52,18 @@ off, check here first before anywhere else.
   site. A real target's tier isn't a `Scenario` field (deliberately — it's derived from `target` via
   the live raid feed, not an independent user setting; see `feedback_boss_tier_not_in_scenario.md`
   if reconsidering this).
-- **`combat.ts`** (deterministic opening-burst path): `simulateOpeningBurst` — boss uses only its
-  fast move (the window before it can throw a charged move), returns `ownDamageTrajectory`
-  (cumulative combined fast+charged damage over time, not just a final total). Also exports
-  `bossChargedMoveReadySeconds(fastMove, chargedMove, startingEnergy?)` — the single source of
-  truth for how long a boss needs to generate its first charged move's energy (a **lower bound**:
-  it doesn't model the boss gaining energy from damage taken, so real timing can only be sooner).
-  `runComparison`/`runSustainedComparison` both default their opening-burst window to this — do
-  not reintroduce a fixed number; a hardcoded/user-typed window both misrepresented the mechanic
-  and once caused degenerate all-zero sustained-fight output. This path is **not used by the live
-  web UI**, only by tests (it backs the pinned Scenario A acceptance numbers below) — the UI
-  always runs the sustained/stepwise path.
+- **`combat.ts`**: `bossChargedMoveReadySeconds(fastMove, chargedMove, startingEnergy?)` — the
+  single source of truth for how long a boss needs to generate its first charged move's energy (a
+  **lower bound**: it doesn't model the boss gaining energy from damage taken, so real timing can
+  only be sooner) — plus the `DamageTrajectoryPoint` shape. `runSustainedComparison`/`runTeamRaid`/
+  `runSpeciesReverseLookup` all default their boss fast-move-only warmup window to it — do not
+  reintroduce a fixed number; a hardcoded/user-typed window both misrepresented the mechanic and
+  once caused degenerate all-zero sustained-fight output. **There is no "opening burst" phase in
+  this engine**: the deterministic `simulateOpeningBurst`/`runComparison` cluster was deleted
+  2026-09-11 at the user's instruction ("there is no opening salvo"), so the fight is always one
+  continuous simulation and this function only answers how long the boss stays fast-move-only
+  within it. Don't rebuild that path to pin an exact number — pin against `simulateStepwiseBattle`
+  with a fixed seed instead.
 - **`breakpoints.ts`**: `findFastMoveBreakpoints` (damage breakpoint table),
   `timeToFaint`/`timeToFaintTable` (survivability, with a `DodgeBehavior` model), and
   `attackDamageGrid`/`defenseDamageGrid` (the IV x level per-hit damage grids backing the web
@@ -93,16 +94,18 @@ off, check here first before anywhere else.
   mega-bringer's own bench (a solo trainer only has one Pokémon active at a time). This is why
   `teamRaid.ts` (below) has zero cross-slot team-boost math — don't add any; it'd be mechanically
   wrong for a single trainer's own roster, not just redundant.
-- **`comparison.ts`**: `runComparison` (opening-burst, tests only) and `runSustainedComparison`
-  (the only path the web UI drives, returns a distribution). Both take `dodgeFastAttacks?`
-  alongside `dodge`; sustained also takes `holdChargedMoveUntilSafe?` (see `simulate.ts`). Each
+- **`comparison.ts`**: `runSustainedComparison` (the path the web UI drives, returns a
+  distribution) takes `dodgeFastAttacks?` alongside `dodge`, and `holdChargedMoveUntilSafe?`
+  (see `simulate.ts`). Each
   candidate's own fast move deals damage to the boss too (`ownFastMoveDamage`/
   `totalFastMoveDamage`, alongside `ownChargedDamage`/`totalChargedDamage`) — `ownTotalDamage`
   (combined) is what feeds `uptime.ts` and the chart, not charged-only. Fast and charged moves
   get their own `fastDamageOut`/`chargedDamageOut` (STAB + type-effectiveness computed
   per-move-type) — never share one `damageOut` built from the fast move's type; that bug was
-  invisible in every fixture because Scenario A's two moves happen to share a type, but wrong for
-  any species whose moves differ (very common on real species). Both entry points take optional
+  invisible in every fixture because the test-only duo's two moves happen to share a type, but
+  wrong for any species whose moves differ (very common on real species) — and as of 2026-09-11
+  **nothing tests that invariant end-to-end any more**: its coverage lived on the deleted
+  opening-burst path, so treat it as unguarded. It takes optional
   per-candidate `candidateFastMoveIds`/`candidateChargedMoveIds` (matched by index to
   `candidates`) and `bossFastMoveId`/`bossChargedMoveId`, resolved via the shared `resolveMove`
   helper (falls back to `moves[0]` when omitted/`null`/unmatched) — every species' full learnable
@@ -180,10 +183,14 @@ deleted 2026-09-06 at the user's explicit request** — living under `src/` made
 `packages/web`'s species picker, which was never the intent. That directory is now empty; don't
 repopulate it. Their namesakes (Mega Raichu X/Y, Mega Skarmory, Primal Kyogre) are all **real
 released species** and arrive as real synced data via `data-sync` — don't re-author them here.
-If you're looking for pinned-acceptance-number derivations styled like the old ones (level/IV
-sweeps, exact survival-time/damage pins), that logic now lives in `test/scenarioA.test.ts`/
-`test/scenarioB.test.ts` directly, backed by a **test-only** fixture module,
-`test/fixtures/hypotheticalDuo.ts` (`CANDIDATE_ALPHA`/`CANDIDATE_BETA`, `BOSS_TIDE`/`BOSS_GALE`).
+The **test-only** fixture module `test/fixtures/hypotheticalDuo.ts`
+(`CANDIDATE_ALPHA`/`CANDIDATE_BETA`, `BOSS_TIDE`/`BOSS_GALE`) outlived them and is used across the
+suite (`simulate`, `sustainedComparison`, `speciesReport`, `bossTiming`, `shadowEnrage`, `perf`,
+and the lineup/roster-planner fixture modules). The two acceptance-pin files that used to drive
+it, `test/scenarioA.test.ts`/`test/scenarioB.test.ts`, were **deleted 2026-09-11** along with the
+opening-burst path they pinned; their historical numbers survive only as commentary inside the
+fixture module, explicitly marked as no longer asserted. New pins go against
+`simulateStepwiseBattle`/`runSustainedComparison` with a fixed seed.
 
 **This module must stay test-only — do not move it under `src/` or re-export it from
 `src/index.ts`.** That's the one rule that actually matters here; being importable from
@@ -211,9 +218,9 @@ together. Run `npm run test:engine` from the repo root before considering a chan
 `PostToolUse` hook already reruns it automatically after any `Edit`/`Write` to
 `packages/engine/src/**/*.ts` and surfaces failures inline, but that's a safety net, not a
 substitute for actually running the suite yourself when you're done. Every existing pinned
-number (Scenario A/B, the dodge/energy/simulate mechanics above) is a regression gate — when a
-change legitimately shifts one of `scenarioB.test.ts`'s empirically-derived thresholds, say so
-explicitly and re-derive, don't silently weaken an assertion to make it pass.
+number (the dodge/energy/simulate mechanics above) is a regression gate — when a change
+legitimately shifts an empirically-derived threshold, say so explicitly and re-derive, don't
+silently weaken an assertion to make it pass.
 
 `test/perf.test.ts` is a coarse performance-regression guard inside the normal suite: each hot
 path must finish within a budget set at ~10x a locally measured number, with the measurement

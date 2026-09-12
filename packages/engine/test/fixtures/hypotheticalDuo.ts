@@ -2,8 +2,9 @@ import { RAID_BOSS_CPM, RAID_BOSS_IVS } from "../../src/raidBoss.js";
 import type { ChargedMove, FastMove, SpeciesDefinition } from "../../src/types.js";
 
 /**
- * TEST-ONLY hypothetical fixtures backing this engine's own acceptance
- * tests (scenarioA.test.ts/scenarioB.test.ts) plus every other test file that
+ * TEST-ONLY hypothetical fixtures backing this engine's own regression tests
+ * (comparison.test.ts/sustainedComparison.test.ts/simulate.test.ts/
+ * speciesReport.test.ts/bossTiming.test.ts) plus every other test file that
  * previously reused the old shared MEGA_RAICHU_X/MEGA_RAICHU_Y/PRIMAL_KYOGRE/
  * MEGA_SKARMORY fixtures (see git history / .claude/agent-memory for that
  * deletion). Deliberately NOT under src/fixtures and NOT re-exported from
@@ -15,7 +16,7 @@ import type { ChargedMove, FastMove, SpeciesDefinition } from "../../src/types.j
  * ever import this file.
  *
  * All numbers below were computed against this engine's OWN formulas
- * (stats.ts/damage.ts/typeChart.ts/combat.ts) via a throwaway script, then
+ * (stats.ts/damage.ts/typeChart.ts) via a throwaway script, then
  * pinned here as exact regression values — not derived from any external
  * spec. Hand-authored (not real synced species) on purpose: a real species'
  * base stats/movepool are outside this project's control and could shift
@@ -58,16 +59,24 @@ export const VOLT_SLAM: ChargedMove = {
  * assertion is meant to isolate, same convention as the old fixtures.
  *
  * Verified (via a throwaway script driving this engine's own
- * effectiveStatsAtLevel/calculateDamage/typeEffectiveness/simulateOpeningBurst,
- * against BOSS_TIDE below), at level 35/perfect IVs:
+ * effectiveStatsAtLevel/calculateDamage/typeEffectiveness, against BOSS_TIDE
+ * below), at level 35/perfect IVs:
  *   - Both effective HP: 150.
  *   - ARC_SPARK's damage vs BOSS_TIDE is constant across attack IV 13-15:
  *     ALPHA=5, BETA=6 (both include STAB, the 1.6x SUPER_EFFECTIVE
  *     electric-vs-water multiplier, and the 1.3x mega boost).
- *   - Fast-move-only opening burst (BOSS_TIDE's Tidal Surge only): both
- *     faint at EXACTLY 7.5s, having taken 183 damage and landed exactly 1
- *     charged attack: ALPHA=171, BETA=189 (delta +10.53%).
- * See scenarioA.test.ts for the exact assertions.
+ *   - Fast-move-only phase (BOSS_TIDE's Tidal Surge only, before it can
+ *     throw its first charged move): both faint at EXACTLY 7.5s, having
+ *     taken 183 damage and landed exactly 1 charged attack: ALPHA=171,
+ *     BETA=189 (delta +10.53%). See simulateStepwiseBattle's own tests in
+ *     simulate.test.ts for coverage of this exact matchup/timing today —
+ *     the deterministic acceptance harness that originally pinned these
+ *     numbers bit-for-bit (scenarioA.test.ts/scenarioB.test.ts, backed by
+ *     combat.ts's now-removed simulateOpeningBurst) was deleted 2026-09-11
+ *     at the user's request ("there is no opening salvo" — the
+ *     opening-burst/sustained split was never a real game concept). This
+ *     comment's numbers are kept as a historical cross-check for anyone
+ *     hand-verifying this fixture again, not as a currently-asserted pin.
  */
 export const CANDIDATE_ALPHA: SpeciesDefinition = {
   id: "test-candidate-alpha",
@@ -111,14 +120,14 @@ export const MAELSTROM: ChargedMove = {
 
 /**
  * BOSS_TIDE: a precomputed (statsArePrecomputed: true) hypothetical raid
- * boss, pure Water — the Scenario A target. Water is neutral against both
- * Electric and Steel (see typeChart.ts), so ALPHA/BETA's typing difference
- * doesn't touch a single Scenario A number, same as the old fixtures'
- * PRIMAL_KYOGRE/Raichu-X/Y relationship. Carries a persistsThroughFaint
- * party-wide boost purely as fixture metadata coverage (see
- * scenarioA.test.ts's dedicated test for it) — boss-mode damage calc never
- * reads SpeciesDefinition.boost at all, so this can't affect any pinned
- * number above.
+ * boss, pure Water — the "Candidate Alpha vs Beta" target used across
+ * comparison.test.ts/sustainedComparison.test.ts/simulate.test.ts. Water is
+ * neutral against both Electric and Steel (see typeChart.ts), so ALPHA/
+ * BETA's typing difference doesn't touch a single pinned number here, same
+ * as the old fixtures' PRIMAL_KYOGRE/Raichu-X/Y relationship. Carries a
+ * persistsThroughFaint party-wide boost purely as fixture metadata coverage
+ * — boss-mode damage calc never reads SpeciesDefinition.boost at all, so
+ * this can't affect any pinned number above.
  */
 export const BOSS_TIDE: SpeciesDefinition = {
   id: "test-boss-tide",
@@ -155,18 +164,25 @@ export const SKY_CRASH: ChargedMove = {
 
 /**
  * BOSS_GALE: a precomputed hypothetical raid boss, Steel/Flying — the
- * Scenario B target, matched to BOSS_TIDE's threat level (same effective
- * attack, 230) for a comparable A/B difficulty. Flying's attacks are
- * NOT_VERY_EFFECTIVE (0.625x) against BOTH Electric and Steel individually,
- * so ALPHA's secondary Steel typing stacks a second 0.625x multiplier
- * (0.625*0.625 = 0.390625) that BETA (pure Electric) doesn't get — the same
- * type-chart-driven survivability edge the old MEGA_RAICHU_X/MEGA_SKARMORY
- * pairing demonstrated, just with fresh numbers. Verified (same throwaway
- * script) with dodge:{kind:"none"}, dodgeFastAttacks:true,
- * openingBurstSeconds:150: ALPHA survives 110s (4 charged attacks landed,
- * 536 total charged damage) while BETA survives only 83.6s but still lands
- * MORE total charged damage (592) despite dying sooner — the crossover
- * finding Scenario B exists to demonstrate. See scenarioB.test.ts.
+ * second boss target (used where a Flying-type matchup is needed), matched
+ * to BOSS_TIDE's threat level (same effective attack, 230) for a comparable
+ * difficulty. Flying's attacks are NOT_VERY_EFFECTIVE (0.625x) against BOTH
+ * Electric and Steel individually, so ALPHA's secondary Steel typing stacks
+ * a second 0.625x multiplier (0.625*0.625 = 0.390625) that BETA (pure
+ * Electric) doesn't get — the same type-chart-driven survivability edge the
+ * old MEGA_RAICHU_X/MEGA_SKARMORY pairing demonstrated, just with fresh
+ * numbers. Verified (same throwaway script) with dodge:{kind:"none"},
+ * dodgeFastAttacks:true, a 150s fast-move-only window: ALPHA survives 110s
+ * (4 charged attacks landed, 536 total charged damage) while BETA survives
+ * only 83.6s but still lands MORE total charged damage (592) despite dying
+ * sooner — a real ranking-flip finding this pair of fixtures was built to
+ * demonstrate (Alpha's typing wins on survivability, Beta's raw attack wins
+ * on damage output). The dedicated deterministic test that pinned this
+ * exact scenario (scenarioB.test.ts, backed by the now-removed
+ * simulateOpeningBurst) was deleted 2026-09-11 along with the rest of the
+ * "opening burst" cluster — see comparison.ts's git history/this repo's
+ * engine-developer agent memory for why. This comment's numbers are kept as
+ * a historical cross-check, not as a currently-asserted pin.
  */
 export const BOSS_GALE: SpeciesDefinition = {
   id: "test-boss-gale",

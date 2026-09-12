@@ -313,7 +313,7 @@ export interface TeamRaidInputs {
    * returned to the lobby to heal (it's still the same raid attempt).
    */
   bossChargedMoveWarmupSeconds?: number;
-  /** See comparison.ts's ComparisonInputs.bossStartingEnergy. Only affects the very first fight's default warmup above. Defaults to 0. */
+  /** See comparison.ts's SustainedComparisonInputs.bossStartingEnergy. Only affects the very first fight's default warmup above. Defaults to 0. */
   bossStartingEnergy?: number;
   /** Active weather, applied per-move to both sides — see weather.ts. Defaults to "none". */
   weather?: WeatherCondition;

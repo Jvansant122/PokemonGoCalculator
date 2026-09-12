@@ -15,7 +15,7 @@ import type { WeatherCondition } from "./weather.js";
  * level/IVs/moveset/dodge/weather assumptions) is swept against a
  * caller-supplied list of boss targets, reusing runSustainedComparison
  * (single-candidate array — already legal, confirmed by reading
- * comparison.ts's ComparisonInputs.candidates: SpeciesDefinition[], no
+ * comparison.ts's SustainedComparisonInputs.candidates: SpeciesDefinition[], no
  * hardcoded length) once per boss, exactly the way teamRaid.ts reuses
  * simulateStepwiseBattle rather than forking a second combat model.
  *
@@ -124,7 +124,7 @@ export interface SpeciesReportInputs {
   megaLevel?: MegaLevel | null;
   level: number;
   ivs: IVSpread;
-  /** Governs dodging each boss's CHARGED attacks — one shared assumption swept across every boss target, same as comparison.ts's ComparisonInputs.dodge. */
+  /** Governs dodging each boss's CHARGED attacks — one shared assumption swept across every boss target, same as comparison.ts's SustainedComparisonInputs.dodge. */
   dodge: DodgeBehavior;
   /** Whether the species also attempts to dodge each boss's fast attacks. Defaults to false. */
   dodgeFastAttacks?: boolean;
@@ -136,7 +136,7 @@ export interface SpeciesReportInputs {
   bossChargedMoveMeanIntervalSeconds: number;
   /** See comparison.ts's SustainedComparisonInputs.bossChargedMoveCadence — one shared assumption swept identically across every boss target. Defaults to "fixed-interval". */
   bossChargedMoveCadence?: BossChargedMoveCadence;
-  /** See ComparisonInputs.bossStartingEnergy. Only affects each boss's own derived warmup default. Defaults to 0. */
+  /** See SustainedComparisonInputs.bossStartingEnergy. Only affects each boss's own derived warmup default. Defaults to 0. */
   bossStartingEnergy?: number;
   maxSeconds?: number;
   iterations?: number;

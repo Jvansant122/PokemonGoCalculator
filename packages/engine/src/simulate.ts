@@ -13,10 +13,11 @@ import { shadowEnragePhaseForHpFraction } from "./shadow.js";
 import type { ChargedMove, FastMove } from "./types.js";
 
 /**
- * Phase 5: a stepwise (100ms-tick) battle simulator. Unlike combat.ts's
- * simulateOpeningBurst (deterministic, boss uses only its fast move), this
- * models the sustained phase: the boss's charged-move timing is randomized,
- * so a single run is a single sample — callers should run many (see
+ * Phase 5: a stepwise (100ms-tick) battle simulator — the fight is always
+ * one continuous simulation, from the boss's fast-move-only opening through
+ * its sustained charged-move phase, with no separate deterministic "opening
+ * burst" model. The boss's charged-move timing is randomized, so a single
+ * run is a single sample — callers should run many (see
  * runStepwiseDistribution) and report a distribution, not a point estimate.
  * It also models the attacker's own charged-move animation as a vulnerability
  * window: if the boss's next hit lands before that animation completes, the
@@ -153,7 +154,7 @@ export interface StepwiseAttacker {
   attackStat: number;
   fastMove: FastMove;
   chargedMove: ChargedMove;
-  /** Damage modifiers for the attacker's OWN FAST move — see combat.ts's AttackerProfile.fastDamageOut for why this is separate from chargedDamageOut (STAB/type-effectiveness depend on the move's own type). */
+  /** Damage modifiers for the attacker's OWN FAST move — kept separate from chargedDamageOut because STAB/type-effectiveness depend on the move's own type, which can differ from the charged move's (e.g. a Dragon fast move paired with a Fire charged move). */
   fastDamageOut: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
   /** Damage modifiers for the attacker's OWN CHARGED move. */
   chargedDamageOut: Omit<DamageInputs, "power" | "attackerAttackStat" | "defenderDefenseStat">;
@@ -465,7 +466,13 @@ export interface StepwiseRunResult {
    * `holdChargedMoveDodgeCostEvents` above.
    */
   holdChargedMoveDodgeCostSeconds: number;
-  /** Combined fast+charged cumulative own damage over time — see OpeningBurstResult.ownDamageTrajectory (combat.ts) for the exact shape/semantics. */
+  /**
+   * The attacker's own cumulative damage over time — fast-move AND
+   * charged-move damage COMBINED: a point at {0, 0}, one point each time
+   * either move lands, and a final point at faintedAtSeconds (or the window
+   * end) repeating the last value — so a chart can draw a flat line after
+   * death/window-end with no special-casing.
+   */
   ownDamageTrajectory: DamageTrajectoryPoint[];
   /**
    * Cumulative damage the ATTACKER TOOK over time — same shape/semantics as
@@ -1040,8 +1047,7 @@ export function simulateStepwiseBattle(params: StepwiseSimulationParams): Stepwi
         // "boss wins the tie" for those specifically, a deliberate,
         // arbitrary-but-chosen convention (there's no finer-grained signal
         // to break the tie by, unlike the charged-move-landing case handled
-        // above) matching combat.ts's simulateOpeningBurst, which documents
-        // the same choice for its own event merge.
+        // above).
         break;
       }
       energy = Math.min(energy + energyFromDamageTaken(damage), MAX_ENERGY);

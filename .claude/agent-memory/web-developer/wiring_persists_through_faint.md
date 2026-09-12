@@ -26,7 +26,9 @@ non-persisting candidate's team damage flattens at its death time as `t` increas
 persisting one keeps climbing at the boosted per-second rate. See [[verification-without-browser-tool]].
 
 **`CandidateResult` (from `runComparison`) already carries `persistsThroughFaint: boolean`** —
-`sensitivity.ts` could read it straight off `x`/`y` with no extra plumbing. `SustainedCandidateResult`
+`sensitivity.ts` could read it straight off `x`/`y` with no extra plumbing. (Both symbols were
+deleted 2026-09-11 with the rest of the opening-burst path, so this option no longer exists; the
+conclusion below is now the only one.) `SustainedCandidateResult`
 (from `runSustainedComparison`, what `App.tsx`'s main result cards use) does NOT carry this field —
 `App.tsx` instead reads it directly off the `SpeciesDefinition` (`species.candidates?.[i]?.boost?.persistsThroughFaint`),
 which it already does for `boostMultiplier` today. No engine change was needed for this gap.

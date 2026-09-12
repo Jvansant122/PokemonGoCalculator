@@ -1,10 +1,78 @@
 # Handoff
 
-Last updated: 2026-09-11 (repo and docs cleanup — no product behaviour changed). Read `CLAUDE.md`
+Last updated: 2026-09-12 (the opening-burst engine cluster deleted). Read `CLAUDE.md`
 first for durable project architecture/conventions — this file is the point-in-time "what's done,
 what's next."
 
-## 2026-09-11 (latest): repo and docs cleanup — no product behaviour changed
+## 2026-09-12 (latest): the "opening burst" path is gone from the engine
+
+The user's instruction was flat: **"There is no opening salvo."** The deterministic Phase 1
+opening-burst cluster is deleted, not deprecated.
+
+**Deleted.** `combat.ts`'s `simulateOpeningBurst`/`AttackerProfile`/`BossProfile`/
+`OpeningBurstResult`, `comparison.ts`'s `runComparison`/`ComparisonInputs`/`CandidateResult`,
+`test/scenarioA.test.ts`, `test/scenarioB.test.ts`, and the `runComparison` half of
+`test/comparison.test.ts` (its `resolveCandidateMegaLevel` tests survive). This overrode the
+2026-09-06 code-simplifier note in `combat.ts` that said not to delete the cluster without first
+migrating its coverage; that note went with it. `combat.ts` is now just
+`bossChargedMoveReadySeconds` (live in production — `simulate.ts`'s boss warmup default) plus
+`DamageTrajectoryPoint`, and its doc comment states outright that there is no opening-burst phase:
+the fight is one continuous simulation and that function only answers how long the boss stays
+fast-move-only within it. 19 files, 195 insertions, 1,594 deletions.
+
+**Two real coverage gaps, deliberately not migrated** — worth knowing before you trust these
+invariants:
+
+1. **Nothing tests per-move STAB/type-effectiveness for a species whose fast and charged moves
+   differ in type** (the "one shared `damageOut` built from the fast move's type" bug shape). That
+   was a real bug once, and its only end-to-end guard lived on the deleted path. Recorded as an
+   explicitly unguarded invariant in `.claude/agents/engine-developer.md`.
+2. **Nothing exercises explicit `candidateFastMoveIds`/`bossFastMoveId` move selection end-to-end
+   through `runSustainedComparison`** — only incidentally, via `compareAcrossBossMovesets`.
+
+A third (friendship boosts the candidate, never the boss, through that entry point specifically) is
+still covered via `teamRaid.test.ts`/`damage.test.ts`. Shadow multipliers, raid-tier threading,
+weather, and the whole `candidateMegaLevel` Super Max block were duplicated elsewhere and lost
+nothing. New pins go against `simulateStepwiseBattle`/`runSustainedComparison` with a fixed seed.
+
+**Stale cross-references cleaned up** so nothing points at deleted symbols: `packages/web`'s
+`sensitivity.ts` and `registry.ts`, four passages in `.claude/agents/engine-developer.md`, and the
+agent-memory notes that told future agents to keep the cluster alive (`code-simplifier`'s audit +
+index, `meta-architect`'s changelog-drift note, `web-developer`'s persists-through-faint note).
+
+**Queued from two UI passes run the same day** (`pogo-researcher` on source, `pogo-player` on the
+live app) — verified, not yet built:
+
+- **The fast-dodge lockout is invisible AND misreported.** The engine computes
+  `dodgeFastAttacksLockout` (`simulate.ts`) / `fastMoveCadenceTooFastToDodge` (`breakpoints.ts`)
+  and carries it on results reaching the Comparator, Species Report and Team Raid; `packages/web`
+  has **zero** references to either. Worse, with both candidates at `0.0 OWN DPS` (real case: Mega
+  Tyranitar, Bite at 500ms, dodge-fast-attacks on) the chart caption still claims a winner —
+  `rankingFlip.ts`'s `finalLeader` uses `x >= y`, so `0 >= 0` names candidate X. Any exact tie
+  misreports, not just the lockout case, while the moveset-roll table in the same view correctly
+  prints `tied`. **This is the next thing being built.**
+- **Friendship (up to 1.12x, real raid mechanic) reaches only 2 of 7 tabs.** Absent from Species
+  Report, IV Breakpoints, Attack/Defense Breakpoints and the Power-Up Optimizer —
+  `friendshipLevel` appears 0× in `speciesReport.ts`/`breakpoints.ts`/`powerUp.ts`. `pogo-player`
+  argued against a uniform rollout: a caveat is honest enough on the two aggregate-ranking tabs, but
+  the two breakpoint tabs sell an *exact* floored crossing that a pre-floor multiplier can move.
+  **Measure whether a friendship-driven breakpoint shift is observable before scheduling either.**
+  Note the trap: `PowerUpOptimizerInputs` inherits `friendshipLevel` structurally, so the
+  simulation would honour it immediately while `powerUp.ts`'s separate breakpoint-ladder recompute
+  would keep ignoring it — reintroducing the exact ladder-vs-simulation disagreement the Mega Level
+  work was built to fix. Adding the control to four tabs also means four codecs and
+  `check-scenario-roundtrip` (`add-scenario-assumption` skill).
+- **Design, all web-side:** Team Raid's "Cleared" headline sits above a *red* box explaining the
+  moveset risk (right copy, wrong colour — amber); at 375px the tab strip renders with no tab marked
+  active after a resize/rotate or a deep link; the Power-Up Optimizer's Single/Multi-raid toggle
+  overflows into a second nested horizontal scroll; the Roster summary card spends a lot of vertical
+  space on five one-digit integers.
+
+**`meta-researcher` added** (11th agent) — scouts the Claude Code platform for capabilities this
+repo isn't using, capped at three priced recommendations per pass, retirement in scope, proposes
+only and never edits `.claude/` (findings go to `meta-architect`). Committed separately.
+
+## 2026-09-11: repo and docs cleanup — no product behaviour changed
 
 Housekeeping pass, no feature work. Every number the app shows is unchanged.
 
