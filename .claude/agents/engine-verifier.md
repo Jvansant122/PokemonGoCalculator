@@ -35,6 +35,17 @@ The pinned Scenario A set (`test/scenarioA.test.ts`, using the test-only fixture
 - Both candidates compute to exactly 150 HP at level 35 with perfect stamina IV.
 - Beta's fast move deals 6 damage, Alpha's deals 5, across attack IVs 13–15 at level 35.
 
+## Step zero: rule out worker noise
+
+`npm run test:engine` on this machine sometimes prints an error count and exits non-zero while
+every listed test still passes — those errors are vitest worker processes dying with
+`FATAL ERROR: Zone Allocation failed - process out of memory`, which is a process-spawn problem,
+not a regression. Before touching the diagnosis order below, rerun once from `packages/engine`
+with `npx vitest run --pool=forks --poolOptions.forks.singleFork=true` (kill leftover `node.exe`
+processes first if it persists). If that run is clean, report it as environment noise and stop —
+there is nothing to diagnose. Only a test marked ✗, or a failure that survives the single-fork
+rerun, is real.
+
 ## Diagnosis order
 
 When an anchor test fails, check these in order before looking anywhere else:

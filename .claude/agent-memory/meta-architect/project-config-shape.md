@@ -1,22 +1,23 @@
 ---
 name: project-config-shape
-description: Current shape of this repo's Claude Code config — 9 agents, 7 skills, 2 hooks, a permissions allowlist — plus the deliberate settings behind them and where sizes actually matter (snapshot 2026-09-08).
+description: Current shape of this repo's Claude Code config — 11 agents, 7 skills, 2 hooks, a permissions allowlist — plus the deliberate settings behind them and where sizes actually matter (snapshot 2026-09-12).
 metadata:
   type: project
 ---
 
 **Snapshot 2026-09-08.** Nine agents in `.claude/agents/`: `data-sync`, `engine-developer`,
 `engine-verifier`, `web-developer`, `site-builder`, `code-simplifier`, `skeptic`,
-`pogo-researcher`, `meta-architect` — plus `pogo-player` (added 2026-09-10, so **ten** as of
-then). Per-agent audits: [[six-agent-split]], [[pogo-researcher-addition]],
+`pogo-researcher`, `meta-architect` — plus `pogo-player` (added 2026-09-10) and `meta-researcher`
+(added 2026-09-12: outward-facing platform scout, proposes only, `disallowedTools: Edit`, never
+edits `.claude/` itself), so **eleven** as of 2026-09-12. Per-agent audits: [[six-agent-split]], [[pogo-researcher-addition]],
 [[skeptic-addition]], [[code-simplifier-addition]], [[pogo-player-addition]].
 
 Seven skills in `.claude/skills/`: `verify-and-ship`, `watch-github-actions`,
 `add-scenario-assumption`, `new-tab`, `add-mega-allowlist-entry`, `record-mechanic`,
 `close-session` — the last four added 2026-09-08 ([[skills-and-gates-2026-09-08]]).
 
-Sizes (2026-09-10): agent bodies ~93 KB total; description-field sum ~4.85k chars (~1.2k tokens)
-across all 10 — far under the ~15k-token warning, so descriptions are never the lever. CLAUDE.md
+Sizes (2026-09-12): agent bodies ~105 KB total; description-field sum ~5.3k chars (~1.3k tokens)
+across all 11 — far under the ~15k-token warning, so descriptions are never the lever. CLAUDE.md
 (~21 KB → ~5.3k tokens) is the expensive surface: loaded into the main conversation *and* every
 non-Explore/Plan subagent. Measure it before touching descriptions.
 
@@ -25,7 +26,10 @@ Deliberate settings, don't relitigate:
   [[engine-verifier-hook-overlap]].
 - `code-simplifier` / `skeptic` / `pogo-researcher` / `pogo-player`: `Write` granted **only** for their own memory
   file; each body says so explicitly, which is what makes the grant justifiable.
-- `meta-architect`: `model: inherit`, `memory: project`.
+- `meta-architect`: `model: inherit`, `memory: project`. `meta-researcher`: `Write` for its own
+  memory only + `disallowedTools: Edit` — the boundary that keeps it a proposer.
+- Machine-specific quirks an agent must know go in that agent's BODY: the user's private
+  cross-session memory is not inherited by Task-spawned subagents ([[skills-frontmatter-preload]]).
 - `.claude/settings.json`: `SessionStart` → `.claude/hooks/session-start.sh` (Node on PATH via
   `CLAUDE_ENV_FILE`, prints git status + HANDOFF.md newest section + pending PLAN files);
   `PostToolUse` Edit|Write → `.claude/hooks/post-edit.mjs` (engine src → engine tests; web src →
