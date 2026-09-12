@@ -365,6 +365,7 @@ describe("IvBreakpointsScenario round-trip", () => {
     weather: "cloudy",
     megaLevel: "max",
     isShadow: true,
+    friendshipLevel: "best",
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -398,6 +399,7 @@ describe("AttackDefenseBreakpointsScenario round-trip", () => {
     mode: "defense",
     megaLevel: "super-max",
     isShadow: true,
+    friendshipLevel: "ultra",
   };
 
   it("round-trips a fully populated non-default scenario through the URL transport", () => {
@@ -470,6 +472,11 @@ describe("PowerUpOptimizerScenario round-trip", () => {
     dodgeFastAttacks: true,
     holdChargedMoveUntilSafe: true,
     weather: "partly_cloudy",
+    // Non-default: PU_DEFAULTS is "none". Single-raid mode only (this
+    // nonDefault case uses "multi-raid" for `mode` itself, same as rankBy
+    // above it — the field still round-trips regardless of which mode is
+    // active, see powerUpOptimizerScenario.ts's own doc comment).
+    friendshipLevel: "great",
     bossChargedMoveFrequencySeconds: 11,
     bossChargedMoveCadence: "energy-driven",
     bossStartsPrimed: true,

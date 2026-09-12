@@ -1,4 +1,12 @@
-import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
+import {
+  fromBase64Url,
+  toBase64Url,
+  type DodgeBehavior,
+  type FriendshipLevel,
+  type IVSpread,
+  type MegaLevel,
+  type WeatherCondition,
+} from "@pogo-analyzer/engine";
 
 /**
  * The complete, shareable description of one "IV Breakpoints" run — a sibling
@@ -54,6 +62,22 @@ export interface IvBreakpointsScenario {
    * IvBreakpointsView's normalizeAssumptions.
    */
   isShadow: boolean;
+  /**
+   * The species' own friendship tier (see FriendshipSelect.tsx /
+   * packages/engine/src/damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER) —
+   * applied to BOTH spreads' fast/charged OUTGOING damage only (same species/
+   * moveset, differing only in IVs), never to the target's incoming fast
+   * move (see IvBreakpointsView.tsx's own note on why `incomingDamageModifiers`
+   * must not read this). Measured 2026-09-12 (engine-developer's
+   * measurement_friendship_bonus_breakpoint_impact.md): this tab's per-level
+   * damage cells are exact floored values, and friendship moves at least one
+   * breakpoint in 32-100% of tested matchups even at the weakest real tier
+   * (Good Friend) — a real control, not a cosmetic one. Optional so a link
+   * shared before this field existed decodes via `??` rather than surfacing
+   * `undefined` into the friendship `<select>`. Defaults to `"none"`,
+   * matching today's implicit (no bonus) behavior.
+   */
+  friendshipLevel?: FriendshipLevel;
 }
 
 function encodeIvBreakpointsScenario(scenario: IvBreakpointsScenario): string {

@@ -145,6 +145,7 @@ export function powerUpOptimizerAssumptionsToTeamAssumptions(
     dodgeFastAttacks: a.dodgeFastAttacks,
     holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
     weather: a.weather,
+    friendshipLevel: a.friendshipLevel,
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
     // See this function's own doc comment — every gated field below carries
     // a real, non-default value from the source tab, so it should be
@@ -157,11 +158,12 @@ export function powerUpOptimizerAssumptionsToTeamAssumptions(
     raidTimerSeconds: a.raidTimerSeconds,
     swapCostSeconds: a.swapCostSeconds,
     reviveCostSeconds: a.reviveCostSeconds,
-    // PowerUpOptimizerAssumptions has no equivalent of these three fields
+    // PowerUpOptimizerAssumptions has no equivalent of these two fields
     // (added to Team Raid after this export function existed) — plain
     // defaults, same as a fresh Team Raid scenario, rather than inventing a
-    // value this source tab never expressed an opinion on.
-    friendshipLevel: "none",
+    // value this source tab never expressed an opinion on. friendshipLevel
+    // USED to be a third one but is carried verbatim above now that the
+    // source tab has its own (single-raid-only) copy of that field.
     bossMaxHpOverrideEnabled: false,
     reselectAfterWipeEnabled: false,
   };

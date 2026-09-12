@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import type { MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
+import type { FriendshipLevel, MegaLevel, SpeciesDefinition, WeatherCondition } from "@pogo-analyzer/engine";
 import { BreakpointSheet } from "./BreakpointSheet.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
+import { FriendshipSelect } from "./FriendshipSelect.js";
 import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect, MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
@@ -39,6 +40,8 @@ export interface AttackDefenseBreakpointsAssumptions {
   megaLevel: MegaLevel | null;
   /** See AttackDefenseBreakpointsScenario.isShadow. */
   isShadow: boolean;
+  /** See AttackDefenseBreakpointsScenario.friendshipLevel — Attack mode only. */
+  friendshipLevel: FriendshipLevel;
 }
 
 export const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
@@ -52,6 +55,7 @@ export const DEFAULT_ASSUMPTIONS: AttackDefenseBreakpointsAssumptions = {
   mode: "attack",
   megaLevel: null,
   isShadow: false,
+  friendshipLevel: "none",
 };
 
 export function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): AttackDefenseBreakpointsScenario {
@@ -66,6 +70,7 @@ export function assumptionsToScenario(a: AttackDefenseBreakpointsAssumptions): A
     mode: a.mode,
     megaLevel: a.megaLevel,
     isShadow: a.isShadow,
+    friendshipLevel: a.friendshipLevel,
   };
 }
 
@@ -86,6 +91,9 @@ export function scenarioToAssumptions(s: AttackDefenseBreakpointsScenario): Atta
     // than surfacing `undefined` into the Mega Level <select>.
     megaLevel: s.megaLevel ?? DEFAULT_ASSUMPTIONS.megaLevel,
     isShadow: s.isShadow ?? DEFAULT_ASSUMPTIONS.isShadow,
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the friendship <select>.
+    friendshipLevel: s.friendshipLevel ?? DEFAULT_ASSUMPTIONS.friendshipLevel,
   };
 }
 
@@ -275,6 +283,21 @@ export function AttackDefenseBreakpointsView() {
                   onChange={(id) => setAssumptions({ ...assumptions, chargedMoveId: id })}
                   opponents={bossOpponent}
                 />
+                {/*
+                  Attack mode only — see AttackDefenseBreakpointsScenario.friendshipLevel's
+                  own doc comment for why this is never shown (or wired) in
+                  Defense mode: friendship boosts only the attacker whose tier
+                  this is, and Defense mode's "attacker" is the boss, which
+                  this engine never scales by the player's own friendship.
+                  Hiding rather than disabling, same "an inert control is
+                  worse than no control" precedent as this project's own
+                  mega/primal boost UI (see hide_inert_boost_ui memory).
+                */}
+                <FriendshipSelect
+                  idPrefix="adb"
+                  value={assumptions.friendshipLevel}
+                  onChange={(f) => setAssumptions({ ...assumptions, friendshipLevel: f })}
+                />
               </>
             )}
           </div>
@@ -416,6 +439,16 @@ export function AttackDefenseBreakpointsView() {
           modelled here despite that gap: Super Max's CP bump shifts the swept Attack/Defense-stat lookup, and a
           selected "+" charged move's scaled power feeds the Attack-mode charged grid directly — neither touches
           the own-damage boost multiplier this paragraph is about.
+        </p>
+        <h3>Friendship bonus</h3>
+        <p className="caveats">
+          The friendship control above applies only in Attack mode (this species' own outgoing damage) — a
+          co-participating friend never boosts the BOSS's damage, so it has no effect on the Defense-mode grids and is
+          hidden there rather than shown inert. Unlike the Species Report tab's aggregate ranking (where friendship
+          scales nearly every row near-uniformly and barely moves the ORDER), this tab reads exact floored per-hit
+          values, and a real, measured pass found friendship moves at least one breakpoint in 32-100% of tested
+          matchups even at the weakest real tier (Good Friend, +3%) — treat the control as load-bearing, not
+          decorative.
         </p>
         <h3>Mega Level — full sourcing</h3>
         <p className="caveats">{MEGA_LEVEL_HINT}</p>

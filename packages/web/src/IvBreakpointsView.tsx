@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   type DodgeBehavior,
+  type FriendshipLevel,
   type IVSpread,
   type IvComparisonRow,
   type MegaLevel,
@@ -48,6 +49,8 @@ export interface IvBreakpointsAssumptions {
   megaLevel: MegaLevel | null;
   /** See IvBreakpointsScenario.isShadow — one shared toggle for both spreads (same species/moveset). */
   isShadow: boolean;
+  /** See IvBreakpointsScenario.friendshipLevel — one shared tier for both spreads' outgoing damage only. */
+  friendshipLevel: FriendshipLevel;
 }
 
 export const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
@@ -62,6 +65,7 @@ export const DEFAULT_ASSUMPTIONS: IvBreakpointsAssumptions = {
   weather: "none",
   megaLevel: null,
   isShadow: false,
+  friendshipLevel: "none",
 };
 
 export function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpointsScenario {
@@ -77,6 +81,7 @@ export function assumptionsToScenario(a: IvBreakpointsAssumptions): IvBreakpoint
     weather: a.weather,
     megaLevel: a.megaLevel,
     isShadow: a.isShadow,
+    friendshipLevel: a.friendshipLevel,
   };
 }
 
@@ -98,6 +103,9 @@ export function scenarioToAssumptions(s: IvBreakpointsScenario): IvBreakpointsAs
     // than surfacing `undefined` into the Mega Level <select>.
     megaLevel: s.megaLevel ?? DEFAULT_ASSUMPTIONS.megaLevel,
     isShadow: s.isShadow ?? DEFAULT_ASSUMPTIONS.isShadow,
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the friendship <select>.
+    friendshipLevel: s.friendshipLevel ?? DEFAULT_ASSUMPTIONS.friendshipLevel,
   };
 }
 

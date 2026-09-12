@@ -77,10 +77,14 @@ function slotToPowerUpSlot(
  * Lineup Builder — else the shared roster-wide spread fanned out per-slot,
  * see slotToPowerUpSlot above), and every combat assumption both tabs share
  * verbatim (dodge model, dodgeFastAttacks, holdChargedMoveUntilSafe,
- * weather, boss charged-move frequency + cadence, bossStartsPrimed,
- * bossStartingEnergyFraction, raidTimerSeconds, swapCostSeconds,
- * reviveCostSeconds) — these mean the same thing on both tabs, so they carry
- * unchanged rather than reverting to the destination's own defaults.
+ * weather, friendshipLevel, boss charged-move frequency + cadence,
+ * bossStartsPrimed, bossStartingEnergyFraction, raidTimerSeconds,
+ * swapCostSeconds, reviveCostSeconds) — these mean the same thing on both
+ * tabs, so they carry unchanged rather than reverting to the destination's
+ * own defaults. `friendshipLevel` carries even though the destination's
+ * multi-raid mode can't use it (rosterPlanner.ts has no such field) — this
+ * export always lands in single-raid mode (see below), where it's fully
+ * honored.
  *
  * What does NOT carry, and lands on the Power-Up Optimizer's own
  * "nothing entered yet" resting state instead of a silently-invented number
@@ -116,6 +120,7 @@ export function teamAssumptionsToPowerUpOptimizerAssumptions(team: TeamAssumptio
     dodgeFastAttacks: team.dodgeFastAttacks,
     holdChargedMoveUntilSafe: team.holdChargedMoveUntilSafe,
     weather: team.weather,
+    friendshipLevel: team.friendshipLevel,
     bossChargedMoveFrequencySeconds: team.bossChargedMoveFrequencySeconds,
     bossChargedMoveCadence: team.bossChargedMoveCadence,
     bossStartsPrimed: team.bossStartsPrimed,

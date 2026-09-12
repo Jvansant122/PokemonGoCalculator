@@ -206,6 +206,14 @@ export function runPowerUpOptimizerScenario(a: PowerUpOptimizerAssumptions, regi
         bossChargedMoveCadence: a.bossChargedMoveCadence,
         bossStartingEnergy,
         weather: a.weather,
+        // Single-raid mode only — see PowerUpOptimizerAssumptions.friendshipLevel's
+        // own doc comment. Reaches BOTH optimizePowerUps' ranked candidates
+        // AND its powerUpDamageLadder per-slot headline (fixed 5be01ce so the
+        // two never disagree), plus planPowerUpBudget below (same
+        // `optimizerInputs` object) — PowerUpBudgetInputs extends
+        // PowerUpOptimizerInputs extends (most of) TeamRaidInputs, which
+        // already declares friendshipLevel.
+        friendshipLevel: a.friendshipLevel,
         raidTimerSeconds: a.raidTimerSeconds,
         swapCostSeconds: a.swapCostSeconds,
         reviveCostSeconds: a.reviveCostSeconds,

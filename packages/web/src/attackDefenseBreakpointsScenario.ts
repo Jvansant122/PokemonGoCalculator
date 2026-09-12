@@ -1,4 +1,4 @@
-import { fromBase64Url, toBase64Url, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
+import { fromBase64Url, toBase64Url, type FriendshipLevel, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
 
 /** Which half of the tab is currently rendering — see AttackDefenseBreakpointsView.tsx's own doc comment. */
 export type AttackDefenseBreakpointsMode = "attack" | "defense";
@@ -69,6 +69,24 @@ export interface AttackDefenseBreakpointsScenario {
    * normalizeAssumptions.
    */
   isShadow: boolean;
+  /**
+   * The species' own friendship tier (see FriendshipSelect.tsx /
+   * packages/engine/src/damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER) —
+   * consumed ONLY by the Attack-mode grids (this species' own outgoing
+   * damage). Deliberately does NOT reach the Defense-mode grids: a
+   * co-participating friend boosts only the attacker whose friendship tier
+   * this is, and in Defense mode the "attacker" is the BOSS, whose damage
+   * this engine never scales by the player's own friendship (see
+   * AttackDefenseBreakpointsView's "Known caveats" section). Measured
+   * 2026-09-12 (engine-developer's measurement_friendship_bonus_breakpoint_impact.md):
+   * this tab's cells are exact floored values, and friendship moves at least
+   * one breakpoint in 32-100% of tested matchups even at the weakest real
+   * tier (Good Friend) — a real control, not a cosmetic one. Optional so a
+   * link shared before this field existed decodes via `??` rather than
+   * surfacing `undefined`. Defaults to `"none"`, matching today's implicit
+   * (no bonus) behavior.
+   */
+  friendshipLevel?: FriendshipLevel;
 }
 
 function encodeAttackDefenseBreakpointsScenario(scenario: AttackDefenseBreakpointsScenario): string {

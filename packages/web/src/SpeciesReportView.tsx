@@ -979,6 +979,21 @@ export function SpeciesReportView({
           </p>
         </details>
         <details className="prose-details">
+          <summary>Friendship bonus</summary>
+          <p>
+          This ranking assumes no friendship attack bonus (see FriendshipSelect.tsx / MECHANICS.md's "The friendship
+          attack bonus is a RAID/GYM mechanic, not PvP") — there is no friendship control on this tab, unlike IV
+          Breakpoints and Attack/Defense Breakpoints, which both got one. That's a deliberate, measured split, not an
+          oversight: a real pass (engine-developer, 2026-09-12) ran this exact aggregate ranking across all 771 real
+          historical raid bosses at friendship none/good/forever and found the rank correlation stayed &ge;0.989 in
+          every case, with the TOP-10 boss set identical across all three tiers — friendship scales nearly every row
+          by the same 3-12% multiplier, so it moves absolute damage/survival numbers but barely reshuffles the ORDER
+          this tab exists to report. The two Breakpoints tabs read one exact floored value directly, where a
+          sub-1-unit shift can flip a cell; this tab sums hundreds of floored hits into a distribution, which washes
+          that sensitivity out except among already near-tied rows.
+          </p>
+        </details>
+        <details className="prose-details">
           <summary>Boss movesets</summary>
           <p>
           Every swept boss attacks with its own FIRST fast move and FIRST charged move only — unlike the

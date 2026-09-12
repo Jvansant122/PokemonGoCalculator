@@ -81,6 +81,10 @@ export function runAttackDefenseBreakpointsScenario(
             stab: species.types.includes(fastMove.type),
             typeEffectiveness: typeEffectiveness(fastMove.type, boss.types),
             weatherBoosted: isWeatherBoosted(fastMove.type, a.weather),
+            // Species' own bonus (outgoing damage only) — see
+            // AttackDefenseBreakpointsScenario.friendshipLevel's doc comment
+            // for why Defense mode below deliberately never sets this.
+            friendshipLevel: a.friendshipLevel,
           },
           ivRange: IVS_0_TO_15,
           levels: LEVELS_25_TO_50,
@@ -94,6 +98,7 @@ export function runAttackDefenseBreakpointsScenario(
             stab: species.types.includes(chargedMove.type),
             typeEffectiveness: typeEffectiveness(chargedMove.type, boss.types),
             weatherBoosted: isWeatherBoosted(chargedMove.type, a.weather),
+            friendshipLevel: a.friendshipLevel,
           },
           ivRange: IVS_0_TO_15,
           levels: LEVELS_25_TO_50,
@@ -107,6 +112,12 @@ export function runAttackDefenseBreakpointsScenario(
         if (!bossChargedMove) throw new Error(`${boss.name} has no charged move defined.`);
         const { attack: bossAttackStat } = bossEffectiveStats(boss, bossRaidTier);
 
+        // NO a.friendshipLevel anywhere below — this is the BOSS's own
+        // outgoing damage against our species' defense. A co-participating
+        // friend only ever boosts the player's own damage, never the boss's
+        // (see AttackDefenseBreakpointsScenario.friendshipLevel's own doc
+        // comment, and IvBreakpointsView's incomingDamageModifiers for the
+        // same rule applied to the sibling tab).
         const fast = defenseDamageGrid({
           baseDefense: adjustedBaseStats.baseDefense,
           attackerAttackStat: bossAttackStat,

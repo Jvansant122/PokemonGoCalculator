@@ -1,6 +1,14 @@
-import { type DodgeBehavior, type MegaLevel, type RosterSignificanceMode, type SpeciesDefinition, type WeatherCondition } from "@pogo-analyzer/engine";
+import {
+  type DodgeBehavior,
+  type FriendshipLevel,
+  type MegaLevel,
+  type RosterSignificanceMode,
+  type SpeciesDefinition,
+  type WeatherCondition,
+} from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { NumberField } from "./NumberField.js";
+import { FriendshipSelect } from "./FriendshipSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
 import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
@@ -122,6 +130,14 @@ export interface PowerUpOptimizerAssumptions {
   dodgeFastAttacks: boolean;
   holdChargedMoveUntilSafe: boolean;
   weather: WeatherCondition;
+  /**
+   * Single-raid mode only — see powerUpOptimizerScenario.ts's own field doc
+   * comment for why `rosterPlanner.ts` (multi-raid) has no equivalent. The
+   * panel keeps the control visible but disabled in multi-raid mode with an
+   * explicit note, same "don't silently disappear a setting" precedent as
+   * this file's own boss-charged-move-frequency field.
+   */
+  friendshipLevel: FriendshipLevel;
   bossChargedMoveFrequencySeconds: number;
   bossChargedMoveCadence: BossChargedMoveCadence;
   bossStartsPrimed: boolean;
@@ -1000,6 +1016,22 @@ export function PowerUpOptimizerAssumptionPanel({
         )}
 
         <WeatherSelect idPrefix="pu" value={value.weather} onChange={(w) => set("weather", w)} />
+
+        <div>
+          <FriendshipSelect
+            idPrefix="pu"
+            value={value.friendshipLevel}
+            onChange={(f) => set("friendshipLevel", f)}
+            disabled={value.mode === "multi-raid"}
+          />
+          {value.mode === "multi-raid" && (
+            <p className="species-picker-hint">
+              Multi-raid mode doesn't model friendship yet — rosterPlanner.ts (the engine module behind this mode) has
+              no friendshipLevel field at all. This setting only affects single-raid mode's ranked candidates and
+              per-slot ladder.
+            </p>
+          )}
+        </div>
 
         <BossCadenceSelect idPrefix="pu" value={value.bossChargedMoveCadence} onChange={(v) => set("bossChargedMoveCadence", v)} />
 

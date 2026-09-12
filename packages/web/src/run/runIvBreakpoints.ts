@@ -94,15 +94,24 @@ export function runIvBreakpointsScenario(a: IvBreakpointsAssumptions, registry: 
           stab: species.types.includes(fastMove.type),
           typeEffectiveness: typeEffectiveness(fastMove.type, boss.types),
           weatherBoosted: isWeatherBoosted(fastMove.type, a.weather),
+          // Species' own bonus (outgoing damage only) — never the boss's, see
+          // incomingDamageModifiers below, which deliberately omits it.
+          friendshipLevel: a.friendshipLevel,
         },
         chargedMoveDamageModifiers: {
           stab: species.types.includes(chargedMove.type),
           typeEffectiveness: typeEffectiveness(chargedMove.type, boss.types),
           weatherBoosted: isWeatherBoosted(chargedMove.type, a.weather),
+          friendshipLevel: a.friendshipLevel,
         },
         bossAttackStat,
         bossFastMovePower: bossFastMove.power,
         bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
+        // NO friendshipLevel here — this is the TARGET's incoming fast move
+        // against our species' own defense. A co-participating friend boosts
+        // only the attacker whose friendship level this is, never the boss's
+        // damage output (see damage.ts's FRIENDSHIP_ATTACK_BONUS_MULTIPLIER
+        // doc comment).
         incomingDamageModifiers: {
           stab: boss.types.includes(bossFastMove.type),
           typeEffectiveness: typeEffectiveness(bossFastMove.type, species.types),
@@ -154,15 +163,18 @@ export function runIvBreakpointsScenario(a: IvBreakpointsAssumptions, registry: 
             stab: species.types.includes(fastMove.type),
             typeEffectiveness: typeEffectiveness(fastMove.type, bossSpecies.types),
             weatherBoosted: isWeatherBoosted(fastMove.type, a.weather),
+            friendshipLevel: a.friendshipLevel,
           },
           chargedMoveDamageModifiers: {
             stab: species.types.includes(chargedMove.type),
             typeEffectiveness: typeEffectiveness(chargedMove.type, bossSpecies.types),
             weatherBoosted: isWeatherBoosted(chargedMove.type, a.weather),
+            friendshipLevel: a.friendshipLevel,
           },
           bossAttackStat,
           bossFastMovePower: bossFastMove.power,
           bossFastMoveDurationSeconds: bossFastMove.durationSeconds,
+          // NO friendshipLevel — see the single-target call above.
           incomingDamageModifiers: {
             stab: bossSpecies.types.includes(bossFastMove.type),
             typeEffectiveness: typeEffectiveness(bossFastMove.type, species.types),

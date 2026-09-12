@@ -2,6 +2,7 @@ import {
   fromBase64Url,
   toBase64Url,
   type DodgeBehavior,
+  type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
   type RosterSignificanceMode,
@@ -103,6 +104,22 @@ export interface PowerUpOptimizerScenario {
   dodgeFastAttacks: boolean;
   holdChargedMoveUntilSafe: boolean;
   weather: WeatherCondition;
+  /**
+   * Single-raid mode only — `rosterPlanner.ts` (the multi-raid engine
+   * module) has NO friendshipLevel field at all (confirmed by grep, zero
+   * matches), so this is inert there; the panel disables (not hides) its own
+   * control in multi-raid mode with an explicit note, and this field is
+   * carried through the multi-raid path as an unread placeholder rather than
+   * gating which fields exist on the scenario. See
+   * run/runPowerUpOptimizer.ts's own doc comment for where this actually
+   * reaches the engine (both `optimizePowerUps`' ranked candidates AND its
+   * `powerUpDamageLadder` per-slot headline, and `planPowerUpBudget` —
+   * `PowerUpOptimizerInputs extends TeamRaidInputs`, which already declares
+   * `friendshipLevel`, see 5be01ce). Optional so a link shared before this
+   * field existed decodes via `??` rather than surfacing `undefined`.
+   * Defaults to `"none"`, matching today's implicit (no bonus) behavior.
+   */
+  friendshipLevel?: FriendshipLevel;
   bossChargedMoveFrequencySeconds: number;
   /** See bossCadence.tsx's BOSS_CADENCE_HINT. Optional so a link shared before this field existed decodes via `??` rather than surfacing `undefined`. */
   bossChargedMoveCadence?: BossChargedMoveCadence;

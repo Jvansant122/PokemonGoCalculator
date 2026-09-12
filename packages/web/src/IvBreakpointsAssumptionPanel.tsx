@@ -1,6 +1,7 @@
 import type { DodgeBehavior, SpeciesDefinition } from "@pogo-analyzer/engine";
 import { CollapsibleSection } from "./CollapsibleSection.js";
 import { NumberField } from "./NumberField.js";
+import { FriendshipSelect } from "./FriendshipSelect.js";
 import { MoveSelect, type MoveSelectOpponent } from "./MoveSelect.js";
 import { MegaLevelSelect } from "./megaLevelSelect.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
@@ -98,6 +99,11 @@ export function IvBreakpointsAssumptionPanel({
                 species={species}
                 value={assumptions.megaLevel}
                 onChange={(level) => setAssumptions({ ...assumptions, megaLevel: level })}
+              />
+              <FriendshipSelect
+                idPrefix="iv-breakpoints"
+                value={assumptions.friendshipLevel}
+                onChange={(f) => setAssumptions({ ...assumptions, friendshipLevel: f })}
               />
             </>
           )}

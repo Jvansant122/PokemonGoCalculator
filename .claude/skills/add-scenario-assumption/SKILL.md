@@ -114,11 +114,10 @@ Two asymmetries that matter:
 The name-level check runs itself: the `PostToolUse` hook fires `npm run check-scenario-roundtrip`
 after any edit to a `*Scenario.ts`, `*AssumptionPanel.tsx`, or `*View.tsx`, extracting every
 field of each tab's `Assumptions` interface and asserting the name appears in both round-trip
-directions. **As of the Roster tab's own addition (2026-09-10) this script's `TABS` array still
-only lists six rows** — a known, tracked gap (see HANDOFF.md), not something this checklist
-pretends is covered; the Roster tab's one field (`sortBy`) is instead covered by the value-level
-test in step 7 above until that row is added. For the six tabs it DOES cover, a miss surfaces in
-the conversation naming the field. It proves a
+directions. It covers **all seven** tabs — the Roster row that was missing when that tab shipped
+(2026-09-10) was added since, and the checker's own output confirms it every run
+("round-trip checker covers all 7 tabs"). A miss surfaces in the
+conversation naming the field. It proves a
 field is *mentioned* in both functions, not that it's mapped correctly — step 7's value-level test
 is what proves that. Since 2026-09-10 this also recurses into a `Foo[]`-shaped member (Team
 Raid's `slots: TeamSlotAssumption[]`, Power-Up Optimizer's `slots: PowerUpSlotAssumption[]`) and

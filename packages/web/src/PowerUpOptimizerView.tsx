@@ -150,6 +150,9 @@ export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
   dodgeFastAttacks: false,
   holdChargedMoveUntilSafe: false,
   weather: "none",
+  // Single-raid mode only — see PowerUpOptimizerAssumptions.friendshipLevel's
+  // own doc comment for why multi-raid mode disables this control.
+  friendshipLevel: "none",
   bossChargedMoveFrequencySeconds: 15,
   bossChargedMoveCadence: "fixed-interval",
   bossStartsPrimed: false,
@@ -227,6 +230,7 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
     dodgeFastAttacks: a.dodgeFastAttacks,
     holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
     weather: a.weather,
+    friendshipLevel: a.friendshipLevel,
     bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
     bossChargedMoveCadence: a.bossChargedMoveCadence,
     bossStartsPrimed: a.bossStartsPrimed,
@@ -294,6 +298,9 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
     holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_ASSUMPTIONS.holdChargedMoveUntilSafe,
     weather: s.weather ?? "none",
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the friendship <select>.
+    friendshipLevel: s.friendshipLevel ?? DEFAULT_ASSUMPTIONS.friendshipLevel,
     bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
     // `??` guards a link built before this field existed — see
     // bossCadence.tsx's BOSS_CADENCE_HINT for what the control itself explains.
@@ -3044,6 +3051,7 @@ export function PowerUpOptimizerView() {
       bossStartsPrimed: assumptions.bossStartsPrimed,
       bossStartingEnergyFraction: assumptions.bossStartingEnergyFraction,
       weather: assumptions.weather,
+      friendshipLevel: assumptions.friendshipLevel,
       raidTimerSeconds: assumptions.raidTimerSeconds,
       swapCostSeconds: assumptions.swapCostSeconds,
       reviveCostSeconds: assumptions.reviveCostSeconds,
@@ -3086,6 +3094,7 @@ export function PowerUpOptimizerView() {
       assumptions.bossStartsPrimed,
       assumptions.bossStartingEnergyFraction,
       assumptions.weather,
+      assumptions.friendshipLevel,
       assumptions.raidTimerSeconds,
       assumptions.swapCostSeconds,
       assumptions.reviveCostSeconds,
@@ -3136,6 +3145,11 @@ export function PowerUpOptimizerView() {
       bossStartsPrimed: false,
       bossStartingEnergyFraction: 0,
       rankBy: "stardust",
+      // Placeholder — rosterPlanner.ts (the multi-raid engine) has no
+      // friendshipLevel field at all, see PowerUpOptimizerAssumptions'
+      // own doc comment; the panel disables its friendship control in this
+      // mode rather than reading this value for anything.
+      friendshipLevel: "none",
       // Placeholders on THIS memo — resolveRosterPlannerInputs (the main
       // sweep) never reads any of the four TM inventory fields. The
       // move-change sweep DOES read eliteFastTmOnHand/eliteChargedTmOnHand,

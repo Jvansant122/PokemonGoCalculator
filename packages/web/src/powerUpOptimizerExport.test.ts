@@ -28,6 +28,7 @@ function baseAssumptions(overrides: Partial<PowerUpOptimizerAssumptions> = {}): 
     dodgeFastAttacks: false,
     holdChargedMoveUntilSafe: false,
     weather: "none",
+    friendshipLevel: "none",
     bossChargedMoveFrequencySeconds: 15,
     bossChargedMoveCadence: "fixed-interval",
     bossStartsPrimed: false,
@@ -137,7 +138,7 @@ describe("powerUpOptimizerAssumptionsToTeamAssumptions", () => {
   });
 
   it("carries the boss target/moves and every shared combat assumption verbatim, and forces showDetailedAssumptions true", () => {
-    const a = baseAssumptions();
+    const a = baseAssumptions({ friendshipLevel: "great" });
     const result = powerUpOptimizerAssumptionsToTeamAssumptions(a, null);
     expect(result.targetId).toBe(a.targetId);
     expect(result.bossFastMoveId).toBe(a.bossFastMoveId);
@@ -146,6 +147,10 @@ describe("powerUpOptimizerAssumptionsToTeamAssumptions", () => {
     expect(result.dodgeFastAttacks).toBe(a.dodgeFastAttacks);
     expect(result.holdChargedMoveUntilSafe).toBe(a.holdChargedMoveUntilSafe);
     expect(result.weather).toBe(a.weather);
+    // Non-default, to prove this carries verbatim rather than landing on
+    // Team Raid's own "none" default — see powerUpOptimizerExport.ts's own
+    // doc comment on why this is no longer one of the "no equivalent" fields.
+    expect(result.friendshipLevel).toBe("great");
     expect(result.bossChargedMoveFrequencySeconds).toBe(a.bossChargedMoveFrequencySeconds);
     expect(result.bossChargedMoveCadence).toBe(a.bossChargedMoveCadence);
     expect(result.bossStartsPrimed).toBe(a.bossStartsPrimed);
