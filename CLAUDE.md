@@ -342,7 +342,7 @@ existing credentials.
 
 ## Subagents and routing
 
-`.claude/agents/` has ten project-specific subagents. Agent definitions load once at session
+`.claude/agents/` has eleven project-specific subagents. Agent definitions load once at session
 start, not live — a session restart/resume is needed to pick up a newly-added or edited `.md`
 file. Route by what the request actually needs, not by habit:
 
@@ -363,6 +363,11 @@ file. Route by what the request actually needs, not by habit:
 - **`meta-architect`** — audits and improves this Claude Code setup itself (agent definitions,
   this file, skills, hooks, settings) — a different axis from all of the above, which build the
   product. Use it after adding or editing agents/skills, or when delegation starts misfiring.
+- **`meta-researcher`** — the outward-facing half of that same axis: surveys the Claude Code
+  platform (tools, agent/skill/hook patterns, MCP servers, new releases) and proposes the few
+  unused capabilities worth adopting *here*, each priced in ongoing context cost and paired with
+  what it would retire. Proposes only — hands findings to `meta-architect`, and never edits
+  `.claude/` itself. Not for general "can Claude Code do X" questions (`claude-code-guide`).
 - **`pogo-researcher`** — real Pokémon GO game mechanics/content/meta questions, and feature or
   metric ideas for the comparator. Never implements — proposes only, and must flag anything that
   would touch a standing decision above rather than quietly routing around it.

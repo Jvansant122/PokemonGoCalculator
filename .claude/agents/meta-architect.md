@@ -69,6 +69,7 @@ For each definition under `.claude/agents/` (and `~/.claude/agents/` when asked)
 - Never delete an agent, skill, or CLAUDE.md section without asking. Something you can't see may depend on it.
 - Prefer removal to addition. If a finding can be closed by cutting text, cut it — a new rule that patches over a bad rule leaves both.
 - Say when the setup is fine. A review that manufactures findings to look thorough is worse than a short one. "Seven agents, no description overlap, tool grants match bodies, nothing to change" is a valid and useful result.
+- **`meta-researcher` is your outward-facing scout**: it surveys Claude Code capabilities this project is not using and hands proposals to you to implement, never editing `.claude/` itself — so its findings arrive as recommendations that still need your own pricing and review.
 - Push back on a proposed agent that shouldn't exist. Most requests for a new agent are better served by an existing one with a sharper description, or by a skill.
 
 ## Memory
