@@ -41,6 +41,11 @@
   --good: #4caf7d;
   --warn: #ff6b6b;
   --info: #5bbeff;
+  /* "Worth a second look, not a failure" — deliberately distinct from both
+     --warn's red ("something is wrong") and --accent-y's orange (candidate B
+     identity, fixed everywhere including inline chart SVGs — must not be
+     reused for an unrelated meaning). See .boss-moveset-risk. */
+  --caution: #f0b429;
   --focus: rgba(91, 157, 255, 0.55);
 
   /* Radius scale */
@@ -193,6 +198,54 @@ nav.tab-switcher {
 .tab-button:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
+}
+
+/*
+ * Scroll affordance for the top-level nav only (not the two in-panel
+ * segmented controls, which never carry enough options to overflow): at
+ * narrow widths seven tab labels always overflow, so a static right-edge
+ * fade is a cheap, always-correct hint that the strip scrolls further. Not
+ * scroll-position-aware (it doesn't fade out once fully scrolled right) —
+ * a deliberate simplification, not a bug; `nav.tab-switcher` is already
+ * `position: sticky`, which is a positioned value, so it needs no extra
+ * wrapper to contain this absolutely-positioned pseudo-element.
+ */
+/*
+ * The Power-Up Optimizer's own single-raid/multi-raid mode toggle: only two
+ * options but both labels are long full sentences ("Single raid — 6-slot
+ * roster vs. one boss" / "Multi-raid — whole imported roster vs. a boss
+ * set"), so at narrow widths this reads as one visible option plus a
+ * horizontal scrollbar NESTED inside the assumptions card, on top of the
+ * page-level nav's own scroll (reproduced at 375px, pogo-player
+ * 2026-09-12). Unlike the top-level nav (many short labels, where
+ * horizontal scroll is the right call — see the fade affordance above),
+ * this toggle only ever has two options, so stacking them full-width
+ * removes the nested scroll entirely rather than just hinting at it.
+ */
+@media (max-width: 480px) {
+  .tab-switcher-stack-narrow {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .tab-switcher-stack-narrow .tab-button {
+    width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+}
+
+@media (max-width: 640px) {
+  nav.tab-switcher::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    bottom: 1px;
+    width: 28px;
+    pointer-events: none;
+    background: linear-gradient(to right, transparent, rgba(14, 17, 23, 0.92) 75%);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  }
 }
 
 /* ------------------------------------------------------------------ panels */
@@ -697,16 +750,31 @@ button:disabled {
  * IDEAS #18: the boss-moveset-sweep headline on Team Raid — only applied
  * when the clear/no-clear verdict actually VARIES across the boss's own
  * known charged moves (the one case worth visually flagging; the "consistent
- * across every moveset" case stays a plain .caveats line). Same rgba-fill +
- * solid-border-in-the-same-hue convention as .badge-approximate, not a new
- * color invented for this one callout.
+ * across every moveset" case stays a plain .caveats line). Also reused by
+ * LineupBuilderPanel for its "winner/runner-up within noise floor" caution,
+ * a context with no clear/fail dichotomy at all.
+ *
+ * Defaults to --caution (amber), not --warn (red): a green "Cleared"
+ * headline sitting directly above a red-bordered box read as
+ * self-contradictory (pogo-player, 2026-09-12) even though the copy itself
+ * was correct and wanted. TeamRaidView's own use of this box is reused
+ * verbatim under a genuinely-failed headline too (verdictVaries is
+ * independent of outcome), so THAT call site applies the `.warn` modifier
+ * to follow the outcome instead of hardcoding a color either way;
+ * LineupBuilderPanel's call site never has an "outcome" to follow and stays
+ * plain amber always.
  */
 .boss-moveset-risk {
-  background: rgba(255, 107, 107, 0.12);
-  border: 1px solid var(--warn);
+  background: rgba(240, 180, 41, 0.12);
+  border: 1px solid var(--caution);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--text);
+}
+
+.boss-moveset-risk.warn {
+  background: rgba(255, 107, 107, 0.12);
+  border-color: var(--warn);
 }
 
 .error-text {

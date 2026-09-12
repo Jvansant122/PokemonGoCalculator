@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { AttackDefenseBreakpointsView } from "./AttackDefenseBreakpointsView.js";
@@ -60,6 +60,35 @@ function initialTab(): AppTab {
  */
 export function App() {
   const [tab, setTab] = useState<AppTab>(initialTab);
+  const tabListRef = useRef<HTMLElement | null>(null);
+  // Keeps the active tab visible in the (horizontally scrollable at narrow
+  // widths, see .tab-switcher) nav strip. Runs on every mount AND on every
+  // window resize/rotate — a deep link landing on a non-Comparator tab at
+  // mobile width, or a desktop->mobile resize with a tab already selected,
+  // otherwise leaves the active tab scrolled off-screen with no visible
+  // active marker and no hint that the strip scrolls further (reproduced at
+  // 375px, pogo-player 2026-09-12). Pure DOM scroll, no state — clicking a
+  // tab already scrolls correctly via the browser's native focus/click
+  // handling, so this only needs to cover the resize/mount path.
+  useEffect(() => {
+    function scrollActiveTabIntoView() {
+      const active = tabListRef.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+      active?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+    scrollActiveTabIntoView();
+    // The Inter web font (index.html) swaps in well after this effect's own
+    // mount-time call and visibly widens every tab-button's text — verified
+    // live (Playwright): scrollWidth grew ~50px between mount and font-load
+    // on a real deep link, with the active tab silently pushed back
+    // off-screen and nothing left to re-center it. Re-run once the swap
+    // settles. `document.fonts` doesn't exist in every test/SSR
+    // environment, hence the guard.
+    if (typeof document !== "undefined" && document.fonts) {
+      void document.fonts.ready.then(scrollActiveTabIntoView);
+    }
+    window.addEventListener("resize", scrollActiveTabIntoView);
+    return () => window.removeEventListener("resize", scrollActiveTabIntoView);
+  }, [tab]);
   const [comparatorPrefill, setComparatorPrefill] = useState<ComparatorPrefill | null>(null);
   // A second, independent lifted-prop hand-off channel (see teamRaidPrefill.ts)
   // for Species Report's "Send to Team Raid Simulator" row action — mirrors
@@ -99,7 +128,7 @@ export function App() {
           <p className="masthead-tagline">Survivability counted as team DPS, not raw damage.</p>
         </div>
       </header>
-      <nav className="tab-switcher" role="tablist" aria-label="View">
+      <nav className="tab-switcher" role="tablist" aria-label="View" ref={tabListRef}>
         <button
           type="button"
           role="tab"

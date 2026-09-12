@@ -305,7 +305,12 @@ export function PowerUpOptimizerAssumptionPanel({
 
   return (
     <CollapsibleSection id="pu-assumptions" heading="Assumptions" defaultOpen={false}>
-      <div className="tab-switcher" role="group" aria-label="Power-up optimizer mode" style={{ marginBottom: 12 }}>
+      <div
+        className="tab-switcher tab-switcher-stack-narrow"
+        role="group"
+        aria-label="Power-up optimizer mode"
+        style={{ marginBottom: 12 }}
+      >
         <button
           type="button"
           className={`tab-button${value.mode === "single-raid" ? " active" : ""}`}

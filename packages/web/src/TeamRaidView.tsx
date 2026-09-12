@@ -564,7 +564,14 @@ export function TeamRaidView({ prefill = null, onConsumedPrefill }: TeamRaidView
             </p>
             {bossMovesetSweep && (
               <>
-                <p className={`caveats ${bossMovesetSweep.verdictVaries ? "boss-moveset-risk" : ""}`} style={{ marginTop: -4, marginBottom: 12 }}>
+                <p
+                  className={`caveats ${
+                    bossMovesetSweep.verdictVaries
+                      ? `boss-moveset-risk${result.data.outcome === "cleared" ? "" : " warn"}`
+                      : ""
+                  }`}
+                  style={{ marginTop: -4, marginBottom: 12 }}
+                >
                   {bossMovesetSweep.verdictVaries ? (
                     <>
                       Boss moveset risk: this roster{" "}
