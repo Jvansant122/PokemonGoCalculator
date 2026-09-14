@@ -53,6 +53,56 @@ export const BOSS_TWO: SpeciesDefinition = {
 };
 
 /**
+ * Same "normal"-type, hand-authored family as BOSS_ONE/BOSS_TWO, but with HP
+ * so large a 6-attacker team never clears it within any raidTimerSeconds
+ * used in these tests (`clearRate` measured exactly 0 against every
+ * STRONG_SPECIES-based team this file's tests use). Required for any
+ * regression test comparing two levels/flags of the SAME team (e.g. IDEAS.md
+ * #5's Best Buddy roster mode) — see
+ * `.claude/agent-memory/engine-developer/measurement_best_buddy_roster_mode_impact.md`
+ * for why a CLEARING boss is unsafe here: `summarizeResults` quantizes a
+ * cleared fight's teamDps by discrete cast count, which can make a real,
+ * nonzero per-hit damage difference between two variants read as an
+ * IDENTICAL teamDps purely by coincidence (this project has hit that trap
+ * twice already). `BOSS_ONE`/`BOSS_TWO` above are deliberately kept
+ * clearable — most of this file's pre-existing tests rely on that — so this
+ * is a separate, additive fixture rather than a change to either.
+ */
+export const TOUGH_BOSS: SpeciesDefinition = {
+  ...BOSS_ONE,
+  id: "test-roster-boss-tough",
+  name: "Test Roster Boss Tough",
+  baseStamina: 10_000_000,
+};
+
+/**
+ * Same never-clears family as TOUGH_BOSS, but with a lower own Attack —
+ * paired with TOUGH_BOSS_HIGH_ATTACK below so a Best Buddy candidate's real,
+ * measured per-boss delta differs enough in magnitude between the two to
+ * demonstrate the "significant on one boss, diluted in the weighted
+ * aggregate" case (rosterBestBuddy.test.ts) — the SAME shape of finding that
+ * justified `RosterSignificanceMode`'s aggregate-or-per-boss default
+ * existing at all. The specific Attack values (150/260) were found by direct
+ * measurement (a scratch script sweeping boss Attack against a fixed
+ * STRONG_SPECIES team and comparing each boss's own measured Best Buddy
+ * delta/noise floor), not guessed or hand-derived from first principles.
+ */
+export const TOUGH_BOSS_LOW_ATTACK: SpeciesDefinition = {
+  ...TOUGH_BOSS,
+  id: "test-roster-boss-tough-low-atk",
+  name: "Test Roster Boss Tough Low Attack",
+  baseAttack: 150,
+};
+
+/** See TOUGH_BOSS_LOW_ATTACK. */
+export const TOUGH_BOSS_HIGH_ATTACK: SpeciesDefinition = {
+  ...TOUGH_BOSS,
+  id: "test-roster-boss-tough-high-atk",
+  name: "Test Roster Boss Tough High Attack",
+  baseAttack: 260,
+};
+
+/**
  * A fast move at EXACTLY DODGE_COST_SECONDS (0.5s) — the just-above-boundary
  * `fastMoveCadenceTooFastToDodge` case breakpoints.ts's own doc comment calls
  * out (`<=`, not `<`). `data/normalized/species.json` has no 0.6s fast move

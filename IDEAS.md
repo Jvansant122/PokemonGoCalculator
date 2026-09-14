@@ -32,12 +32,32 @@ aggregate-across-bosses machinery `RosterPowerUpCandidate` uses. That is a mater
 change, not a copy of the single-raid path. The tab tells a multi-raid user this is single-raid
 only rather than rendering an empty section.
 
-⚠️ **Measured caveat worth knowing before investing more here.** On the default scenario every
-Best Buddy candidate came back *inside* the noise floor (±0.73 team DPS at 20 seeds; best observed
-gain +0.49). That is an honest result, not a wiring failure — a single +1 effective level is a
-small effect, and it shrinks further at level 50. The feature reports "≈0 (within noise)" rather
-than a fake signed number, which is correct, but it means the roster-mode build may buy very
-little. Measure before scheduling it.
+✅ **MEASURED 2026-09-13 — BUILD. The earlier caveat did not survive contact with multi-raid.**
+The single-raid near-miss below (±0.73 floor at 20 seeds, best gain +0.49) does NOT generalize:
+multi-raid significance is aggregate **OR** per-boss, and against the real active-raid set
+**~45-55% of a top-attacker pool clears the PER-BOSS bar** (4/49 clear the aggregate one).
+Magnitudes match this project's own precedent for "worth surfacing" — Dialga vs Shadow Lampent
++1.82 team DPS (~17.5%, several sigma over a 0.02-0.24 floor), Darmanitan (Galarian Zen) vs Shadow
+Sandslash (Alola) +1.34 to +1.93 — the same shape as the Kyurem case (+1.29 on one boss, +0.11
+averaged) that justified per-boss significance existing at all. Best Buddy is also structurally at
+least as large as the smallest paid action (a free permanent +1 whole level vs a half-level click),
+confirmed by direct comparison. The "shrinks at level 50" claim is neither confirmed nor refuted
+and would need its own sweep. Full detail:
+`.claude/agent-memory/engine-developer/measurement_best_buddy_roster_mode_impact.md`.
+
+⛔ **Whoever builds this must not pin a regression test against a solo-attacker-vs-1-star-fodder
+scenario.** The first measurement pass produced nonsense — Best Buddy *slower* to clear than
+baseline (40.8s vs 10s) with strictly more attack and bulk — because a strong solo attacker
+1-2-shots a 600 HP 1-star boss, so `timeToClearSeconds` is quantized by discrete cast count. Roughly
+half of a real active-raid set is 1-star fodder, so the artifact dominates. It is generic, not
+Best Buddy-specific (an equivalent PAID power-up hits the identical cliff). Pair a full 6-slot team
+with 3-Star+ bosses and confirm `timeToClearSeconds === null` (the fight runs the full timer) before
+trusting any delta. This trap was already recorded once and still had to be rediscovered.
+
+⚠️ **The original single-raid result, kept for context.** On the default scenario every Best Buddy
+candidate came back *inside* the noise floor (±0.73 team DPS at 20 seeds; best observed gain +0.49).
+That was an honest result, not a wiring failure — the feature reports "≈0 (within noise)" rather
+than a fake signed number, which is correct.
 
 ⚠️ Best Buddy is a **per-Pokémon, one-at-a-time** status in the real game — a roster cannot hold
 six of them simultaneously. Any future joint-plan work must keep that constraint structural.

@@ -283,6 +283,25 @@ export interface RosterEntry {
    * against nothing or guessing a base species.
    */
   candyFamilyId?: string;
+  /**
+   * IDEAS.md #5 (roster mode, 2026-09-13) — see `teamRaid.ts`'s
+   * `TeamRaidSlotInput.isBestBuddy` for the mechanic itself (a free,
+   * permanent +1 effective level via `megaLevel.ts`'s
+   * `effectiveLevelForBestBuddy`). Forwarded unchanged by `toSlotInput`.
+   * Real Pokémon GO allows only ONE Best Buddy at a time; this module does
+   * NOT validate that at most one pool entry sets this true (same
+   * non-enforcement `TeamRaidSlotInput.isBestBuddy` itself documents) — it
+   * only matters for a caller pre-declaring an entry as ALREADY a Best
+   * Buddy (excluded from `RosterPlanResult.bestBuddyCandidates`/
+   * `RosterBudgetPlan.bestBuddyRecommendation`'s own candidate pools below,
+   * since flipping an already-true flag to true again is a no-op). The
+   * real one-at-a-time constraint for RECOMMENDING a NEW Best Buddy is
+   * enforced structurally by `bestBuddyRecommendation`'s `| null` (never an
+   * array) shape, not by validation here — see that field's own doc
+   * comment. `undefined`/omitted means not currently a Best Buddy (today's
+   * behavior, byte-identical).
+   */
+  isBestBuddy?: boolean;
 }
 
 /**
@@ -514,7 +533,7 @@ export interface RosterPlannerInputs {
  * stages itself rather than assume this type does it for them.
  */
 export interface RosterPlannerProgressEvent {
-  stage: "baseline" | "candidates" | "hypotheticalCatches" | "rounds";
+  stage: "baseline" | "candidates" | "hypotheticalCatches" | "rounds" | "bestBuddy";
   /** Work units of THIS stage completed so far. */
   completed: number;
   /**
@@ -530,7 +549,10 @@ export interface RosterPlannerProgressEvent {
    * committed step mattered most for, i.e. its `bestBossId`, when a step
    * committed). Undefined for "candidates"/"hypotheticalCatches" (one unit of
    * work can touch several bosses at once, so no single boss applies) and for
-   * a "rounds" event where the round didn't commit a step.
+   * a "rounds" event where the round didn't commit a step. Also undefined for
+   * "bestBuddy" (IDEAS.md #5, roster mode) — one unit of work is one pool
+   * entry's Best Buddy candidate, evaluated across every boss it's fielded
+   * on, not one single boss.
    */
   bossId?: string;
   bossName?: string;
@@ -680,6 +702,58 @@ export interface RosterPowerUpCandidate {
   };
 }
 
+/**
+ * IDEAS.md #5 (roster mode, 2026-09-13) — one pool entry's real, simulated
+ * effect of flipping its `RosterEntry.isBestBuddy` flag to `true`. Mirrors
+ * `powerUp.ts`'s single-raid `BestBuddyCandidate` in every way that matters:
+ * a free, permanent +1 effective level (`megaLevel.ts`'s
+ * `effectiveLevelForBestBuddy`) costs ZERO stardust and ZERO candy, so —
+ * exactly like that type — this has NO cost/efficiency fields at all (no
+ * `cost`, no `deltaPer1000Stardust`/`deltaPerCandy`/`deltaPerXlCandy`), never
+ * `null` placeholders for them. `RosterPowerUpCandidate`'s cost-based ranking
+ * axes simply don't apply here.
+ *
+ * SCOPE (measured, not guessed — see
+ * `measurement_best_buddy_roster_mode_impact.md`): evaluated ONLY for pool
+ * entries already fielded on at least one boss's team. Every `perBoss[]`
+ * entry for a boss this entry ISN'T fielded on is a real, exact, computed 0
+ * (`simulated: false`) — Best Buddy's fixed, small +1-level nudge is not
+ * estimated for a currently-BENCHED entry the way a multi-level power-up
+ * jump is elsewhere in this module, because `screenScoreFor` (the cheap
+ * Stage 1 screen this module's benched-entry estimates are built from) has
+ * no `isBestBuddy` parameter at all — there is no cheap, sound proxy for
+ * "would Best Buddy alone newly earn this entry a team slot," only an
+ * expensive one, and the measurement above found the realistic case (a
+ * strong ALREADY-FIELDED attacker) is where this mechanic's real per-boss
+ * effect actually lives (Dialga vs Shadow Lampent: +1.82 team DPS, ~17.5%).
+ *
+ * REAL-GAME CONSTRAINT THIS ARRAY DOES NOT ENFORCE (same convention as
+ * `PowerUpOptimizerResult.bestBuddyCandidates`): only one Pokémon can be a
+ * trainer's active Best Buddy at a time. Every row here is evaluated
+ * INDEPENDENTLY, as if it were the only Best Buddy candidate — more than one
+ * row can show a positive, significant gain at once; a caller must not
+ * recommend more than one from this array. `RosterBudgetPlan.
+ * bestBuddyRecommendation` is the joint, AT-MOST-ONE version of this same
+ * question, enforced structurally by its `| null` (never array) shape.
+ */
+export interface RosterBestBuddyCandidate {
+  entryId: string;
+  speciesId: string;
+  speciesName: string;
+  /** One entry per RosterPlannerInputs.targets, in the same order — same convention as RosterPowerUpCandidate.perBoss. */
+  perBoss: RosterPerBossImpact[];
+  /** See RosterPowerUpCandidate.meanDeltaTeamDps — same weighted-mean-across-every-target convention. */
+  meanDeltaTeamDps: number;
+  /** See RosterPowerUpCandidate.bestBossDeltaTeamDps. */
+  bestBossDeltaTeamDps: number | null;
+  /** See RosterPowerUpCandidate.bestBossId. */
+  bestBossId: string | null;
+  /** See RosterPowerUpCandidate.significantBossCount. */
+  significantBossCount: number;
+  /** See RosterPowerUpCandidate.exceedsNoise — same aggregate-OR-per-boss test, governed by the same RosterSignificanceMode. */
+  exceedsNoise: boolean;
+}
+
 export interface RosterNeverCompetitiveEntry {
   entryId: string;
   speciesId: string;
@@ -770,6 +844,14 @@ export interface RosterPlanResult {
   /** One row per RosterPlannerInputs.hypotheticalCatches, in the same order — `[]` when that input was omitted/empty. See RosterHypotheticalCatchImpact. */
   hypotheticalCatches: RosterHypotheticalCatchImpact[];
   /**
+   * IDEAS.md #5 (roster mode) — one row per pool entry NOT already flagged
+   * `isBestBuddy: true` that is fielded on at least one boss's baseline
+   * team. See RosterBestBuddyCandidate's own doc comment for the full
+   * scope/rationale and why this never touches `candidates`/
+   * `benchedButPromising`'s cost-based fields.
+   */
+  bestBuddyCandidates: RosterBestBuddyCandidate[];
+  /**
    * Count of `targets` whose own resolved fast move is too fast to
    * fast-dodge while `dodgeFastAttacks` is on — see
    * `RosterPerBossImpact.dodgeFastAttacksLockout`'s doc comment. A plain
@@ -846,11 +928,30 @@ export function toSlotInput(entry: RosterEntry, megaLevel: MegaLevel | undefined
     level: entry.level,
     ivs: entry.ivs,
     megaLevel,
+    isBestBuddy: entry.isBestBuddy,
   };
 }
 
+/**
+ * REAL BUG FIX (2026-09-13, IDEAS.md #5 roster mode): this key used to be
+ * `${entryId}@${level}` only. Every candidate this module varied BEFORE
+ * Best Buddy existed (a power-up's `toLevel`, a benched entry's promotion)
+ * always changed `level` too, so that key was sufficient. Best Buddy varies
+ * ONLY `isBestBuddy` at a FIXED level — a candidate team differing from the
+ * baseline ONLY by that flag hashed to the EXACT SAME key as the baseline
+ * team, so `runFullRosterCached` silently returned the already-cached
+ * BASELINE summary for every Best Buddy candidate, making every single
+ * `deltaTeamDps` read exactly 0 regardless of the real simulated effect —
+ * caught empirically (a scratch script measuring a Best Buddy candidate
+ * against 10 different bosses got a suspicious, uniform `0.0000` every
+ * time; a real effect should vary boss to boss). Any FUTURE per-entry field
+ * this module starts varying independently of `level` needs the same
+ * lesson: this key must name every field a caller can vary between two
+ * otherwise-identical-composition teams, not just the one that happened to
+ * be the only one that mattered historically.
+ */
 function teamKeyFor(entries: RosterEntry[]): string {
-  return entries.map((e) => `${e.entryId}@${e.level}`).join(",");
+  return entries.map((e) => `${e.entryId}@${e.level}${e.isBestBuddy ? "+bb" : ""}`).join(",");
 }
 
 /**
@@ -1339,6 +1440,106 @@ function runFullRosterCached(
   const summary = summarizeResults(results, bossHp, shared.raidTimerSeconds);
   cache.set(key, summary);
   return summary;
+}
+
+// --- Best Buddy (IDEAS.md #5, roster mode) -----------------------------------
+// Shared by runRosterPlanner's ranked `bestBuddyCandidates` array and
+// planRosterBudget's post-search `bestBuddyRecommendation` pass — one
+// implementation of "what does flipping this entry's isBestBuddy flag do,
+// per boss and in aggregate," never two.
+
+/**
+ * Shared weighted-mean-across-targets aggregation, factored out of the THREE
+ * near-identical inline copies already in this module (Stage 3's draft
+ * simulation, the hypothetical-catch pass, and planRosterBudget's own
+ * candidate evaluator) so the Best Buddy passes below don't become a fourth
+ * and fifth hand-copy of the same formula. Existing call sites are left
+ * exactly as they were — this is purely additive.
+ */
+function aggregateRosterImpact(
+  perBoss: RosterPerBossImpact[],
+  targets: WeightedRaidTarget[],
+  totalTargetWeight: number,
+  perBossNoiseFloors: number[],
+): { meanDeltaTeamDps: number; bestBossDeltaTeamDps: number | null; bestBossId: string | null; significantBossCount: number } {
+  const meanDeltaTeamDps =
+    totalTargetWeight > 0 ? targets.reduce((sum, t, ti) => sum + (t.weight ?? 1) * perBoss[ti]!.deltaTeamDps, 0) / totalTargetWeight : 0;
+
+  let bestBossDeltaTeamDps: number | null = null;
+  let bestBossId: string | null = null;
+  let significantBossCount = 0;
+  for (let ti = 0; ti < targets.length; ti++) {
+    const delta = perBoss[ti]!.deltaTeamDps;
+    if (bestBossDeltaTeamDps === null || Math.abs(delta) > Math.abs(bestBossDeltaTeamDps)) {
+      bestBossDeltaTeamDps = delta;
+      bestBossId = targets[ti]!.species.id;
+    }
+    if (Math.abs(delta) > perBossNoiseFloors[ti]!) significantBossCount++;
+  }
+  if (bestBossDeltaTeamDps === 0) {
+    // Every boss read exactly 0 — no single boss is meaningfully "best."
+    bestBossDeltaTeamDps = null;
+    bestBossId = null;
+  }
+  return { meanDeltaTeamDps, bestBossDeltaTeamDps, bestBossId, significantBossCount };
+}
+
+/**
+ * One pool entry's per-boss Best Buddy impact, against WHATEVER team/summary
+ * arrays the caller supplies (baseline, for runRosterPlanner; the current
+ * mid-search state, for planRosterBudget's post-search pass) — see
+ * RosterBestBuddyCandidate's own doc comment for why this is ONLY evaluated
+ * for bosses `entry` is ALREADY fielded on (never estimated for a benched
+ * one). `mapEntry` applies whatever level/state transform the caller's team
+ * arrays need (identity for a baseline team of un-mutated pool entries;
+ * `liveEntry` for planRosterBudget's currently-planned levels).
+ */
+function bestBuddyPerBossImpactFor(
+  entry: RosterEntry,
+  targets: WeightedRaidTarget[],
+  teamByTarget: RosterEntry[][],
+  teamSummaryByTarget: PowerUpEncounterSummary[],
+  evalSeeds: number[],
+  shared: SharedAssumptions,
+  bossHpByTarget: number[],
+  teamSummaryCache: Map<string, PowerUpEncounterSummary>,
+  bossDodgeFastAttacksLockoutByTarget: boolean[],
+  mapEntry: (e: RosterEntry) => RosterEntry,
+): RosterPerBossImpact[] {
+  return targets.map((target, ti) => {
+    const team = teamByTarget[ti]!;
+    const fieldedIdx = team.findIndex((e) => e.entryId === entry.entryId);
+    const rankBefore = fieldedIdx >= 0 ? fieldedIdx + 1 : null;
+
+    if (fieldedIdx < 0) {
+      return {
+        bossId: target.species.id,
+        bossName: target.species.name,
+        deltaTeamDps: 0,
+        rankBefore: null,
+        rankAfter: null,
+        simulated: false,
+        dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+      };
+    }
+
+    const bestBuddyTeam = team.map((e) => {
+      const mapped = mapEntry(e);
+      return e.entryId === entry.entryId ? { ...mapped, isBestBuddy: true } : mapped;
+    });
+    const summary = runFullRosterCached(bestBuddyTeam, ti, target, evalSeeds, shared, bossHpByTarget[ti]!, teamSummaryCache);
+    const deltaTeamDps = summary.teamDps - teamSummaryByTarget[ti]!.teamDps;
+
+    return {
+      bossId: target.species.id,
+      bossName: target.species.name,
+      deltaTeamDps,
+      rankBefore,
+      rankAfter: rankBefore,
+      simulated: true,
+      dodgeFastAttacksLockout: bossDodgeFastAttacksLockoutByTarget[ti]!,
+    };
+  });
 }
 
 // --- Main entry point ---------------------------------------------------------
@@ -1936,6 +2137,47 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     .sort((a, b) => b.meanDeltaTeamDps - a.meanDeltaTeamDps);
   const benchedButPromising = [...benchedDraftByEntry.values()].map((d) => simulatedByKey.get(`${d.entry.entryId}@${d.toLevel}`)!);
 
+  // --- Best Buddy candidates (IDEAS.md #5, roster mode) ----------------------
+  // See RosterBestBuddyCandidate's own doc comment: evaluated only for pool
+  // entries already fielded on at least one boss's BASELINE team
+  // (fieldedEntryIdsAnywhere, already computed above for benchedButPromising),
+  // never estimated for a benched one. Every row independent — the real
+  // one-at-a-time constraint is planRosterBudget's bestBuddyRecommendation's
+  // job, not this ranked table's.
+  const bestBuddyEligible = pool.filter((entry) => !entry.isBestBuddy && fieldedEntryIdsAnywhere.has(entry.entryId));
+  const bestBuddyCandidates: RosterBestBuddyCandidate[] = bestBuddyEligible.map((entry, i) => {
+    const perBoss = bestBuddyPerBossImpactFor(
+      entry,
+      targets,
+      baselineTeamsByTarget,
+      baselinePerBoss.map((b) => b.summary),
+      evalSeeds,
+      shared,
+      bossHpByTarget,
+      teamSummaryCache,
+      bossDodgeFastAttacksLockoutByTarget,
+      (e) => e,
+    );
+    const { meanDeltaTeamDps, bestBossDeltaTeamDps, bestBossId, significantBossCount } = aggregateRosterImpact(
+      perBoss,
+      targets,
+      totalTargetWeight,
+      perBossNoiseFloors,
+    );
+    onProgress?.({ stage: "bestBuddy", completed: i + 1, total: bestBuddyEligible.length });
+    return {
+      entryId: entry.entryId,
+      speciesId: entry.species.id,
+      speciesName: entry.species.name,
+      perBoss,
+      meanDeltaTeamDps,
+      bestBossDeltaTeamDps,
+      bestBossId,
+      significantBossCount,
+      exceedsNoise: Math.abs(meanDeltaTeamDps) > noiseFloorTeamDps || (significanceMode === "aggregate-or-per-boss" && significantBossCount > 0),
+    };
+  });
+
   return {
     baselinePerBoss,
     noiseFloorTeamDps,
@@ -1945,6 +2187,7 @@ export function runRosterPlanner(inputs: RosterPlannerInputs): RosterPlanResult 
     benchedButPromising,
     neverCompetitive,
     hypotheticalCatches,
+    bestBuddyCandidates,
     lockedBossCount,
   };
 }
@@ -2259,6 +2502,15 @@ export interface RosterBudgetBlockedCandidate {
   shortfalls: PowerUpBudgetResourceShortfall[];
 }
 
+/** See RosterBudgetPlan.bestBuddyRecommendation. */
+export interface RosterBestBuddyRecommendation {
+  entryId: string;
+  speciesId: string;
+  speciesName: string;
+  /** Real simulated gain vs. the FINAL committed roster (after every paid step), with ONLY this one entry's Best Buddy flag flipped on. Guaranteed to clear candidateClearsBudgetFloor against the FINAL floors — that's what qualifies it for this field at all. */
+  deltaTeamDps: number;
+}
+
 export interface RosterBudgetPlan {
   /** The plan, in the order the greedy search chose each step. */
   steps: RosterBudgetStep[];
@@ -2307,6 +2559,22 @@ export interface RosterBudgetPlan {
   excludedEntries: RosterNeverCompetitiveEntry[];
   /** See RosterPlanResult.lockedBossCount — identical meaning/formula, computed over this same `targets` list. */
   lockedBossCount: number;
+  /**
+   * IDEAS.md #5's "at most one" version for a JOINT roster plan — mirrors
+   * `powerUp.ts`'s `PowerUpBudgetPlan.bestBuddyRecommendation` exactly: at
+   * most ONE pool entry, evaluated against the FINAL committed roster/team
+   * state (after every paid step above), with its Best Buddy flag flipped
+   * on. Never folded into `steps`/`ledger` — it costs nothing tracked, no
+   * stardust/candy/XL row to debit. `null` when no unflagged, currently-
+   * fielded pool entry's Best Buddy delta clears `candidateClearsBudgetFloor`
+   * against the FINAL floors, OR every currently-fielded entry already
+   * carries `isBestBuddy: true`. Honors the real one-Best-Buddy-per-trainer
+   * constraint STRUCTURALLY (this field's type is a single nullable object,
+   * never an array) — unlike `RosterPlanResult.bestBuddyCandidates`'s ranked
+   * table, which deliberately does NOT enforce it (see that field's own doc
+   * comment for why the ranked table stays independent-per-row).
+   */
+  bestBuddyRecommendation: RosterBestBuddyRecommendation | null;
 }
 
 /**
@@ -3043,6 +3311,54 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     }
   }
 
+  // --- Best Buddy recommendation (one-time, post-search; IDEAS.md #5) -------
+  // Same "run once against the state the search stopped at" discipline as
+  // the bestBlockedCandidate pass just above, judged against the SAME final
+  // floors (perBossNoiseFloors/aggregateNoiseFloor) — but this costs nothing
+  // tracked, so it's reported separately rather than folded into
+  // steps/ledger. Real Pokémon GO constraint: only ONE Pokémon can be a
+  // trainer's active Best Buddy, so — unlike bestBlockedCandidate, which can
+  // name several shortfalls — this recommends AT MOST ONE entry (see
+  // RosterBudgetPlan.bestBuddyRecommendation's own doc comment for why
+  // that's structural here, not just a convention).
+  let bestBuddyRecommendation: RosterBestBuddyRecommendation | null = null;
+  let bestBuddyScore = -Infinity;
+  const bestBuddyFieldedAnywhere = new Set(currentTeamsByTarget.flat().map((e) => e.entryId));
+  for (const entry of pool) {
+    if (entry.isBestBuddy || !bestBuddyFieldedAnywhere.has(entry.entryId)) continue;
+    const perBoss = bestBuddyPerBossImpactFor(
+      entry,
+      targets,
+      currentTeamsByTarget,
+      currentTeamSummaryByTarget,
+      evalSeeds,
+      shared,
+      bossHpByTarget,
+      teamSummaryCache,
+      bossDodgeFastAttacksLockoutByTarget,
+      liveEntry,
+    );
+    const agg = aggregateRosterImpact(perBoss, targets, totalTargetWeight, perBossNoiseFloors);
+    const evalResult: RosterBudgetCandidateEval = {
+      perBoss,
+      meanDeltaTeamDps: agg.meanDeltaTeamDps,
+      bestBossDeltaTeamDps: agg.bestBossDeltaTeamDps,
+      bestBossId: agg.bestBossId,
+      significantBossCount: agg.significantBossCount,
+      touchedTargetIndices: perBoss.flatMap((p, ti) => (p.simulated ? [ti] : [])),
+    };
+    if (!candidateClearsBudgetFloor(evalResult, perBossNoiseFloors, aggregateNoiseFloor, significanceMode)) continue;
+    if (agg.meanDeltaTeamDps > bestBuddyScore) {
+      bestBuddyScore = agg.meanDeltaTeamDps;
+      bestBuddyRecommendation = {
+        entryId: entry.entryId,
+        speciesId: entry.species.id,
+        speciesName: entry.species.name,
+        deltaTeamDps: agg.meanDeltaTeamDps,
+      };
+    }
+  }
+
   // --- Final reporting ------------------------------------------------------
   const finalPerBoss: RosterBaselineBossSummary[] = targets.map((target, ti) => ({
     bossId: target.species.id,
@@ -3088,5 +3404,6 @@ export function planRosterBudget(inputs: RosterBudgetInputs): RosterBudgetPlan {
     bestBlockedCandidate,
     excludedEntries,
     lockedBossCount,
+    bestBuddyRecommendation,
   };
 }
