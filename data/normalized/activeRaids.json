@@ -54,6 +54,12 @@
     "isApproximate": false
   },
   {
+    "raidName": "Mega Houndoom",
+    "tier": "Mega Raids",
+    "speciesId": "houndoom-mega",
+    "isApproximate": false
+  },
+  {
     "raidName": "Shadow Machop",
     "tier": "1-Star Raids",
     "speciesId": "machop-shadow",

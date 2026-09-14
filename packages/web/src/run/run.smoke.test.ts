@@ -245,14 +245,24 @@ describe("runTeamRaidScenario (boss moveset sweep, IDEAS #18)", () => {
   });
 
   it("returns null when the boss has fewer than 2 distinct fast x charged moveset combinations", () => {
-    // magikarp is a real registry entry with exactly 1 known fast move and 1
-    // known charged move (1 x 1 = 1 combination) — not a real raid boss, but
-    // runTeamRaidScenario resolves targetId straight off the registry with no
-    // raid-eligibility gate of its own, so it's a legitimate way to exercise
-    // the `fastMoves.length * chargedMoves.length >= 2` guard (same gate
-    // ComparatorView's own bossMovesetSweep uses) without a synthetic species
-    // fixture.
-    const oneMoveBoss = { ...DEFAULT_TEAM_ASSUMPTIONS, targetId: "magikarp" };
+    // ditto is a real registry entry with exactly 1 known fast move
+    // (Transform) and 1 known charged move (Struggle) — 1 x 1 = 1
+    // combination — not a real raid boss, but runTeamRaidScenario resolves
+    // targetId straight off the registry with no raid-eligibility gate of
+    // its own, so it's a legitimate way to exercise the
+    // `fastMoves.length * chargedMoves.length >= 2` guard (same gate
+    // ComparatorView's own bossMovesetSweep uses) without a synthetic
+    // species fixture.
+    //
+    // NOT magikarp (used here before IDEAS.md #24, option 1, 2026-09-13):
+    // GAME_MASTER's own `shadow` block is first-party evidence Magikarp can
+    // be caught as a real Shadow/Purified individual (holding Frustration/
+    // Return respectively, since it otherwise only ever knows Struggle), so
+    // data-sync now adds both to its chargedMoves — correctly widening it to
+    // 1 x 3 and disqualifying it from this guard's premise. Ditto has no
+    // `shadow` block in GAME_MASTER (no released Shadow Ditto exists) and
+    // stays a clean 1 x 1 example.
+    const oneMoveBoss = { ...DEFAULT_TEAM_ASSUMPTIONS, targetId: "ditto" };
     const result = runTeamRaidScenario(oneMoveBoss, speciesRegistry);
     expect(result.error).toBeNull();
     expect(result.bossMovesetSweep).toBeNull();

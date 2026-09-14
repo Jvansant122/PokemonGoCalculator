@@ -42,51 +42,6 @@ little. Measure before scheduling it.
 ⚠️ Best Buddy is a **per-Pokémon, one-at-a-time** status in the real game — a roster cannot hold
 six of them simultaneously. Any future joint-plan work must keep that constraint structural.
 
-### 24. Frustration notice — BUILT 2026-09-11, but structurally UNREACHABLE with real data
-
-Engine (`tmMove.ts`'s `frustrationLockNotice`, `RosterMoveChangeResult.frustrationNotices`) and UI
-both shipped, both tested, and the UI renders correctly when handed a Frustration-holding entry.
-**No real user workflow can produce one.**
-
-Verified 2026-09-11 against the committed data: `FRUSTRATION` and `RETURN` exist in GAME_MASTER's
-move list, but **zero of 1750 species** carry either in `chargedMoves` — including all 520 shadow
-entries. The real game assigns Frustration *dynamically* to a freshly-caught unpurified Shadow; it
-is never part of a species' static movepool, which is the only thing this pipeline reads. Both
-routes into an entry's `chargedMoveId` (the Poke Genie CSV matcher and the Roster tab's
-`MoveSelect`) can only resolve a move that is actually in `species.chargedMoves`, so neither can
-ever yield one.
-
-**This is a data-layer question, and there is a strong candidate answer already in hand.** The
-`shadow` block captured during the #15 widening carries first-party `shadowChargeMove:
-"FRUSTRATION"` / `purifiedChargeMove: "RETURN"` per species — i.e. GAME_MASTER itself states that
-an unpurified Shadow holds Frustration. Options, needing a deliberate call:
-
-1. Add Frustration/Return to shadow species' movepools so the CSV matcher can resolve them.
-   ⚠️ Blast radius: they become selectable in every move picker and simulatable everywhere. Their
-   real stats are recorded (Frustration 10 power / 2000 ms), so a simulation would be *correct*,
-   just showing a deliberately terrible move. `tmMove.ts` already refuses to TM them.
-2. Annotate at import/hand-entry instead ("this Shadow may still hold Frustration"), leaving
-   movepools untouched. Weaker, but zero blast radius.
-3. Leave it. The code is harmless and already correct if the data ever changes.
-
-✅ **CONFIRMED 2026-09-11 — this is a live, already-visible defect, not a hypothesis.** An earlier
-version of this entry called the consequence "suspected, not yet confirmed" and said to check a
-real export first. That check is unnecessary: the committed real Poke Genie export
-(`packages/web/src/import/test/pokeGenieSample.csv`, row 20) already carries a **Purified** Alolan
-Raticate whose `Charge Move` column reads literally `Return`. Our matcher cannot resolve it, so the
-row falls back to the species' first charged move (`CRUNCH`), sets `movesetIsDefaulted`, and reports
-`Return` in `unmatchedMoveNames` — earning the **"unrecognised"** badge, which by its own definition
-means "our data gap, not the player's problem". This is pinned by two already-passing tests in
-`pokeGenieMatch.test.ts` (~lines 243 and 383), so it has been true and visible since the import
-shipped.
-
-The Frustration/Shadow half runs the identical code path and will behave identically; no shadow row
-exists in the sample export to demonstrate it directly, but nothing about the mechanism differs.
-**So the decision below no longer has a confirmation step in front of it** — pick an option. Note
-that option 1 would fix the Return case too (a Purified Pokémon's real charged move IS Return), and
-that a defaulted moveset silently changes which move the whole simulation runs, so this is a
-correctness issue on that row, not only a cosmetic badge.
-
 ### 25. A typed PAIR of damage-modifier builders (never one builder with an optional field)
 
 Raised by `code-simplifier` 2026-09-12, deliberately parked rather than built. The outgoing
@@ -176,3 +131,4 @@ described in `HANDOFF.md` and git history, and any *mechanic* it established is 
 | 21 | Dodge-execution-error sensitivity band | 2026-09-10. A band across 50-100% accuracy, never one blended number. |
 | 22 | The first-party 1.0s swap cost | 2026-09-10. Replaced the shipped 0.5s; the Team Raid default's clear time lengthening is the fix working, not a regression. |
 | 15 | Shadow forms exist only for species that have been shadow *raid bosses* | 2026-09-11. Widened, not blocked — GAME_MASTER's own per-template `shadow` block is a first-party anchor (stronger than a raid archive) that raidHistory/Pokebattler/Bulbapedia structurally can't see, since a grunt-only shadow (Shadow Alolan Sandshrew) never raids. See `MECHANICS.md`'s "Which species can be Shadow at all" and `CLAUDE.md`'s shadow-synthesis standing decision. |
+| 24 | Frustration/Return movepool gap (option 1) | 2026-09-13. `data-sync` now adds `FRUSTRATION`/`RETURN` to any species whose matched GAME_MASTER template carries a `shadow` block with that literal move as `shadowChargeMove`/`purifiedChargeMove` (1,040 of 1,750 species, including their Shadow variants) — sourced values only (Frustration 10 power/2000 ms, Return 25 power/500 ms), never hand-authored. Fixes the confirmed live defect: the committed Poke Genie fixture's Purified Alolan Raticate row (`Charge Move` = `Return`) now resolves instead of defaulting. `tmMove.ts`'s existing un-TM-able exclusion (case-insensitive on name) still covers both untouched. Accepted blast radius: both moves are now selectable/simulatable everywhere a movepool is read, including raid-boss moveset sweeps (a real registry entry, e.g. Magikarp, gains extra fast×charged combinations it wouldn't realistically show as a wild boss) — `run.smoke.test.ts`'s "fewer than 2 combos" guard test was moved off Magikarp onto Ditto (no `shadow` block) for that reason. |

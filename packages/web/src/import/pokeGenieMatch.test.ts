@@ -221,6 +221,14 @@ describe("matchPokeGenieRows — per-row interpretation", () => {
   });
 
   it("falls back to the species' first move and reports the raw name when a move name doesn't resolve", () => {
+    // Deliberately NOT "Return"/"Frustration" here (IDEAS.md #24, option 1,
+    // 2026-09-13) — data-sync now adds both to any species whose GAME_MASTER
+    // template carries a `shadow` block (see the "resolves Return... " test
+    // below, which pins THAT fix against the real fixture), so a mock
+    // species that omits them from its own chargedMoves is no longer a
+    // faithful stand-in for "a move name real data can never resolve." A
+    // genuinely made-up name keeps this test's actual point — the generic
+    // unresolved-move-name fallback path — honest.
     const withMoves = {
       all: () => [
         species({
@@ -233,22 +241,51 @@ describe("matchPokeGenieRows — per-row interpretation", () => {
       ],
     };
     const result = matchPokeGenieRows(
-      [row(20, { Name: "Raticate", Form: "Alola", Pokemon: "20", "Quick Move": "Quick Attack", "Charge Move": "Return" })],
+      [row(20, { Name: "Raticate", Form: "Alola", Pokemon: "20", "Quick Move": "Quick Attack", "Charge Move": "Not A Real Move" })],
       withMoves,
     );
     const entry = result.matched[0]!;
     expect(entry.fastMoveId).toBe("QUICK_ATTACK_FAST"); // matched normally, not defaulted
     expect(entry.chargedMoveId).toBe("CRUNCH"); // fell back to the species' first charged move
     expect(entry.movesetIsDefaulted).toBe(true);
-    expect(entry.unmatchedMoveNames).toEqual(["Return"]);
+    expect(entry.unmatchedMoveNames).toEqual(["Not A Real Move"]);
     // Per-slot detail: only the CHARGED move was defaulted, and specifically
-    // because "Return" was present but unrecognized — never conflate this
-    // with a blank slot (see movesetDefaultBadge, which words these two
-    // cases differently).
+    // because "Not A Real Move" was present but unrecognized — never
+    // conflate this with a blank slot (see movesetDefaultBadge, which words
+    // these two cases differently).
     expect(entry.fastMoveIsDefaulted).toBe(false);
     expect(entry.chargedMoveIsDefaulted).toBe(true);
     expect(entry.fastMoveUnmatchedName).toBeNull();
-    expect(entry.chargedMoveUnmatchedName).toBe("Return");
+    expect(entry.chargedMoveUnmatchedName).toBe("Not A Real Move");
+  });
+
+  it('resolves Raticate (Alola)\'s "Return" charged move when the species carries it (IDEAS.md #24, option 1, 2026-09-13 fix) — a Purified individual\'s real charged move IS Return, sourced from GAME_MASTER\'s own shadow block', () => {
+    const withReturn = {
+      all: () => [
+        species({
+          id: "raticate-alola",
+          name: "Raticate (Alola)",
+          dex: 20,
+          fastMoves: [fastMove("QUICK_ATTACK_FAST", "Quick Attack"), fastMove("BITE_FAST", "Bite")],
+          chargedMoves: [
+            chargedMove("CRUNCH", "Crunch"),
+            chargedMove("HYPER_BEAM", "Hyper Beam"),
+            chargedMove("FRUSTRATION", "Frustration"),
+            chargedMove("RETURN", "Return"),
+          ],
+        }),
+      ],
+    };
+    const result = matchPokeGenieRows(
+      [row(20, { Name: "Raticate", Form: "Alola", Pokemon: "20", "Quick Move": "Quick Attack", "Charge Move": "Return" })],
+      withReturn,
+    );
+    const entry = result.matched[0]!;
+    expect(entry.chargedMoveId).toBe("RETURN");
+    expect(entry.movesetIsDefaulted).toBe(false);
+    expect(entry.unmatchedMoveNames).toEqual([]);
+    expect(entry.chargedMoveIsDefaulted).toBe(false);
+    expect(entry.chargedMoveUnmatchedName).toBeNull();
   });
 
   it("defaults a BLANK move silently — a blank move is not reported as unmatched", () => {
@@ -379,11 +416,17 @@ describe("matchPokeGenieRows — real fixture against the real species registry"
     expect(result.matched.some((m) => m.species.id === "blaziken-mega")).toBe(true);
   });
 
-  it('falls back Raticate (Alola)\'s "Return" charged move and reports it as unmatched, since it does not exist in this engine\'s move data', () => {
-    const withReturn = result.matched.find((m) => m.unmatchedMoveNames.includes("Return"));
-    expect(withReturn).toBeDefined();
-    expect(withReturn!.species.id).toBe("raticate-alola");
-    expect(withReturn!.movesetIsDefaulted).toBe(true);
+  it('resolves the Purified Raticate (Alola) row\'s "Return" charged move rather than falling back (IDEAS.md #24, option 1, 2026-09-13 fix — data-sync now adds Return/Frustration to any species whose GAME_MASTER template carries a `shadow` block)', () => {
+    const raticateRows = result.matched.filter((m) => m.species.id === "raticate-alola");
+    const purified = raticateRows.find((m) => m.costModifiers.isPurified);
+    expect(purified).toBeDefined();
+    expect(purified!.chargedMoveId).toBe("RETURN");
+    expect(purified!.movesetIsDefaulted).toBe(false);
+    expect(purified!.unmatchedMoveNames).toEqual([]);
+    // No row in this fixture is a Shadow (unpurified) individual, so
+    // Frustration has no row to demonstrate resolving against here — but it
+    // runs the identical resolution code path as Return, sourced from the
+    // same species.chargedMoves list this test just confirmed carries it.
   });
 
   it("flags the blank-IV and uncertain-level rows as approximate", () => {

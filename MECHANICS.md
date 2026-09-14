@@ -1265,9 +1265,17 @@ rate flagged in the second-charged-move entry applies to that unlock and to
 power-ups — never to TM application, which is free once the item is owned,
 regardless of Shadow/Purified/Lucky.
 
-**Engine: not modelled**, and consequential — a Shadow attacker in an imported
-roster is simulated on whatever charged move resolved, with no notion that it
-may be stuck on a power-10 move for most of the year.
+**Engine: partially modelled as of 2026-09-13 (IDEAS.md #24, option 1).** Both
+moves now exist in `data/normalized/species.json` — `data-sync` adds
+`FRUSTRATION`/`RETURN` to any species whose GAME_MASTER template carries a
+`shadow` block naming them, sourced with real stats (never hand-authored), so
+a Poke Genie CSV row that literally reads `Frustration`/`Return` in its Charge
+Move column now resolves correctly instead of silently defaulting to the
+species' first charged move. **Still not modelled**: the engine has no notion
+that an UNSPECIFIED/blank-move Shadow entry is *likely* stuck on Frustration —
+it only resolves the move when a source (CSV column, hand entry) names it
+explicitly. A Shadow attacker imported with a blank Charge Move still defaults
+to the species' first charged move with no Frustration-specific inference.
 
 ### A blank move column means "not captured", never "has no move"
 

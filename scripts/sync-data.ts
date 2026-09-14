@@ -345,6 +345,50 @@ function resolveGameMasterMoves<T extends FastMove | ChargedMove>(
 }
 
 /**
+ * IDEAS.md #24 option 1 (2026-09-13): Niantic assigns FRUSTRATION/RETURN
+ * dynamically at catch/purify time rather than listing them in any species'
+ * static `cinematicMoves`/`eliteCinematicMoves`, so this pipeline's normal
+ * "moveset = GAME_MASTER's own move list" rule structurally could never pick
+ * either move up — a real, live defect (a Poke Genie CSV row can read
+ * literally `Return` in its Charge Move column and had nowhere to resolve
+ * to, silently defaulting the whole moveset). `GameMasterPokemonRecord.shadow`
+ * is first-party evidence of exactly which species/move pair is real: if a
+ * template's own `shadow.shadowChargeMove`/`shadow.purifiedChargeMove` reads
+ * "FRUSTRATION"/"RETURN", THIS pipeline adds that literal move id to this
+ * species' charged movepool (both onto the same base, non-shadow
+ * SpeciesDefinition — see pokeGenieMatch.ts's own note that a roster
+ * Shadow/Purified individual is represented via a cost-modifier flag on the
+ * BASE species, never a separate SpeciesDefinition, so the base movepool is
+ * the ONLY place either move can resolve for CSV import matching).
+ *
+ * Deliberately literal-string-gated to exactly "FRUSTRATION"/"RETURN" rather
+ * than "add whatever shadow.shadowChargeMove/purifiedChargeMove says" — a
+ * SEPARATE raw template per enum (LUGIA_S / HO_OH_S, confirmed 2026-09-13;
+ * this pipeline's own resolveGameMasterPokemonRecord never selects an "_S"
+ * form as the matched record for the roster's plain "lugia"/"ho-oh" species,
+ * whose own matched template's `shadow` block is the ordinary FRUSTRATION/
+ * RETURN pair like every other species) carries a DIFFERENT signature
+ * exclusive-move pair (AEROBLAST_PLUS/AEROBLAST_PLUS_PLUS,
+ * SACRED_FIRE_PLUS/SACRED_FIRE_PLUS_PLUS) under this same `shadow` key. That
+ * pair is out of scope for this fix either way (it never reaches gmRecord
+ * for either species today) — the literal-string gate exists so a future
+ * resolution-order change can't silently start adding an unvetted exclusive
+ * move here instead of loudly needing its own decision.
+ *
+ * No-op (returns `chargedNames` unchanged) for a species with no `shadow`
+ * block at all, or one already listing the move name — evidence-gated per
+ * CLAUDE.md's shadow-synthesis standing decision, not a blanket add.
+ */
+function withShadowAndPurifiedMoveNames(chargedNames: string[], gmRecord: GameMasterPokemonRecord | null): string[] {
+  const shadow = gmRecord?.shadow;
+  if (!shadow) return chargedNames;
+  const extra: string[] = [];
+  if (shadow.shadowChargeMove === "FRUSTRATION" && !chargedNames.includes("FRUSTRATION")) extra.push("FRUSTRATION");
+  if (shadow.purifiedChargeMove === "RETURN" && !chargedNames.includes("RETURN")) extra.push("RETURN");
+  return extra.length === 0 ? chargedNames : [...chargedNames, ...extra];
+}
+
+/**
  * Per-species overrides for the "first-listed form" fallback (see
  * defaultFormByPokemonId below), keyed by pokemon_id. The generic fallback is
  * just "whichever form pokemon_stats.json happens to list first" (effectively
@@ -780,7 +824,7 @@ for (const stat of normalStats) {
     rawTypeStrings = [gmRecord.type, gmRecord.type2].filter((t): t is string => Boolean(t));
     rarity = pokemonClassToRarity(gmRecord.pokemonClass);
     fastNames = [...gmRecord.quickMoves, ...gmRecord.eliteQuickMoves];
-    chargedNames = [...gmRecord.cinematicMoves, ...gmRecord.eliteCinematicMoves];
+    chargedNames = withShadowAndPurifiedMoveNames([...gmRecord.cinematicMoves, ...gmRecord.eliteCinematicMoves], gmRecord);
   } else {
     speciesFallenBackToPogoapi.push(`${stat.pokemon_name} (${form})`);
     const typesEntry = typesByPokemonId.get(pokemonId);
@@ -1045,7 +1089,10 @@ for (const [pokemonId, rows] of statsByPokemonId) {
       rawTypeStrings = candidateRawTypeStrings!; // non-null here — gmExactRecord is set, so the hoisted lookup above always populated it
       rarity = pokemonClassToRarity(gmExactRecord.pokemonClass);
       fastNames = [...gmExactRecord.quickMoves, ...gmExactRecord.eliteQuickMoves];
-      chargedNames = [...gmExactRecord.cinematicMoves, ...gmExactRecord.eliteCinematicMoves];
+      chargedNames = withShadowAndPurifiedMoveNames(
+        [...gmExactRecord.cinematicMoves, ...gmExactRecord.eliteCinematicMoves],
+        gmExactRecord,
+      );
     } else {
       speciesFallenBackToPogoapi.push(`${row.pokemon_name} (${row.form}) [extra form]`);
       const typesEntry = fallbackTypesEntry;
