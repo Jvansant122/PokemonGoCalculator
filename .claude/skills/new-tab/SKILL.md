@@ -1,6 +1,6 @@
 ---
 name: new-tab
-description: Checklist for adding a new top-level tab (view) to the web app — a seventh tab-switched view with its own shareable Scenario type and URL query param. Use whenever the user asks for a new tab, view, mode, or "page" in the comparator, before any component is written. A tab has eleven parallel touch points (App.tsx, codec, view, run/ function, round-trip checker, CLI, three test files, docs); missing one is the recurring drift this repo's docs checker exists to catch.
+description: Checklist for adding a new top-level tab (view) to the web app — a seventh tab-switched view with its own shareable Scenario type and URL query param. Use whenever the user asks for a new tab, view, mode, or "page" in the comparator, before any component is written. A tab has twelve parallel touch points (App.tsx, codec, view, run/ function, round-trip checker, CLI, three test files, docs, skill prose); missing one is the recurring drift this repo's docs checker exists to catch.
 ---
 
 # Add a tab
@@ -53,6 +53,11 @@ cleanest model.
     `URL query param (...)` list.
 11. The `add-scenario-assumption` skill's Step-0 table (the `| Name (param) | ... |` row format
     is parsed) and `web-developer`'s tab table.
+12. **Bold tab-count words in any skill's PROSE**, which are a separate surface from the table in
+    step 11 — e.g. `add-scenario-assumption`'s "There are **seven** tabs" and "It covers **all
+    seven** tabs". Every `SKILL.md` is scanned for `**<count>** tab(s)`. This shape went stale
+    once already: a "covers only six tabs" sentence survived because the table beside it was
+    correct, and it was found only when a human read it.
 
 ## Finish
 

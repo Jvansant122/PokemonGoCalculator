@@ -71,6 +71,32 @@ if (claudeCountWord && COUNT_WORDS[appTabs.length] !== claudeCountWord)
   fail(`CLAUDE.md says "${claudeCountWord} tab-switched views" but App.tsx has ${appTabs.length}`);
 else if (claudeCountWord) ok(`CLAUDE.md tab count word ("${claudeCountWord}") matches App.tsx`);
 
+// A skill's own PROSE can carry a tab count too, and that is a separate surface from the
+// Step-0 table checked above. This exact shape went stale once: add-scenario-assumption said the
+// round-trip checker "covers only six tabs" after the Roster row was added, the table check could
+// not see it (the table was correct), and per HANDOFF.md 2026-09-12 it "went unnoticed until a
+// human read it". Scans every SKILL.md rather than one hard-coded path, so a future skill that
+// states a tab count is covered the day it is written.
+const skillProseCountWords = [];
+const skillDirsForProse = exists('.claude/skills')
+  ? fs.readdirSync(path.join(repoRoot, '.claude/skills'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name)
+  : [];
+for (const dir of skillDirsForProse) {
+  const p = `.claude/skills/${dir}/SKILL.md`;
+  if (!exists(p)) continue;
+  const body = read(p);
+  for (const m of body.matchAll(/\*\*(?:all\s+)?([a-z]+)\*\*\s+tabs?\b/g)) {
+    if (!Object.values(COUNT_WORDS).includes(m[1])) continue; // "**every** tab" etc. — not a count
+    skillProseCountWords.push({ file: p, word: m[1], phrase: m[0] });
+  }
+}
+const staleSkillProse = appTabs.length ? skillProseCountWords.filter((c) => c.word !== COUNT_WORDS[appTabs.length]) : [];
+if (staleSkillProse.length)
+  for (const c of staleSkillProse)
+    fail(`${c.file} prose says "${c.phrase}" but App.tsx has ${appTabs.length} tabs`);
+else if (skillProseCountWords.length)
+  ok(`${skillProseCountWords.length} skill prose tab-count word(s) match App.tsx`);
+
 // ---- 2. Params -----------------------------------------------------------------------------
 const paramLine = claude.match(/URL query param \(([^)]+)\)/);
 const claudeParams = paramLine ? [...paramLine[1].matchAll(/`([a-z]+)`/g)].map((m) => m[1]) : [];

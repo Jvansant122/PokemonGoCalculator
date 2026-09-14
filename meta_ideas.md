@@ -140,7 +140,11 @@ platform-survey passes are not worth running again until a release lands.
 - **Owner:** not `meta-researcher` (out of its remit, and it said so), and arguably not
   `meta-architect` either, since `scripts/` is product code rather than `.claude/` config. Needs
   an explicit assignment — most likely the user directly.
-- **Status:** Accepted (2026-09-14), not yet implemented.
+- **Status:** **Implemented 2026-09-14.** `scripts/check-docs-drift.mjs` now scans every
+  `SKILL.md` for `**<count>** tab(s)` prose and compares it against `App.tsx`; proven to fail on
+  the exact historical drift (injected "**six** tabs", got `FAIL ... but App.tsx has 7 tabs`) and
+  to pass once restored. `new-tab` gained step 12 for the prose surface, and its own description
+  went eleven -> twelve touch points.
 
 ## 2026-09-14 — Zero-result pass
 
