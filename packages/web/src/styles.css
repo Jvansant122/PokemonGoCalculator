@@ -736,6 +736,50 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Compact inline stats row: a handful of small labeled counts (Roster tab's
+ * "Total entries" / "Unique species" / "Mega/Primal-capable" / "Shadow" /
+ * "Default/unknown moveset") that read fine as one wrapping line rather than
+ * a stacked block each (pogo-player, 2026-09-12 — "five tiny integers"
+ * burning a card's worth of vertical scroll). A "0" value stays fully
+ * legible as plain text here rather than being omitted — an absent stat
+ * would be ambiguous between "none" and "not counted". Generic/reusable:
+ * not named after Roster specifically, so any future summary panel wanting
+ * a row-of-counts over stacked stat tiles can reuse it directly.
+ */
+.compact-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-3);
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.compact-stats-item {
+  white-space: nowrap;
+}
+
+.compact-stats-item strong {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  margin-right: 4px;
+}
+
+/*
+ * Visual gap before a destructive action that shares a panel with summary
+ * numbers or other non-destructive controls, so proximity alone doesn't
+ * invite a misclick (pogo-player, 2026-09-12 — Roster summary panel's
+ * "Clear roster" button sitting directly under the stats it might be
+ * mistaken for acting on). Generic — any panel section boundary can use it.
+ */
+.panel-section-divider {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
 /* Team Raid's cleared / failed verdict line. */
 .raid-outcome {
   font-size: 1.05rem;
@@ -976,6 +1020,37 @@ button:disabled {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.09em;
+}
+
+/*
+ * TabErrorBoundary's fallback — same box family as .blocked-gain-callout
+ * (border-left accent, radius, shadow) rather than a third visual language,
+ * recolored to --warn's red ("something is wrong") since this is an actual
+ * crash, not a "pay attention" callout. See TabErrorBoundary.tsx.
+ */
+.tab-crash-callout {
+  border-left: 4px solid var(--warn);
+  background: rgba(255, 107, 107, 0.08);
+}
+
+.tab-crash-callout > strong {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--warn);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.tab-crash-stack {
+  max-height: 260px;
+  overflow: auto;
+  padding: var(--space-2);
+  background: var(--inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* --------------------------------------------------------------- share row */

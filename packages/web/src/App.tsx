@@ -7,6 +7,7 @@ import { IvBreakpointsView } from "./IvBreakpointsView.js";
 import { PowerUpOptimizerView } from "./PowerUpOptimizerView.js";
 import { RosterView } from "./RosterView.js";
 import { SpeciesReportView } from "./SpeciesReportView.js";
+import { TabErrorBoundary } from "./TabErrorBoundary.js";
 import { TeamRaidView } from "./TeamRaidView.js";
 
 /** The app's seven views. */
@@ -31,6 +32,22 @@ export type AppTab =
  * a shared link restores the same tab it was built from, not whatever tab
  * happened to be open last.
  */
+/**
+ * Human-readable label per tab for TabErrorBoundary's fallback message and
+ * for building a "reset to defaults" link — kept here rather than duplicated
+ * per-view since App.tsx is the one place that already enumerates all seven
+ * tabs (the `.tab-switcher` nav below).
+ */
+const TAB_LABELS: Record<AppTab, string> = {
+  comparator: "Two-Candidate Comparator",
+  "team-raid": "Team Raid Simulator",
+  "species-report": "Species Report",
+  "iv-breakpoints": "IV Breakpoints",
+  "attack-defense-breakpoints": "Attack/Defense Breakpoints",
+  "power-up-optimizer": "Power-Up Optimizer",
+  roster: "Roster",
+};
+
 function initialTab(): AppTab {
   if (typeof window === "undefined") return "comparator";
   const requested = new URLSearchParams(window.location.search).get("view");
@@ -105,6 +122,20 @@ export function App() {
   function handleSendToTeamRaidFromSpeciesReport(prefill: TeamRaidPrefill) {
     setTeamRaidPrefill(prefill);
     setTab("team-raid");
+  }
+
+  /**
+   * TabErrorBoundary's "Reset this tab to defaults" action — a full
+   * navigation (not just clearing React state) so it's robust to whatever
+   * corrupted the tree in the first place, dropping every query param except
+   * `view` so the tab reloads onto DEFAULT_ASSUMPTIONS rather than
+   * re-decoding the same malformed scenario param that just crashed it.
+   */
+  function handleResetTab() {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("view", tab);
+    window.location.href = url.toString();
   }
 
   return (
@@ -193,21 +224,30 @@ export function App() {
           Roster
         </button>
       </nav>
-      {tab === "comparator" ? (
-        <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
-      ) : tab === "team-raid" ? (
-        <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
-      ) : tab === "species-report" ? (
-        <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
-      ) : tab === "iv-breakpoints" ? (
-        <IvBreakpointsView />
-      ) : tab === "attack-defense-breakpoints" ? (
-        <AttackDefenseBreakpointsView />
-      ) : tab === "power-up-optimizer" ? (
-        <PowerUpOptimizerView />
-      ) : (
-        <RosterView />
-      )}
+      {/*
+        Keyed by `tab` so navigating to another tab and back always mounts a
+        fresh TabErrorBoundary instance — a tab that crashed once doesn't
+        stay stuck in its fallback state after you've clicked away from it.
+        Scoped to only the active view (not the whole .app div above) so the
+        masthead and nav stay usable as the fallback's own "way out."
+      */}
+      <TabErrorBoundary key={tab} tabLabel={TAB_LABELS[tab]} onResetTab={handleResetTab}>
+        {tab === "comparator" ? (
+          <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
+        ) : tab === "team-raid" ? (
+          <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
+        ) : tab === "species-report" ? (
+          <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
+        ) : tab === "iv-breakpoints" ? (
+          <IvBreakpointsView />
+        ) : tab === "attack-defense-breakpoints" ? (
+          <AttackDefenseBreakpointsView />
+        ) : tab === "power-up-optimizer" ? (
+          <PowerUpOptimizerView />
+        ) : (
+          <RosterView />
+        )}
+      </TabErrorBoundary>
     </div>
   );
 }
