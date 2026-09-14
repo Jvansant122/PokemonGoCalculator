@@ -42,6 +42,50 @@ a declined one gets its permanent number when it lands in `REJECTED_IDEAS.md`.
 
 ---
 
+## 2026-09-14 (pass 6) — one proposal blocked on a dependency, one finding rejected as false
+
+Run minutes after pass 5, with one docs-only commit in between and the CHANGELOG flat at 2.1.270
+for a fourth consecutive pass. Both productive seams were near-bare going in, and the invocation
+said so.
+
+### Match `.claude/settings.json` and `.claude/hooks/**/*.mjs` in `post-edit.mjs`'s `isDocsSurface`
+
+- **Evidence:** the premise is correct and verified — `isDocsSurface` (post-edit.mjs:39) matches
+  only `agents/*.md`, `skills/**/SKILL.md`, `CLAUDE.md` and `HANDOFF.md`, so editing a hook script
+  or `settings.json` triggers no automatic check at all.
+- ⛔ **Blocked on a dependency that makes it useless as proposed.** `scripts/check-docs-drift.mjs`
+  contains **zero** references to hooks or `settings.json` (grepped: no matches). Wiring those file
+  classes in would invoke a checker with no awareness of them — cost with no detection. **A
+  hook-count / hook-description check inside `check-docs-drift.mjs` has to come first**; only then
+  does the trigger wiring buy anything. The agent flagged this caveat itself, honestly, as outside
+  its remit; verification promoted it from footnote to blocker.
+- **Ongoing context cost:** none (hook + script internals).
+- **Status:** Proposed — blocked on adding a hook-aware check to `check-docs-drift.mjs` first.
+
+### ❌ Rejected as factually wrong: "CLAUDE.md's hooks paragraph is stale"
+
+The pass's headline finding claimed `CLAUDE.md` still says *two* hooks and describes only three
+`post-edit.mjs` branches. **It does not.** `CLAUDE.md:403` reads "has three hooks", lists all four
+branches including `check-docs-drift`, and documents the `PreToolUse` scratch-block deny with its
+allow-list and rationale — all updated in `56d0bbc` by the same change that added the hook.
+Verified by reading the file directly.
+
+**Logged because it is the first false finding in six passes**, and the shape is worth knowing: it
+was a *stale-doc* claim that was itself stale. A future pass raising it again should check
+`CLAUDE.md:403` before spending effort.
+
+**CONSIDERED AND DROPPED:**
+
+- *The operator heredoc/`node -e` quoting friction* (hit three times in one session, all while
+  doing surgical replacement inside large Markdown docs) — judged **operator discipline, not a
+  mechanism gap**, the same shape as `REJECTED_IDEAS.md` #16. The `Edit` tool's own description,
+  already loaded every session, says to prefer it for modifying existing files; `CLAUDE.md` has no
+  `heredoc`/`node -e` convention and needs none. A repo-agnostic finding fails this pass's bar, and
+  no line of documentation fixes a momentary bypass of an already-loaded instruction. **Correct
+  call — the coordinator supplied this lead and it was right to drop it.**
+
+**RETIRE:** nothing. `gh` CLI status still unverified (open since pass 1).
+
 ## 2026-09-14 — Run `typecheck:scripts` in the post-edit hook's web branch
 
 - **Evidence:** a real incident the same day. During the `PowerUpOptimizerView.tsx` four-stage
