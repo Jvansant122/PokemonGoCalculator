@@ -121,9 +121,95 @@ test("power-up-optimizer multi-raid: switch mode, import a roster, run a sweep o
   await expect(budgetSection.getByText("Steps committed")).toBeVisible();
   // Either a real ledger line or the "blocked, not done"/"nothing further
   // measurably helps" callout — either way proves a REAL RosterBudgetPlan
-  // came back, not just the section's own static intro copy.
+  // came back, not just the section's own static intro copy. `.first()`
+  // because a non-null `bestBuddyRecommendation` (IDEAS.md #5) renders its
+  // OWN `.blocked-gain-callout`-styled div alongside the stop-reason one —
+  // this assertion only needs proof that at least one real callout rendered,
+  // not that exactly one did.
   await expect(budgetSection.getByText(/Stardust/)).toBeVisible();
-  await expect(budgetSection.locator(".blocked-gain-callout")).toBeVisible();
+  await expect(budgetSection.locator(".blocked-gain-callout").first()).toBeVisible();
+
+  const bodyText = await page.locator("body").innerText();
+  expect(bodyText, "rendered page text").not.toMatch(/\bNaN\b/);
+  expect(bodyText, "rendered page text").not.toMatch(/\bInfinity\b/);
+
+  expect(consoleErrors, "console.error calls").toEqual([]);
+  expect(pageErrors, "uncaught page errors").toEqual([]);
+});
+
+/**
+ * IDEAS.md #5's roster-mode Best Buddy candidates (`RosterPlanResult.
+ * bestBuddyCandidates`) — shipped in the engine 2026-09-13, wired into this
+ * UI 2026-09-14. Real rows must render (not the stale "Single-raid mode
+ * ONLY" caveat this replaced), flagging one entry via localStorage (the same
+ * shape the Roster tab's own edit form persists) must remove exactly that
+ * entry from the list, and flagging EVERY fielded entry must produce the
+ * explicit "already done" empty state rather than a blank panel.
+ */
+test("power-up-optimizer multi-raid: Best Buddy candidates render real rows, exclude an already-flagged entry, and the all-flagged roster shows the 'already done' empty state", async ({
+  page,
+}) => {
+  const { consoleErrors, pageErrors } = attachErrorListeners(page);
+
+  await importSampleRosterViaRosterTab(page);
+
+  async function runSweep() {
+    await page.goto("/?view=power-up-optimizer");
+    await expandAssumptions(page);
+    await page.getByRole("button", { name: "Multi-raid — whole imported roster vs. a boss set" }).click();
+    await expect(page.getByRole("heading", { name: "Multi-raid sweep" })).toBeVisible();
+    const runSweepButton = page.getByRole("button", { name: "Run sweep" });
+    await expect(runSweepButton).toBeEnabled({ timeout: 10_000 });
+    await runSweepButton.click();
+    await expect(page.getByRole("heading", { name: "Ranked candidates" })).toBeVisible({ timeout: 20_000 });
+  }
+
+  await runSweep();
+
+  const bodyTextBefore = await page.locator("body").innerText();
+  expect(bodyTextBefore).not.toContain("No Best Buddy candidates here");
+
+  const bestBuddyHeading = page.getByRole("heading", { name: /Best Buddy candidates \(no stardust\/candy cost\)/ });
+  await expect(bestBuddyHeading).toBeVisible();
+  const bestBuddySection = bestBuddyHeading.locator("xpath=ancestor::details[1]");
+  const rowCountBefore = await bestBuddySection.locator("table tbody tr").count();
+  expect(rowCountBefore).toBeGreaterThan(0);
+
+  // Expanding a row reveals its own per-boss breakdown table, same
+  // convention as the ranked/benched tables above it.
+  await bestBuddySection.locator("table tbody tr").first().getByRole("button").click();
+  await expect(bestBuddySection.locator("table.time-series-table").nth(1)).toBeVisible();
+
+  // Flag Mewtwo (real, fielded on this sample roster) via localStorage —
+  // the same StoredRosterEntry.isBestBuddy shape the Roster tab's own edit
+  // form persists — and confirm it drops out of the list.
+  await page.evaluate(() => {
+    const key = "pogo-analyzer:roster-pool:v1";
+    const pool = JSON.parse(window.localStorage.getItem(key)!);
+    pool.entries = pool.entries.map((e: { speciesId: string }) => (e.speciesId === "mewtwo" ? { ...e, isBestBuddy: true } : e));
+    window.localStorage.setItem(key, JSON.stringify(pool));
+  });
+  await runSweep();
+  const bestBuddySectionAfterFlag = page
+    .getByRole("heading", { name: /Best Buddy candidates \(no stardust\/candy cost\)/ })
+    .locator("xpath=ancestor::details[1]");
+  await expect(bestBuddySectionAfterFlag.locator("table tbody tr")).toHaveCount(rowCountBefore - 1);
+  await expect(bestBuddySectionAfterFlag).not.toContainText("Mewtwo");
+
+  // Flag EVERY entry — the explicit "already done" empty state, never a
+  // blank panel or an error.
+  await page.evaluate(() => {
+    const key = "pogo-analyzer:roster-pool:v1";
+    const pool = JSON.parse(window.localStorage.getItem(key)!);
+    pool.entries = pool.entries.map((e: Record<string, unknown>) => ({ ...e, isBestBuddy: true }));
+    window.localStorage.setItem(key, JSON.stringify(pool));
+  });
+  await runSweep();
+  const bestBuddySectionAllFlagged = page
+    .getByRole("heading", { name: /Best Buddy candidates \(no stardust\/candy cost\)/ })
+    .locator("xpath=ancestor::details[1]");
+  await expect(bestBuddySectionAllFlagged.locator("table tbody tr")).toHaveCount(0);
+  await expect(bestBuddySectionAllFlagged.getByText(/Nothing to recommend — every Pokémon fielded/)).toBeVisible();
 
   const bodyText = await page.locator("body").innerText();
   expect(bodyText, "rendered page text").not.toMatch(/\bNaN\b/);

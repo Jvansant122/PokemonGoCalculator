@@ -48,6 +48,15 @@ export interface RosterEntryDraft {
    * questions; don't "harmonise" them into one flag.
    */
   canMega: boolean;
+  /**
+   * IDEAS.md #5 (roster mode) — mirrors `RosterEntry.isBestBuddy` (engine
+   * `rosterPlanner.ts`) exactly, including its non-enforcement of the real
+   * one-Best-Buddy-per-trainer limit — same convention
+   * `TeamAssumptionPanel.tsx`'s own per-slot Best Buddy checkbox already
+   * uses. The Poke Genie CSV has no Best Buddy column, so hand-entry/edit via
+   * this form is the ONLY way this ever becomes `true`.
+   */
+  isBestBuddy: boolean;
 }
 
 export function emptyRosterEntryDraft(): RosterEntryDraft {
@@ -65,6 +74,7 @@ export function emptyRosterEntryDraft(): RosterEntryDraft {
     isPurified: false,
     isLucky: false,
     canMega: false,
+    isBestBuddy: false,
   };
 }
 
@@ -138,6 +148,7 @@ export function rosterEntryToDraft(entry: RosterEntry): RosterEntryDraft {
     isPurified: entry.costModifiers.isPurified,
     isLucky: entry.costModifiers.isLucky,
     canMega: entry.canMega,
+    isBestBuddy: entry.isBestBuddy ?? false,
   };
 }
 
@@ -193,6 +204,7 @@ export function draftToRosterEntry(draft: RosterEntryDraft, species: SpeciesDefi
       isLucky: draft.isLucky,
     },
     canMega: draft.canMega && !!species.boost,
+    isBestBuddy: draft.isBestBuddy,
     ivsAreApproximate: false,
     levelIsApproximate: false,
     movesetIsDefaulted: false,

@@ -14,7 +14,12 @@ import { rankByLabel } from "./powerUpOptimizerSentences.js";
 import { efficiencyForRankBy, sortCandidatesByEfficiency } from "./powerUpCandidateSort.js";
 import { getBaseUrl } from "./urlUtils.js";
 import type { RosterPlannerRunResult } from "./run/runRosterPlanner.js";
-import { dedupeInterchangeableCandidates, type DedupedRosterCandidateGroup } from "./rosterCandidateDedupe.js";
+import {
+  dedupeInterchangeableBestBuddyCandidates,
+  dedupeInterchangeableCandidates,
+  type DedupedRosterBestBuddyGroup,
+  type DedupedRosterCandidateGroup,
+} from "./rosterCandidateDedupe.js";
 import type { MovesetDefaultBadgeInfo } from "./rosterMovesetBadge.js";
 import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
 
@@ -228,6 +233,80 @@ function MultiRaidCandidateRow({
         <td>{c.bossesNewlyFielded.length}</td>
       </tr>
       {expanded && <MultiRaidPerBossTable perBoss={c.perBoss} columnCount={MULTI_RAID_ROW_COLUMN_COUNT} />}
+    </>
+  );
+}
+
+const MULTI_RAID_BEST_BUDDY_COLUMN_COUNT = 5;
+
+/**
+ * One row of the "Best Buddy candidates" table (IDEAS.md #5, roster mode —
+ * `RosterPlanResult.bestBuddyCandidates`, shipped in the engine 2026-09-13
+ * but unwired until this pass). `RosterBestBuddyCandidate` carries NO cost or
+ * efficiency fields at all (never nulls — see that type's own doc comment:
+ * Best Buddy is free, and a free action divides by zero on both of this
+ * tab's cost-efficiency axes), so this is its own row component rather than
+ * a cost-column-blanked reuse of `MultiRaidCandidateRow` — same reasoning as
+ * `MultiRaidHypotheticalCatchRow` just above. `level` is looked up
+ * separately (this candidate type has no `fromLevel`/`toLevel` — Best Buddy
+ * doesn't change a Pokémon's power-up level at all) since the engine row
+ * itself doesn't carry it.
+ */
+function MultiRaidBestBuddyRow({
+  group,
+  level,
+  identity,
+}: {
+  group: DedupedRosterBestBuddyGroup;
+  level: number | undefined;
+  identity?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const c = group.representative;
+  return (
+    <>
+      <tr style={{ opacity: c.exceedsNoise ? 1 : 0.6 }}>
+        <td>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title="Show the per-boss breakdown — where Best Buddy actually helps, not just the averaged headline number."
+            style={{ background: "none", border: "none", padding: 0, font: "inherit", color: "inherit", cursor: "pointer", textAlign: "left" }}
+          >
+            {expanded ? "▾" : "▸"} {c.speciesName}
+          </button>
+          {group.count > 1 && (
+            <span className="species-picker-hint">
+              {" "}
+              ×{group.count} interchangeable entries
+            </span>
+          )}
+          {identity && (
+            <span className="caveats" style={{ display: "block", fontSize: "0.85em" }}>
+              {identity}
+            </span>
+          )}
+        </td>
+        <td>{level ?? "—"}</td>
+        <td>
+          {c.exceedsNoise ? (
+            <>
+              {c.meanDeltaTeamDps >= 0 ? "+" : ""}
+              {c.meanDeltaTeamDps.toFixed(3)}
+            </>
+          ) : (
+            "≈0 (no measurable change)"
+          )}
+        </td>
+        <td>
+          {c.bestBossDeltaTeamDps === null
+            ? "—"
+            : `${c.bestBossDeltaTeamDps >= 0 ? "+" : ""}${c.bestBossDeltaTeamDps.toFixed(3)} vs ${c.perBoss.find((p) => p.bossId === c.bestBossId)?.bossName ?? c.bestBossId}`}
+        </td>
+        <td>{c.significantBossCount}</td>
+      </tr>
+      {expanded && <MultiRaidPerBossTable perBoss={c.perBoss} columnCount={MULTI_RAID_BEST_BUDDY_COLUMN_COUNT} />}
     </>
   );
 }
@@ -492,6 +571,8 @@ export function rosterProgressSentence(event: RosterPlannerProgressEvent): strin
       return `Simulating power-up candidates: ${event.completed} / ${event.total}`;
     case "hypotheticalCatches":
       return `Evaluating hypothetical catches: ${event.completed} / ${event.total}`;
+    case "bestBuddy":
+      return `Evaluating Best Buddy candidates: ${event.completed} / ${event.total}`;
     case "rounds":
       return `Building plan: round ${event.completed}${event.bossName ? ` (committed against ${event.bossName})` : ""}`;
     default:
@@ -605,6 +686,36 @@ export function MultiRaidResultsSection({
 
   const dedupedBenched = useMemo(() => dedupeInterchangeableCandidates(run?.data?.benchedButPromising ?? [], pool), [run, pool]);
 
+  const dedupedBestBuddy = useMemo(
+    () => dedupeInterchangeableBestBuddyCandidates(run?.data?.bestBuddyCandidates ?? [], pool),
+    [run, pool],
+  );
+  // RosterBestBuddyCandidate carries no `level` field (Best Buddy doesn't
+  // change a Pokémon's power-up level at all — see that type's own doc
+  // comment), so MultiRaidBestBuddyRow needs it joined back from the pool,
+  // same "entryId -> X" join shape as entryIdentities/entryMovesetBadges.
+  const entryLevelById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of pool) map.set(entry.entryId, entry.level);
+    return map;
+  }, [pool]);
+  // Distinguishes the two real reasons dedupedBestBuddy can be empty (task
+  // requirement: "nothing to recommend because you've already done it" must
+  // read differently from a generic empty panel) — computed from data this
+  // component already has, no new engine field needed. "already-best-buddy"
+  // means every entryId appearing on ANY boss's baseline team is already
+  // flagged; "none" covers everything else (nothing fielded at all, or a
+  // stale run with no data).
+  const bestBuddyEmptyReason = useMemo((): "already-best-buddy" | "none" | null => {
+    if (!run?.data || run.data.bestBuddyCandidates.length > 0) return null;
+    const fieldedEntryIds = new Set<string>();
+    for (const b of run.data.baselinePerBoss) for (const id of b.team) fieldedEntryIds.add(id);
+    if (fieldedEntryIds.size === 0) return "none";
+    const poolById = new Map(pool.map((e) => [e.entryId, e]));
+    const allAlreadyBestBuddy = [...fieldedEntryIds].every((id) => poolById.get(id)?.isBestBuddy);
+    return allAlreadyBestBuddy ? "already-best-buddy" : "none";
+  }, [run, pool]);
+
   const neverCompetitive = run?.data?.neverCompetitive ?? [];
 
   return (
@@ -620,13 +731,6 @@ export function MultiRaidResultsSection({
         ~164 Pokémon, so a per-entry control would be unusable. It only ever affects an entry that can actually
         Mega Evolve; everything else in the pool is untouched by it.
       </p>
-      <p className="caveats" style={{ marginBottom: 12 }}>
-        <strong>No Best Buddy candidates here.</strong> IDEAS.md #5&rsquo;s free (no stardust/candy) Best Buddy
-        candidate list is Single-raid mode ONLY — a roster entry here carries no Best Buddy flag at all, and
-        evaluating it correctly needs the aggregate-across-bosses noise-floor machinery Single-raid mode
-        doesn&rsquo;t have. Switch to Single-raid mode (in Assumptions above) to see it.
-      </p>
-
       <div className="result-row" style={{ alignItems: "center", gap: 12, marginBottom: 12 }}>
         <button type="button" onClick={onRunSweep} disabled={isRunning || hydratedPoolCount === 0 || bossCount === 0}>
           {isRunning ? "Running sweep…" : run ? "Run sweep again" : "Run sweep"}
@@ -727,6 +831,10 @@ export function MultiRaidResultsSection({
               <dd>±{run.data.noiseFloorTeamDps.toFixed(3)} team DPS ({run.data.iterations} seeds, {run.data.screenIterations} screen)</dd>
               <dt>Benched but promising</dt>
               <dd>{run.data.benchedButPromising.length}</dd>
+              <dt title="Pool entries not already flagged Best Buddy, fielded on at least one boss's baseline team — see the Best Buddy candidates table below.">
+                Best Buddy candidates
+              </dt>
+              <dd>{run.data.bestBuddyCandidates.length}</dd>
               <dt title="Excluded from candidate generation entirely — an unevolved species, one with no affordable level, or one where no affordable level touches any boss's team. Never silently hidden.">
                 Never competitive
               </dt>
@@ -771,6 +879,62 @@ export function MultiRaidResultsSection({
               {showAllMultiRaidCandidates ? `Show top ${MULTI_RAID_TABLE_INITIAL_ROWS} only` : `Show all ${qualifyingCandidates.length}`}
             </button>
           )}
+
+          <CollapsibleSection
+            id="pu-multi-best-buddy"
+            heading={`Best Buddy candidates (no stardust/candy cost) — ${dedupedBestBuddy.length} row${dedupedBestBuddy.length === 1 ? "" : "s"}`}
+            headingLevel="h3"
+            defaultOpen
+            variant="subsection"
+          >
+            <p className="caveats" style={{ marginBottom: 12 }}>
+              Best Buddy&rsquo;s +1 effective level costs ZERO stardust and ZERO candy, so it can&rsquo;t be ranked
+              by either of this tab&rsquo;s cost-efficiency axes and never appears in the ranked table above —
+              evaluated here for every pool entry fielded on at least one boss&rsquo;s baseline team that
+              isn&rsquo;t already flagged Best Buddy (flag one on the{" "}
+              <a href={`${getBaseUrl()}?view=roster`}>Roster tab</a>). Each row is a real paired simulation with
+              ONLY that one entry&rsquo;s Best Buddy flag flipped on, evaluated INDEPENDENTLY as if it were the only
+              Best Buddy candidate — but only ONE Pokémon can be your trainer&rsquo;s active Best Buddy at a time in
+              the real game, so more than one row can show a gain here without all being simultaneously achievable.
+              Significance is aggregate OR per-boss, same test as the ranked table above — a dimmed row can still be
+              genuinely significant against just ONE boss even though it&rsquo;s diluted away in the aggregate
+              (against a real active-raid set, roughly half a top-attacker pool clears the per-boss bar while only a
+              handful clear the aggregate one) — expand a row to see its per-boss breakdown. Currently-BENCHED
+              entries are never evaluated here — there&rsquo;s no cheap, sound way to estimate whether Best
+              Buddy&rsquo;s small fixed nudge alone would earn a benched entry a team spot.
+            </p>
+            {dedupedBestBuddy.length === 0 ? (
+              <p className="caveats" style={{ color: "var(--text)" }}>
+                {bestBuddyEmptyReason === "already-best-buddy"
+                  ? "Nothing to recommend — every Pokémon fielded on at least one boss's baseline team is already flagged Best Buddy on the Roster tab."
+                  : "No pool entry fielded on any boss's baseline team is eligible for a Best Buddy row."}
+              </p>
+            ) : (
+              <div className="table-scroll">
+                <table className="time-series-table">
+                  <thead>
+                    <tr>
+                      <th>Species</th>
+                      <th>Level</th>
+                      <th title="Weighted mean across every swept boss">Mean Δ team DPS</th>
+                      <th title="The single largest-magnitude per-boss effect">Best boss Δ</th>
+                      <th title="Bosses where this candidate's own effect clears THAT boss's own noise floor">Significant bosses</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dedupedBestBuddy.map((group) => (
+                      <MultiRaidBestBuddyRow
+                        key={`bb-${group.key}`}
+                        group={group}
+                        level={entryLevelById.get(group.representative.entryId)}
+                        identity={entryIdentities.get(group.representative.entryId)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CollapsibleSection>
 
           {run.data.benchedButPromising.length > 0 && (
             <CollapsibleSection

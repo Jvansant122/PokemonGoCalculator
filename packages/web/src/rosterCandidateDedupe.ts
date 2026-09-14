@@ -1,4 +1,4 @@
-import type { RosterPowerUpCandidate } from "@pogo-analyzer/engine";
+import type { RosterBestBuddyCandidate, RosterPowerUpCandidate } from "@pogo-analyzer/engine";
 import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
 
 /**
@@ -73,6 +73,73 @@ export function dedupeInterchangeableCandidates(
     // from the same pool this sweep was computed from), never collapse it —
     // give it its own row rather than guessing at identity.
     const key = entry ? candidateGroupKey(c, entry) : `unique:${c.entryId}@${c.toLevel}`;
+    const existing = groups.get(key);
+    if (existing) existing.push(c);
+    else {
+      groups.set(key, [c]);
+      order.push(key);
+    }
+  }
+
+  return order.map((key) => {
+    const group = groups.get(key)!;
+    if (group.length === 1) return { key, count: 1, representative: group[0]! };
+
+    const meanOfMeans = group.reduce((sum, c) => sum + c.meanDeltaTeamDps, 0) / group.length;
+    let representative = group[0]!;
+    let bestDistance = Infinity;
+    for (const c of group) {
+      const distance = Math.abs(c.meanDeltaTeamDps - meanOfMeans);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        representative = c;
+      }
+    }
+    return { key, count: group.length, representative };
+  });
+}
+
+/** Same idea as DedupedRosterCandidateGroup, for RosterBestBuddyCandidate (IDEAS.md #5, roster mode) rather than RosterPowerUpCandidate. */
+export interface DedupedRosterBestBuddyGroup {
+  key: string;
+  count: number;
+  representative: RosterBestBuddyCandidate;
+}
+
+/**
+ * Same key convention as `candidateGroupKey`, minus `fromLevel`/`toLevel`
+ * (a Best Buddy candidate has no power-up level step — it's evaluated at the
+ * entry's OWN current level) and with that current `level` itself included
+ * instead, since two entries of the same species at DIFFERENT levels are not
+ * interchangeable even if everything else matches.
+ */
+function bestBuddyCandidateGroupKey(c: RosterBestBuddyCandidate, entry: ImportedRosterEntry): string {
+  return [
+    c.speciesId,
+    entry.level,
+    entry.ivs.attack,
+    entry.ivs.defense,
+    entry.ivs.stamina,
+    entry.fastMoveId ?? "",
+    entry.chargedMoveId ?? "",
+    entry.costModifiers.isShadow ? 1 : 0,
+    entry.costModifiers.isPurified ? 1 : 0,
+    entry.costModifiers.isLucky ? 1 : 0,
+  ].join("|");
+}
+
+/** Same purpose/conservatism as dedupeInterchangeableCandidates, for RosterBestBuddyCandidate rows instead. */
+export function dedupeInterchangeableBestBuddyCandidates(
+  candidates: RosterBestBuddyCandidate[],
+  pool: ImportedRosterEntry[],
+): DedupedRosterBestBuddyGroup[] {
+  const poolByEntryId = new Map(pool.map((e) => [e.entryId, e]));
+  const groups = new Map<string, RosterBestBuddyCandidate[]>();
+  const order: string[] = [];
+
+  for (const c of candidates) {
+    const entry = poolByEntryId.get(c.entryId);
+    const key = entry ? bestBuddyCandidateGroupKey(c, entry) : `unique:${c.entryId}`;
     const existing = groups.get(key);
     if (existing) existing.push(c);
     else {

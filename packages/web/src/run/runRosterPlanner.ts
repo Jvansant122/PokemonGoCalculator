@@ -241,6 +241,10 @@ export function toEngineRosterPool(pool: ImportedRosterEntry[], useBestAvailable
       // move" from "known move plus an unrecorded second one").
       knownChargedMoveIds: e.knownChargedMoveIds,
       candyFamilyId: canMega ? resolveMegaBaseCandyFamilyId(e.species) : undefined,
+      // See import/pokeGenieMatch.ts's RosterEntry.isBestBuddy doc comment —
+      // straight carry-over, `undefined` already means "not a Best Buddy" on
+      // both sides of this join.
+      isBestBuddy: e.isBestBuddy,
     };
   });
 }

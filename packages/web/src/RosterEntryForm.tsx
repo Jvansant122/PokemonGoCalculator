@@ -3,6 +3,7 @@ import { MoveSelect } from "./MoveSelect.js";
 import { NumberField } from "./NumberField.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker, type SpeciesPickerOption } from "./SpeciesPicker.js";
+import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { speciesRegistry } from "./registry.js";
 import { defaultCanMegaForSpecies, normalizeRosterEntryDraft, type RosterEntryDraft } from "./rosterEntryDraft.js";
 import { shadowToggleUiState } from "./shadowToggle.js";
@@ -179,6 +180,15 @@ export function RosterEntryForm({ idPrefix, draft, onChange, species, speciesOpt
                 title={species.boost ? "This entry is eligible to be fielded as the team's one Mega/Primal slot." : "No boost mechanic on this species."}
               />{" "}
               Can Mega/Primal Evolve{!species.boost ? " (no boost mechanic on this species)" : ""}
+            </label>
+            <label className="species-picker-hint">
+              <input
+                type="checkbox"
+                checked={draft.isBestBuddy}
+                onChange={(e) => set({ ...draft, isBestBuddy: e.target.checked })}
+                title={BEST_BUDDY_HINT}
+              />{" "}
+              Best Buddy
             </label>
           </div>
         </>

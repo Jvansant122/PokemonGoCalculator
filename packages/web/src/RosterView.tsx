@@ -239,6 +239,9 @@ export function RosterView() {
           <span className="compact-stats-item">
             <strong>{summary.defaultedMovesetCount}</strong> default/unknown moveset
           </span>
+          <span className="compact-stats-item">
+            <strong>{summary.bestBuddyCount}</strong> best buddy
+          </span>
         </p>
         <div className="field" style={{ maxWidth: 260 }}>
           <label htmlFor="roster-sort-by">Table sort order</label>
@@ -319,6 +322,7 @@ export function RosterView() {
                   if (entry.canMega) flags.push("mega-capable");
                   if (entry.costModifiers.isPurified) flags.push("purified");
                   if (entry.costModifiers.isLucky) flags.push("lucky");
+                  if (entry.isBestBuddy) flags.push("best buddy");
                   return (
                     <tr key={entry.entryId}>
                       <td>

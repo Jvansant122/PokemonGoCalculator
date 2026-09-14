@@ -682,6 +682,21 @@ function MultiRaidBudgetPlanSection({
             </div>
           )}
 
+          {run.data.bestBuddyRecommendation && (
+            <div className="blocked-gain-callout" style={{ borderLeftColor: "var(--info)" }}>
+              <strong style={{ color: "var(--info)" }}>Best Buddy recommendation (free — no stardust/candy)</strong>
+              {run.data.bestBuddyRecommendation.speciesName}
+              {entryIdentities.get(run.data.bestBuddyRecommendation.entryId)
+                ? ` (${entryIdentities.get(run.data.bestBuddyRecommendation.entryId)})`
+                : ""}
+              : +{run.data.bestBuddyRecommendation.deltaTeamDps.toFixed(3)} team DPS if made your active Best Buddy,
+              evaluated against the roster AFTER every step above. This is the single, joint pick across your WHOLE
+              roster — honoring the real one-Best-Buddy-per-trainer limit the ranked sweep&rsquo;s own Best Buddy
+              table deliberately does not enforce. &ldquo;Free&rdquo; means no stardust/candy cost tracked here; the
+              real walking distance to earn it is not modelled.
+            </div>
+          )}
+
           <div className="result-card" style={{ marginBottom: 12 }}>
             <dl>
               <dt>Steps committed</dt>

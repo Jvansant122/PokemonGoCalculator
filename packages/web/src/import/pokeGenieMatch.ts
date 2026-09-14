@@ -89,6 +89,17 @@ export interface RosterEntry {
    * `RosterImportPanel.tsx` already reads it directly.
    */
   unmatchedMoveNames: string[];
+  /**
+   * IDEAS.md #5 (roster mode, 2026-09-13/14) — mirrors the engine's own
+   * `RosterEntry.isBestBuddy` (rosterPlanner.ts) field-for-field, including
+   * its non-enforcement of the real one-Best-Buddy-per-trainer limit (see
+   * that field's own doc comment). The Poke Genie CSV export has no Best
+   * Buddy column at all, so this is ALWAYS `undefined` for a freshly-imported
+   * row — hand-entry/edit (`RosterEntryForm.tsx`, via `rosterEntryDraft.ts`)
+   * is the only source that ever sets this `true`. `undefined`/`false` both
+   * mean "not currently a Best Buddy."
+   */
+  isBestBuddy?: boolean;
 }
 
 export interface UnmatchedPokeGenieRow {

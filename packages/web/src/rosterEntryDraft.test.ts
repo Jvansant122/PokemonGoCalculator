@@ -186,6 +186,16 @@ describe("rosterEntryToDraft / draftToRosterEntry round trip", () => {
     expect(rebuilt).toEqual(original);
   });
 
+  it("round-trips isBestBuddy: true (IDEAS.md #5, roster mode)", () => {
+    const species = fakeSpecies();
+    const original = draftToRosterEntry({ ...emptyRosterEntryDraft(), speciesId: species.id, isBestBuddy: true }, species, "existing-id");
+    expect(original.isBestBuddy).toBe(true);
+    const draft = rosterEntryToDraft(original);
+    expect(draft.isBestBuddy).toBe(true);
+    const rebuilt = draftToRosterEntry(draft, species, original.entryId);
+    expect(rebuilt).toEqual(original);
+  });
+
   it("round-trips a known second charged move", () => {
     const species = fakeTwoChargedMoveSpecies();
     const original = draftToRosterEntry(

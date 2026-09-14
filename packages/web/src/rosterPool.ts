@@ -43,6 +43,8 @@ export interface StoredRosterEntry {
   knownChargedMoveIds?: string[];
   sourceLineNumber: number;
   unmatchedMoveNames: string[];
+  /** See RosterEntry's own doc comment (import/pokeGenieMatch.ts) — added alongside IDEAS.md #5's roster-mode Best Buddy UI. Absent on a pool saved before this field existed; hydrateRosterEntry passes it through as-is (undefined already means "not a Best Buddy," same as a pool that never set it). */
+  isBestBuddy?: boolean;
 }
 
 export interface RosterPool {
@@ -89,6 +91,7 @@ export function dehydrateRosterEntry(entry: RosterEntry): StoredRosterEntry {
     knownChargedMoveIds: entry.knownChargedMoveIds,
     sourceLineNumber: entry.sourceLineNumber,
     unmatchedMoveNames: entry.unmatchedMoveNames,
+    isBestBuddy: entry.isBestBuddy,
   };
 }
 
@@ -131,6 +134,10 @@ export function hydrateRosterEntry(stored: StoredRosterEntry, registry: SpeciesL
     knownChargedMoveIds: stored.knownChargedMoveIds,
     sourceLineNumber: stored.sourceLineNumber,
     unmatchedMoveNames: stored.unmatchedMoveNames,
+    // Absent on a pool saved before this field existed — `undefined` is
+    // already the correct "not a Best Buddy" meaning (same as
+    // knownChargedMoveIds above), so no `?? false` fallback needed.
+    isBestBuddy: stored.isBestBuddy,
   };
 }
 

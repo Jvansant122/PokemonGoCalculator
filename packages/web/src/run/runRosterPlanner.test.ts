@@ -112,6 +112,13 @@ describe("toEngineRosterPool", () => {
     expect(unknown!.knownChargedMoveIds).toBeUndefined();
   });
 
+  it("carries isBestBuddy straight through unchanged (IDEAS.md #5, roster mode)", () => {
+    const [flagged] = toEngineRosterPool([fakeImportedEntry({ isBestBuddy: true })]);
+    expect(flagged!.isBestBuddy).toBe(true);
+    const [unflagged] = toEngineRosterPool([fakeImportedEntry({ isBestBuddy: undefined })]);
+    expect(unflagged!.isBestBuddy).toBeUndefined();
+  });
+
   it("defensively clears canMega when the species has no boost mechanic, even if the imported flag says true", () => {
     const corrupt = fakeImportedEntry({ canMega: true, species: fakeSpecies("no-boost-species") });
     const [entry] = toEngineRosterPool([corrupt]);

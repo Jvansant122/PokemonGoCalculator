@@ -105,6 +105,21 @@ describe("dehydrateRosterEntry / hydrateRosterEntry", () => {
     const registry = { has: (id: string) => id === "houndour", get: () => fakeSpecies("houndour") };
     expect(hydrateRosterEntry(stored, registry)!.knownChargedMoveIds).toBeUndefined();
   });
+
+  it("round-trips isBestBuddy: true (IDEAS.md #5, roster mode)", () => {
+    const entry = fakeEntry({ isBestBuddy: true });
+    const stored = dehydrateRosterEntry(entry);
+    expect(stored.isBestBuddy).toBe(true);
+    const registry = { has: (id: string) => id === "houndour", get: () => fakeSpecies("houndour") };
+    expect(hydrateRosterEntry(stored, registry)).toEqual(entry);
+  });
+
+  it("hydrates isBestBuddy as undefined (not a Best Buddy), never a crash, on a pool saved before this field existed", () => {
+    const stored = dehydrateRosterEntry(fakeEntry());
+    delete (stored as Partial<StoredRosterEntry>).isBestBuddy;
+    const registry = { has: (id: string) => id === "houndour", get: () => fakeSpecies("houndour") };
+    expect(hydrateRosterEntry(stored, registry)!.isBestBuddy).toBeUndefined();
+  });
 });
 
 describe("hydrateRosterPool", () => {

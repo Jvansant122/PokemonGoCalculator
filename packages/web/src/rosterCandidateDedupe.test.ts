@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { RosterPowerUpCandidate } from "@pogo-analyzer/engine";
+import type { RosterBestBuddyCandidate, RosterPowerUpCandidate } from "@pogo-analyzer/engine";
 import type { RosterEntry as ImportedRosterEntry } from "./import/pokeGenieMatch.js";
-import { dedupeInterchangeableCandidates } from "./rosterCandidateDedupe.js";
+import { dedupeInterchangeableBestBuddyCandidates, dedupeInterchangeableCandidates } from "./rosterCandidateDedupe.js";
 
 function fakeEntry(overrides: Partial<ImportedRosterEntry> = {}): ImportedRosterEntry {
   return {
@@ -150,5 +150,63 @@ describe("dedupeInterchangeableCandidates", () => {
       entries,
     );
     expect(groups.map((g) => g.representative.entryId)).toEqual(["top", "second"]);
+  });
+});
+
+function fakeBestBuddyCandidate(overrides: Partial<RosterBestBuddyCandidate> = {}): RosterBestBuddyCandidate {
+  return {
+    entryId: "pg-1-mewtwo",
+    speciesId: "mewtwo",
+    speciesName: "Mewtwo",
+    perBoss: [],
+    meanDeltaTeamDps: 0.15,
+    bestBossDeltaTeamDps: 0.3,
+    bestBossId: "boss-a",
+    significantBossCount: 1,
+    exceedsNoise: true,
+    ...overrides,
+  };
+}
+
+describe("dedupeInterchangeableBestBuddyCandidates", () => {
+  it("collapses two genuinely identical entries (same species/level/IVs/moveset/cost modifiers) into one group", () => {
+    const entryA = fakeEntry({ entryId: "pg-1-mewtwo" });
+    const entryB = fakeEntry({ entryId: "pg-9-mewtwo" });
+    const candidateA = fakeBestBuddyCandidate({ entryId: "pg-1-mewtwo", meanDeltaTeamDps: 0.161 });
+    const candidateB = fakeBestBuddyCandidate({ entryId: "pg-9-mewtwo", meanDeltaTeamDps: 0.147 });
+
+    const groups = dedupeInterchangeableBestBuddyCandidates([candidateA, candidateB], [entryA, entryB]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]!.count).toBe(2);
+  });
+
+  it("keeps two entries separate when their level differs — Best Buddy has no toLevel field to disambiguate otherwise", () => {
+    const entryA = fakeEntry({ entryId: "pg-1-mewtwo", level: 20 });
+    const entryB = fakeEntry({ entryId: "pg-2-mewtwo", level: 25 });
+    const groups = dedupeInterchangeableBestBuddyCandidates(
+      [fakeBestBuddyCandidate({ entryId: "pg-1-mewtwo" }), fakeBestBuddyCandidate({ entryId: "pg-2-mewtwo" })],
+      [entryA, entryB],
+    );
+    expect(groups).toHaveLength(2);
+  });
+
+  it("keeps two entries separate when their IVs differ", () => {
+    const entryA = fakeEntry({ entryId: "pg-1-mewtwo", ivs: { attack: 12, defense: 12, stamina: 14 } });
+    const entryB = fakeEntry({ entryId: "pg-2-mewtwo", ivs: { attack: 15, defense: 15, stamina: 15 } });
+    const groups = dedupeInterchangeableBestBuddyCandidates(
+      [fakeBestBuddyCandidate({ entryId: "pg-1-mewtwo" }), fakeBestBuddyCandidate({ entryId: "pg-2-mewtwo" })],
+      [entryA, entryB],
+    );
+    expect(groups).toHaveLength(2);
+  });
+
+  it("a candidate whose entryId isn't found in the pool at all gets its own row rather than being guessed into a group", () => {
+    const entryA = fakeEntry({ entryId: "pg-1-mewtwo" });
+    const groups = dedupeInterchangeableBestBuddyCandidates(
+      [fakeBestBuddyCandidate({ entryId: "pg-1-mewtwo" }), fakeBestBuddyCandidate({ entryId: "pg-missing" })],
+      [entryA],
+    );
+    expect(groups).toHaveLength(2);
   });
 });

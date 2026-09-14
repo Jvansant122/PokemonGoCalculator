@@ -33,6 +33,8 @@ export interface RosterSummary {
   defaultedMovesetCount: number;
   approximateIvCount: number;
   approximateLevelCount: number;
+  /** IDEAS.md #5 (roster mode) — count of entries flagged `isBestBuddy: true`. Real Pokémon GO allows only ONE at a time; this tool doesn't enforce that (see RosterEntry.isBestBuddy's own doc comment), so a count above 1 is a real, visible signal the roster has more than one flagged, not a bug. */
+  bestBuddyCount: number;
 }
 
 function summarizeRoster(entries: RosterEntry[]): RosterSummary {
@@ -44,6 +46,7 @@ function summarizeRoster(entries: RosterEntry[]): RosterSummary {
   let defaultedMovesetCount = 0;
   let approximateIvCount = 0;
   let approximateLevelCount = 0;
+  let bestBuddyCount = 0;
   for (const entry of entries) {
     speciesIds.add(entry.species.id);
     if (entry.canMega) megaCapableCount += 1;
@@ -53,6 +56,7 @@ function summarizeRoster(entries: RosterEntry[]): RosterSummary {
     if (movesetDefaultBadge(entry)) defaultedMovesetCount += 1;
     if (entry.ivsAreApproximate) approximateIvCount += 1;
     if (entry.levelIsApproximate) approximateLevelCount += 1;
+    if (entry.isBestBuddy) bestBuddyCount += 1;
   }
   return {
     entryCount: entries.length,
@@ -64,6 +68,7 @@ function summarizeRoster(entries: RosterEntry[]): RosterSummary {
     defaultedMovesetCount,
     approximateIvCount,
     approximateLevelCount,
+    bestBuddyCount,
   };
 }
 
