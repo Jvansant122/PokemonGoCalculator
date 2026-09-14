@@ -163,6 +163,40 @@ if (skillCountWord && COUNT_WORDS[skillDirs.length] !== skillCountWord[1])
   fail(`CLAUDE.md says "${skillCountWord[1]} project-specific skills" but .claude/skills has ${skillDirs.length}`);
 if (!badSkills) ok(`all ${skillDirs.length} skills are mentioned in CLAUDE.md`);
 
+// ---- 5b. Hooks -----------------------------------------------------------------------------
+// CLAUDE.md's "Skills and hooks" paragraph describes what governs every Edit/Write in this repo,
+// and it is the one surface where being wrong is actively misleading: an agent that reads only
+// CLAUDE.md would not know a PreToolUse hook can DENY its write. Nothing checked it until now —
+// the count sentence was kept honest by hand each time a hook was added, which worked twice and
+// is not a mechanism. Checks the count word and that each hook's script is named somewhere in the
+// paragraph; deliberately does NOT try to validate the prose description of behaviour, which is
+// judgement rather than fact.
+const settingsPath = '.claude/settings.json';
+if (exists(settingsPath)) {
+  let hooksByEvent = {};
+  try {
+    hooksByEvent = JSON.parse(read(settingsPath)).hooks ?? {};
+  } catch {
+    fail(`${settingsPath} is not valid JSON`);
+  }
+  const hookEntries = Object.values(hooksByEvent).flat();
+  const hookCountWord = claude.match(/`\.claude\/settings\.json` has \*{0,2}([a-z]+)\*{0,2} hooks?/);
+  if (hookCountWord && COUNT_WORDS[hookEntries.length] !== hookCountWord[1])
+    fail(`CLAUDE.md says settings.json has "${hookCountWord[1]}" hooks but it has ${hookEntries.length}`);
+
+  const scriptNames = hookEntries
+    .flatMap((e) => (e.hooks ?? []).map((h) => (h.command ?? '').match(/[\w-]+\.(?:mjs|sh)/)?.[0]))
+    .filter(Boolean);
+  const unmentioned = [...new Set(scriptNames)].filter((n) => !claude.includes(n));
+  for (const n of unmentioned) fail(`.claude/settings.json runs ${n} but CLAUDE.md never names it`);
+
+  const eventsUnmentioned = Object.keys(hooksByEvent).filter((e) => !claude.includes(e));
+  for (const e of eventsUnmentioned) fail(`settings.json registers a ${e} hook but CLAUDE.md never names that event`);
+
+  if (hookCountWord && !unmentioned.length && !eventsUnmentioned.length)
+    ok(`CLAUDE.md describes all ${hookEntries.length} hooks (${Object.keys(hooksByEvent).join(', ')})`);
+}
+
 // ---- 6. Plans ------------------------------------------------------------------------------
 const plans = fs.readdirSync(repoRoot).filter((f) => /^PLAN_.*\.md$/.test(f));
 let badPlans = 0;

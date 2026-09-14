@@ -37,9 +37,15 @@ process.stdin.on("end", () => {
   const base = path.basename(fp);
   const isScenarioFile =
     /Scenario\.ts$/.test(base) || /AssumptionPanel\.tsx$/.test(base) || /View\.tsx$/.test(base);
+  // settings.json and the hook scripts are included because check-docs-drift now validates
+  // CLAUDE.md's hook paragraph against settings.json's real hooks (count word, event names,
+  // script names). Before that check existed this trigger would have been cost with no
+  // detection, which is why it was logged blocked in meta_ideas.md rather than wired early.
   const isDocsSurface =
     /\.claude\/agents\/[^/]+\.md$/.test(fp) ||
     /\.claude\/skills\/.+\/SKILL\.md$/.test(fp) ||
+    /\.claude\/hooks\/[^/]+\.mjs$/.test(fp) ||
+    fp.includes(".claude/settings.json") ||
     base === "CLAUDE.md" ||
     base === "HANDOFF.md";
 

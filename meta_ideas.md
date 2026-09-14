@@ -60,7 +60,14 @@ said so.
   does the trigger wiring buy anything. The agent flagged this caveat itself, honestly, as outside
   its remit; verification promoted it from footnote to blocker.
 - **Ongoing context cost:** none (hook + script internals).
-- **Status:** Proposed — blocked on adding a hook-aware check to `check-docs-drift.mjs` first.
+- **Status:** **Implemented 2026-09-14.** The blocker was cleared first, in the order the entry
+  demanded: `check-docs-drift.mjs` gained a hooks section validating CLAUDE.md's hook paragraph
+  against `settings.json`'s real hooks — count word, event names, and each hook script's filename —
+  proven to fail on both a wrong count (`"two" hooks but it has 3`) and an unnamed script. Only
+  then was `isDocsSurface` widened to `settings.json` and `.claude/hooks/*.mjs`, so the trigger now
+  invokes a checker that actually validates those files. Routing verified with a failing `npm`
+  stub: both new classes run `check-docs-drift`, agent-memory and README still run nothing, and the
+  engine branch is unchanged.
 
 ### ❌ Rejected as factually wrong: "CLAUDE.md's hooks paragraph is stale"
 
