@@ -153,14 +153,28 @@ export function scenarioToAssumptions(s: SpeciesReportScenario): SpeciesReportAs
     speciesId: s.speciesId,
     fastMoveId: s.fastMoveId ?? null,
     chargedMoveId: s.chargedMoveId ?? null,
-    level: s.level,
-    ivAttack: s.ivs.attack,
-    ivDefense: s.ivs.defense,
-    ivStamina: s.ivs.stamina,
+    // `??` guards `s.level` being absent — a REQUIRED (non-optional) field on
+    // this tab's own `SpeciesReportScenario`, but TS's static requiredness
+    // doesn't survive JSON.parse any more than it does elsewhere on this
+    // page: an absent `level` reaches `cpmForLevel` downstream and throws
+    // instead of computing a usable default result — same failure mode as
+    // ComparatorView.tsx's/TeamRaidView.tsx's identical `level` field.
+    level: s.level ?? DEFAULT_ASSUMPTIONS.level,
+    // `?.` guards `s.ivs` itself being absent (a corrupted/truncated link
+    // that still decodes to SOME object, but not this tab's shape) —
+    // `s.ivs.attack` throws outright when `ivs` is missing, `?.` degrades to
+    // `undefined` for `??` to then catch.
+    ivAttack: s.ivs?.attack ?? DEFAULT_ASSUMPTIONS.ivAttack,
+    ivDefense: s.ivs?.defense ?? DEFAULT_ASSUMPTIONS.ivDefense,
+    ivStamina: s.ivs?.stamina ?? DEFAULT_ASSUMPTIONS.ivStamina,
     // `??` guards a scenario URL encoded before this field existed rather
     // than surfacing `undefined` into the Mega Level <select>.
     megaLevel: s.megaLevel ?? DEFAULT_ASSUMPTIONS.megaLevel,
-    dodge: s.dodgeModel,
+    // `??` guards `s.dodgeModel` being absent — a plain property read can't
+    // throw here, but a resulting `undefined` crashes downstream wherever
+    // `.dodge.kind` is read unguarded, same failure mode as
+    // ComparatorView.tsx/TeamRaidView.tsx/PowerUpOptimizerAssumptionPanel.tsx:59.
+    dodge: s.dodgeModel ?? DEFAULT_ASSUMPTIONS.dodge,
     // `??` guards a scenario URL encoded before a field existed rather than
     // surfacing `undefined` into a controlled input — same discipline as
     // App.tsx's scenarioToAssumptions/TeamRaidView's teamScenarioToAssumptions.

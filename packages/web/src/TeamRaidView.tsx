@@ -232,7 +232,14 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
 }
 
 export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssumptions {
-  const slots: TeamSlotAssumption[] = s.slots.map((slot) => ({
+  // `?? []` guards `s.slots` itself being absent (a corrupted/truncated link
+  // that still decodes to SOME object, but not this tab's shape) — `.map` on
+  // `undefined` throws outright, same failure mode as
+  // powerUpOptimizerScenario.ts's own `(s.slots ?? []).map(...)`. The
+  // pad-to-MAX_TEAM_RAID_SLOTS loop below already turns an empty array into
+  // MAX_TEAM_RAID_SLOTS blank slots exactly like an old link with no slots
+  // at all.
+  const slots: TeamSlotAssumption[] = (s.slots ?? []).map((slot) => ({
     speciesId: slot.speciesId ?? null,
     fastMoveId: slot.fastMoveId ?? null,
     chargedMoveId: slot.chargedMoveId ?? null,
@@ -270,11 +277,24 @@ export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssump
     // App.tsx's scenarioToAssumptions.
     bossFastMoveId: s.bossFastMoveId ?? null,
     bossChargedMoveId: s.bossChargedMoveId ?? null,
-    level: s.level,
-    ivAttack: s.ivs.attack,
-    ivDefense: s.ivs.defense,
-    ivStamina: s.ivs.stamina,
-    dodge: s.dodgeModel,
+    // `??` guards `s.level` being absent — a REQUIRED (non-optional) field on
+    // the engine's own `TeamScenario`, but TS's static requiredness doesn't
+    // survive JSON.parse any more than it does elsewhere on this page: an
+    // absent `level` reaches `cpmForLevel` downstream and throws instead of
+    // computing a usable default result — same failure mode as
+    // ComparatorView.tsx's identical `level` field.
+    level: s.level ?? DEFAULT_TEAM_ASSUMPTIONS.level,
+    // `?.` guards `s.ivs` itself being absent (same "valid object, expected
+    // key absent" shape as `s.slots` above) — `s.ivs.attack` throws outright
+    // when `ivs` is missing, `?.` degrades to `undefined` for `??` to catch.
+    ivAttack: s.ivs?.attack ?? DEFAULT_TEAM_ASSUMPTIONS.ivAttack,
+    ivDefense: s.ivs?.defense ?? DEFAULT_TEAM_ASSUMPTIONS.ivDefense,
+    ivStamina: s.ivs?.stamina ?? DEFAULT_TEAM_ASSUMPTIONS.ivStamina,
+    // `??` guards `s.dodgeModel` being absent — a plain property read can't
+    // throw here, but a resulting `undefined` crashes downstream wherever
+    // `.dodge.kind` is read unguarded, same failure mode as
+    // ComparatorView.tsx/PowerUpOptimizerAssumptionPanel.tsx:59.
+    dodge: s.dodgeModel ?? DEFAULT_TEAM_ASSUMPTIONS.dodge,
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_TEAM_ASSUMPTIONS.dodgeFastAttacks,
     holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_TEAM_ASSUMPTIONS.holdChargedMoveUntilSafe,
     weather: s.weather ?? "none",

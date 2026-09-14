@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { toBase64Url } from "@pogo-analyzer/engine";
+import { parseScenarioFromUrl, parseTeamScenarioFromUrl, toBase64Url } from "@pogo-analyzer/engine";
 import {
   assumptionsToScenario as speciesReportAssumptionsToScenario,
   DEFAULT_ASSUMPTIONS as SPECIES_REPORT_DEFAULTS,
+  scenarioToAssumptions as speciesReportScenarioToAssumptions,
 } from "./SpeciesReportView.js";
 import {
   decodeSpeciesReportScenarioWithDiagnostics,
@@ -20,10 +21,21 @@ import {
   assumptionsToScenario as puAssumptionsToScenario,
   DEFAULT_ASSUMPTIONS as PU_DEFAULTS,
   decodePowerUpOptimizerScenarioWithDiagnostics,
+  scenarioToAssumptions as puScenarioToAssumptions,
   type PowerUpOptimizerScenario,
 } from "./powerUpOptimizerScenario.js";
 import { assumptionsToScenario as rosterAssumptionsToScenario, DEFAULT_ASSUMPTIONS as ROSTER_DEFAULTS } from "./RosterView.js";
 import { decodeRosterScenarioWithDiagnostics, parseRosterScenarioFromUrl, type RosterScenario } from "./rosterScenario.js";
+import {
+  DEFAULT_ASSUMPTIONS as COMPARATOR_DEFAULTS,
+  scenarioToAssumptions as comparatorScenarioToAssumptions,
+  type ComparatorScenario,
+} from "./ComparatorView.js";
+import {
+  DEFAULT_TEAM_ASSUMPTIONS,
+  teamScenarioToAssumptions,
+  type TeamScenarioWithShadow,
+} from "./TeamRaidView.js";
 
 /**
  * Mirrors packages/engine's test/scenario.test.ts (`decodeScenarioWithDiagnostics`
@@ -217,6 +229,84 @@ describe("web-owned scenario codecs never throw on malformed input", () => {
   it("Roster: parseRosterScenarioFromUrl returns null for an unusable ?rt= the same way as a missing one", () => {
     expect(parseRosterScenarioFromUrl("https://pogo-analyzer.example/?view=roster&rt=not%20valid")).toBeNull();
     expect(parseRosterScenarioFromUrl("https://pogo-analyzer.example/?view=roster")).toBeNull();
+  });
+
+  /**
+   * A "valid JSON, decodes to SOME object, but none of this tab's expected
+   * top-level keys are present" share link — a corrupted/truncated paste
+   * that still parses as an object. The engine's/web's own
+   * decode*WithDiagnostics degrades this correctly already (every recognized
+   * field just comes back `undefined`, `rejectedFields` stays empty since
+   * nothing was PRESENT-but-wrong-typed to reject) — the bug this covers was
+   * one step downstream, in each view's own scenarioToAssumptions merge,
+   * where a handful of fields were dereferenced without the `?.`/`??` guard
+   * every sibling field in the same function already had (`s.candidates[0]`,
+   * `s.ivs.attack`, `s.slots.map(...)`, `s.dodgeModel`). Real repro links:
+   * see the four `?view=...&PARAM=eyJmb28iOiJiYXIiLCJuZXN0ZWQiOnsiYSI6MX19`
+   * URLs this exact payload encodes to.
+   */
+  const malformedPayload = { foo: "bar", nested: { a: 1 } };
+
+  it("Comparator: a structurally-valid-but-wrong-shape payload degrades to defaults instead of throwing", () => {
+    const url = `https://pogo-analyzer.example/?view=comparator&s=${encode(malformedPayload)}`;
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    expect(() => comparatorScenarioToAssumptions(decoded!)).not.toThrow();
+    const assumptions = comparatorScenarioToAssumptions(decoded!);
+    expect(assumptions.candidateAId).toBe(COMPARATOR_DEFAULTS.candidateAId);
+    expect(assumptions.candidateBId).toBe(COMPARATOR_DEFAULTS.candidateBId);
+    expect(assumptions.targetId).toBe(COMPARATOR_DEFAULTS.targetId);
+    // `level` is required on the engine's own `Scenario` — an absent value
+    // here previously reached `cpmForLevel` downstream as literal `undefined`
+    // and threw "No CPM entry for level undefined" (caught, so not a crash,
+    // but an unusable "Could not compute this scenario" result rather than a
+    // real one — live-confirmed via this exact test's own payload shape).
+    expect(assumptions.level).toBe(COMPARATOR_DEFAULTS.level);
+    expect(assumptions.partySize).toBe(COMPARATOR_DEFAULTS.partySize);
+    expect(assumptions.teammateDps).toBe(COMPARATOR_DEFAULTS.teammateDps);
+    expect(assumptions.matchingTeammateCount).toBe(COMPARATOR_DEFAULTS.matchingTeammateCount);
+    expect(assumptions.ivAttack).toBe(COMPARATOR_DEFAULTS.ivAttack);
+    expect(assumptions.ivDefense).toBe(COMPARATOR_DEFAULTS.ivDefense);
+    expect(assumptions.ivStamina).toBe(COMPARATOR_DEFAULTS.ivStamina);
+    expect(assumptions.dodge).toEqual(COMPARATOR_DEFAULTS.dodge);
+  });
+
+  it("Team Raid: a structurally-valid-but-wrong-shape payload degrades to defaults instead of throwing", () => {
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(malformedPayload)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect(() => teamScenarioToAssumptions(decoded!)).not.toThrow();
+    const assumptions = teamScenarioToAssumptions(decoded!);
+    expect(assumptions.slots).toHaveLength(DEFAULT_TEAM_ASSUMPTIONS.slots.length);
+    expect(assumptions.slots.every((s) => s.speciesId === null)).toBe(true);
+    expect(assumptions.level).toBe(DEFAULT_TEAM_ASSUMPTIONS.level);
+    expect(assumptions.ivAttack).toBe(DEFAULT_TEAM_ASSUMPTIONS.ivAttack);
+    expect(assumptions.ivDefense).toBe(DEFAULT_TEAM_ASSUMPTIONS.ivDefense);
+    expect(assumptions.ivStamina).toBe(DEFAULT_TEAM_ASSUMPTIONS.ivStamina);
+    expect(assumptions.dodge).toEqual(DEFAULT_TEAM_ASSUMPTIONS.dodge);
+  });
+
+  it("Species Report: a structurally-valid-but-wrong-shape payload degrades to defaults instead of throwing", () => {
+    const url = `https://pogo-analyzer.example/?view=species-report&sr=${encode(malformedPayload)}`;
+    const decoded = parseSpeciesReportScenarioFromUrl(url);
+    expect(decoded).not.toBeNull();
+    expect(() => speciesReportScenarioToAssumptions(decoded!)).not.toThrow();
+    const assumptions = speciesReportScenarioToAssumptions(decoded!);
+    expect(assumptions.level).toBe(SPECIES_REPORT_DEFAULTS.level);
+    expect(assumptions.ivAttack).toBe(SPECIES_REPORT_DEFAULTS.ivAttack);
+    expect(assumptions.ivDefense).toBe(SPECIES_REPORT_DEFAULTS.ivDefense);
+    expect(assumptions.ivStamina).toBe(SPECIES_REPORT_DEFAULTS.ivStamina);
+    expect(assumptions.dodge).toEqual(SPECIES_REPORT_DEFAULTS.dodge);
+  });
+
+  it("Power-Up Optimizer: a structurally-valid-but-wrong-shape payload degrades to defaults instead of throwing", () => {
+    const result = decodePowerUpOptimizerScenarioWithDiagnostics(encode(malformedPayload));
+    expect(result).not.toBeNull();
+    expect(() => puScenarioToAssumptions(result!.scenario)).not.toThrow();
+    const assumptions = puScenarioToAssumptions(result!.scenario);
+    expect(assumptions.targetId).toBe(PU_DEFAULTS.targetId);
+    expect(assumptions.dodge).toEqual(PU_DEFAULTS.dodge);
+    expect(assumptions.slots).toHaveLength(PU_DEFAULTS.slots.length);
   });
 });
 

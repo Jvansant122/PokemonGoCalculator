@@ -163,9 +163,18 @@ export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
 
 export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
   return {
-    candidateAId: s.candidates[0] ?? DEFAULT_CANDIDATE_A_ID,
-    candidateBId: s.candidates[1] ?? DEFAULT_CANDIDATE_B_ID,
-    targetId: s.target,
+    // `?.` guards `s.candidates` itself being absent (a corrupted/truncated
+    // link that still decodes to SOME object, but not this tab's shape) —
+    // plain `??` only guards an undefined *element*, not an undefined
+    // *array*, so `s.candidates[0]` throws before `??` ever runs if
+    // `candidates` itself is missing.
+    candidateAId: s.candidates?.[0] ?? DEFAULT_CANDIDATE_A_ID,
+    candidateBId: s.candidates?.[1] ?? DEFAULT_CANDIDATE_B_ID,
+    // `??` guards the same "valid object, expected key absent" shape as
+    // candidateAId/candidateBId above — registry.get(undefined) throws, and
+    // while runComparatorScenario already catches that, it also (harmlessly
+    // but needlessly) nulls out otherwise-valid candidates in the process.
+    targetId: s.target ?? DEFAULT_TARGET_ID,
     // `??` guards a scenario URL encoded before these fields existed rather
     // than surfacing `undefined` into a controlled input (see the block below).
     candidateAFastMoveId: s.candidateFastMoveIds?.[0] ?? DEFAULT_ASSUMPTIONS.candidateAFastMoveId,
@@ -184,11 +193,27 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // even declared on the engine's own Scenario type — see ComparatorScenario
     // above) rather than surfacing `undefined` into the checkboxes below.
     candidateShadow: s.candidateShadow ?? [false, false],
-    level: s.level,
-    ivAttack: s.ivs.attack,
-    ivDefense: s.ivs.defense,
-    ivStamina: s.ivs.stamina,
-    dodge: s.dodgeModel,
+    // `??` guards `s.level` being absent — a REQUIRED (non-optional) field on
+    // `Scenario`, but TS's static requiredness doesn't survive JSON.parse any
+    // more than it does for any other field on this page: an absent `level`
+    // reaches `cpmForLevel` downstream and throws "No CPM entry for level
+    // undefined" (caught by runComparatorScenario's own try/catch, so this
+    // doesn't crash the tab — but it silently replaces a usable default
+    // result with an opaque error message, live-confirmed via this exact
+    // bug's own repro links).
+    level: s.level ?? DEFAULT_ASSUMPTIONS.level,
+    // `?.` guards `s.ivs` itself being absent (same "valid object, expected
+    // key absent" shape as candidateAId/candidateBId above) — `s.ivs.attack`
+    // throws outright when `ivs` is missing, `?.` degrades to `undefined`
+    // for `??` to then catch.
+    ivAttack: s.ivs?.attack ?? DEFAULT_ASSUMPTIONS.ivAttack,
+    ivDefense: s.ivs?.defense ?? DEFAULT_ASSUMPTIONS.ivDefense,
+    ivStamina: s.ivs?.stamina ?? DEFAULT_ASSUMPTIONS.ivStamina,
+    // `??` guards `s.dodgeModel` being absent — a plain property read can't
+    // throw here, but a resulting `undefined` crashes downstream wherever
+    // `.dodge.kind` is read unguarded (e.g. AssumptionPanel.tsx's dodge
+    // <select>), same failure mode as PowerUpOptimizerAssumptionPanel.tsx:59.
+    dodge: s.dodgeModel ?? DEFAULT_ASSUMPTIONS.dodge,
     // `??` guards a scenario URL encoded before these fields existed rather
     // than surfacing `undefined` into a controlled input.
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
@@ -203,9 +228,18 @@ export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
     // surfacing `undefined` into the cadence <select> — see ComparatorScenario
     // above for why this field is optional on the encoded type at all.
     bossChargedMoveCadence: s.bossChargedMoveCadence ?? DEFAULT_ASSUMPTIONS.bossChargedMoveCadence,
-    partySize: s.partySize,
-    teammateDps: s.teammateDps,
-    matchingTeammateCount: s.matchingTeammateCount ?? Math.min(DEFAULT_ASSUMPTIONS.matchingTeammateCount, s.partySize),
+    // `??` guards `s.partySize`/`s.teammateDps` being absent — same "required
+    // field, but requiredness doesn't survive JSON.parse" reasoning as
+    // `level` above. Without this, an absent `s.partySize` also poisons
+    // matchingTeammateCount's own `Math.min` below with `NaN` (`Math.min(4,
+    // undefined)` is `NaN`, not `4`) even on the branch that DOES have a
+    // `??` fallback, since that fallback's fallback expression itself reads
+    // raw `s.partySize`.
+    partySize: s.partySize ?? DEFAULT_ASSUMPTIONS.partySize,
+    teammateDps: s.teammateDps ?? DEFAULT_ASSUMPTIONS.teammateDps,
+    matchingTeammateCount:
+      s.matchingTeammateCount ??
+      Math.min(DEFAULT_ASSUMPTIONS.matchingTeammateCount, s.partySize ?? DEFAULT_ASSUMPTIONS.partySize),
     bossStartsPrimed: s.bossStartsPrimed ?? DEFAULT_ASSUMPTIONS.bossStartsPrimed,
     bossStartingEnergyFraction: s.bossStartingEnergyFraction ?? DEFAULT_ASSUMPTIONS.bossStartingEnergyFraction,
     // `??` guards a scenario URL encoded before this field existed rather than

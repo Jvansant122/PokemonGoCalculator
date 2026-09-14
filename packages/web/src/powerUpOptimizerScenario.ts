@@ -479,10 +479,18 @@ export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptim
     stardustOnHand: s.stardustOnHand ?? DEFAULT_ASSUMPTIONS.stardustOnHand,
     rareCandyOnHand: s.rareCandyOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyOnHand,
     rareCandyXlOnHand: s.rareCandyXlOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyXlOnHand,
-    targetId: s.target,
+    // `??` guards `s.target` being absent (a corrupted/truncated link that
+    // still decodes to SOME object, but not this tab's shape) — same
+    // discipline as ComparatorView.tsx/TeamRaidView.tsx's own target field.
+    targetId: s.target ?? DEFAULT_ASSUMPTIONS.targetId,
     bossFastMoveId: s.bossFastMoveId ?? null,
     bossChargedMoveId: s.bossChargedMoveId ?? null,
-    dodge: s.dodgeModel,
+    // `??` guards `s.dodgeModel` being absent — every OTHER field in this
+    // function already has `?? DEFAULT_ASSUMPTIONS.x`; this one didn't, and
+    // a resulting `undefined` crashes PowerUpOptimizerAssumptionPanel.tsx:59
+    // (`assumptions.dodge.kind`) downstream — same failure mode as
+    // ComparatorView.tsx/TeamRaidView.tsx/SpeciesReportView.tsx's own dodge field.
+    dodge: s.dodgeModel ?? DEFAULT_ASSUMPTIONS.dodge,
     dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
     holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_ASSUMPTIONS.holdChargedMoveUntilSafe,
     weather: s.weather ?? "none",
