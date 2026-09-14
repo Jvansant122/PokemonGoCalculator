@@ -104,7 +104,13 @@ was a *stale-doc* claim that was itself stale. A future pass raising it again sh
 - **Ongoing context cost:** none, ever — a hook script edit loads into no agent's context. The
   price is one more bounded offline `tsc -p tsconfig.scripts.json` per `packages/web/src/**` edit,
   on top of the `typecheck:web` already running there.
-- **Status:** Proposed
+- **Status:** **Implemented 2026-09-14.** Verified by reproducing the original incident in a
+  throwaway worktree — `blockedCandidateSentence` renamed web-side with `scripts/run-scenario.ts`
+  left stale — where `typecheck:web` and `eslint` both exited 0, `typecheck:scripts` exited 2, and
+  the pre-change hook let the break through (exit 0) while the edited hook caught it (exit 2).
+  Known limit, deliberately not widened: editing `scripts/run-scenario.ts` ITSELF still triggers
+  no check, since `scripts/` matches no branch. This closes the direction the incident came from,
+  not both.
 
 **RETIRE:** nothing found.
 

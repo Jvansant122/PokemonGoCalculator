@@ -3,6 +3,7 @@
 - [Project config shape](project-config-shape.md) — snapshot 2026-09-12: 11 agents, 8 skills, 3 hooks as of 2026-09-14, docs-drift checker; deliberate settings + what the checker does NOT cover.
 - [Skills and gates pass](skills-and-gates-2026-09-08.md) — 2026-09-08: 4 skills added, verify-and-ship → `npm run verify`, agents pointed at new suites/CLI; CRLF + heredoc lessons.
 - [PreToolUse scratch guard + docs-drift branch](preToolUse-scratch-guard.md) — 2026-09-14: 3rd hook added; deny-form + Write-only rationale, what the guard and check-docs-drift canNOT see, heredoc fixture trap.
+- [post-edit web branch runs typecheck:scripts](post-edit-scripts-typecheck.md) — 2026-09-14: catches the scripts/-imports-web/src edge typecheck:web is blind to; scope kept narrow; stub-npm + worktree verification rig.
 - [scout-meta-ideas skill](scout-meta-ideas-skill.md) — 2026-09-14: 8th skill, user-invocable meta-researcher loop + root `meta_ideas.md` ledger; "up to three", zero-is-valid, why REJECTED #22 does not block it.
 - [`skills:` preload + why not a skill](skills-frontmatter-preload.md) — 2026-09-12: `skills:` content-preload confirmed, invocation unconfirmed; vitest-OOM note went in engine-verifier's body instead.
 

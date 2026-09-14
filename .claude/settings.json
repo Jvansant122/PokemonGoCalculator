@@ -80,7 +80,7 @@
             "type": "command",
             "command": "export PATH=\"/c/Program Files/nodejs:$PATH\"; node \"/c/Users/Jack/Documents/PokemonGoCalculator/.claude/hooks/post-edit.mjs\"",
             "timeout": 120,
-            "statusMessage": "Running the check that owns the edited file (engine tests / web tsc / scenario round-trip / docs drift)..."
+            "statusMessage": "Running the check that owns the edited file (engine tests / web+scripts tsc / scenario round-trip / docs drift)..."
           }
         ]
       }

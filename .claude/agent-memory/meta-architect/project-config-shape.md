@@ -17,9 +17,10 @@ Eight skills in `.claude/skills/`: `verify-and-ship`, `watch-github-actions`,
 `close-session` — the last four added 2026-09-08 ([[skills-and-gates-2026-09-08]]); `scout-meta-ideas`
 added 2026-09-14 ([[scout-meta-ideas-skill]]), so **eight**.
 
-Sizes (2026-09-12): agent bodies ~105 KB total; description-field sum ~5.3k chars (~1.3k tokens)
+Sizes: agent bodies ~105 KB total (2026-09-12); description-field sum ~5.3k chars (~1.3k tokens)
 across all 11 — far under the ~15k-token warning, so descriptions are never the lever. CLAUDE.md
-(~21 KB → ~5.3k tokens) is the expensive surface: loaded into the main conversation *and* every
+(**39 KB → ~9.8k tokens, measured 2026-09-14** — it grew; the old ~21 KB figure was stale)
+is the expensive surface: loaded into the main conversation *and* every
 non-Explore/Plan subagent. Measure it before touching descriptions.
 
 Deliberate settings, don't relitigate:
@@ -34,7 +35,7 @@ Deliberate settings, don't relitigate:
 - `.claude/settings.json`: `SessionStart` → `.claude/hooks/session-start.sh` (Node on PATH via
   `CLAUDE_ENV_FILE`, prints git status + HANDOFF.md newest section + pending PLAN files);
   `PostToolUse` Edit|Write → `.claude/hooks/post-edit.mjs` (engine src → engine tests; web src →
-  web tsc; `*Scenario.ts`/`*AssumptionPanel.tsx`/`*View.tsx` → check-scenario-roundtrip; `.claude/` + CLAUDE.md
+  web tsc **+ scripts tsc** ([[post-edit-scripts-typecheck]], 2026-09-14); `*Scenario.ts`/`*AssumptionPanel.tsx`/`*View.tsx` → check-scenario-roundtrip; `.claude/` + CLAUDE.md
   + HANDOFF.md → check-docs-drift, confirmed firing 2026-09-14). The
   inline `export PATH=...` in that hook command is deliberate (hooks don't inherit the env file).
   Permissions allowlist covers every `npm run` script + read-only git/file commands;

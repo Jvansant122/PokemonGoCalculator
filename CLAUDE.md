@@ -404,7 +404,9 @@ in so a pass mines new ground).
 Node on PATH for the session, then git status, HANDOFF.md's newest section, and any pending
 `PLAN_*.md`. `PostToolUse` on `Edit|Write` runs `.claude/hooks/post-edit.mjs`, which reruns the
 cheapest check that owns the edited file — `npm run test:engine` for `packages/engine/src/**/*.ts`,
-the web type-check for `packages/web/src/**`, `npm run check-scenario-roundtrip` for any
+`npm run typecheck:web` **and** `npm run typecheck:scripts` for `packages/web/src/**` (only the
+latter sees `scripts/run-scenario.ts`'s imports of React-free exports out of web's `.tsx` views),
+`npm run check-scenario-roundtrip` for any
 `*Scenario.ts` / `*AssumptionPanel.tsx` / `*View.tsx`, `npm run check-docs-drift` for
 `.claude/agents/*.md` / `.claude/skills/**/SKILL.md` / `CLAUDE.md` / `HANDOFF.md` — and surfaces a
 failure straight into the conversation. `PreToolUse` on `Write` runs

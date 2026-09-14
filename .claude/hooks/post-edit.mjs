@@ -2,7 +2,8 @@
 // check that can catch a regression in the file that was just edited:
 //
 //   packages/engine/src/**/*.ts            -> npm run test:engine        (the original hook)
-//   packages/web/src/**/*.{ts,tsx}         -> tsc --noEmit (web)         (engine<->web interface drift)
+//   packages/web/src/**/*.{ts,tsx}         -> tsc --noEmit (web, scripts) (engine<->web drift, and
+//                                                                         scripts/ importing web/src)
 //   any scenario/assumption file (any tab) -> check-scenario-roundtrip   (the shared-link bug class)
 //   .claude/agents|skills, CLAUDE.md, HANDOFF.md -> check-docs-drift     (docs claiming stale counts)
 //
@@ -44,7 +45,15 @@ process.stdin.on("end", () => {
 
   const checks = [];
   if (isEngineSrc) checks.push({ label: "npm run test:engine", cmd: "npm run test:engine" });
-  if (isWebSrc) checks.push({ label: "web tsc --noEmit", cmd: "npm run typecheck:web" });
+  if (isWebSrc) {
+    checks.push({ label: "web tsc --noEmit", cmd: "npm run typecheck:web" });
+    // scripts/run-scenario.ts imports React-free constants/functions out of packages/web/src's
+    // .tsx views, but packages/web/tsconfig.json never includes scripts/ as an entry point, so
+    // typecheck:web is blind to that edge (tsconfig.scripts.json sets `jsx` precisely for it).
+    // Renaming a web export while a scripts/ import site still names the old one type-checked
+    // clean and lint-passed once, surfacing only as an ESM runtime error under test:scripts.
+    checks.push({ label: "scripts tsc --noEmit", cmd: "npm run typecheck:scripts" });
+  }
   if (isScenarioFile) checks.push({ label: "npm run check-scenario-roundtrip", cmd: "npm run check-scenario-roundtrip" });
   if (isDocsSurface) checks.push({ label: "npm run check-docs-drift", cmd: "npm run check-docs-drift" });
   if (checks.length === 0) process.exit(0);
