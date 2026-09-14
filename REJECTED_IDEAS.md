@@ -160,6 +160,17 @@ So the honest expected outcome is a feature that costs real work to produce rows
 "≈0 (within noise)". **Measure before scheduling, not after.** If a future measurement finds a
 scenario where Best Buddy clears the floor, this is worth revisiting.
 
+✅ **OVERTURNED AND BUILT 2026-09-13 (`e861049`) — the escape clause above fired as designed.**
+The measurement that killed this was single-raid, and it does NOT generalize: multi-raid
+significance is aggregate **OR** per-boss, and against the real active-raid set ~45-55% of a
+top-attacker pool clears the PER-BOSS bar (4/49 clear the aggregate one), at magnitudes matching
+the Kyurem precedent — Dialga vs Shadow Lampent +1.82 team DPS, ~17.5%, several sigma over a
+0.02-0.24 floor. **Left in this file rather than deleted**, because the reasoning is still correct
+for the case it was measured on, and because the shape of the error is worth keeping: a floor
+measured in one mode was assumed to hold in another with a different significance rule.
+Full detail: `.claude/agent-memory/engine-developer/measurement_best_buddy_roster_mode_impact.md`.
+
+
 ## 14. Worktree isolation for every concurrent agent
 
 **Why not:** rejected on cost. This is an npm-workspaces monorepo, so a per-agent worktree needs
@@ -175,3 +186,100 @@ to be recovered from the stash ref.
 `git checkout --`, no `git reset`. To compare one file against a baseline, use
 `git show HEAD:<path>`. An agent that needs a genuinely clean tree should create a throwaway
 worktree for *verification only*, which is cheap, rather than mutating the shared one.
+---
+
+# Tooling and process rejections
+
+Same rule as above — considered and declined on the merits. Separated only because these concern
+this repo's *tooling* (hooks, skills, agents, scripts) rather than the product's features; the
+lane table above still applies.
+
+Most came out of `meta-researcher` passes on 2026-09-12 through 2026-09-14, run repeatedly until a
+pass returned nothing. **Three were killed by evidence gathered specifically to test them** — that
+evidence is the valuable part, not the verdict.
+
+## 15. A grep or hook flagging "an agent doc cites a file that no longer exists"
+
+**Why not:** tested, not assumed. ~130 backtick-quoted path-shaped tokens across all eleven agent
+bodies were sampled, and the **first two non-trivial ones checked were false positives**:
+`data-sync.md` cites `data/raid-bosses.json`, a fallback file that by design does not exist until
+the live feed fails, and two agents cite the deleted `scenarioA` files inside prose that correctly
+explains they were deleted. A low-noise version must distinguish "cited as currently live" from
+"cited and explained as deleted or conditional" — semantic judgement a path regex cannot do.
+
+⚠️ Fossilization itself is real — three instances sit in `meta-architect`'s memory, the latest
+being `engine-verifier.md` pointing at a test deleted three days earlier. The *problem* stands;
+this *mechanism* does not. A materially better discriminator would reopen it.
+
+## 16. A guard against the GITHUB_PAGES base-path mismatch
+
+Building with `GITHUB_PAGES=true` then running `test:e2e` without it (or the reverse) 404s every
+asset and fails all 31 specs at once, looking exactly like a catastrophic regression.
+
+**Why not:** already documented in three places — a comment block in
+`packages/web/playwright.config.ts` describing this failure verbatim, `packages/web/e2e/README.md`'s
+paired invocation, and `site-builder.md`'s gotcha list — and `npm run verify:full` keeps the two
+consistent by construction. The 2026-09-14 incident happened because the operator hand-composed the
+steps instead of using it. A guard would also fire on a *correct* workflow: `site-builder.md`
+documents deliberately building with the flag and serving `dist` under a matching path to verify
+the Pages build locally.
+
+**The rule, not a tool: use `npm run verify:full`; don't compose build and e2e by hand.**
+
+## 17. A hook or lint rule for the "hand-built inputs object missing a field its siblings spread" bug
+
+Four instances landed in one day (2026-09-12): `powerUp.ts`'s ladder call site, `planPowerUpBudget`'s
+dominated-level search, `runRosterMoveChange.ts`, and `rosterPlanner.ts`'s memo key omitting
+`isBestBuddy`. Every one passed every test.
+
+**Why not:** the bug is semantic — "this object literal should have carried a field its sibling call
+sites pass via spread" is not path-matchable, and a hook is a path/tool matcher. The real fix is
+product code, scoped as **`IDEAS.md` #25**.
+
+## 18. One shared damage-modifier builder with an optional `friendshipLevel`
+
+The obvious de-duplication of the 12 hand-built modifier sites.
+
+**Why not:** it recreates #17's exact failure shape. An optional field is one a call site can
+silently omit — which IS the bug. Only the typed *pair* in `IDEAS.md` #25 is worth building
+(outgoing REQUIRES the field; incoming has no such parameter, making the mistake a type error).
+This entry exists because "just extract a helper" is the natural first instinct every time someone
+reads those 12 sites.
+
+## 19. Annotating Frustration/Return at import instead of adding them to movepools
+
+**Why not:** user decision, 2026-09-13, choosing option 1 of `IDEAS.md` #24's three. An annotation
+leaves the wrong number in place: a Purified entry whose real charge move is Return was silently
+simulating `CRUNCH`, and a defaulted moveset changes what the whole simulation runs. Accepted blast
+radius: both moves are now selectable in every picker — correct behaviour showing a deliberately
+terrible move. "Leave it entirely" was declined for the same reason.
+
+## 20. A friendship control on the Species Report
+
+**Why not:** measured 2026-09-13. Friendship moves 32-89% of floored breakpoint CELLS at Good Friend
+alone, which is why both Breakpoints tabs and the Power-Up ladder got real controls — but Species
+Report sums hundreds of floored hits into a distribution and a uniform 3-12% scale washes out:
+Spearman ≥0.989 across 771 bosses, identical top-10, verified against a determinism control. It
+carries a caveat sentence instead. **The dividing line is per-FEATURE, not per-tab:** a feature
+reading ONE floored value needs a control; one summing many into a distribution needs a caveat.
+
+## 21. The GitHub MCP server
+
+**Why not:** its tool descriptions sit in main context permanently, and the need is better met by
+the `gh` CLI (still open, awaiting a user install). The one place this repo creates GitHub issues —
+`check-mega-gaps.yml` — does it inside the Actions runner via `actions/github-script`, never through
+an agent, so there is no agent-side gap to justify the ongoing cost.
+
+## 22. A dedicated skill for a fact only one agent needs
+
+Proposed twice — a vitest worker-OOM skill for `engine-verifier`, a measure-before-building skill for
+`engine-developer` — and declined both times in favour of writing the fact into that agent's own body.
+
+**Why not:** a skill costs a line in the always-loaded listing for *every* session; an agent body is
+paid only when that agent runs. Precedents: `5e35bfd`, `56d0bbc`.
+
+⚠️ Corollary: if a fact is ever needed by *several* agents, a skill becomes the right shape, and the
+subagent `skills:` frontmatter field (verified real against current docs 2026-09-12 — content is
+injected at startup, though invocation by an agent lacking the `Skill` tool is undocumented) is the
+mechanism.
+
