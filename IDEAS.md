@@ -89,6 +89,39 @@ incoming ones saying why they omit the field, and an audit confirmed all 12 corr
 touches correctness-critical code across both packages for a readability gain. Worth doing when
 something else already opens those files; not worth a dedicated churn pass.
 
+### 26. Defer the species MOVE arrays out of first load — MEASURED 2026-09-14, not scheduled
+
+The per-tab lazy split (`3b2f723`) took the default landing path from 407.5 KB to **322.4 KB
+gzip**, and its own measurement said the remaining lever is the data layer, not the tabs. Measured
+directly against `data/normalized/species.json` (1,750 species, 2.59 MB compact):
+
+| payload | raw | gzip |
+| :--- | ---: | ---: |
+| full `species.json` | 2.59 MB | **211 KB** |
+| everything except `fastMoves`/`chargedMoves` | 0.70 MB | 78 KB |
+| moves only | 1.92 MB | 119 KB |
+| lean picker subset (id/name/types/image/dex/rarity) | 0.32 MB | 33 KB |
+
+So **species data is 211 of the 322 KB that ships on every visit**, and the move arrays alone are
+46% of raw bytes. Deferring only the moves saves **132 KB gzip — first load 322 → ~190 KB, a 41%
+cut, roughly double what splitting all seven tabs bought.** The full lean split reaches ~145 KB
+(55%) but needs far more of the app to tolerate a partial species record.
+
+**Moves-only is the cheap half and the one to do first:** pickers need id/name/types/image, and
+moves are only needed once something actually simulates. Two constraints make this real work rather
+than a config change, and both must be respected:
+
+1. `SpeciesDefinition` is an **engine** type carrying `fastMoves`/`chargedMoves` inline, consumed
+   everywhere. Splitting means either an async load of the moves payload before the first
+   simulation, or restructuring the type so moves are looked up separately — an engine-wide change,
+   not a `registry.ts` tweak.
+2. `rosterPlanner.worker.ts` may import ONLY `@pogo-analyzer/engine`, never `registry.ts`
+   (CLAUDE.md standing decision), or `species.json` is bundled twice — which would silently undo
+   the entire saving.
+
+Worth a `PLAN_*.md` before anyone starts; it is the largest remaining performance lever and also
+the one most able to break the worker's import constraint by accident.
+
 ## Unmodelled real mechanics
 
 Real, recorded game mechanics this engine does **not** model. Each lives in `MECHANICS.md` with
