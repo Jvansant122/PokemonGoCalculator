@@ -206,6 +206,7 @@ import {
   spriteLookupIdFor,
 } from "./sync-data/megaPrimalParsing.ts";
 import { getOrCreateShadowVariant } from "./sync-data/shadowVariant.ts";
+import { deriveSpeciesSplit } from "./sync-data/speciesSplit.ts";
 import { matchRaidName } from "./sync-data/raidNameMatching.ts";
 import { diffSpecies, diffRaids } from "./sync-data/diff.ts";
 import { RELEASED_MEGA_PRIMAL_ALLOWLIST } from "./sync-data/releasedMegaPrimalAllowlist.ts";
@@ -2257,6 +2258,21 @@ if (!hasHalfLevels) {
 // ---------------------------------------------------------------------------
 
 const speciesOutPath = join(NORMALIZED_DIR, "species.json");
+/**
+ * `speciesCore.json` / `speciesMoves.json` (PLAN_species_moves_split.md Stage
+ * 1, IDEAS.md #26's dedup half) — derived, compact siblings of species.json,
+ * NOT a replacement for it. species.json keeps its exact existing shape and
+ * pretty-printing; every existing script/golden test/checker reads that file
+ * unchanged. These two exist purely so packages/web can eventually join a
+ * small core payload against a deduped move dictionary instead of shipping
+ * every species' moves inline redundantly. See deriveSpeciesSplit's own doc
+ * comment (scripts/sync-data/speciesSplit.ts) for the safety precondition it
+ * asserts on every run, and scripts/check-species-split.mjs for the
+ * re-join-and-compare check that keeps these two mechanically in sync with
+ * species.json (never hand-verified — that check is in `npm run check`).
+ */
+const speciesCoreOutPath = join(NORMALIZED_DIR, "speciesCore.json");
+const speciesMovesOutPath = join(NORMALIZED_DIR, "speciesMoves.json");
 const raidsOutPath = join(NORMALIZED_DIR, "activeRaids.json");
 /**
  * `check-raid-history-sources.mjs`'s "shadow durability" assertion needs to
@@ -3190,6 +3206,19 @@ const bulbapediaInvalidHpSamplesDistinct = [...new Set(bulbapediaInvalidHpSample
 if (!existsSync(NORMALIZED_DIR)) mkdirSync(NORMALIZED_DIR, { recursive: true });
 
 writeFileSync(speciesOutPath, JSON.stringify(species, null, 2));
+
+// speciesCore.json / speciesMoves.json — see speciesCoreOutPath's doc comment
+// above. deriveSpeciesSplit THROWS (stopping this sync) if any move id is not
+// structurally identical across every species that carries it — see its own
+// doc comment in scripts/sync-data/speciesSplit.ts. Deliberately NOT
+// pretty-printed with the same 2-space indent as species.json: these are
+// meant to be small, and pretty-printing ~13,000 move-id-list entries would
+// undercut that for no readability benefit (nobody diffs these by eye — that
+// is what check-species-split.mjs and diff-normalized.mjs are for).
+const speciesSplit = deriveSpeciesSplit(species);
+writeFileSync(speciesCoreOutPath, JSON.stringify(speciesSplit.speciesCore));
+writeFileSync(speciesMovesOutPath, JSON.stringify(speciesSplit.speciesMoves));
+
 writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
 writeFileSync(raidHistoryOutPath, JSON.stringify(raidHistory, null, 2));
 // See shadowFirstPartyAnchorsOutPath's own doc comment above.

@@ -28,6 +28,14 @@ and it changes the economics:
 | moves, naive per-species (what IDEAS #26 assumed) | ~119 KB |
 | **moves, deduped dict + `bySpecies` id lists** | **42 KB** |
 
+⚠️ **Which "species.json" number you get depends on pretty vs compact — reconciled 2026-09-14, do
+not re-derive.** The committed file is pretty-printed: 4.03 MB raw, **258 KB gzip**. A bundler
+parses and re-emits it compactly: 2.59 MB raw, **211 KB gzip**. **211 is the number that matters**,
+because compact is what ships. The two derived files are already compact on disk, so compare them
+against 211, never against 258 — doing the latter would overstate the win. Measured saving,
+compact-to-compact: **211 → 78 + 42 = 120 KB, i.e. 91 KB.** (All figures gzip level 6, Node's
+default; level 9 gives 202 / 75 / 42 and the same conclusion.)
+
 Three consequences that reshape the work:
 
 1. **Dedup alone is worth ~90 KB gzip with no async, no gating and no worker risk** — a build-time

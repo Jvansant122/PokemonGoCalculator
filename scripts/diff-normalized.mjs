@@ -25,6 +25,18 @@
  *   - species.json: added/removed/changed species by `id`. A changed entry
  *     names WHICH fields changed (stats, types, boost, shadow flag, moves,
  *     lastKnownRaidTier, rarity, name, imageUrl, or any other field found).
+ *   - speciesCore.json (2026-09-14, PLAN_species_moves_split.md Stage 1):
+ *     species.json minus its two move arrays — diffed the same way as
+ *     species.json (its field-group check degrades harmlessly for the
+ *     absent moves fields; moves changes are reported via speciesMoves.json
+ *     instead, never double-counted here).
+ *   - speciesMoves.json (2026-09-14, same plan): a deduped move dictionary
+ *     (`fastMoves`/`chargedMoves`, each `Record<id, Move>`) plus a
+ *     `bySpecies` id-list index. Diffed as three independent added/removed/
+ *     changed sets (fast moves, charged moves, bySpecies entries) rather than
+ *     falling through to the generic non-array whole-file check, since a
+ *     single boolean would hide exactly the kind of change (one species'
+ *     movepool, one move's stats) this script exists to surface.
  *   - activeRaids.json: boss rotation changes, keyed by `raidName` (added =
  *     newly rotated in, removed = rotated out, changed = same raid name but a
  *     different tier and/or resolved speciesId).
@@ -192,6 +204,44 @@ function diffSpeciesFile(prev, next) {
   };
 }
 
+/**
+ * speciesCore.json (PLAN_species_moves_split.md Stage 1) — species.json minus
+ * its two move arrays. Reuses diffSpeciesFile's field-group logic as-is:
+ * `speciesChangedFields`'s `fastMoves`/`chargedMoves` comparison degrades to
+ * `deepEqual(undefined, undefined)` (true) for entries that never carry those
+ * keys, so it never falsely reports a "moves" change here — moves changes
+ * belong to speciesMoves.json below instead.
+ */
+const diffSpeciesCoreFile = diffSpeciesFile;
+
+/**
+ * speciesMoves.json (PLAN_species_moves_split.md Stage 1) — a deduped move
+ * dictionary (`fastMoves`/`chargedMoves`, both `Record<id, Move>`) plus a
+ * `bySpecies` id-list index. Not an array at the top level, so the generic
+ * array fallback (diffGenericFile) would otherwise collapse this to a single
+ * whole-file boolean — exactly the "useless whole-file diff" this dedicated
+ * handler exists to avoid, matching diffPowerUpCostsFile's precedent for
+ * another non-array normalized file.
+ */
+function diffSpeciesMovesFile(prev, next) {
+  const fastMovesDiff = diffByKey(Object.values(prev?.fastMoves ?? {}), Object.values(next?.fastMoves ?? {}), "id");
+  const chargedMovesDiff = diffByKey(Object.values(prev?.chargedMoves ?? {}), Object.values(next?.chargedMoves ?? {}), "id");
+  const prevBySpecies = Object.entries(prev?.bySpecies ?? {}).map(([speciesId, v]) => ({ speciesId, ...v }));
+  const nextBySpecies = Object.entries(next?.bySpecies ?? {}).map(([speciesId, v]) => ({ speciesId, ...v }));
+  const bySpeciesDiff = diffByKey(prevBySpecies, nextBySpecies, "speciesId");
+  return {
+    fastMovesAdded: fastMovesDiff.added,
+    fastMovesRemoved: fastMovesDiff.removed,
+    fastMovesChanged: fastMovesDiff.changed,
+    chargedMovesAdded: chargedMovesDiff.added,
+    chargedMovesRemoved: chargedMovesDiff.removed,
+    chargedMovesChanged: chargedMovesDiff.changed,
+    bySpeciesAdded: bySpeciesDiff.added,
+    bySpeciesRemoved: bySpeciesDiff.removed,
+    bySpeciesChanged: bySpeciesDiff.changed,
+  };
+}
+
 function diffActiveRaidsFile(prev, next) {
   const { added, removed, changed, prevMap, nextMap } = diffByKey(prev, next, "raidName");
   return {
@@ -318,6 +368,8 @@ function diffGenericFile(prev, next) {
 
 const HANDLERS = {
   "species.json": diffSpeciesFile,
+  "speciesCore.json": diffSpeciesCoreFile,
+  "speciesMoves.json": diffSpeciesMovesFile,
   "activeRaids.json": diffActiveRaidsFile,
   "raidHistory.json": diffRaidHistoryFile,
   "powerUpCosts.json": diffPowerUpCostsFile,
@@ -348,11 +400,24 @@ function printFileResult(filename, result) {
     console.log("  (new file, no baseline)");
     return;
   }
-  if (filename === "species.json") {
+  if (filename === "species.json" || filename === "speciesCore.json") {
     console.log(`  +${result.added.length} added, -${result.removed.length} removed, ~${result.changed.length} changed`);
     printClipped(result.added, (e) => `  + ${e.id} (${e.name})`);
     printClipped(result.removed, (e) => `  - ${e.id} (${e.name})`);
     printClipped(result.changed, (e) => `  ~ ${e.id}: ${e.fields.join(", ")}`);
+  } else if (filename === "speciesMoves.json") {
+    console.log(
+      `  fastMoves: +${result.fastMovesAdded.length} -${result.fastMovesRemoved.length} ~${result.fastMovesChanged.length}, ` +
+        `chargedMoves: +${result.chargedMovesAdded.length} -${result.chargedMovesRemoved.length} ~${result.chargedMovesChanged.length}, ` +
+        `bySpecies: +${result.bySpeciesAdded.length} -${result.bySpeciesRemoved.length} ~${result.bySpeciesChanged.length}`,
+    );
+    printClipped(result.fastMovesAdded, (id) => `  + fast ${id}`);
+    printClipped(result.fastMovesRemoved, (id) => `  - fast ${id}`);
+    printClipped(result.fastMovesChanged, (id) => `  ~ fast ${id}`);
+    printClipped(result.chargedMovesAdded, (id) => `  + charged ${id}`);
+    printClipped(result.chargedMovesRemoved, (id) => `  - charged ${id}`);
+    printClipped(result.chargedMovesChanged, (id) => `  ~ charged ${id}`);
+    printClipped(result.bySpeciesChanged, (id) => `  ~ bySpecies ${id}`);
   } else if (filename === "activeRaids.json") {
     console.log(`  +${result.added.length} added, -${result.removed.length} removed, ~${result.changed.length} changed`);
     printClipped(result.added, (e) => `  + ${e.raidName} (${e.tier})`);
@@ -389,9 +454,15 @@ function printFileResult(filename, result) {
   } else if (result.note) {
     console.log(`  ${result.note}`);
     if ("prevCount" in result) console.log(`  prev count: ${result.prevCount}, next count: ${result.nextCount}`);
-    if (result.added) printClipped(result.added, (id) => `  + ${id}`);
-    if (result.removed) printClipped(result.removed, (id) => `  - ${id}`);
-    if (result.changed) printClipped(result.changed, (id) => `  ~ ${id}`);
+    if (Array.isArray(result.added)) printClipped(result.added, (id) => `  + ${id}`);
+    if (Array.isArray(result.removed)) printClipped(result.removed, (id) => `  - ${id}`);
+    if (Array.isArray(result.changed)) printClipped(result.changed, (id) => `  ~ ${id}`);
+    // diffGenericFile's non-array fallback (e.g. an object-shaped file with no
+    // recognizable keyed array, like _meta.json) reports `changed` as a plain
+    // BOOLEAN, not an array — same field name, different shape, and the array
+    // guards above would otherwise silently drop it (or, before this guard
+    // existed, crash `printClipped` on a non-array). Print it plainly instead.
+    if (typeof result.changed === "boolean") console.log(`  whole-file changed: ${result.changed}`);
   } else {
     console.log(`  ${JSON.stringify(result)}`);
   }
