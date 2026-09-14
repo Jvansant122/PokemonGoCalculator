@@ -389,14 +389,16 @@ file. Route by what the request actually needs, not by habit:
 
 ## Skills and hooks
 
-`.claude/skills/` has **seven** project-specific skills: `verify-and-ship` (`npm run verify` →
+`.claude/skills/` has **eight** project-specific skills: `verify-and-ship` (`npm run verify` →
 commit → push → watch-deploy), `watch-github-actions` (bounded, budget-aware polling of a
 workflow run — never a hand-written loop), `add-scenario-assumption` (the checklist referenced
 under "Standing decisions" above), `new-tab` (every parallel touch point for a seventh tab),
 `add-mega-allowlist-entry` (the independently-cited path for a real mega the automated gates
 can't see), `record-mechanic` (a sourced, dated MECHANICS.md entry ending with the engine's
-status), and `close-session` (HANDOFF/PLAN/MECHANICS/IDEAS back in their lanes, uncommitted work
-stated plainly).
+status), `close-session` (HANDOFF/PLAN/MECHANICS/IDEAS back in their lanes, uncommitted work
+stated plainly), and `scout-meta-ideas` (one `meta-researcher` pass for new tooling ideas, logged
+in `meta_ideas.md` — re-runnable, and it feeds the already-logged and already-declined ideas back
+in so a pass mines new ground).
 
 `.claude/settings.json` has three hooks. `SessionStart` runs `.claude/hooks/session-start.sh`:
 Node on PATH for the session, then git status, HANDOFF.md's newest section, and any pending
@@ -415,7 +417,7 @@ script above, and asks before any `git push`.
 
 ## For session continuity
 
-Six root-level docs, each with a distinct job — keep them in their lanes rather than letting one
+Seven root-level docs, each with a distinct job — keep them in their lanes rather than letting one
 absorb another:
 
 - **`CLAUDE.md`** (this file) — durable architecture and standing decisions only. It's re-read by
@@ -437,6 +439,11 @@ absorb another:
   moves to the "Shipped" table keeping its number rather than being renumbered away.
   ⚠️ **Mark an item shipped in the same pass that ships it** — a stale entry here has twice sent
   an agent to build something that already existed.
+- **`meta_ideas.md`** — proposed **tooling/setup** ideas (agents, skills, hooks, this file,
+  `settings.json`, the checkers) awaiting a decision, written by the `scout-meta-ideas` skill. The
+  axis against `IDEAS.md` is product vs machinery; the axis against `REJECTED_IDEAS.md` is
+  undecided vs decided-no. It doubles as the exclusion ledger a re-run scouting pass reads, so
+  declined and zero-result entries stay as stubs rather than being deleted.
 - **`REJECTED_IDEAS.md`** — things this project **will not build even if they were free and fully
   unblocked**, each with the reasoning that killed it. Distinct from `IDEAS.md`'s blocked items:
   *blocked* is "not yet" and evidence rescues it, *rejected* is "no" and evidence does not. Read <!-- drift-ok -->

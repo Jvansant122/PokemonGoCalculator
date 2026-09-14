@@ -1,8 +1,9 @@
 # Meta-Architect Memory Index
 
-- [Project config shape](project-config-shape.md) — snapshot 2026-09-12: 11 agents, 7 skills, 3 hooks as of 2026-09-14, docs-drift checker; deliberate settings + what the checker does NOT cover.
+- [Project config shape](project-config-shape.md) — snapshot 2026-09-12: 11 agents, 8 skills, 3 hooks as of 2026-09-14, docs-drift checker; deliberate settings + what the checker does NOT cover.
 - [Skills and gates pass](skills-and-gates-2026-09-08.md) — 2026-09-08: 4 skills added, verify-and-ship → `npm run verify`, agents pointed at new suites/CLI; CRLF + heredoc lessons.
 - [PreToolUse scratch guard + docs-drift branch](preToolUse-scratch-guard.md) — 2026-09-14: 3rd hook added; deny-form + Write-only rationale, what the guard and check-docs-drift canNOT see, heredoc fixture trap.
+- [scout-meta-ideas skill](scout-meta-ideas-skill.md) — 2026-09-14: 8th skill, user-invocable meta-researcher loop + root `meta_ideas.md` ledger; "up to three", zero-is-valid, why REJECTED #22 does not block it.
 - [`skills:` preload + why not a skill](skills-frontmatter-preload.md) — 2026-09-12: `skills:` content-preload confirmed, invocation unconfirmed; vitest-OOM note went in engine-verifier's body instead.
 
 - [pogo-player addition](pogo-player-addition.md) — 2026-09-10: 10th agent, user-proxy/product critic; separated from pogo-researcher (no web access) and skeptic (useful vs wrong); 4 archetypes, one evidence-backed.

@@ -1,6 +1,6 @@
 ---
 name: project-config-shape
-description: Current shape of this repo's Claude Code config — 11 agents, 7 skills, 2 hooks, a permissions allowlist — plus the deliberate settings behind them and where sizes actually matter (snapshot 2026-09-12).
+description: Current shape of this repo's Claude Code config — 11 agents, 8 skills, 3 hooks, a permissions allowlist — plus the deliberate settings behind them and where sizes actually matter (snapshot 2026-09-14).
 metadata:
   type: project
 ---
@@ -12,9 +12,10 @@ metadata:
 edits `.claude/` itself), so **eleven** as of 2026-09-12. Per-agent audits: [[six-agent-split]], [[pogo-researcher-addition]],
 [[skeptic-addition]], [[code-simplifier-addition]], [[pogo-player-addition]].
 
-Seven skills in `.claude/skills/`: `verify-and-ship`, `watch-github-actions`,
+Eight skills in `.claude/skills/`: `verify-and-ship`, `watch-github-actions`,
 `add-scenario-assumption`, `new-tab`, `add-mega-allowlist-entry`, `record-mechanic`,
-`close-session` — the last four added 2026-09-08 ([[skills-and-gates-2026-09-08]]).
+`close-session` — the last four added 2026-09-08 ([[skills-and-gates-2026-09-08]]); `scout-meta-ideas`
+added 2026-09-14 ([[scout-meta-ideas-skill]]), so **eight**.
 
 Sizes (2026-09-12): agent bodies ~105 KB total; description-field sum ~5.3k chars (~1.3k tokens)
 across all 11 — far under the ~15k-token warning, so descriptions are never the lever. CLAUDE.md
@@ -33,7 +34,8 @@ Deliberate settings, don't relitigate:
 - `.claude/settings.json`: `SessionStart` → `.claude/hooks/session-start.sh` (Node on PATH via
   `CLAUDE_ENV_FILE`, prints git status + HANDOFF.md newest section + pending PLAN files);
   `PostToolUse` Edit|Write → `.claude/hooks/post-edit.mjs` (engine src → engine tests; web src →
-  web tsc; `*Scenario.ts`/`*AssumptionPanel.tsx`/`*View.tsx` → check-scenario-roundtrip). The
+  web tsc; `*Scenario.ts`/`*AssumptionPanel.tsx`/`*View.tsx` → check-scenario-roundtrip; `.claude/` + CLAUDE.md
+  + HANDOFF.md → check-docs-drift, confirmed firing 2026-09-14). The
   inline `export PATH=...` in that hook command is deliberate (hooks don't inherit the env file).
   Permissions allowlist covers every `npm run` script + read-only git/file commands;
   `permissions.ask` on `git push:*` ([[site-builder-push-guardrail]]).
