@@ -48,9 +48,16 @@ module, never inline in the view, or the two drift.
 
 These are not cosmetic; they are the point of the product:
 
-- **Assumptions are always visible.** The dodge model, party size, teammate DPS, level, IVs, and
-  every other input render alongside every result in `AssumptionPanel.tsx`, never behind a
-  collapsed panel. A result without its conditions is a wrong result.
+- **Assumptions always accompany the result.** The dodge model, party size, teammate DPS, level,
+  IVs, and every other input render on the same page as every result, in that tab's
+  `*AssumptionPanel.tsx`. A result without its conditions is a wrong result.
+
+  ⚠️ **They ARE collapsed by default, and that is deliberate — do not "fix" it.** All six panels
+  use `CollapsibleSection ... defaultOpen={false}`, a dated 2026-09-10 decision with e2e coverage.
+  This bullet used to read "never behind a collapsed panel", which is how a 2026-09-14 agent nearly
+  reverted working, tested behaviour before finding the e2e evidence and stopping. The rule that
+  survives is about **presence and proximity** — the conditions must be on the page, one click
+  away, never on another screen or omitted — not about the panel's initial open state.
 - **Show the crossover, not a winner.** The primary visualization (`DamageOverTimeChart.tsx`)
   plots own damage plus attributable team damage over time for both candidates, with the flip
   point marked — the headline output is *where the ranking flips*, not which name is on top.

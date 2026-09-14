@@ -23,8 +23,10 @@ cleanest model.
    `scripts/run-scenario.ts` for the taken ones (`s` / `ts` / `sr` / `ivc` / `adb` / `pu`).
 3. `packages/web/src/<Tab>View.tsx` (+ `<Tab>AssumptionPanel.tsx` if the panel is big) —
    `Assumptions`, `DEFAULT_ASSUMPTIONS`, `assumptionsToScenario` / `scenarioToAssumptions`,
-   with `?? default` on every decoded field. Assumptions render alongside the result, never
-   collapsed.
+   with `?? default` on every decoded field. Assumptions render on the same page as the result —
+   collapsed by default is correct and deliberate (every panel uses
+   `CollapsibleSection ... defaultOpen={false}`, a dated 2026-09-10 decision with e2e coverage);
+   what must never happen is the conditions being absent or on another screen.
 4. `packages/web/src/run/run<Tab>.ts` — the React-free `run<Tab>Scenario(assumptions, ...)`
    that does the whole computation. The view calls it through `useMemo` and nothing else; the
    CLI and the smoke test call the same function, so CLI == UI by construction.

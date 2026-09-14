@@ -9,6 +9,7 @@ import {
 } from "./registry.js";
 import { multiRaidTiersPresent, resolveMultiRaidBossIds, type MultiRaidBossFilters } from "./multiRaidBossSet.js";
 import { NumberField } from "./NumberField.js";
+import { RaidFreshnessNote } from "./RaidFreshnessNote.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 
 export interface BossSetPanelValue extends MultiRaidBossFilters {
@@ -207,6 +208,7 @@ export function BossSetPanel({ value, onChange }: Props) {
           added or removed by hand — use hand-picking above for surgical edits, and these filters when you want to
           bulk-regenerate from scratch.
         </p>
+        <RaidFreshnessNote />
 
         <div className="field">
           <label htmlFor="pu-multiraid-includePast">Include past/inactive raids</label>

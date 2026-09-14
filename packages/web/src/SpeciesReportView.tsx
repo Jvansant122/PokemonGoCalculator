@@ -18,6 +18,7 @@ import { CollapsibleSection } from "./CollapsibleSection.js";
 import { MoveSelect } from "./MoveSelect.js";
 import { NumberField } from "./NumberField.js";
 import { MegaLevelSelect, MEGA_LEVEL_HINT } from "./megaLevelSelect.js";
+import { RaidFreshnessNote } from "./RaidFreshnessNote.js";
 import { SpeciesBadges } from "./SpeciesBadges.js";
 import { SpeciesPicker } from "./SpeciesPicker.js";
 import { WeatherSelect } from "./WeatherSelect.js";
@@ -471,6 +472,7 @@ export function SpeciesReportView({
           : "every currently-active real raid boss"}{" "}
         — ranked by survival-weighted sustained output, not raw DPS.
       </p>
+      <RaidFreshnessNote />
 
       <CollapsibleSection id="species-report-assumptions" heading="Assumptions" defaultOpen={false}>
         <div className="assumption-grid">

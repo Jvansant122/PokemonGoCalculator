@@ -1,4 +1,11 @@
-import { fromBase64Url, toBase64Url } from "@pogo-analyzer/engine";
+import {
+  fromBase64Url,
+  sanitizeKnownFields,
+  toBase64Url,
+  tryParseJsonObject,
+  type FieldValidators,
+} from "@pogo-analyzer/engine";
+import { isLiteralUnion } from "./webScenarioValidation.js";
 
 /**
  * Which column order the Roster tab's own table is currently displayed in —
@@ -28,9 +35,38 @@ function encodeRosterScenario(scenario: RosterScenario): string {
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-function decodeRosterScenario(encoded: string): RosterScenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as RosterScenario;
+const isRosterSortBy = isLiteralUnion<RosterSortBy>(["recent", "species", "level"]);
+
+/** See scenario.ts's `SCENARIO_FIELD_VALIDATORS` — the same per-field validator table convention, just for this tab's (much smaller) scenario shape. */
+const ROSTER_SCENARIO_FIELD_VALIDATORS: FieldValidators<RosterScenario> = {
+  sortBy: isRosterSortBy,
+};
+
+/** See scenario.ts's `ScenarioDecodeResult` — identical shape and rationale, just for `RosterScenario`. */
+export interface RosterScenarioDecodeResult {
+  scenario: RosterScenario;
+  rejectedFields: string[];
+}
+
+/**
+ * Defensive decode: never throws. Returns `null` only when the payload is
+ * entirely unusable (invalid base64, non-JSON, or a non-object top level) —
+ * see scenario.ts's `decodeScenarioWithDiagnostics` for the full contract
+ * this mirrors. `RosterScenario`'s single field (`sortBy`) already being
+ * optional means a wholly-empty `{}` was always a valid decode; this only
+ * changes what happens to a PRESENT-but-wrong-shaped `sortBy` (previously a
+ * silent wrong value flowing straight into the sort-order `<select>`, now
+ * dropped back to "absent," same as an older link).
+ */
+export function decodeRosterScenarioWithDiagnostics(encoded: string): RosterScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+  const { result, rejectedFields } = sanitizeKnownFields<RosterScenario>(payload, ROSTER_SCENARIO_FIELD_VALIDATORS);
+  return { scenario: result as unknown as RosterScenario, rejectedFields };
+}
+
+function decodeRosterScenario(encoded: string): RosterScenario | null {
+  return decodeRosterScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 /**

@@ -79,11 +79,17 @@ One agent claim was wrong and corrected: web tests are **372**, not the 377 repo
 
 1. **One combined `packages/web` pass** — four items on the same files, so one diff and one
    verification: **accessibility** (a genuinely broken contract: 7 `role="tab"` buttons, **zero**
-   `role="tabpanel"`, no `aria-controls`, no arrow-key nav, all seven in the tab sequence; 9 SVGs
-   with no title/role/aria-hidden; no skip link — contrast and labelling audited clean),
-   **visual polish** (shell max-width: prose hits 88-98 chars at 1920px; no
-   `prefers-reduced-motion` block despite 6 transition rules), the **raid-freshness indicator**
+   `role="tabpanel"`, no `aria-controls`, no arrow-key nav, all seven in the tab sequence; no skip
+   link — contrast and labelling audited clean), **visual polish**, the **raid-freshness indicator**
    reading `_meta.json`, and **hardening the five web codecs** against `957999d`'s pattern.
+
+   ⚠️ **Two of my own audit claims here were wrong and were corrected during the build** — recorded
+   so they are not re-derived: the charts already carry `role="img"`+`aria-label` (my probe tested
+   for a `role` attribute, which decorative icons correctly lack, and ran before the charts
+   mounted), and `.app` has had `max-width: 1100px` since 2026-09-04 (I measured `main`, the wrong
+   element). The real, narrower version of the width complaint was true: prose capped at `70-78ch`
+   renders at 83-98 characters because CSS `ch` is the "0" glyph width and Inter's average
+   character is narrower.
 2. **Best Buddy's UI** — engine-complete since `e861049`, unwired.
 3. **`meta_ideas.md`'s two Proposed/Accepted items** — wire `typecheck:scripts` into
    `post-edit.mjs`'s web branch (today's own incident is the evidence), and the prose count-word

@@ -1,12 +1,24 @@
 import {
   fromBase64Url,
+  isBoolean,
+  isDodgeBehavior,
+  isIVSpread,
+  isMegaLevel,
+  isString,
+  isStringOrNull,
+  isWeatherCondition,
+  orNull,
+  sanitizeKnownFields,
   toBase64Url,
+  tryParseJsonObject,
   type DodgeBehavior,
+  type FieldValidators,
   type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
+import { isFriendshipLevel } from "./webScenarioValidation.js";
 
 /**
  * The complete, shareable description of one "IV Breakpoints" run — a sibling
@@ -85,9 +97,41 @@ function encodeIvBreakpointsScenario(scenario: IvBreakpointsScenario): string {
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-function decodeIvBreakpointsScenario(encoded: string): IvBreakpointsScenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as IvBreakpointsScenario;
+/** See scenario.ts's `SCENARIO_FIELD_VALIDATORS` — same per-field validator table convention, for this tab's own scenario shape. */
+const IV_BREAKPOINTS_SCENARIO_FIELD_VALIDATORS: FieldValidators<IvBreakpointsScenario> = {
+  speciesId: isString,
+  fastMoveId: isStringOrNull,
+  chargedMoveId: isStringOrNull,
+  ivA: isIVSpread,
+  ivB: isIVSpread,
+  targetId: isString,
+  bossFastMoveId: isStringOrNull,
+  dodgeModel: isDodgeBehavior,
+  weather: isWeatherCondition,
+  megaLevel: orNull(isMegaLevel),
+  isShadow: isBoolean,
+  friendshipLevel: isFriendshipLevel,
+};
+
+/** See scenario.ts's `ScenarioDecodeResult` — identical shape and rationale, just for `IvBreakpointsScenario`. */
+export interface IvBreakpointsScenarioDecodeResult {
+  scenario: IvBreakpointsScenario;
+  rejectedFields: string[];
+}
+
+/** Defensive decode: never throws. See scenario.ts's `decodeScenarioWithDiagnostics` for the full contract this mirrors. */
+export function decodeIvBreakpointsScenarioWithDiagnostics(encoded: string): IvBreakpointsScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+  const { result, rejectedFields } = sanitizeKnownFields<IvBreakpointsScenario>(
+    payload,
+    IV_BREAKPOINTS_SCENARIO_FIELD_VALIDATORS,
+  );
+  return { scenario: result as unknown as IvBreakpointsScenario, rejectedFields };
+}
+
+function decodeIvBreakpointsScenario(encoded: string): IvBreakpointsScenario | null {
+  return decodeIvBreakpointsScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 /**

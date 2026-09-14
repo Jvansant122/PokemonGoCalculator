@@ -1,4 +1,20 @@
-import { fromBase64Url, toBase64Url, type FriendshipLevel, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
+import {
+  fromBase64Url,
+  isBoolean,
+  isMegaLevel,
+  isString,
+  isStringOrNull,
+  isWeatherCondition,
+  orNull,
+  sanitizeKnownFields,
+  toBase64Url,
+  tryParseJsonObject,
+  type FieldValidators,
+  type FriendshipLevel,
+  type MegaLevel,
+  type WeatherCondition,
+} from "@pogo-analyzer/engine";
+import { isFriendshipLevel, isLiteralUnion } from "./webScenarioValidation.js";
 
 /** Which half of the tab is currently rendering — see AttackDefenseBreakpointsView.tsx's own doc comment. */
 export type AttackDefenseBreakpointsMode = "attack" | "defense";
@@ -94,9 +110,44 @@ function encodeAttackDefenseBreakpointsScenario(scenario: AttackDefenseBreakpoin
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-function decodeAttackDefenseBreakpointsScenario(encoded: string): AttackDefenseBreakpointsScenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as AttackDefenseBreakpointsScenario;
+const isAttackDefenseBreakpointsMode = isLiteralUnion<AttackDefenseBreakpointsMode>(["attack", "defense"]);
+
+/** See scenario.ts's `SCENARIO_FIELD_VALIDATORS` — same per-field validator table convention, for this tab's own scenario shape. */
+const ATTACK_DEFENSE_BREAKPOINTS_SCENARIO_FIELD_VALIDATORS: FieldValidators<AttackDefenseBreakpointsScenario> = {
+  speciesId: isString,
+  fastMoveId: isStringOrNull,
+  chargedMoveId: isStringOrNull,
+  targetId: isString,
+  bossFastMoveId: isStringOrNull,
+  bossChargedMoveId: isStringOrNull,
+  weather: isWeatherCondition,
+  mode: isAttackDefenseBreakpointsMode,
+  megaLevel: orNull(isMegaLevel),
+  isShadow: isBoolean,
+  friendshipLevel: isFriendshipLevel,
+};
+
+/** See scenario.ts's `ScenarioDecodeResult` — identical shape and rationale, just for `AttackDefenseBreakpointsScenario`. */
+export interface AttackDefenseBreakpointsScenarioDecodeResult {
+  scenario: AttackDefenseBreakpointsScenario;
+  rejectedFields: string[];
+}
+
+/** Defensive decode: never throws. See scenario.ts's `decodeScenarioWithDiagnostics` for the full contract this mirrors. */
+export function decodeAttackDefenseBreakpointsScenarioWithDiagnostics(
+  encoded: string,
+): AttackDefenseBreakpointsScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+  const { result, rejectedFields } = sanitizeKnownFields<AttackDefenseBreakpointsScenario>(
+    payload,
+    ATTACK_DEFENSE_BREAKPOINTS_SCENARIO_FIELD_VALIDATORS,
+  );
+  return { scenario: result as unknown as AttackDefenseBreakpointsScenario, rejectedFields };
+}
+
+function decodeAttackDefenseBreakpointsScenario(encoded: string): AttackDefenseBreakpointsScenario | null {
+  return decodeAttackDefenseBreakpointsScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 /**

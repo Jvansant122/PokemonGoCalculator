@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { TabErrorBoundary } from "./TabErrorBoundary.js";
@@ -73,6 +73,32 @@ const TAB_LABELS: Record<AppTab, string> = {
   "power-up-optimizer": "Power-Up Optimizer",
   roster: "Roster",
 };
+
+/**
+ * Render/navigation order for the `.tab-switcher` nav — a plain array (not
+ * just `Object.keys(TAB_LABELS)`) so the roving-tabindex keyboard handler
+ * below has an explicit, stable sequence to walk with ArrowLeft/ArrowRight/
+ * Home/End, independent of object key insertion order.
+ */
+const TAB_ORDER: AppTab[] = [
+  "comparator",
+  "team-raid",
+  "species-report",
+  "iv-breakpoints",
+  "attack-defense-breakpoints",
+  "power-up-optimizer",
+  "roster",
+];
+
+/** DOM id for a tab button — shared by the button's own `id` and every other tab/panel's `aria-controls`/`aria-labelledby` pointing at it. */
+function tabButtonId(id: AppTab): string {
+  return `tab-${id}`;
+}
+
+/** DOM id for a tab's content region — the single `<main>` below swaps this (and its `aria-labelledby`) as the active tab changes, rather than mounting one panel element per tab. */
+function tabPanelId(id: AppTab): string {
+  return `tabpanel-${id}`;
+}
 
 function initialTab(): AppTab {
   if (typeof window === "undefined") return "comparator";
@@ -151,6 +177,35 @@ export function App() {
   }
 
   /**
+   * ARIA APG "tabs" pattern keyboard support: Left/Right (wrapping) and
+   * Home/End move AND activate — this app has no expensive per-tab fetch
+   * gating a "select without activating" step, so automatic activation is
+   * the right choice, not just the simpler one. Only the active tab sits in
+   * the Tab sequence (roving tabindex, set on the buttons below) so a
+   * keyboard user reaches the seven tabs in one Tab stop, then arrows
+   * between them, matching what a screen-reader user is told to expect by
+   * `role="tab"`/`role="tablist"`.
+   */
+  function handleTabListKeyDown(event: KeyboardEvent<HTMLElement>) {
+    const currentIndex = TAB_ORDER.indexOf(tab);
+    let nextIndex: number | null = null;
+    if (event.key === "ArrowRight") nextIndex = (currentIndex + 1) % TAB_ORDER.length;
+    else if (event.key === "ArrowLeft") nextIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+    else if (event.key === "Home") nextIndex = 0;
+    else if (event.key === "End") nextIndex = TAB_ORDER.length - 1;
+    if (nextIndex === null) return;
+    event.preventDefault();
+    const nextTab = TAB_ORDER[nextIndex]!;
+    setTab(nextTab);
+    // The newly active button only becomes tabIndex 0 (and thus reliably
+    // focusable) after this render commits, so defer the focus move a tick
+    // rather than reading the DOM synchronously mid-handler.
+    requestAnimationFrame(() => {
+      tabListRef.current?.querySelector<HTMLElement>(`#${tabButtonId(nextTab)}`)?.focus();
+    });
+  }
+
+  /**
    * TabErrorBoundary's "Reset this tab to defaults" action — a full
    * navigation (not just clearing React state) so it's robust to whatever
    * corrupted the tree in the first place, dropping every query param except
@@ -166,6 +221,18 @@ export function App() {
 
   return (
     <div className="app">
+      {/*
+        First focusable element on the page — invisible until it receives
+        keyboard focus (`.visually-hidden` combined with the focus-visible
+        rule in styles.css), so a keyboard/screen-reader user isn't forced to
+        tab through the masthead and all seven tab buttons before reaching
+        the actual content on every single page load. Targets the `<main>`
+        tabpanel below by its CURRENT id, not a fixed one, so it always
+        lands on whichever tab is actually showing.
+      */}
+      <a href={`#${tabPanelId(tab)}`} className="skip-link visually-hidden">
+        Skip to main content
+      </a>
       <header className="masthead">
         <span className="masthead-mark" aria-hidden="true">
           {/*
@@ -185,102 +252,76 @@ export function App() {
           <p className="masthead-tagline">Survivability counted as team DPS, not raw damage.</p>
         </div>
       </header>
-      <nav className="tab-switcher" role="tablist" aria-label="View" ref={tabListRef}>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "comparator"}
-          className={`tab-button${tab === "comparator" ? " active" : ""}`}
-          onClick={() => setTab("comparator")}
-        >
-          Two-Candidate Comparator
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "team-raid"}
-          className={`tab-button${tab === "team-raid" ? " active" : ""}`}
-          onClick={() => setTab("team-raid")}
-        >
-          Team Raid Simulator
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "species-report"}
-          className={`tab-button${tab === "species-report" ? " active" : ""}`}
-          onClick={() => setTab("species-report")}
-        >
-          Species Report
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "iv-breakpoints"}
-          className={`tab-button${tab === "iv-breakpoints" ? " active" : ""}`}
-          onClick={() => setTab("iv-breakpoints")}
-        >
-          IV Breakpoints
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "attack-defense-breakpoints"}
-          className={`tab-button${tab === "attack-defense-breakpoints" ? " active" : ""}`}
-          onClick={() => setTab("attack-defense-breakpoints")}
-        >
-          Attack/Defense Breakpoints
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "power-up-optimizer"}
-          className={`tab-button${tab === "power-up-optimizer" ? " active" : ""}`}
-          onClick={() => setTab("power-up-optimizer")}
-        >
-          Power-Up Optimizer
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={tab === "roster"}
-          className={`tab-button${tab === "roster" ? " active" : ""}`}
-          onClick={() => setTab("roster")}
-        >
-          Roster
-        </button>
+      {/*
+        `role="tab"` needs a `role="tabpanel"` counterpart it points at via
+        `aria-controls` (and the panel points back via `aria-labelledby`) to
+        actually satisfy the tablist contract — see the `<main>` below.
+        Roving tabindex: only the active tab sits in the page's Tab
+        sequence; ArrowLeft/Right/Home/End (handleTabListKeyDown) move
+        between the rest, per the ARIA APG tabs pattern.
+      */}
+      <nav className="tab-switcher" role="tablist" aria-label="View" ref={tabListRef} onKeyDown={handleTabListKeyDown}>
+        {TAB_ORDER.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={tabButtonId(id)}
+            aria-selected={tab === id}
+            aria-controls={tabPanelId(id)}
+            tabIndex={tab === id ? 0 : -1}
+            className={`tab-button${tab === id ? " active" : ""}`}
+            onClick={() => setTab(id)}
+          >
+            {TAB_LABELS[id]}
+          </button>
+        ))}
       </nav>
       {/*
-        Keyed by `tab` so navigating to another tab and back always mounts a
-        fresh TabErrorBoundary instance — a tab that crashed once doesn't
-        stay stuck in its fallback state after you've clicked away from it.
-        Scoped to only the active view (not the whole .app div above) so the
-        masthead and nav stay usable as the fallback's own "way out."
+        The single content region doubles as the ARIA tabpanel for whichever
+        tab is active — one `<main>` that swaps its id/aria-labelledby as
+        `tab` changes, rather than mounting seven (mostly-empty) panel
+        elements. It's declared here in App.tsx itself, NOT inside the lazy
+        chunk below, specifically so `aria-controls`/the skip link's `href`
+        always resolve to a real element even before a lazy view's chunk has
+        finished loading (TabLoadingBar's fallback still renders inside it).
+        `tabIndex={-1}` makes it a valid focus target for the skip link
+        without adding a second stop to the page's normal Tab sequence (the
+        panel's own focusable content already provides that).
       */}
-      <TabErrorBoundary key={tab} tabLabel={TAB_LABELS[tab]} onResetTab={handleResetTab}>
+      <main id={tabPanelId(tab)} role="tabpanel" aria-labelledby={tabButtonId(tab)} tabIndex={-1}>
         {/*
-          Suspense sits INSIDE TabErrorBoundary on purpose — see App.tsx's top
-          doc comment on the lazy view declarations for why a failed chunk
-          fetch needs a boundary ABOVE this, not below it.
+          Keyed by `tab` so navigating to another tab and back always mounts a
+          fresh TabErrorBoundary instance — a tab that crashed once doesn't
+          stay stuck in its fallback state after you've clicked away from it.
+          Scoped to only the active view (not the whole .app div above) so the
+          masthead and nav stay usable as the fallback's own "way out."
         */}
-        <Suspense fallback={<TabLoadingBar />}>
-          {tab === "comparator" ? (
-            <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
-          ) : tab === "team-raid" ? (
-            <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
-          ) : tab === "species-report" ? (
-            <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
-          ) : tab === "iv-breakpoints" ? (
-            <IvBreakpointsView />
-          ) : tab === "attack-defense-breakpoints" ? (
-            <AttackDefenseBreakpointsView />
-          ) : tab === "power-up-optimizer" ? (
-            <PowerUpOptimizerView />
-          ) : (
-            <RosterView />
-          )}
-        </Suspense>
-      </TabErrorBoundary>
+        <TabErrorBoundary key={tab} tabLabel={TAB_LABELS[tab]} onResetTab={handleResetTab}>
+          {/*
+            Suspense sits INSIDE TabErrorBoundary on purpose — see App.tsx's top
+            doc comment on the lazy view declarations for why a failed chunk
+            fetch needs a boundary ABOVE this, not below it.
+          */}
+          <Suspense fallback={<TabLoadingBar />}>
+            {tab === "comparator" ? (
+              <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
+            ) : tab === "team-raid" ? (
+              <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
+            ) : tab === "species-report" ? (
+              <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
+            ) : tab === "iv-breakpoints" ? (
+              <IvBreakpointsView />
+            ) : tab === "attack-defense-breakpoints" ? (
+              <AttackDefenseBreakpointsView />
+            ) : tab === "power-up-optimizer" ? (
+              <PowerUpOptimizerView />
+            ) : (
+              <RosterView />
+            )}
+          </Suspense>
+        </TabErrorBoundary>
+      </main>
     </div>
   );
 }

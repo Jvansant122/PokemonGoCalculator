@@ -1,5 +1,26 @@
-import { fromBase64Url, toBase64Url, type DodgeBehavior, type IVSpread, type MegaLevel, type WeatherCondition } from "@pogo-analyzer/engine";
+import {
+  fromBase64Url,
+  isBoolean,
+  isDodgeBehavior,
+  isFiniteNumber,
+  isIVSpread,
+  isMegaLevel,
+  isString,
+  isStringArray,
+  isStringOrNull,
+  isWeatherCondition,
+  orNull,
+  sanitizeKnownFields,
+  toBase64Url,
+  tryParseJsonObject,
+  type DodgeBehavior,
+  type FieldValidators,
+  type IVSpread,
+  type MegaLevel,
+  type WeatherCondition,
+} from "@pogo-analyzer/engine";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
+import { isBossChargedMoveCadence, isLiteralUnion } from "./webScenarioValidation.js";
 
 /**
  * Which column the results table is ranked by — a display-only choice (it
@@ -90,9 +111,55 @@ function encodeSpeciesReportScenario(scenario: SpeciesReportScenario): string {
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-function decodeSpeciesReportScenario(encoded: string): SpeciesReportScenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as SpeciesReportScenario;
+const isSpeciesReportSortMode = isLiteralUnion<SpeciesReportSortMode>(["damage", "typeMatchup"]);
+
+/** See scenario.ts's `SCENARIO_FIELD_VALIDATORS` — same per-field validator table convention, for this tab's own scenario shape. */
+const SPECIES_REPORT_SCENARIO_FIELD_VALIDATORS: FieldValidators<SpeciesReportScenario> = {
+  speciesId: isString,
+  fastMoveId: isStringOrNull,
+  chargedMoveId: isStringOrNull,
+  level: isFiniteNumber,
+  ivs: isIVSpread,
+  dodgeModel: isDodgeBehavior,
+  dodgeFastAttacks: isBoolean,
+  weather: isWeatherCondition,
+  bossChargedMoveFrequencySeconds: isFiniteNumber,
+  bossChargedMoveCadence: isBossChargedMoveCadence,
+  megaLevel: orNull(isMegaLevel),
+  sortMode: isSpeciesReportSortMode,
+  includedTiers: orNull(isStringArray),
+  includePastRaids: isBoolean,
+};
+
+/** See scenario.ts's `ScenarioDecodeResult` — identical shape and rationale, just for `SpeciesReportScenario`. */
+export interface SpeciesReportScenarioDecodeResult {
+  scenario: SpeciesReportScenario;
+  rejectedFields: string[];
+}
+
+/**
+ * Defensive decode: never throws. See scenario.ts's `decodeScenarioWithDiagnostics`
+ * for the full "when does this return null vs. a partial result" contract —
+ * identical here, just for `SpeciesReportScenario`'s shape. `speciesId`
+ * being a REQUIRED field (not optional on the interface) doesn't change
+ * anything here: a missing/invalid `speciesId` still just decodes to
+ * `undefined` in `scenario` exactly like every other rejected field, and
+ * SpeciesReportView's own `scenarioToAssumptions` already has to handle "no
+ * usable share link at all" (the whole-payload-unusable `null` case) the
+ * same way it would handle this.
+ */
+export function decodeSpeciesReportScenarioWithDiagnostics(encoded: string): SpeciesReportScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+  const { result, rejectedFields } = sanitizeKnownFields<SpeciesReportScenario>(
+    payload,
+    SPECIES_REPORT_SCENARIO_FIELD_VALIDATORS,
+  );
+  return { scenario: result as unknown as SpeciesReportScenario, rejectedFields };
+}
+
+function decodeSpeciesReportScenario(encoded: string): SpeciesReportScenario | null {
+  return decodeSpeciesReportScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 /**

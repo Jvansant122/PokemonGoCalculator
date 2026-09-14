@@ -1,8 +1,21 @@
 import {
   fromBase64Url,
+  isBoolean,
+  isDodgeBehavior,
+  isFiniteNumber,
+  isIVSpread,
+  isMegaLevel,
+  isString,
+  isStringArray,
+  isStringOrNull,
+  isWeatherCondition,
   MAX_TEAM_RAID_SLOTS,
+  orNull,
+  sanitizeKnownFields,
   toBase64Url,
+  tryParseJsonObject,
   type DodgeBehavior,
+  type FieldValidators,
   type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
@@ -18,6 +31,14 @@ import {
 } from "./PowerUpOptimizerAssumptionPanel.js";
 import { effectiveIsShadow } from "./shadowToggle.js";
 import { speciesRegistry } from "./registry.js";
+import {
+  isBossChargedMoveCadence,
+  isCandyByFamilyIdMap,
+  isFriendshipLevel,
+  isLiteralUnion,
+  isRosterSignificanceMode,
+  sanitizeObjectArray,
+} from "./webScenarioValidation.js";
 
 /**
  * Which resource column the ranked candidate table is sorted by — a
@@ -417,7 +438,13 @@ export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOp
 }
 
 export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptimizerAssumptions {
-  const slots: PowerUpSlotAssumption[] = s.slots.map((slot) => ({
+  // `?? []` guards a scenario whose `slots` field was entirely absent or got
+  // rejected as a whole by decodePowerUpOptimizerScenarioWithDiagnostics
+  // (e.g. a hand-edited link where `slots` isn't an array at all) — without
+  // it, `.map` on `undefined` would throw here instead of degrading; the
+  // pad-to-MAX_TEAM_RAID_SLOTS loop below already turns an empty array into
+  // six blank slots exactly like an old link with no slots at all.
+  const slots: PowerUpSlotAssumption[] = (s.slots ?? []).map((slot) => ({
     speciesId: slot.speciesId ?? null,
     fastMoveId: slot.fastMoveId ?? null,
     chargedMoveId: slot.chargedMoveId ?? null,
@@ -550,9 +577,126 @@ function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): str
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-function decodePowerUpOptimizerScenario(encoded: string): PowerUpOptimizerScenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as PowerUpOptimizerScenario;
+const isPowerUpOptimizerMode = isLiteralUnion<PowerUpOptimizerMode>(["single-raid", "multi-raid"]);
+const isPowerUpRankBy = isLiteralUnion<PowerUpRankBy>(["stardust", "candy", "xlCandy"]);
+const isHypotheticalCatchLevel = isLiteralUnion<20 | 25>([20, 25]);
+
+/** Validates one `PowerUpScenarioSlot` — see scenarioValidation.ts's `sanitizeKnownFields`; applied per-entry by `sanitizeObjectArray` below, mirroring teamScenario.ts's own `TEAM_SCENARIO_SLOT_VALIDATORS`. */
+const POWER_UP_SLOT_VALIDATORS: FieldValidators<PowerUpScenarioSlot> = {
+  speciesId: isStringOrNull,
+  fastMoveId: isStringOrNull,
+  chargedMoveId: isStringOrNull,
+  isMega: isBoolean,
+  megaLevel: orNull(isMegaLevel),
+  isShadow: isBoolean,
+  isPurified: isBoolean,
+  isLucky: isBoolean,
+  level: isFiniteNumber,
+  ivs: isIVSpread,
+  candyOnHand: isFiniteNumber,
+  xlCandyOnHand: isFiniteNumber,
+};
+
+/** Validates one `PowerUpHypotheticalCatchScenario` — see POWER_UP_SLOT_VALIDATORS above for the same per-entry pattern. */
+const POWER_UP_HYPOTHETICAL_CATCH_VALIDATORS: FieldValidators<PowerUpHypotheticalCatchScenario> = {
+  speciesId: isStringOrNull,
+  level: isHypotheticalCatchLevel,
+};
+
+/**
+ * One validator per top-level `PowerUpOptimizerScenario` field EXCEPT `slots`
+ * and `multiRaidHypotheticalCatches`, which need `sanitizeObjectArray`'s
+ * array-shaped handling instead of a plain per-field validator — see
+ * scenario.ts's `SCENARIO_FIELD_VALIDATORS`/teamScenario.ts's
+ * `TEAM_SCENARIO_FIELD_VALIDATORS` for the sibling tables this mirrors.
+ */
+const POWER_UP_OPTIMIZER_SCENARIO_FIELD_VALIDATORS: FieldValidators<
+  Omit<PowerUpOptimizerScenario, "slots" | "multiRaidHypotheticalCatches">
+> = {
+  mode: isPowerUpOptimizerMode,
+  stardustOnHand: isFiniteNumber,
+  rareCandyOnHand: isFiniteNumber,
+  rareCandyXlOnHand: isFiniteNumber,
+  target: isString,
+  bossFastMoveId: isStringOrNull,
+  bossChargedMoveId: isStringOrNull,
+  dodgeModel: isDodgeBehavior,
+  dodgeFastAttacks: isBoolean,
+  holdChargedMoveUntilSafe: isBoolean,
+  weather: isWeatherCondition,
+  friendshipLevel: isFriendshipLevel,
+  bossChargedMoveFrequencySeconds: isFiniteNumber,
+  bossChargedMoveCadence: isBossChargedMoveCadence,
+  bossStartsPrimed: isBoolean,
+  bossStartingEnergyFraction: isFiniteNumber,
+  raidTimerSeconds: isFiniteNumber,
+  swapCostSeconds: isFiniteNumber,
+  reviveCostSeconds: isFiniteNumber,
+  rankBy: isPowerUpRankBy,
+  multiRaidBossIds: isStringArray,
+  multiRaidIncludePastRaids: isBoolean,
+  multiRaidIncludedTiers: orNull(isStringArray),
+  multiRaidMaxBossCount: isFiniteNumber,
+  candyByFamilyId: isCandyByFamilyIdMap,
+  multiRaidMegaLevel: orNull(isMegaLevel),
+  multiRaidSignificanceMode: isRosterSignificanceMode,
+  multiRaidUseBestAvailableMoveset: isBoolean,
+  fastTmOnHand: orNull(isFiniteNumber),
+  chargedTmOnHand: orNull(isFiniteNumber),
+  eliteFastTmOnHand: orNull(isFiniteNumber),
+  eliteChargedTmOnHand: orNull(isFiniteNumber),
+};
+
+/** See scenario.ts's `ScenarioDecodeResult` — identical shape and rationale, just for `PowerUpOptimizerScenario`. */
+export interface PowerUpOptimizerScenarioDecodeResult {
+  scenario: PowerUpOptimizerScenario;
+  rejectedFields: string[];
+}
+
+/**
+ * Defensive decode: never throws. See scenario.ts's `decodeScenarioWithDiagnostics`
+ * for the full "when does this return null vs. a partial result" contract —
+ * identical here, plus `slots`/`multiRaidHypotheticalCatches` get
+ * `sanitizeObjectArray`'s item-by-item handling (see that function's own doc
+ * comment in webScenarioValidation.ts for why neither needs
+ * `teamScenario.ts`'s stricter "exact length or reject the whole array" rule).
+ */
+export function decodePowerUpOptimizerScenarioWithDiagnostics(encoded: string): PowerUpOptimizerScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+
+  const { slots: rawSlots, multiRaidHypotheticalCatches: rawCatches, ...rest } = payload;
+  const { result, rejectedFields } = sanitizeKnownFields<Omit<PowerUpOptimizerScenario, "slots" | "multiRaidHypotheticalCatches">>(
+    rest,
+    POWER_UP_OPTIMIZER_SCENARIO_FIELD_VALIDATORS,
+  );
+
+  let slots: PowerUpScenarioSlot[] | undefined;
+  if (Object.prototype.hasOwnProperty.call(payload, "slots")) {
+    const sanitizedSlots = sanitizeObjectArray<PowerUpScenarioSlot>(rawSlots, POWER_UP_SLOT_VALIDATORS, "slots");
+    slots = sanitizedSlots.value;
+    rejectedFields.push(...sanitizedSlots.rejectedFields);
+  }
+
+  let multiRaidHypotheticalCatches: PowerUpHypotheticalCatchScenario[] | undefined;
+  if (Object.prototype.hasOwnProperty.call(payload, "multiRaidHypotheticalCatches")) {
+    const sanitizedCatches = sanitizeObjectArray<PowerUpHypotheticalCatchScenario>(
+      rawCatches,
+      POWER_UP_HYPOTHETICAL_CATCH_VALIDATORS,
+      "multiRaidHypotheticalCatches",
+    );
+    multiRaidHypotheticalCatches = sanitizedCatches.value;
+    rejectedFields.push(...sanitizedCatches.rejectedFields);
+  }
+
+  return {
+    scenario: { ...result, slots, multiRaidHypotheticalCatches } as unknown as PowerUpOptimizerScenario,
+    rejectedFields,
+  };
+}
+
+function decodePowerUpOptimizerScenario(encoded: string): PowerUpOptimizerScenario | null {
+  return decodePowerUpOptimizerScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 /**

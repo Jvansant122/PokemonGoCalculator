@@ -23,6 +23,13 @@ import raidHistoryData from "../../../data/normalized/raidHistory.json";
 // shape plus two provenance-only fields (sourceUrl/fetchedAt) this module
 // strips before exporting, since PowerUpCostTable itself declares neither.
 import powerUpCostsData from "../../../data/normalized/powerUpCosts.json";
+// activeRaids.json's freshness sibling (data-sync, 2026-09-14) — see that
+// file's own generation comment in scripts/sync-data.ts for exactly what
+// each field means. Bundled at build time same as every other file above:
+// this is a STATIC site, so "how current is the raid roster I'm showing"
+// freezes at build time too, and this is the one place that fact can be
+// read from without a network call. Surfaced via raidDataFreshness() below.
+import normalizedMetaData from "../../../data/normalized/_meta.json";
 
 export interface RawActiveRaidEntry {
   raidName: string;
@@ -227,6 +234,43 @@ function buildRegistry(): SpeciesRegistry {
 }
 
 export const speciesRegistry = buildRegistry();
+
+/** data/normalized/_meta.json's one entry today — see that file's generation comment (scripts/sync-data.ts) for the fetchedAt/writtenAt distinction. */
+export interface RaidDataFreshness {
+  /**
+   * When the live ScrapedDuck feed was last successfully fetched — null only
+   * if it has never once succeeded on this checkout. On a run that fell back
+   * to a cached file (source !== "scrapedduck"), this is NOT "now" — it
+   * stays whatever an earlier successful run recorded, so a stale fallback
+   * correctly reads as stale.
+   */
+  fetchedAt: string | null;
+  /** When activeRaids.json was last (re)written to disk — always "now" for whichever sync produced the currently-committed file, regardless of source. */
+  writtenAt: string;
+  /**
+   * "scrapedduck": the live feed itself succeeded this sync. "fallback-file":
+   * the live feed failed but a previously-cached roster file was reused.
+   * "fallback-file-created-empty": the live feed AND the local fallback both
+   * failed — the roster below may be missing entries entirely, not just
+   * stale ones.
+   *
+   * NOTE: deliberately placed here rather than right after the imports
+   * (where it originally lived) — `check-raid-history-sources.mjs` locates
+   * `RawActiveRaidEntry`'s sibling `RawRaidHistoryEntry.source` union via a
+   * naive "first `source: \"...\" | \"...\";` match in this file" regex, and
+   * this interface's OWN `source` field (a completely different, much
+   * smaller union) matched first when declared earlier in the file —
+   * confirmed live, a real false-positive FAIL this move fixes.
+   */
+  source: "scrapedduck" | "fallback-file" | "fallback-file-created-empty";
+}
+
+const NORMALIZED_META = normalizedMetaData as unknown as { "activeRaids.json": RaidDataFreshness };
+
+/** How current the active-raid roster (activeRaidBossOptions/targetPickerOptions/BossSetPanel) is — see RaidDataFreshness's own field docs. */
+export function raidDataFreshness(): RaidDataFreshness {
+  return NORMALIZED_META["activeRaids.json"];
+}
 
 export interface SpeciesOption {
   id: string;

@@ -859,8 +859,8 @@ button:disabled {
      this same callout; the comparator chart's two branches name themselves
      via the modifiers below. */
   content: "Verdict";
-  display: block;
-  margin-bottom: 3px;
+  display: inline-block;
+  margin-bottom: 5px;
   color: var(--good);
   font-size: 0.68rem;
   font-weight: 600;
@@ -868,12 +868,34 @@ button:disabled {
   letter-spacing: 0.09em;
 }
 
-.crossover-note--flip::before {
-  content: "Ranking flip";
+/*
+ * The one case this whole callout exists for: a genuine ranking flip, the
+ * product's entire thesis (CLAUDE.md — "the headline output is WHERE the
+ * ranking flips, not which name is on top"). Deliberately louder than the
+ * shared `.crossover-note` base it still inherits — a bolder rule, a soft
+ * glow instead of the flat `--shadow-1` every other card uses, and the
+ * label promoted from plain uppercase text to a pill badge — so this reads
+ * as a designed focal point instead of a caption sitting under the SVG.
+ * `.crossover-note--steady` (no flip found) deliberately does NOT get any
+ * of this: a steady result is a real, useful answer, but dressing it up
+ * with the same emphasis as an actual flip would misrepresent it as one.
+ */
+.crossover-note--flip {
+  border-left-width: 5px;
+  box-shadow: var(--shadow-1), 0 0 0 1px rgba(76, 175, 125, 0.25), 0 4px 18px rgba(76, 175, 125, 0.16);
+  font-size: 1.05rem;
+  font-weight: 550;
 }
 
-/* "No crossing in this window" is a real, useful answer — same prominence,
-   but not dressed as a flip that didn't happen. */
+.crossover-note--flip::before {
+  content: "Ranking flip";
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(76, 175, 125, 0.22);
+}
+
+/* "No crossing in this window" is a real, useful answer — same base
+   prominence as any callout, but not dressed as a flip that didn't happen. */
 .crossover-note--steady {
   border-left-color: var(--border-strong);
   background: rgba(255, 255, 255, 0.03);
@@ -922,7 +944,16 @@ button:disabled {
   font-size: 0.86rem;
   color: var(--muted);
   line-height: 1.62;
-  max-width: 78ch;
+  /*
+   * Measured live at 1920px (pogo-player/skeptic accessibility pass,
+   * 2026-09-14): CSS `ch` tracks the "0" glyph's width, which in Inter is
+   * noticeably WIDER than this prose's actual average character (mixed-case
+   * letters + spaces) — so the original 78ch rendered as an ACTUAL ~84-93
+   * characters per line, well past the comfortable 45-75 range, despite the
+   * ch-based cap looking reasonable on paper. Scaled down empirically
+   * (measured, not guessed) rather than trusting the `ch` unit's face value.
+   */
+  max-width: 62ch;
 }
 
 /*
@@ -932,7 +963,9 @@ button:disabled {
  * readable size rather than a wall of 0.82rem muted text.
  */
 .note-block {
-  max-width: 70ch;
+  /* See `.caveats` above on why this is 56ch, not the original 70ch — same
+     measured `ch`-vs-actual-character-width correction, same source. */
+  max-width: 56ch;
   padding: 2px 0 2px var(--space-4);
   border-left: 2px solid var(--border-strong);
   font-size: 0.87rem;
@@ -982,7 +1015,8 @@ button:disabled {
 
 .prose-details > p {
   margin: var(--space-2) 0 var(--space-1);
-  max-width: 70ch;
+  /* See `.caveats` above — same measured `ch`-vs-actual-character-width correction. */
+  max-width: 56ch;
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.6;
@@ -1241,6 +1275,31 @@ button:disabled {
 .species-picker-list button:hover,
 .species-picker-list li[aria-selected="true"] button {
   background: rgba(255, 255, 255, 0.06);
+}
+
+/*
+ * RaidFreshnessNote.tsx — "raid data as of …" wherever a currently-active
+ * raid list renders. Plain muted prose by default (this is the healthy
+ * "scrapedduck" case, no different in weight from any other caveat); the
+ * caution/warn modifiers escalate only when the underlying sync itself had a
+ * real problem (a stale fallback file, or a totally failed sync), matching
+ * this file's existing --caution/--warn convention (.boss-moveset-risk
+ * above) rather than inventing a third color scheme for one component.
+ */
+.raid-freshness-note {
+  margin: var(--space-2) 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.raid-freshness-note--caution {
+  color: var(--caution);
+}
+
+.raid-freshness-note--warn {
+  color: var(--warn);
 }
 
 .species-picker-empty,
@@ -2064,4 +2123,57 @@ label.species-picker-hint {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * "Skip to main content" (App.tsx): the standard pattern is `.visually-hidden`
+ * at rest, un-hidden on focus — this is the ONE place that override is
+ * needed, so it lives here as a `.skip-link:focus` override rather than
+ * teaching `.visually-hidden` itself about focus. Pinned to the viewport's
+ * top-left so it can't be clipped by `.app`'s own padding or `nav.tab-switcher`'s
+ * `position: sticky` stacking context, and given a z-index above the sticky
+ * nav's (30) so it's never rendered underneath it.
+ */
+.skip-link:focus {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  width: auto;
+  height: auto;
+  padding: 10px 16px;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  z-index: 60;
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--focus);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/*
+ * Correctness, not just polish (skeptic/pogo-player accessibility pass,
+ * 2026-09-14): collapses every transition and CSS animation to
+ * near-instant for a user who has asked their OS for reduced motion,
+ * covering both the six `transition:` rules scattered across this file
+ * (tab switching, collapsible chevrons, focus rings, etc.) and
+ * TabLoadingBar's infinite sweep keyframe above, which would otherwise
+ * keep animating regardless of this preference. `!important` is
+ * deliberate here — this is the one override in the file meant to beat
+ * every component-specific transition/animation declaration
+ * unconditionally, not a specificity workaround.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

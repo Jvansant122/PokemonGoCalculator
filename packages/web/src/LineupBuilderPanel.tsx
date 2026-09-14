@@ -33,14 +33,22 @@ function LineupSummary({ label, slots }: { label: string; slots: LineupSlot[] })
  */
 function LineupStats({ result }: { result: LineupBuilderResult["winner"] }) {
   return (
-    <dl>
-      <dt>Team DPS</dt>
-      <dd>{result.summary.teamDps.toFixed(1)}</dd>
-      <dt>Clear rate</dt>
-      <dd>{(result.summary.clearRate * 100).toFixed(0)}%</dd>
-      <dt>Mean time to clear (cleared runs only)</dt>
-      <dd>{result.summary.meanTimeToClearSeconds !== null ? `${result.summary.meanTimeToClearSeconds.toFixed(1)}s` : "never clears"}</dd>
-    </dl>
+    <>
+      {/* Same stat-tile-headline treatment ComparatorView/SingleRaidResultsSection/
+          TeamRaidView already give their own single headline metric — team
+          DPS was previously just the first row of an undifferentiated dl,
+          reading no more prominent than clear rate or mean time to clear. */}
+      <div className="stat-tile-headline">
+        <span className="stat-tile-value">{result.summary.teamDps.toFixed(1)}</span>
+        <span className="stat-tile-unit">team DPS</span>
+      </div>
+      <dl>
+        <dt>Clear rate</dt>
+        <dd>{(result.summary.clearRate * 100).toFixed(0)}%</dd>
+        <dt>Mean time to clear (cleared runs only)</dt>
+        <dd>{result.summary.meanTimeToClearSeconds !== null ? `${result.summary.meanTimeToClearSeconds.toFixed(1)}s` : "never clears"}</dd>
+      </dl>
+    </>
   );
 }
 
