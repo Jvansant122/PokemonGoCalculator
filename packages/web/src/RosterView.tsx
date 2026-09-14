@@ -223,18 +223,23 @@ export function RosterView() {
 
       <section className="panel">
         <h2>Roster summary</h2>
-        <dl>
-          <dt>Total entries</dt>
-          <dd>{summary.entryCount}</dd>
-          <dt>Unique species</dt>
-          <dd>{summary.uniqueSpeciesCount}</dd>
-          <dt>Mega/Primal-capable</dt>
-          <dd>{summary.megaCapableCount}</dd>
-          <dt>Shadow</dt>
-          <dd>{summary.shadowCount}</dd>
-          <dt>Default/unknown moveset</dt>
-          <dd>{summary.defaultedMovesetCount}</dd>
-        </dl>
+        <p className="compact-stats">
+          <span className="compact-stats-item">
+            <strong>{summary.entryCount}</strong> total entr{summary.entryCount === 1 ? "y" : "ies"}
+          </span>
+          <span className="compact-stats-item">
+            <strong>{summary.uniqueSpeciesCount}</strong> unique species
+          </span>
+          <span className="compact-stats-item">
+            <strong>{summary.megaCapableCount}</strong> mega/primal-capable
+          </span>
+          <span className="compact-stats-item">
+            <strong>{summary.shadowCount}</strong> shadow
+          </span>
+          <span className="compact-stats-item">
+            <strong>{summary.defaultedMovesetCount}</strong> default/unknown moveset
+          </span>
+        </p>
         <div className="field" style={{ maxWidth: 260 }}>
           <label htmlFor="roster-sort-by">Table sort order</label>
           <select
@@ -248,7 +253,7 @@ export function RosterView() {
           </select>
         </div>
 
-        <div className="field" style={{ marginTop: 16 }}>
+        <div className="field panel-section-divider">
           {!confirmingClear ? (
             <button type="button" onClick={() => setConfirmingClear(true)} disabled={!canClearRoster(hydratedEntries.length)}>
               Clear roster
