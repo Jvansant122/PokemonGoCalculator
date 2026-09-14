@@ -42,6 +42,44 @@ a declined one gets its permanent number when it lands in `REJECTED_IDEAS.md`.
 
 ---
 
+## 2026-09-14 — Run `typecheck:scripts` in the post-edit hook's web branch
+
+- **Evidence:** a real incident the same day. During the `PowerUpOptimizerView.tsx` four-stage
+  extraction, `blockedCandidateSentence` moved to a new module; 4 of 5 import sites were updated
+  and `scripts/run-scenario.ts` was missed. The hook's existing `npm run typecheck:web` stayed
+  green — `packages/web/tsconfig.json` never includes `scripts/` as an entry point — as did
+  `npm run lint`. The break was a pure ESM runtime error, surfaced only when `test:scripts`
+  executed the CLI under `tsx`. `tsconfig.scripts.json`'s own header comment says it sets `jsx`
+  precisely *because* `run-scenario.ts` reaches into `packages/web/src`'s `.tsx` exports, so
+  `typecheck:scripts` is already the exact mechanism this needed — it simply never fires on the
+  file class that broke.
+- **Scope argued down, deliberately:** add `typecheck:scripts` only, not the full four-way
+  `npm run typecheck`. `typecheck:engine`/`typecheck:engine-test` cover `packages/engine`, which a
+  web-only edit structurally cannot break, so including them buys `tsc` runtime with zero marginal
+  detection.
+- **Ongoing context cost:** none, ever — a hook script edit loads into no agent's context. The
+  price is one more bounded offline `tsc -p tsconfig.scripts.json` per `packages/web/src/**` edit,
+  on top of the `typecheck:web` already running there.
+- **Status:** Proposed
+
+**RETIRE:** nothing found.
+
+**CONSIDERED AND DROPPED:**
+
+- *`check-scenario-roundtrip.mjs`'s hardcoded `TABS` table silently skipping a stale row* — **a
+  negative result on the coordinator's own hypothesis, and worth recording as one.** `runCli()`
+  was read directly: a moved or renamed function prints `FAIL … (renamed or moved?)`, increments
+  `failures`, and exits non-zero (line 178); a deleted file throws an uncaught ENOENT, also
+  non-zero. It fails loudly in both directions, never silently, and today's refactor confirmed it
+  in practice — the row was updated and the 155/155 assertion used as a stage-gate. **No mechanism
+  needed. The guard is not at risk from an ordinary refactor.**
+- *A standalone cross-package ESM import-resolution linter for `scripts/`* — the tool already
+  exists (`typecheck:scripts`) and only needed wiring to the right trigger. A second one would
+  reimplement `tsc`'s resolution for nothing. Superseded by the recommendation above.
+
+**Platform surface:** CHANGELOG still at 2.1.270 — third consecutive pass with no movement, so
+platform-survey passes are not worth running again until a release lands.
+
 ## 2026-09-14 — Prose count-word regex for `check-docs-drift`, plus a `new-tab` checklist line
 
 - **Evidence:** `scripts/check-docs-drift.mjs` has count-word regexes for `CLAUDE.md`'s
