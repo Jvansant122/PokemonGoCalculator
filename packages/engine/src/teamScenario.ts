@@ -1,6 +1,22 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { MegaLevel } from "./megaLevel.js";
 import { fromBase64Url, toBase64Url } from "./scenario.js";
+import {
+  isBoolean,
+  isDodgeBehavior,
+  isFiniteNumber,
+  isIVSpread,
+  isMegaLevel,
+  isPlainObject,
+  isString,
+  isStringOrNull,
+  isWeatherCondition,
+  orNull,
+  sanitizeKnownFields,
+  tryParseJsonObject,
+  type FieldValidators,
+} from "./scenarioValidation.js";
+import { MAX_TEAM_RAID_SLOTS } from "./teamRaid.js";
 import type { IVSpread } from "./types.js";
 import type { WeatherCondition } from "./weather.js";
 
@@ -183,9 +199,128 @@ export function encodeTeamScenario(scenario: TeamScenario): string {
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodeTeamScenario(encoded: string): TeamScenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as TeamScenario;
+/**
+ * One validator per top-level `TeamScenario` field EXCEPT `slots`, which
+ * needs its own array-shaped handling (`sanitizeSlots` below) rather than a
+ * plain per-field validator — see scenarioValidation.ts's
+ * `FieldValidators`/`sanitizeKnownFields` for how this table is applied, and
+ * scenario.ts's `SCENARIO_FIELD_VALIDATORS` for the sibling table this
+ * mirrors.
+ */
+const TEAM_SCENARIO_FIELD_VALIDATORS: FieldValidators<Omit<TeamScenario, "slots">> = {
+  target: isString,
+  bossFastMoveId: isStringOrNull,
+  bossChargedMoveId: isStringOrNull,
+  level: isFiniteNumber,
+  ivs: isIVSpread,
+  dodgeModel: isDodgeBehavior,
+  dodgeFastAttacks: isBoolean,
+  holdChargedMoveUntilSafe: isBoolean,
+  weather: isWeatherCondition,
+  bossChargedMoveFrequencySeconds: isFiniteNumber,
+  bossStartsPrimed: isBoolean,
+  bossStartingEnergyFraction: isFiniteNumber,
+  raidTimerSeconds: isFiniteNumber,
+  swapCostSeconds: isFiniteNumber,
+  reviveCostSeconds: isFiniteNumber,
+  showDetailedAssumptions: isBoolean,
+};
+
+/**
+ * `level`/`ivs` are validated the same as every other field here even though
+ * they're OPTIONAL on `TeamScenarioSlot` — a present-but-invalid value is
+ * dropped (rejected) exactly like a present-but-invalid REQUIRED field is
+ * elsewhere in this package, and the result reads identically to "absent,"
+ * which already has the correct meaning for these two specifically ("use
+ * the shared roster-wide value" — see `TeamScenarioSlot.level`'s own doc
+ * comment). No special-casing needed for their optionality.
+ */
+const TEAM_SCENARIO_SLOT_VALIDATORS: FieldValidators<TeamScenarioSlot> = {
+  speciesId: isStringOrNull,
+  fastMoveId: isStringOrNull,
+  chargedMoveId: isStringOrNull,
+  isMega: isBoolean,
+  megaLevel: orNull(isMegaLevel),
+  level: isFiniteNumber,
+  ivs: isIVSpread,
+};
+
+/**
+ * Sanitizes `TeamScenario.slots` as a whole. Unlike every other field, a
+ * shape mismatch here can't be fixed per-field within one slot alone: the
+ * array's LENGTH carries meaning (each index is a fixed fight position —
+ * see `TeamScenario.slots`'s own doc comment, "pad ... rather than a shorter
+ * array") that no per-field validator can restore. So the whole `slots`
+ * field is rejected (treated as absent, same as everything else) unless the
+ * raw value is an array of EXACTLY `MAX_TEAM_RAID_SLOTS` entries; once that
+ * holds, each entry is sanitized independently via
+ * `TEAM_SCENARIO_SLOT_VALIDATORS` — one slot with a bad field doesn't cost
+ * the other five slots, matching this feature's "per-field, not
+ * all-or-nothing" goal at the slot level too. A slot entry that isn't even a
+ * plain object (e.g. `slots: [null, "garbage", 5, {}, {}, {}]`) sanitizes to
+ * a slot with every field absent — the same "TS declares it required but a
+ * malformed payload actually decoded it to `undefined`" convention this
+ * package already uses for every other required field a caller might
+ * encounter from an old or corrupted link.
+ */
+function sanitizeSlots(rawSlots: unknown): { slots: TeamScenarioSlot[] | undefined; rejectedFields: string[] } {
+  if (!Array.isArray(rawSlots) || rawSlots.length !== MAX_TEAM_RAID_SLOTS) {
+    return { slots: undefined, rejectedFields: ["slots"] };
+  }
+  const rejectedFields: string[] = [];
+  const slots = rawSlots.map((rawSlot, index): TeamScenarioSlot => {
+    if (!isPlainObject(rawSlot)) {
+      rejectedFields.push(`slots[${index}]`);
+      return {} as TeamScenarioSlot;
+    }
+    const { result, rejectedFields: slotRejected } = sanitizeKnownFields<TeamScenarioSlot>(
+      rawSlot,
+      TEAM_SCENARIO_SLOT_VALIDATORS,
+    );
+    for (const field of slotRejected) rejectedFields.push(`slots[${index}].${field}`);
+    return result as unknown as TeamScenarioSlot;
+  });
+  return { slots, rejectedFields };
+}
+
+/** See scenario.ts's `ScenarioDecodeResult` — identical shape and rationale, just for `TeamScenario`. */
+export interface TeamScenarioDecodeResult {
+  scenario: TeamScenario;
+  rejectedFields: string[];
+}
+
+/**
+ * Defensive decode: never throws. See scenario.ts's `decodeScenarioWithDiagnostics`
+ * for the full "when does this return null" contract — identical here,
+ * just for `TeamScenario`'s shape (including the array-valued `slots`
+ * field, which `sanitizeSlots` above handles specially).
+ */
+export function decodeTeamScenarioWithDiagnostics(encoded: string): TeamScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+
+  const { slots: rawSlots, ...rest } = payload;
+  const { result, rejectedFields } = sanitizeKnownFields<Omit<TeamScenario, "slots">>(
+    rest,
+    TEAM_SCENARIO_FIELD_VALIDATORS,
+  );
+
+  let slots: TeamScenarioSlot[] | undefined;
+  if (Object.prototype.hasOwnProperty.call(payload, "slots")) {
+    const sanitizedSlots = sanitizeSlots(rawSlots);
+    slots = sanitizedSlots.slots;
+    rejectedFields.push(...sanitizedSlots.rejectedFields);
+  }
+
+  return {
+    scenario: { ...result, slots } as TeamScenario,
+    rejectedFields,
+  };
+}
+
+/** See scenario.ts's `decodeScenario` — identical convenience wrapper, just for `TeamScenario`. */
+export function decodeTeamScenario(encoded: string): TeamScenario | null {
+  return decodeTeamScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 /**
@@ -202,7 +337,14 @@ export function buildTeamScenarioUrl(baseUrl: string, scenario: TeamScenario): s
   return url.toString();
 }
 
+/** See scenario.ts's `parseScenarioFromUrl` — identical "null covers both 'no param' and 'unusable param'" contract. */
 export function parseTeamScenarioFromUrl(url: string): TeamScenario | null {
   const encoded = new URL(url).searchParams.get(TEAM_SCENARIO_QUERY_PARAM);
   return encoded ? decodeTeamScenario(encoded) : null;
+}
+
+/** See scenario.ts's `parseScenarioFromUrlWithDiagnostics` for when to prefer this over `parseTeamScenarioFromUrl`. */
+export function parseTeamScenarioFromUrlWithDiagnostics(url: string): TeamScenarioDecodeResult | null {
+  const encoded = new URL(url).searchParams.get(TEAM_SCENARIO_QUERY_PARAM);
+  return encoded ? decodeTeamScenarioWithDiagnostics(encoded) : null;
 }

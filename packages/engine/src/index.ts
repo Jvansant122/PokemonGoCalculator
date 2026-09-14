@@ -13,6 +13,7 @@ export * from "./gamemaster.js";
 export * from "./breakpoints.js";
 export * from "./ivComparison.js";
 export * from "./uptime.js";
+export * from "./scenarioValidation.js";
 export * from "./scenario.js";
 export * from "./comparison.js";
 export * from "./simulate.js";

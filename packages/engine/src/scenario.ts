@@ -1,5 +1,21 @@
 import type { DodgeBehavior } from "./breakpoints.js";
 import type { MegaLevel } from "./megaLevel.js";
+import {
+  isBoolean,
+  isDodgeBehavior,
+  isFiniteNumber,
+  isIVSpread,
+  isMegaLevel,
+  isString,
+  isStringArray,
+  isStringOrNull,
+  isTuple2,
+  isWeatherCondition,
+  orNull,
+  sanitizeKnownFields,
+  tryParseJsonObject,
+  type FieldValidators,
+} from "./scenarioValidation.js";
 import type { IVSpread } from "./types.js";
 import type { WeatherCondition } from "./weather.js";
 
@@ -117,8 +133,11 @@ export interface Scenario {
    * standing "every user-facing assumption round-trips through Scenario"
    * rule. Whether packages/web derives a different value for any gated field
    * when this is false is entirely a web-side decision this field does not
-   * constrain. `decodeScenario` performs no runtime defaulting of its own
-   * (same as every sibling field on this interface); an absent value falls
+   * constrain. `decodeScenario` performs no VALUE-level defaulting of its own
+   * (same as every sibling field on this interface) — as of 2026-09-14 it
+   * does validate this field is actually a `boolean` and drops it back to
+   * "absent" if not (see scenarioValidation.ts), but that is type-shape
+   * checking, not choosing a default; an absent/rejected value still falls
    * back to packages/web's own `DEFAULT_ASSUMPTIONS` in its
    * `scenarioToAssumptions`, the same plain fallback as every other field.
    */
@@ -158,9 +177,91 @@ export function encodeScenario(scenario: Scenario): string {
   return toBase64Url(new TextEncoder().encode(json));
 }
 
-export function decodeScenario(encoded: string): Scenario {
-  const json = new TextDecoder().decode(fromBase64Url(encoded));
-  return JSON.parse(json) as Scenario;
+/**
+ * One validator per top-level `Scenario` field — see scenarioValidation.ts's
+ * `FieldValidators`/`sanitizeKnownFields` for how this is applied. Keep this
+ * in sync with `Scenario` itself; a field added to the interface without a
+ * matching entry here type-checks fine (nothing enforces the two stay in
+ * sync beyond `FieldValidators<Scenario>`'s own mapped type, which DOES fail
+ * to compile if a key is missing) but is worth double-checking on review.
+ */
+const SCENARIO_FIELD_VALIDATORS: FieldValidators<Scenario> = {
+  candidates: isStringArray,
+  candidateFastMoveIds: isTuple2(isStringOrNull),
+  candidateChargedMoveIds: isTuple2(isStringOrNull),
+  candidateMegaBoostDisabled: isTuple2(isBoolean),
+  candidateMegaLevel: isTuple2(orNull(isMegaLevel)),
+  target: isString,
+  bossFastMoveId: isStringOrNull,
+  bossChargedMoveId: isStringOrNull,
+  level: isFiniteNumber,
+  ivs: isIVSpread,
+  dodgeModel: isDodgeBehavior,
+  dodgeFastAttacks: isBoolean,
+  candidateDodge: isTuple2(orNull(isDodgeBehavior)),
+  candidateDodgeFastAttacks: isTuple2(orNull(isBoolean)),
+  holdChargedMoveUntilSafe: isBoolean,
+  minFightLengthSeconds: isFiniteNumber,
+  partySize: isFiniteNumber,
+  teammateDps: isFiniteNumber,
+  matchingTeammateCount: isFiniteNumber,
+  bossChargedMoveFrequencySeconds: isFiniteNumber,
+  bossStartsPrimed: isBoolean,
+  bossStartingEnergyFraction: isFiniteNumber,
+  weather: isWeatherCondition,
+  showDetailedAssumptions: isBoolean,
+};
+
+/**
+ * The result of a defensive decode: `scenario` is always the best-effort
+ * result (never a lie about what actually decoded — a rejected field is
+ * simply absent from it, exactly like an older link that never had that
+ * field), and `rejectedFields` names anything that HAD to be dropped because
+ * its value didn't match — see scenarioValidation.ts's `SanitizeResult` doc
+ * comment for the full "absent vs. rejected" distinction. Returned instead
+ * of a bare `Scenario` specifically so a caller can't accidentally treat a
+ * half-restored scenario as if it were a clean one (CLAUDE.md's "the tool
+ * confidently asserting something untrue" failure mode) — `decodeScenario`
+ * below is the convenience wrapper for a caller that doesn't care.
+ */
+export interface ScenarioDecodeResult {
+  scenario: Scenario;
+  rejectedFields: string[];
+}
+
+/**
+ * Defensive decode: never throws. Returns `null` only when the payload is
+ * ENTIRELY unusable — invalid base64, base64 that doesn't decode to valid
+ * JSON, or JSON whose top-level value isn't even an object (an array,
+ * string, number, `null`, ...) — see scenarioValidation.ts's
+ * `tryParseJsonObject`. Anything short of that (a plain object, however
+ * sparse or however many of its fields are the wrong shape) decodes to a
+ * real, non-null result: every recognized field that fails its validator
+ * (`SCENARIO_FIELD_VALIDATORS`) is dropped rather than kept with the wrong
+ * shape, exactly like a field this build's `Scenario` doesn't declare at
+ * all — the same "older link predates this field" degrade this package has
+ * always relied on for a genuinely missing key, just applied per-field to a
+ * present-but-invalid one too. Unrecognized keys (e.g. `packages/web`'s
+ * `ComparatorScenario.candidateShadow` riding the same blob) are preserved
+ * untouched, never reported as rejected.
+ */
+export function decodeScenarioWithDiagnostics(encoded: string): ScenarioDecodeResult | null {
+  const payload = tryParseJsonObject(fromBase64Url, encoded);
+  if (payload === null) return null;
+  const { result, rejectedFields } = sanitizeKnownFields<Scenario>(payload, SCENARIO_FIELD_VALIDATORS);
+  return { scenario: result as unknown as Scenario, rejectedFields };
+}
+
+/**
+ * Convenience wrapper over `decodeScenarioWithDiagnostics` for a caller that
+ * only wants the (possibly partial, never throwing) `Scenario` and doesn't
+ * need to know WHICH fields, if any, were rejected. Prefer
+ * `decodeScenarioWithDiagnostics` for any UI that should tell the user "this
+ * link had settings we couldn't read" rather than silently presenting a
+ * partially-restored scenario as fully restored.
+ */
+export function decodeScenario(encoded: string): Scenario | null {
+  return decodeScenarioWithDiagnostics(encoded)?.scenario ?? null;
 }
 
 const SCENARIO_QUERY_PARAM = "s";
@@ -171,7 +272,23 @@ export function buildScenarioUrl(baseUrl: string, scenario: Scenario): string {
   return url.toString();
 }
 
+/**
+ * `null` covers BOTH "no `s` query param at all" and "an `s` param present
+ * but entirely unusable" (see `decodeScenarioWithDiagnostics`) — a caller
+ * already treats those two identically today (fall back to defaults), so
+ * collapsing them here is not a loss of information a caller needs. Use
+ * `parseScenarioFromUrlWithDiagnostics` instead when the caller DOES want to
+ * distinguish "nothing shared" from "something shared but unreadable," or
+ * wants to know which individual fields (if any) were rejected out of an
+ * otherwise-readable payload.
+ */
 export function parseScenarioFromUrl(url: string): Scenario | null {
   const encoded = new URL(url).searchParams.get(SCENARIO_QUERY_PARAM);
   return encoded ? decodeScenario(encoded) : null;
+}
+
+/** See `parseScenarioFromUrl`'s doc comment for when to prefer this over it. */
+export function parseScenarioFromUrlWithDiagnostics(url: string): ScenarioDecodeResult | null {
+  const encoded = new URL(url).searchParams.get(SCENARIO_QUERY_PARAM);
+  return encoded ? decodeScenarioWithDiagnostics(encoded) : null;
 }

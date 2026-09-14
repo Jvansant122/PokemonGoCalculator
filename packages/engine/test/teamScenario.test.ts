@@ -3,11 +3,14 @@ import { runTeamRaid, type TeamRaidSlotInput } from "../src/teamRaid.js";
 import {
   buildTeamScenarioUrl,
   decodeTeamScenario,
+  decodeTeamScenarioWithDiagnostics,
   encodeTeamScenario,
+  parseTeamScenarioFromUrl,
+  parseTeamScenarioFromUrlWithDiagnostics,
   type TeamScenario,
   type TeamScenarioSlot,
-  parseTeamScenarioFromUrl,
 } from "../src/teamScenario.js";
+import { toBase64Url } from "../src/scenario.js";
 import type { ChargedMove, FastMove, SpeciesDefinition } from "../src/types.js";
 
 const sampleTeamScenario: TeamScenario = {
@@ -63,7 +66,7 @@ describe("team scenario serialization", () => {
     // default would misrepresent an intentionally slower/more-cautious
     // scenario as a faster one.
     const withRevive: TeamScenario = { ...sampleTeamScenario, reviveCostSeconds: 13 };
-    expect(decodeTeamScenario(encodeTeamScenario(withRevive)).reviveCostSeconds).toBe(13);
+    expect(decodeTeamScenario(encodeTeamScenario(withRevive))!.reviveCostSeconds).toBe(13);
     expect(
       parseTeamScenarioFromUrl(buildTeamScenarioUrl("https://pogo-analyzer.example/team", withRevive))!.reviveCostSeconds,
     ).toBe(13);
@@ -74,12 +77,12 @@ describe("team scenario serialization", () => {
     // — folded onto TeamScenario 2026-09-10 (was a packages/web-only bolt-on
     // before this). Plain false default, no inverted-decode trick.
     const detailed: TeamScenario = { ...sampleTeamScenario, showDetailedAssumptions: true };
-    expect(decodeTeamScenario(encodeTeamScenario(detailed)).showDetailedAssumptions).toBe(true);
+    expect(decodeTeamScenario(encodeTeamScenario(detailed))!.showDetailedAssumptions).toBe(true);
     expect(
       parseTeamScenarioFromUrl(buildTeamScenarioUrl("https://pogo-analyzer.example/team", detailed))!.showDetailedAssumptions,
     ).toBe(true);
     // And the default itself round-trips as false, not omitted.
-    expect(decodeTeamScenario(encodeTeamScenario(sampleTeamScenario)).showDetailedAssumptions).toBe(false);
+    expect(decodeTeamScenario(encodeTeamScenario(sampleTeamScenario))!.showDetailedAssumptions).toBe(false);
   });
 
   it("round-trips a non-default swapCostSeconds independently of reviveCostSeconds", () => {
@@ -87,16 +90,16 @@ describe("team scenario serialization", () => {
     // revive) that must not collapse into one shared value on the wire.
     const custom: TeamScenario = { ...sampleTeamScenario, swapCostSeconds: 2, reviveCostSeconds: 13 };
     const decoded = decodeTeamScenario(encodeTeamScenario(custom));
-    expect(decoded.swapCostSeconds).toBe(2);
-    expect(decoded.reviveCostSeconds).toBe(13);
+    expect(decoded!.swapCostSeconds).toBe(2);
+    expect(decoded!.reviveCostSeconds).toBe(13);
   });
 
   it("round-trips the per-slot isMega flag and null (empty) slots", () => {
     const decoded = decodeTeamScenario(encodeTeamScenario(sampleTeamScenario));
-    expect(decoded.slots[0]!.isMega).toBe(true);
-    expect(decoded.slots[1]!.isMega).toBe(false);
-    expect(decoded.slots[2]!.speciesId).toBeNull();
-    expect(decoded.slots).toHaveLength(6);
+    expect(decoded!.slots[0]!.isMega).toBe(true);
+    expect(decoded!.slots[1]!.isMega).toBe(false);
+    expect(decoded!.slots[2]!.speciesId).toBeNull();
+    expect(decoded!.slots).toHaveLength(6);
   });
 
   it("round-trips a non-default per-slot megaLevel rather than silently reverting to no Mega Level assumed", () => {
@@ -109,8 +112,8 @@ describe("team scenario serialization", () => {
       ],
     };
     const decoded = decodeTeamScenario(encodeTeamScenario(withMegaLevel));
-    expect(decoded.slots[0]!.megaLevel).toBe("super-max");
-    expect(decoded.slots[1]!.megaLevel).toBeNull();
+    expect(decoded!.slots[0]!.megaLevel).toBe("super-max");
+    expect(decoded!.slots[1]!.megaLevel).toBeNull();
     expect(
       parseTeamScenarioFromUrl(buildTeamScenarioUrl("https://pogo-analyzer.example/team", withMegaLevel))!.slots[0]!.megaLevel,
     ).toBe("super-max");
@@ -123,8 +126,8 @@ describe("team scenario serialization", () => {
       // absent really means "use the shared spread," not a hidden default.
       expect(decodeTeamScenario(encodeTeamScenario(sampleTeamScenario))).toEqual(sampleTeamScenario);
       const decoded = decodeTeamScenario(encodeTeamScenario(sampleTeamScenario));
-      expect(decoded.slots[0]).not.toHaveProperty("level");
-      expect(decoded.slots[0]).not.toHaveProperty("ivs");
+      expect(decoded!.slots[0]).not.toHaveProperty("level");
+      expect(decoded!.slots[0]).not.toHaveProperty("ivs");
     });
 
     it("round-trips a single overriding slot in a roster of otherwise-shared-level slots", () => {
@@ -136,11 +139,11 @@ describe("team scenario serialization", () => {
         ],
       };
       const decoded = decodeTeamScenario(encodeTeamScenario(withOneOverride));
-      expect(decoded.slots[0]!.level).toBe(40);
-      expect(decoded.slots[0]!.ivs).toEqual({ attack: 0, defense: 15, stamina: 15 });
+      expect(decoded!.slots[0]!.level).toBe(40);
+      expect(decoded!.slots[0]!.ivs).toEqual({ attack: 0, defense: 15, stamina: 15 });
       // Every other slot stays fully absent — the override is per-slot, not
       // roster-wide.
-      for (const slot of decoded.slots.slice(1)) {
+      for (const slot of decoded!.slots.slice(1)) {
         expect(slot.level).toBeUndefined();
         expect(slot.ivs).toBeUndefined();
       }
@@ -159,7 +162,7 @@ describe("team scenario serialization", () => {
         })),
       };
       const decoded = decodeTeamScenario(encodeTeamScenario(allOverridden));
-      decoded.slots.forEach((slot, i) => {
+      decoded!.slots.forEach((slot, i) => {
         expect(slot.level).toBe(20 + i);
         expect(slot.ivs).toEqual({ attack: i, defense: 15 - i, stamina: 10 });
       });
@@ -179,12 +182,12 @@ describe("team scenario serialization", () => {
       };
 
       const decodedLevelOnly = decodeTeamScenario(encodeTeamScenario(levelOnly));
-      expect(decodedLevelOnly.slots[0]!.level).toBe(45);
-      expect(decodedLevelOnly.slots[0]!.ivs).toBeUndefined();
+      expect(decodedLevelOnly!.slots[0]!.level).toBe(45);
+      expect(decodedLevelOnly!.slots[0]!.ivs).toBeUndefined();
 
       const decodedIvsOnly = decodeTeamScenario(encodeTeamScenario(ivsOnly));
-      expect(decodedIvsOnly.slots[0]!.level).toBeUndefined();
-      expect(decodedIvsOnly.slots[0]!.ivs).toEqual({ attack: 1, defense: 2, stamina: 3 });
+      expect(decodedIvsOnly!.slots[0]!.level).toBeUndefined();
+      expect(decodedIvsOnly!.slots[0]!.ivs).toEqual({ attack: 1, defense: 2, stamina: 3 });
     });
 
     it("round-trips a mixed roster (some slots overridden, some not, some empty) through a full shareable URL", () => {
@@ -205,6 +208,135 @@ describe("team scenario serialization", () => {
       expect(decoded!.slots[2]!.level).toBe(30);
       expect(decoded!.slots[2]!.ivs).toBeUndefined();
     });
+  });
+
+  // --- Defensive decode: corrupt/partial payloads (2026-09-14) ------------
+  //
+  // Sibling coverage to scenario.test.ts's own section — see
+  // scenarioValidation.ts's doc comment for the shared design, and this
+  // file's own sanitizeSlots doc comment (teamScenario.ts) for what's
+  // specific to the array-valued `slots` field.
+
+  describe("entirely unusable payloads degrade to null rather than throwing", () => {
+    it("invalid base64 (bad alphabet)", () => {
+      expect(() => decodeTeamScenario("not valid base64!!!")).not.toThrow();
+      expect(decodeTeamScenario("not valid base64!!!")).toBeNull();
+      expect(decodeTeamScenarioWithDiagnostics("not valid base64!!!")).toBeNull();
+    });
+
+    it("base64 that decodes to bytes which aren't valid JSON", () => {
+      expect(() => decodeTeamScenario("AAAAAAAAAA")).not.toThrow();
+      expect(decodeTeamScenario("AAAAAAAAAA")).toBeNull();
+    });
+
+    it("valid JSON whose top-level value isn't an object", () => {
+      const arrayEncoded = toBase64Url(new TextEncoder().encode(JSON.stringify([1, 2, 3])));
+      expect(decodeTeamScenario(arrayEncoded)).toBeNull();
+    });
+
+    it("parseTeamScenarioFromUrl returns null for an unusable ?ts= the same way it does for a missing one", () => {
+      expect(parseTeamScenarioFromUrl("https://pogo-analyzer.example/team?ts=AAAAAAAAAA")).toBeNull();
+    });
+  });
+
+  it("a structurally-valid-but-wrong-shape payload decodes cleanly rather than throwing, with every recognized field absent", () => {
+    const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify({ foo: "bar" })));
+    expect(() => decodeTeamScenario(encoded)).not.toThrow();
+    const result = decodeTeamScenarioWithDiagnostics(encoded);
+    expect(result).not.toBeNull();
+    expect(result!.scenario.target).toBeUndefined();
+    expect(result!.scenario.slots).toBeUndefined();
+    expect(result!.rejectedFields).toEqual([]);
+  });
+
+  it("a field present with the wrong TYPE is dropped like a missing one, while every other valid field survives", () => {
+    const raw = { ...sampleTeamScenario, raidTimerSeconds: "a lot", bossStartsPrimed: "yes" } as unknown as Record<string, unknown>;
+    const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(raw)));
+
+    const result = decodeTeamScenarioWithDiagnostics(encoded)!;
+    expect(result.scenario.raidTimerSeconds).toBeUndefined();
+    expect(result.scenario.bossStartsPrimed).toBeUndefined();
+    expect(result.rejectedFields.sort()).toEqual(["bossStartsPrimed", "raidTimerSeconds"]);
+    // Everything else on the same payload, including the full slots array,
+    // decoded cleanly.
+    expect(result.scenario.target).toBe(sampleTeamScenario.target);
+    expect(result.scenario.slots).toEqual(sampleTeamScenario.slots);
+  });
+
+  describe("defensive decode of the slots array", () => {
+    it("a slots array of the wrong length is rejected as a whole (position mapping can't be salvaged) but every other field still decodes", () => {
+      const raw = { ...sampleTeamScenario, slots: sampleTeamScenario.slots.slice(0, 3) } as unknown as Record<string, unknown>;
+      const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(raw)));
+      const result = decodeTeamScenarioWithDiagnostics(encoded)!;
+      expect(result.scenario.slots).toBeUndefined();
+      expect(result.rejectedFields).toEqual(["slots"]);
+      expect(result.scenario.target).toBe(sampleTeamScenario.target);
+    });
+
+    it("one malformed slot doesn't cost the other five — only the bad field(s) in the bad slot are dropped", () => {
+      const raw = {
+        ...sampleTeamScenario,
+        slots: [
+          sampleTeamScenario.slots[0],
+          { ...sampleTeamScenario.slots[1], isMega: "definitely not a boolean" },
+          ...sampleTeamScenario.slots.slice(2),
+        ],
+      };
+      const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(raw)));
+      const result = decodeTeamScenarioWithDiagnostics(encoded)!;
+      expect(result.scenario.slots).toHaveLength(6);
+      expect(result.scenario.slots![0]).toEqual(sampleTeamScenario.slots[0]);
+      expect(result.scenario.slots![1]!.isMega).toBeUndefined();
+      expect(result.scenario.slots![1]!.speciesId).toBe("fragile");
+      expect(result.scenario.slots![2]).toEqual(sampleTeamScenario.slots[2]);
+      expect(result.rejectedFields).toEqual(["slots[1].isMega"]);
+    });
+
+    it("a slot entry that isn't even an object decodes to an all-fields-absent slot rather than throwing", () => {
+      const raw = {
+        ...sampleTeamScenario,
+        slots: [null, "garbage", 5, ...sampleTeamScenario.slots.slice(3)],
+      };
+      const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(raw)));
+      expect(() => decodeTeamScenarioWithDiagnostics(encoded)).not.toThrow();
+      const result = decodeTeamScenarioWithDiagnostics(encoded)!;
+      expect(result.scenario.slots).toHaveLength(6);
+      expect(result.scenario.slots![0]!.speciesId).toBeUndefined();
+      expect(result.scenario.slots![1]!.speciesId).toBeUndefined();
+      expect(result.scenario.slots![2]!.speciesId).toBeUndefined();
+      expect(result.scenario.slots![3]).toEqual(sampleTeamScenario.slots[3]);
+      expect(result.rejectedFields).toEqual(["slots[0]", "slots[1]", "slots[2]"]);
+    });
+
+    it("preserves an unrecognized per-slot extension field (e.g. packages/web's isShadow/isBestBuddy) untouched", () => {
+      // TeamRaidView.tsx's TeamScenarioSlotWithShadow adds isShadow/
+      // isBestBuddy directly onto each slot object, riding the same blob —
+      // see that file's own doc comment. Must survive exactly like
+      // ComparatorScenario.candidateShadow does at the top level.
+      const raw = {
+        ...sampleTeamScenario,
+        slots: [
+          { ...sampleTeamScenario.slots[0], isShadow: true, isBestBuddy: true },
+          ...sampleTeamScenario.slots.slice(1),
+        ],
+      };
+      const encoded = toBase64Url(new TextEncoder().encode(JSON.stringify(raw)));
+      const result = decodeTeamScenarioWithDiagnostics(encoded)!;
+      expect(result.rejectedFields).toEqual([]);
+      const slot0 = result.scenario.slots![0] as unknown as { isShadow: boolean; isBestBuddy: boolean };
+      expect(slot0.isShadow).toBe(true);
+      expect(slot0.isBestBuddy).toBe(true);
+    });
+  });
+
+  it("a valid team scenario is completely unaffected by the new defensive decoding (zero rejected fields, byte-identical result)", () => {
+    const encoded = encodeTeamScenario(sampleTeamScenario);
+    const result = decodeTeamScenarioWithDiagnostics(encoded)!;
+    expect(result.rejectedFields).toEqual([]);
+    expect(result.scenario).toEqual(sampleTeamScenario);
+    expect(
+      parseTeamScenarioFromUrlWithDiagnostics(buildTeamScenarioUrl("https://pogo-analyzer.example/team", sampleTeamScenario)),
+    ).toEqual({ scenario: sampleTeamScenario, rejectedFields: [] });
   });
 });
 
