@@ -27,15 +27,22 @@ import {
 import { assumptionsToScenario as rosterAssumptionsToScenario, DEFAULT_ASSUMPTIONS as ROSTER_DEFAULTS } from "./RosterView.js";
 import { decodeRosterScenarioWithDiagnostics, parseRosterScenarioFromUrl, type RosterScenario } from "./rosterScenario.js";
 import {
+  assumptionsToScenario as comparatorAssumptionsToScenario,
   DEFAULT_ASSUMPTIONS as COMPARATOR_DEFAULTS,
+  normalizeAssumptions as normalizeComparatorAssumptions,
   scenarioToAssumptions as comparatorScenarioToAssumptions,
   type ComparatorScenario,
 } from "./ComparatorView.js";
 import {
+  assumptionsToTeamScenario,
   DEFAULT_TEAM_ASSUMPTIONS,
+  normalizeTeamAssumptions,
   teamScenarioToAssumptions,
   type TeamScenarioWithShadow,
 } from "./TeamRaidView.js";
+import { runComparatorScenario } from "./run/runComparator.js";
+import { runTeamRaidScenario } from "./run/runTeamRaid.js";
+import { speciesRegistry } from "./registry.js";
 
 /**
  * Mirrors packages/engine's test/scenario.test.ts (`decodeScenarioWithDiagnostics`
@@ -60,6 +67,13 @@ const ivSample = ivAssumptionsToScenario(IV_DEFAULTS);
 const adbSample = adbAssumptionsToScenario(ADB_DEFAULTS);
 const puSample = puAssumptionsToScenario(PU_DEFAULTS);
 const rosterSample = rosterAssumptionsToScenario(ROSTER_DEFAULTS);
+const comparatorSample = comparatorAssumptionsToScenario(COMPARATOR_DEFAULTS);
+const teamSample = assumptionsToTeamScenario(DEFAULT_TEAM_ASSUMPTIONS);
+
+function expectFiniteNumber(value: unknown, label: string) {
+  expect(typeof value, label).toBe("number");
+  expect(Number.isFinite(value as number), label).toBe(true);
+}
 
 describe("web-owned scenario codecs never throw on malformed input", () => {
   it.each([
@@ -308,6 +322,182 @@ describe("web-owned scenario codecs never throw on malformed input", () => {
     expect(assumptions.dodge).toEqual(PU_DEFAULTS.dodge);
     expect(assumptions.slots).toHaveLength(PU_DEFAULTS.slots.length);
   });
+});
+
+/**
+ * ComparatorScenario/TeamScenarioWithShadow's own web-owned extension fields
+ * (candidateShadow/bossChargedMoveCadence/friendshipLevel/candidateIsBestBuddy
+ * on the Comparator; bossChargedMoveCadence/friendshipLevel/
+ * bossMaxHpOverrideEnabled/reselectAfterWipeEnabled plus each slot's own
+ * isShadow/isBestBuddy on Team Raid) ride the SAME JSON blob the engine's own
+ * decodeScenarioWithDiagnostics/decodeTeamScenarioWithDiagnostics decode, but
+ * neither decoder validates them — they're invisible to it BY DESIGN (see
+ * ComparatorScenario's own doc comment: unrecognized keys are preserved
+ * untouched so this extension mechanism keeps working, and that decoder
+ * behavior must NOT change). Before sanitizeComparatorExtensionFields/
+ * sanitizeTeamScenarioExtensionFields existed, a wrong-TYPED value here (not
+ * just an absent one — `??` only guards null/undefined) sailed straight
+ * through scenarioToAssumptions/teamScenarioToAssumptions and reached damage
+ * math as NaN (e.g. `FRIENDSHIP_ATTACK_BONUS_MULTIPLIER["bogus"]` is
+ * `undefined`, and `undefined * x` is `NaN` — see damage.ts). Each case below
+ * confirms three things: (1) the engine decoder genuinely did NOT strip the
+ * bad value itself — preserved raw, wrong type and all, proving the bug's
+ * precondition still holds and this test isn't accidentally exercising a
+ * different code path; (2) scenarioToAssumptions/teamScenarioToAssumptions
+ * drops it back to the same default an absent field would produce; and (3),
+ * the actual harm this whole feature is about — running the resulting
+ * assumptions through the real engine produces finite numbers, never NaN.
+ */
+describe("web-owned extension fields on ComparatorScenario/TeamScenarioWithShadow survive a wrong-typed value without propagating NaN", () => {
+  it("Comparator: friendshipLevel wrong-typed value is dropped, not passed to damage math as NaN", () => {
+    const raw = { ...comparatorSample, friendshipLevel: "bogus" } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=comparator&s=${encode(raw)}`;
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).friendshipLevel).toBe("bogus");
+    const assumptions = normalizeComparatorAssumptions(comparatorScenarioToAssumptions(decoded!));
+    expect(assumptions.friendshipLevel).toBe(COMPARATOR_DEFAULTS.friendshipLevel);
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.resultsError).toBeNull();
+    for (const c of result.results!) {
+      expectFiniteNumber(c.meanTotalDamage, "meanTotalDamage");
+      expectFiniteNumber(c.meanSecondsSurvived, "meanSecondsSurvived");
+    }
+  });
+
+  it("Comparator: candidateShadow wrong-typed (non-tuple) value is dropped", () => {
+    const raw = { ...comparatorSample, candidateShadow: "yes" } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=comparator&s=${encode(raw)}`;
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).candidateShadow).toBe("yes");
+    const assumptions = normalizeComparatorAssumptions(comparatorScenarioToAssumptions(decoded!));
+    expect(assumptions.candidateShadow).toEqual([false, false]);
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.resultsError).toBeNull();
+    for (const c of result.results!) expectFiniteNumber(c.meanTotalDamage, "meanTotalDamage");
+  });
+
+  it("Comparator: bossChargedMoveCadence wrong-typed (numeric) value is dropped", () => {
+    const raw = { ...comparatorSample, bossChargedMoveCadence: 42 } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=comparator&s=${encode(raw)}`;
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).bossChargedMoveCadence).toBe(42);
+    const assumptions = normalizeComparatorAssumptions(comparatorScenarioToAssumptions(decoded!));
+    expect(assumptions.bossChargedMoveCadence).toBe(COMPARATOR_DEFAULTS.bossChargedMoveCadence);
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.resultsError).toBeNull();
+    for (const c of result.results!) expectFiniteNumber(c.meanTotalDamage, "meanTotalDamage");
+  });
+
+  it("Comparator: candidateIsBestBuddy wrong-typed (non-boolean elements) value is dropped", () => {
+    const raw = { ...comparatorSample, candidateIsBestBuddy: ["yes", "no"] } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=comparator&s=${encode(raw)}`;
+    const decoded = parseScenarioFromUrl(url) as ComparatorScenario | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).candidateIsBestBuddy).toEqual(["yes", "no"]);
+    const assumptions = normalizeComparatorAssumptions(comparatorScenarioToAssumptions(decoded!));
+    expect(assumptions.candidateIsBestBuddy).toEqual(COMPARATOR_DEFAULTS.candidateIsBestBuddy);
+    const result = runComparatorScenario(assumptions, speciesRegistry);
+    expect(result.resultsError).toBeNull();
+    for (const c of result.results!) expectFiniteNumber(c.meanTotalDamage, "meanTotalDamage");
+  });
+
+  it("Team Raid: friendshipLevel wrong-typed value is dropped, not passed to damage math as NaN", () => {
+    const raw = { ...teamSample, friendshipLevel: "bogus" } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(raw)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).friendshipLevel).toBe("bogus");
+    const assumptions = normalizeTeamAssumptions(teamScenarioToAssumptions(decoded!));
+    expect(assumptions.friendshipLevel).toBe(DEFAULT_TEAM_ASSUMPTIONS.friendshipLevel);
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expectFiniteNumber(result.bossHp, "bossHp");
+    expectFiniteNumber(result.data!.wipeCount, "wipeCount");
+  }, 20_000);
+
+  it("Team Raid: bossChargedMoveCadence wrong-typed (numeric) value is dropped", () => {
+    const raw = { ...teamSample, bossChargedMoveCadence: 42 } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(raw)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).bossChargedMoveCadence).toBe(42);
+    const assumptions = normalizeTeamAssumptions(teamScenarioToAssumptions(decoded!));
+    expect(assumptions.bossChargedMoveCadence).toBe(DEFAULT_TEAM_ASSUMPTIONS.bossChargedMoveCadence);
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expectFiniteNumber(result.bossHp, "bossHp");
+  }, 20_000);
+
+  it("Team Raid: bossMaxHpOverrideEnabled wrong-typed value is dropped", () => {
+    const raw = { ...teamSample, bossMaxHpOverrideEnabled: "yes" } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(raw)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).bossMaxHpOverrideEnabled).toBe("yes");
+    const assumptions = normalizeTeamAssumptions(teamScenarioToAssumptions(decoded!));
+    expect(assumptions.bossMaxHpOverrideEnabled).toBe(DEFAULT_TEAM_ASSUMPTIONS.bossMaxHpOverrideEnabled);
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expectFiniteNumber(result.bossHp, "bossHp");
+  }, 20_000);
+
+  it("Team Raid: reselectAfterWipeEnabled wrong-typed value is dropped", () => {
+    const raw = { ...teamSample, reselectAfterWipeEnabled: "yes" } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(raw)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded as unknown as Record<string, unknown>).reselectAfterWipeEnabled).toBe("yes");
+    const assumptions = normalizeTeamAssumptions(teamScenarioToAssumptions(decoded!));
+    expect(assumptions.reselectAfterWipeEnabled).toBe(DEFAULT_TEAM_ASSUMPTIONS.reselectAfterWipeEnabled);
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expectFiniteNumber(result.bossHp, "bossHp");
+  }, 20_000);
+
+  it("Team Raid: a slot's own isShadow wrong-typed value is dropped without costing the rest of that slot", () => {
+    // Deliberately slot index 1 (machamp), NOT slot 0 (mewtwo-mega-x) —
+    // slot 0's species carries a mega/primal boost, and
+    // normalizeTeamAssumptions ALREADY forces isShadow back to false for any
+    // boost-carrying species regardless of this sanitizer (shadow and
+    // mega/primal are mutually exclusive, see that function's own doc
+    // comment) — testing against slot 0 would pass even with this feature's
+    // sanitizer completely removed, a false-positive live-confirmed while
+    // writing this test. Slot 1 has no boost mechanic, so its isShadow only
+    // ever reaches `false` here via sanitizeTeamScenarioExtensionFields.
+    const rawSlots = teamSample.slots.map((slot, i) => (i === 1 ? { ...slot, isShadow: "yes" } : slot));
+    const raw = { ...teamSample, slots: rawSlots } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(raw)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded!.slots[1] as unknown as Record<string, unknown>).isShadow).toBe("yes");
+    // The rest of slot 1 (e.g. its species id) must survive untouched — only
+    // the one bad field is dropped, same "per-field, not all-or-nothing"
+    // discipline as every other sanitizer in this project.
+    expect(decoded!.slots[1]!.speciesId).toBe(teamSample.slots[1]!.speciesId);
+    const assumptions = normalizeTeamAssumptions(teamScenarioToAssumptions(decoded!));
+    expect(assumptions.slots[1]!.isShadow).toBe(false);
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expectFiniteNumber(result.bossHp, "bossHp");
+  }, 20_000);
+
+  it("Team Raid: a slot's own isBestBuddy wrong-typed value is dropped without costing the rest of that slot", () => {
+    const rawSlots = teamSample.slots.map((slot, i) => (i === 0 ? { ...slot, isBestBuddy: "yes" } : slot));
+    const raw = { ...teamSample, slots: rawSlots } as unknown as Record<string, unknown>;
+    const url = `https://pogo-analyzer.example/?view=team-raid&ts=${encode(raw)}`;
+    const decoded = parseTeamScenarioFromUrl(url) as TeamScenarioWithShadow | null;
+    expect(decoded).not.toBeNull();
+    expect((decoded!.slots[0] as unknown as Record<string, unknown>).isBestBuddy).toBe("yes");
+    expect(decoded!.slots[0]!.speciesId).toBe(teamSample.slots[0]!.speciesId);
+    const assumptions = normalizeTeamAssumptions(teamScenarioToAssumptions(decoded!));
+    expect(assumptions.slots[0]!.isBestBuddy).toBe(false);
+    const result = runTeamRaidScenario(assumptions, speciesRegistry);
+    expect(result.error).toBeNull();
+    expectFiniteNumber(result.bossHp, "bossHp");
+  }, 20_000);
 });
 
 // Referenced only for type-level assurance that the sample builders above

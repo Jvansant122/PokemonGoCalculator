@@ -2,13 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import {
   buildScenarioUrl,
   convertUptimeToTeamDamage,
+  isBoolean,
+  isTuple2,
   parseScenarioFromUrl,
+  sanitizeKnownFields,
+  type FieldValidators,
   type FriendshipLevel,
   type Scenario,
   type SpeciesDefinition,
 } from "@pogo-analyzer/engine";
 import { AssumptionPanel, type Assumptions } from "./AssumptionPanel.js";
 import { BOSS_CADENCE_HINT, type BossChargedMoveCadence } from "./bossCadence.js";
+import { isBossChargedMoveCadence, isFriendshipLevel } from "./webScenarioValidation.js";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import { BossMovesetSweep } from "./BossMovesetSweep.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
@@ -128,6 +133,51 @@ export interface ComparatorScenario extends Scenario {
   candidateIsBestBuddy?: [boolean, boolean];
 }
 
+/**
+ * The four web-owned extension fields above ride on the exact same JSON blob
+ * `decodeScenarioWithDiagnostics` decodes, but that decoder validates only
+ * the fields the ENGINE's own `Scenario` declares — these four are
+ * deliberately invisible to it (see `ComparatorScenario`'s own doc comment:
+ * unrecognized keys are preserved untouched, on purpose, so this extension
+ * mechanism keeps working). That means a wrong-TYPED value here (e.g.
+ * `friendshipLevel: "bogus"`, not just an absent one) previously sailed
+ * straight through `scenarioToAssumptions`'s `??` fallbacks below — `??`
+ * only guards `null`/`undefined`, not a wrong-shaped present value — and
+ * propagated as NaN through every damage number on the page (a bogus
+ * `friendshipLevel` string looks up as `undefined` in
+ * `FRIENDSHIP_ATTACK_BONUS_MULTIPLIER`, and `undefined * x` is `NaN`).
+ * `sanitizeComparatorExtensionFields` below runs THIS validation, entirely
+ * in `packages/web` — never touching `decodeScenarioWithDiagnostics` itself,
+ * which must keep preserving unrecognized keys for the reason above.
+ */
+const COMPARATOR_EXTENSION_FIELD_VALIDATORS: FieldValidators<
+  Pick<ComparatorScenario, "candidateShadow" | "bossChargedMoveCadence" | "friendshipLevel" | "candidateIsBestBuddy">
+> = {
+  candidateShadow: isTuple2(isBoolean),
+  bossChargedMoveCadence: isBossChargedMoveCadence,
+  friendshipLevel: isFriendshipLevel,
+  candidateIsBestBuddy: isTuple2(isBoolean),
+};
+
+/**
+ * Drops any of the four web-owned extension fields whose value is PRESENT
+ * but the wrong type — see COMPARATOR_EXTENSION_FIELD_VALIDATORS just above.
+ * A dropped field reads as "absent" to every `??` fallback in
+ * `scenarioToAssumptions` below, the same degrade this project already
+ * applies to every ENGINE-owned field via `decodeScenarioWithDiagnostics`
+ * — this just extends that same treatment to the four fields that decoder
+ * can't see. Called from `scenarioToAssumptions` itself (not just the UI's
+ * own decode path) so `scripts/run-scenario.ts` — which calls
+ * `scenarioToAssumptions` directly — gets the identical protection; the CLI
+ * and the UI must never diverge on what a share link means.
+ */
+function sanitizeComparatorExtensionFields(scenario: ComparatorScenario): ComparatorScenario {
+  const { result } = sanitizeKnownFields<
+    Pick<ComparatorScenario, "candidateShadow" | "bossChargedMoveCadence" | "friendshipLevel" | "candidateIsBestBuddy">
+  >(scenario as unknown as Record<string, unknown>, COMPARATOR_EXTENSION_FIELD_VALIDATORS);
+  return result as unknown as ComparatorScenario;
+}
+
 export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
   return {
     candidates: [a.candidateAId, a.candidateBId],
@@ -161,7 +211,13 @@ export function assumptionsToScenario(a: Assumptions): ComparatorScenario {
   };
 }
 
-export function scenarioToAssumptions(s: ComparatorScenario): Assumptions {
+export function scenarioToAssumptions(rawScenario: ComparatorScenario): Assumptions {
+  // See sanitizeComparatorExtensionFields's own doc comment — this must run
+  // BEFORE any of the `??` fallbacks below, since `??` only guards
+  // null/undefined, not a present-but-wrong-typed value (e.g.
+  // friendshipLevel: "bogus"), which previously sailed straight through and
+  // reached damage math as NaN.
+  const s = sanitizeComparatorExtensionFields(rawScenario);
   return {
     // `?.` guards `s.candidates` itself being absent (a corrupted/truncated
     // link that still decodes to SOME object, but not this tab's shape) —

@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   buildTeamScenarioUrl,
+  isBoolean,
   MAX_TEAM_RAID_SLOTS,
   parseTeamScenarioFromUrl,
+  sanitizeKnownFields,
+  type FieldValidators,
   type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
@@ -12,6 +15,7 @@ import {
 import { TeamAssumptionPanel, emptyTeamSlot, type TeamAssumptions, type TeamSlotAssumption } from "./TeamAssumptionPanel.js";
 import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
 import { BOSS_CADENCE_HINT, type BossChargedMoveCadence } from "./bossCadence.js";
+import { isBossChargedMoveCadence, isFriendshipLevel } from "./webScenarioValidation.js";
 import { FRIENDSHIP_HINT } from "./FriendshipSelect.js";
 import { BEST_BUDDY_HINT } from "./bestBuddyHint.js";
 import { CollapsibleSection } from "./CollapsibleSection.js";
@@ -195,6 +199,70 @@ export interface TeamScenarioWithShadow extends Omit<TeamScenario, "slots"> {
   reselectAfterWipeEnabled?: boolean;
 }
 
+/**
+ * The four TOP-LEVEL web-owned extension fields above ride on the same JSON
+ * blob `decodeTeamScenarioWithDiagnostics` decodes, but that decoder
+ * validates only fields the ENGINE's own `TeamScenario` declares — these
+ * four (and, below, each slot's own `isShadow`/`isBestBuddy`) are
+ * deliberately invisible to it, same "preserve unrecognized keys" contract
+ * as ComparatorView.tsx's identical situation — see that file's
+ * `sanitizeComparatorExtensionFields` for the full "why," including the
+ * NaN-propagation failure mode a wrong-typed value (not just an absent one)
+ * caused before this existed.
+ */
+const TEAM_SCENARIO_EXTENSION_FIELD_VALIDATORS: FieldValidators<
+  Pick<TeamScenarioWithShadow, "bossChargedMoveCadence" | "friendshipLevel" | "bossMaxHpOverrideEnabled" | "reselectAfterWipeEnabled">
+> = {
+  bossChargedMoveCadence: isBossChargedMoveCadence,
+  friendshipLevel: isFriendshipLevel,
+  bossMaxHpOverrideEnabled: isBoolean,
+  reselectAfterWipeEnabled: isBoolean,
+};
+
+/**
+ * Each slot's own `isShadow`/`isBestBuddy` are PER-SLOT web-owned extension
+ * fields — invisible to `TEAM_SCENARIO_SLOT_VALIDATORS` (packages/engine's
+ * teamScenario.ts) for the same reason as the top-level fields above, so
+ * they need this separate validation pass too.
+ */
+const TEAM_SCENARIO_SLOT_EXTENSION_FIELD_VALIDATORS: FieldValidators<
+  Pick<TeamScenarioSlotWithShadow, "isShadow" | "isBestBuddy">
+> = {
+  isShadow: isBoolean,
+  isBestBuddy: isBoolean,
+};
+
+/**
+ * Drops any of the six web-owned extension fields (four top-level, two
+ * per-slot) whose value is PRESENT but the wrong type — see the two
+ * validator tables just above. A dropped field reads as "absent" to every
+ * `??` fallback in `teamScenarioToAssumptions` below, the same degrade this
+ * project already applies to every ENGINE-owned field. Called from
+ * `teamScenarioToAssumptions` itself (not just the UI's own decode path) so
+ * `scripts/run-scenario.ts` — which calls `teamScenarioToAssumptions`
+ * directly — gets the identical protection; the CLI and the UI must never
+ * diverge on what a share link means.
+ */
+function sanitizeTeamScenarioExtensionFields(scenario: TeamScenarioWithShadow): TeamScenarioWithShadow {
+  const { result } = sanitizeKnownFields<
+    Pick<TeamScenarioWithShadow, "bossChargedMoveCadence" | "friendshipLevel" | "bossMaxHpOverrideEnabled" | "reselectAfterWipeEnabled">
+  >(scenario as unknown as Record<string, unknown>, TEAM_SCENARIO_EXTENSION_FIELD_VALIDATORS);
+  // `?? []` guards `scenario.slots` itself being absent — the engine's own
+  // decodeTeamScenarioWithDiagnostics already rejects the WHOLE `slots`
+  // field (not per-entry) when the raw value isn't an array of exactly
+  // MAX_TEAM_RAID_SLOTS entries, so an undefined `slots` here is a real,
+  // already-handled case, not a bug — teamScenarioToAssumptions below
+  // already treats an empty array identically to an absent one.
+  const slots = (scenario.slots ?? []).map((slot) => {
+    const { result: slotResult } = sanitizeKnownFields<Pick<TeamScenarioSlotWithShadow, "isShadow" | "isBestBuddy">>(
+      slot as unknown as Record<string, unknown>,
+      TEAM_SCENARIO_SLOT_EXTENSION_FIELD_VALIDATORS,
+    );
+    return slotResult as unknown as TeamScenarioSlotWithShadow;
+  });
+  return { ...(result as unknown as TeamScenarioWithShadow), slots };
+}
+
 export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithShadow {
   return {
     slots: a.slots.map((s) => ({
@@ -231,7 +299,13 @@ export function assumptionsToTeamScenario(a: TeamAssumptions): TeamScenarioWithS
   };
 }
 
-export function teamScenarioToAssumptions(s: TeamScenarioWithShadow): TeamAssumptions {
+export function teamScenarioToAssumptions(rawScenario: TeamScenarioWithShadow): TeamAssumptions {
+  // See sanitizeTeamScenarioExtensionFields's own doc comment — this must
+  // run BEFORE any of the `??` fallbacks below, since `??` only guards
+  // null/undefined, not a present-but-wrong-typed value (e.g.
+  // friendshipLevel: "bogus"), which previously sailed straight through and
+  // reached damage math as NaN.
+  const s = sanitizeTeamScenarioExtensionFields(rawScenario);
   // `?? []` guards `s.slots` itself being absent (a corrupted/truncated link
   // that still decodes to SOME object, but not this tab's shape) — `.map` on
   // `undefined` throws outright, same failure mode as
