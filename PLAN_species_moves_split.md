@@ -186,8 +186,18 @@ different silent failure:
    and assert the moves chunk is reachable only via `dynamicImports`. *The deferral check*, and the
    one that catches "someone changed `import()` to a static import and the saving quietly
    evaporated while every test passed."
-3. **Entry static-closure gzip ≤ ~210 KB.** The headline number; pin it with the measured value and
-   date in a comment.
+3. **Cold-load closure for the default tab ≤ budget.** The headline number; pin it with the measured
+   value and date in a comment.
+
+   ⚠️ **CORRECTED 2026-09-14 by Stage 0 — the original wording of this assertion was broken.** It
+   said "sum of gzip over the *entry's* static-import closure", which measures **48 KB** and would
+   have passed trivially forever *without ever seeing the species payload*. The manifest entry
+   (`index.html`) has **no static imports at all** — only 7 dynamic ones. The 233 KB species-bearing
+   chunk (`_urlUtils-*.js`) is statically imported by all seven **view** chunks and several shared
+   chunks, never by the entry, so it arrives as a static dependency of whichever lazy view loads
+   first. The correct metric is **entry closure ∪ the default view's static closure**, plus their
+   CSS. Measured 2026-09-14 at HEAD: **Comparator 316 KB**, Power-Up Optimizer 366 KB, Roster
+   301 KB. Assert against the Comparator number — it is the default landing tab.
 4. **Total raw bytes across all emitted JS ≤ budget.** Catches duplication anywhere.
 
 ⚠️ **Wiring trap.** `npm run verify` is `test && typecheck && lint && check && build` — `check` runs
@@ -199,12 +209,32 @@ Append it after the build instead.
 
 ## 4. Staging — four stages, each green and revertable
 
-### Stage 0 — baseline and spikes (no product code)
-Build, record `dist/assets` raw+gzip, and **the worker chunk's exact raw size** (Guard 2's budgets
-pin to these — real numbers, not guesses). Confirm the worker chunk appears in
-`dist/.vite/manifest.json` after adding `build.manifest: true`; if not, adopt a filename-glob
-fallback. Confirm `diff-normalized.mjs` (dispatches on filename at ~`:320`/`:351`) tolerates two new
-files in `data/normalized/`.
+### Stage 0 — baseline and spikes — ✅ DONE 2026-09-14
+
+`build.manifest: true` added to `packages/web/vite.config.ts` with a comment explaining that
+nothing in the app reads it. Measured at HEAD:
+
+| quantity | measured |
+| :--- | ---: |
+| worker chunk raw (Guard 2 #1 budget pins here) | **70 KB** |
+| entry static closure | 48 KB gzip — **meaningless, see below** |
+| cold load → Comparator (default tab) | **316 KB gzip**, 10 chunks |
+| cold load → Power-Up Optimizer | 366 KB gzip, 16 chunks |
+| cold load → Roster | 301 KB gzip, 9 chunks |
+| species-bearing chunk `_urlUtils-*.js` | 233 KB gzip |
+
+**Two findings that change the plan, both recorded above where they apply:**
+
+1. **The worker chunk does NOT appear in `dist/.vite/manifest.json`.** The filename-glob fallback
+   (`/^rosterPlanner\.worker-.*\.js$/` over `dist/assets`) is required, not optional.
+2. **Guard 2's assertion #3 was broken as originally written** — see the ⚠️ under Guard 2. The entry
+   has no static imports; the species chunk hangs off the *view* chunks. Measuring the entry's
+   static closure would have produced a guard that passes forever while the payload regresses
+   freely.
+
+Still to confirm before Stage 1: that `diff-normalized.mjs` (dispatches on filename at ~`:320`/
+`:351`) tolerates two new files in `data/normalized/` without crashing or emitting a useless
+full-file diff.
 
 ### Stage 1 — dedup only, still synchronous (ships ~90 KB gzip on its own)
 1. `scripts/sync-data.ts` (write block ~line 3192): keep `species.json` **exactly as today** —
