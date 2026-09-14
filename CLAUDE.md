@@ -299,13 +299,15 @@ npm run test                         # all three vitest suites (test:engine / te
 npm run test:e2e                     # Playwright, packages/web/e2e/, against the built dist
 npm run bench                        # engine benchmarks (test/perf.test.ts asserts ~10x budgets in the normal suite)
 
-# Checks — the first four are what `npm run check` runs
+# Checks — the first five are what `npm run check` runs
 npm run check-scenario-roundtrip     # every Assumptions field appears in both round-trip directions, all seven tabs
 npm run check-raid-history-sources   # raidHistory source values known to packages/web; every shadow species anchored by a row
 npm run check-mega-gates             # flags a mega/primal carried ONLY by the live-raid gate (fragile)
-npm run check-docs-drift             # tab counts / params / command names / agent+skill mentions / shipped PLANs agree with code
+npm run check-docs-drift             # tab counts / params / command names / agent+skill mentions / hooks paragraph /
+                                     #   skill prose counts / this very "first N" sentence / shipped PLANs agree with code
                                      #   + ADVISORY: "not yet"-shaped claims in CLAUDE.md / HANDOFF.md's newest
                                      #   section unverified >14d (--strict to fail, --max-age-days=N, <!-- drift-ok --> to suppress)
+npm run check-species-split          # speciesCore.json + speciesMoves.json re-join to exactly species.json (all 1750)
 npm run check-mega-gaps              # diffs the mega/primal roster against Bulbapedia (network; not part of `check`)
 
 # Tools

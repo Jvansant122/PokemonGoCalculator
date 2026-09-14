@@ -134,6 +134,29 @@ for (const f of docFiles) {
 }
 if (!badCmds) ok(`every "npm run <x>" in ${docFiles.length} doc files exists in package.json`);
 
+// ---- 3b. The "first N are what `npm run check` runs" sentence -------------------------------
+// Section 3 above proves every cited command EXISTS; it says nothing about how many of them the
+// `check` chain actually runs. That sentence went stale the day check-species-split was wired in
+// (2026-09-14) and no checker noticed, which is the same shape as the hooks paragraph: a claim in
+// CLAUDE.md about a list in package.json, verified by nobody. Counts the && -chained `npm run`
+// invocations in package.json's `check` script and compares against the count word.
+const checkScript = (() => {
+  try {
+    return JSON.parse(read('package.json')).scripts?.check ?? '';
+  } catch {
+    return '';
+  }
+})();
+const chainedChecks = [...checkScript.matchAll(/npm run ([\w:-]+)/g)].map((m) => m[1]);
+const firstNWord = claude.match(/the first \*{0,2}([a-z]+)\*{0,2} are what `npm run check` runs/);
+if (firstNWord && chainedChecks.length) {
+  if (COUNT_WORDS[chainedChecks.length] !== firstNWord[1])
+    fail(
+      `CLAUDE.md says "the first ${firstNWord[1]}" are what \`npm run check\` runs, but package.json chains ${chainedChecks.length} (${chainedChecks.join(', ')})`,
+    );
+  else ok(`CLAUDE.md's "first ${firstNWord[1]}" matches package.json's check chain`);
+}
+
 // ---- 4. Agents -----------------------------------------------------------------------------
 const agentFiles = exists('.claude/agents')
   ? fs.readdirSync(path.join(repoRoot, '.claude/agents')).filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''))
