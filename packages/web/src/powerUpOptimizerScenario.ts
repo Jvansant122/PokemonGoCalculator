@@ -1,14 +1,23 @@
 import {
   fromBase64Url,
+  MAX_TEAM_RAID_SLOTS,
   toBase64Url,
   type DodgeBehavior,
   type FriendshipLevel,
   type IVSpread,
   type MegaLevel,
   type RosterSignificanceMode,
+  type SpeciesDefinition,
   type WeatherCondition,
 } from "@pogo-analyzer/engine";
 import type { BossChargedMoveCadence } from "./bossCadence.js";
+import {
+  emptyPowerUpSlot,
+  type PowerUpOptimizerAssumptions,
+  type PowerUpSlotAssumption,
+} from "./PowerUpOptimizerAssumptionPanel.js";
+import { effectiveIsShadow } from "./shadowToggle.js";
+import { speciesRegistry } from "./registry.js";
 
 /**
  * Which resource column the ranked candidate table is sorted by — a
@@ -233,6 +242,309 @@ export interface PowerUpOptimizerScenario {
   eliteChargedTmOnHand?: number | null;
 }
 
+// A ready-to-run default roster/target so a fresh page load demonstrates real
+// ranked results immediately, not an empty form — same precedent as every
+// other tab's own DEFAULT_*. Reuses the Team Raid tab's exact default
+// roster/boss/moves (see TeamRaidView.tsx's own DEFAULT_TEAM_ASSUMPTIONS doc
+// comment for why this specific Fighting/Steel-counter roster vs. plain
+// tyranitar replaced an earlier default that failed outright) so the two tabs
+// never accidentally disagree about what a "typical" roster looks like, but
+// at VARIED levels (unlike Team Raid's single shared level) since this tab's
+// whole point is per-slot power-up headroom. Verified: 100% clear rate over
+// 20 seeds, mean 111.5s of the 300s timer, baseline 32.5 team DPS against
+// this 3600 HP boss — replaces an earlier default (vs. tyranitar-mega,
+// 9000 HP) that failed outright (0% clear rate, 7.1 team DPS).
+//
+// This SINGLE-RAID default stays populated (2026-09-10 correction) — only
+// the ROSTER TAB and this tab's own MULTI-RAID sweep ship empty before an
+// import; the user's own words: "team raid can have a team. i meant empty
+// the 7th tab and have pokemon optimizer sweep be empty before csv import."
+const DEFAULT_TARGET_ID = "tyranitar";
+
+function defaultSlot(
+  speciesId: string,
+  level: number,
+  isMega: boolean,
+  fastMoveId: string | null = null,
+  chargedMoveId: string | null = null,
+): PowerUpSlotAssumption {
+  return {
+    speciesId,
+    fastMoveId,
+    chargedMoveId,
+    isMega,
+    megaLevel: null,
+    isShadow: false,
+    isPurified: false,
+    isLucky: false,
+    level,
+    ivAttack: 15,
+    ivDefense: 15,
+    ivStamina: 15,
+    candyOnHand: 100,
+    xlCandyOnHand: 0,
+  };
+}
+
+export const DEFAULT_ASSUMPTIONS: PowerUpOptimizerAssumptions = {
+  // "single-raid" is the ORIGINAL behavior and must stay the default so an
+  // existing share link with no `mode` field (PLAN §4.1) decodes exactly as
+  // it always has.
+  mode: "single-raid",
+  slots: [
+    defaultSlot("lucario-mega", 35, true, "COUNTER_FAST", "CLOSE_COMBAT"),
+    defaultSlot("machamp", 30, false, "COUNTER_FAST", "CLOSE_COMBAT"),
+    defaultSlot("terrakion", 40, false, "DOUBLE_KICK_FAST", "CLOSE_COMBAT"),
+    defaultSlot("excadrill", 38, false, "MUD_SLAP_FAST", "EARTHQUAKE"),
+    defaultSlot("conkeldurr", 31, false, "COUNTER_FAST", "FOCUS_BLAST"),
+    defaultSlot("heracross", 25, false, "COUNTER_FAST", "CLOSE_COMBAT"),
+  ],
+  stardustOnHand: 200000,
+  // Modest, non-zero two-digit defaults so the fixed-budget plan's shared
+  // pools are visible/exercised on a fresh page load rather than looking
+  // inert at 0 — a raid-active player realistically keeps a stash of each.
+  rareCandyOnHand: 20,
+  rareCandyXlOnHand: 10,
+  targetId: DEFAULT_TARGET_ID,
+  bossFastMoveId: null,
+  bossChargedMoveId: null,
+  dodge: { kind: "perfect" },
+  dodgeFastAttacks: false,
+  holdChargedMoveUntilSafe: false,
+  weather: "none",
+  // Shared by both modes — see PowerUpOptimizerAssumptions.friendshipLevel's own doc comment.
+  friendshipLevel: "none",
+  bossChargedMoveFrequencySeconds: 15,
+  bossChargedMoveCadence: "fixed-interval",
+  bossStartsPrimed: false,
+  bossStartingEnergyFraction: 0.5,
+  raidTimerSeconds: 300,
+  swapCostSeconds: 0,
+  // 15s per full-roster wipe (user decision 2026-09-08): a lobby revive-and-rejoin
+  // is real raid-clock time in which nothing is dealt, and without it a bulkier
+  // low-DPS slot surviving longer can LOWER team DPS by delaying the stronger
+  // slots behind it (free replacement). Unlike the Team Raid tab this tab's
+  // whole output is a ranking of survivability-vs-damage trade-offs, so a 0s
+  // default would bias every candidate toward glass. Within the community's
+  // ~12-15s estimate (see teamRaid.ts's reviveCostSeconds doc comment).
+  reviveCostSeconds: 15,
+  rankBy: "stardust",
+  // Multi-raid mode fields — see BossSetPanel.tsx / multiRaidBossSet.ts. Left
+  // empty/default here (rather than pre-resolved) since the whole POINT of
+  // this mode is a whole imported roster this static default can't have;
+  // PowerUpOptimizerAssumptionPanel's setMode auto-populates a real boss set
+  // the first time the mode switch flips to "multi-raid".
+  multiRaidBossIds: [],
+  multiRaidIncludePastRaids: false,
+  multiRaidIncludedTiers: null,
+  multiRaidMaxBossCount: 30,
+  candyByFamilyId: {},
+  multiRaidMegaLevel: null,
+  // The user's own chosen default (2026-09-10): rank strictly on the
+  // weighted mean across the boss set, since the sort/efficiency columns
+  // and the headline ranking are already mean-based — this closes the one
+  // remaining place "best boss" alone could still admit a candidate. See
+  // powerUpOptimizerScenario.ts's own field doc comment for why an ABSENT
+  // decoded value deliberately does NOT fall back to this default.
+  multiRaidSignificanceMode: "aggregate-only",
+  // "What should I power up TONIGHT" (the honest reading of the Pokémon a
+  // player actually has) is the tidy default for a fresh scenario — see
+  // PowerUpOptimizerAssumptions.multiRaidUseBestAvailableMoveset.
+  multiRaidUseBestAvailableMoveset: false,
+  // Empty by default — a fresh page load has no idea what "a fresh catch" of
+  // interest would even be. See PowerUpOptimizerAssumptions.multiRaidHypotheticalCatches.
+  multiRaidHypotheticalCatches: [],
+  // Unknown, not zero — see powerUpOptimizerScenario.ts's own field doc
+  // comment. A fresh page load has no way to know a real player's TM
+  // inventory, and second-charged-move/Elite TM candidates are still
+  // computed and ranked either way (see run/runPowerUpOptimizer.ts).
+  fastTmOnHand: null,
+  chargedTmOnHand: null,
+  eliteFastTmOnHand: null,
+  eliteChargedTmOnHand: null,
+};
+
+export function assumptionsToScenario(a: PowerUpOptimizerAssumptions): PowerUpOptimizerScenario {
+  return {
+    mode: a.mode,
+    slots: a.slots.map((s) => ({
+      speciesId: s.speciesId,
+      fastMoveId: s.fastMoveId,
+      chargedMoveId: s.chargedMoveId,
+      isMega: s.isMega,
+      megaLevel: s.megaLevel,
+      isShadow: s.isShadow,
+      isPurified: s.isPurified,
+      isLucky: s.isLucky,
+      level: s.level,
+      ivs: { attack: s.ivAttack, defense: s.ivDefense, stamina: s.ivStamina },
+      candyOnHand: s.candyOnHand,
+      xlCandyOnHand: s.xlCandyOnHand,
+    })),
+    stardustOnHand: a.stardustOnHand,
+    rareCandyOnHand: a.rareCandyOnHand,
+    rareCandyXlOnHand: a.rareCandyXlOnHand,
+    target: a.targetId,
+    bossFastMoveId: a.bossFastMoveId,
+    bossChargedMoveId: a.bossChargedMoveId,
+    dodgeModel: a.dodge,
+    dodgeFastAttacks: a.dodgeFastAttacks,
+    holdChargedMoveUntilSafe: a.holdChargedMoveUntilSafe,
+    weather: a.weather,
+    friendshipLevel: a.friendshipLevel,
+    bossChargedMoveFrequencySeconds: a.bossChargedMoveFrequencySeconds,
+    bossChargedMoveCadence: a.bossChargedMoveCadence,
+    bossStartsPrimed: a.bossStartsPrimed,
+    bossStartingEnergyFraction: a.bossStartingEnergyFraction,
+    raidTimerSeconds: a.raidTimerSeconds,
+    swapCostSeconds: a.swapCostSeconds,
+    reviveCostSeconds: a.reviveCostSeconds,
+    rankBy: a.rankBy,
+    multiRaidBossIds: a.multiRaidBossIds,
+    multiRaidIncludePastRaids: a.multiRaidIncludePastRaids,
+    multiRaidIncludedTiers: a.multiRaidIncludedTiers,
+    multiRaidMaxBossCount: a.multiRaidMaxBossCount,
+    candyByFamilyId: a.candyByFamilyId,
+    multiRaidMegaLevel: a.multiRaidMegaLevel,
+    multiRaidSignificanceMode: a.multiRaidSignificanceMode,
+    multiRaidUseBestAvailableMoveset: a.multiRaidUseBestAvailableMoveset,
+    multiRaidHypotheticalCatches: a.multiRaidHypotheticalCatches,
+    fastTmOnHand: a.fastTmOnHand,
+    chargedTmOnHand: a.chargedTmOnHand,
+    eliteFastTmOnHand: a.eliteFastTmOnHand,
+    eliteChargedTmOnHand: a.eliteChargedTmOnHand,
+  };
+}
+
+export function scenarioToAssumptions(s: PowerUpOptimizerScenario): PowerUpOptimizerAssumptions {
+  const slots: PowerUpSlotAssumption[] = s.slots.map((slot) => ({
+    speciesId: slot.speciesId ?? null,
+    fastMoveId: slot.fastMoveId ?? null,
+    chargedMoveId: slot.chargedMoveId ?? null,
+    isMega: slot.isMega ?? false,
+    // `??` guards a link encoded before this field existed rather than
+    // surfacing `undefined` into the Mega Level <select>.
+    megaLevel: slot.megaLevel ?? null,
+    isShadow: slot.isShadow ?? false,
+    isPurified: slot.isPurified ?? false,
+    isLucky: slot.isLucky ?? false,
+    level: slot.level ?? 20,
+    // `??` guards a link encoded before ivs existed the same way the rest of
+    // this function guards every other optional-feeling field — see
+    // add-scenario-assumption's step 3.
+    ivAttack: slot.ivs?.attack ?? 15,
+    ivDefense: slot.ivs?.defense ?? 15,
+    ivStamina: slot.ivs?.stamina ?? 15,
+    candyOnHand: slot.candyOnHand ?? 0,
+    xlCandyOnHand: slot.xlCandyOnHand ?? 0,
+  }));
+  // Defensive pad/truncate in case an older or hand-edited link has a
+  // different slot count than MAX_TEAM_RAID_SLOTS — same convention as
+  // TeamRaidView's teamScenarioToAssumptions.
+  while (slots.length < MAX_TEAM_RAID_SLOTS) slots.push(emptyPowerUpSlot());
+  return {
+    // `??` guards a link built before multi-raid mode existed — see
+    // powerUpOptimizerScenario.ts's own PowerUpOptimizerMode doc comment for
+    // why "single-raid" (the ORIGINAL, byte-for-byte-unchanged behavior)
+    // must be the fallback.
+    mode: s.mode ?? "single-raid",
+    slots: slots.slice(0, MAX_TEAM_RAID_SLOTS),
+    stardustOnHand: s.stardustOnHand ?? DEFAULT_ASSUMPTIONS.stardustOnHand,
+    rareCandyOnHand: s.rareCandyOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyOnHand,
+    rareCandyXlOnHand: s.rareCandyXlOnHand ?? DEFAULT_ASSUMPTIONS.rareCandyXlOnHand,
+    targetId: s.target,
+    bossFastMoveId: s.bossFastMoveId ?? null,
+    bossChargedMoveId: s.bossChargedMoveId ?? null,
+    dodge: s.dodgeModel,
+    dodgeFastAttacks: s.dodgeFastAttacks ?? DEFAULT_ASSUMPTIONS.dodgeFastAttacks,
+    holdChargedMoveUntilSafe: s.holdChargedMoveUntilSafe ?? DEFAULT_ASSUMPTIONS.holdChargedMoveUntilSafe,
+    weather: s.weather ?? "none",
+    // `??` guards a scenario URL encoded before this field existed rather
+    // than surfacing `undefined` into the friendship <select>.
+    friendshipLevel: s.friendshipLevel ?? DEFAULT_ASSUMPTIONS.friendshipLevel,
+    bossChargedMoveFrequencySeconds: s.bossChargedMoveFrequencySeconds ?? DEFAULT_ASSUMPTIONS.bossChargedMoveFrequencySeconds,
+    // `??` guards a link built before this field existed — see
+    // bossCadence.tsx's BOSS_CADENCE_HINT for what the control itself explains.
+    bossChargedMoveCadence: s.bossChargedMoveCadence ?? DEFAULT_ASSUMPTIONS.bossChargedMoveCadence,
+    bossStartsPrimed: s.bossStartsPrimed ?? DEFAULT_ASSUMPTIONS.bossStartsPrimed,
+    bossStartingEnergyFraction: s.bossStartingEnergyFraction ?? DEFAULT_ASSUMPTIONS.bossStartingEnergyFraction,
+    raidTimerSeconds: s.raidTimerSeconds ?? DEFAULT_ASSUMPTIONS.raidTimerSeconds,
+    swapCostSeconds: s.swapCostSeconds ?? 0,
+    // Every link this tab has ever built carries this field explicitly, so the
+    // fallback only ever applies to a hand-edited URL — and per the
+    // add-scenario-assumption convention (and scenarioRoundtrip.test.ts) a
+    // missing field decodes to DEFAULT_ASSUMPTIONS, i.e. 15s.
+    reviveCostSeconds: s.reviveCostSeconds ?? DEFAULT_ASSUMPTIONS.reviveCostSeconds,
+    rankBy: s.rankBy ?? "stardust",
+    // `??` guards a link built before multi-raid mode existed — see
+    // multiRaidBossIds' own doc comment in powerUpOptimizerScenario.ts for
+    // why this is AUTHORITATIVE and never re-derived from the three filter
+    // fields below.
+    multiRaidBossIds: s.multiRaidBossIds ?? DEFAULT_ASSUMPTIONS.multiRaidBossIds,
+    multiRaidIncludePastRaids: s.multiRaidIncludePastRaids ?? DEFAULT_ASSUMPTIONS.multiRaidIncludePastRaids,
+    multiRaidIncludedTiers: s.multiRaidIncludedTiers ?? DEFAULT_ASSUMPTIONS.multiRaidIncludedTiers,
+    multiRaidMaxBossCount: s.multiRaidMaxBossCount ?? DEFAULT_ASSUMPTIONS.multiRaidMaxBossCount,
+    candyByFamilyId: s.candyByFamilyId ?? DEFAULT_ASSUMPTIONS.candyByFamilyId,
+    // `??` guards a link built before this field existed rather than
+    // surfacing `undefined` into the multi-raid Mega Level <select>.
+    multiRaidMegaLevel: s.multiRaidMegaLevel ?? DEFAULT_ASSUMPTIONS.multiRaidMegaLevel,
+    // Plain `??` default, same as every other field above — see this
+    // field's own doc comment in powerUpOptimizerScenario.ts for why this no
+    // longer inverts to "aggregate-or-per-boss".
+    multiRaidSignificanceMode: s.multiRaidSignificanceMode ?? DEFAULT_ASSUMPTIONS.multiRaidSignificanceMode,
+    multiRaidUseBestAvailableMoveset: s.multiRaidUseBestAvailableMoveset ?? DEFAULT_ASSUMPTIONS.multiRaidUseBestAvailableMoveset,
+    multiRaidHypotheticalCatches: s.multiRaidHypotheticalCatches ?? DEFAULT_ASSUMPTIONS.multiRaidHypotheticalCatches,
+    // `?? null` (not `?? DEFAULT_ASSUMPTIONS...`, though they're the same
+    // value here) — an explicitly-shared `null` ("unknown") and an absent
+    // field from an old link both mean the same thing for these fields, so
+    // there's no old-link-vs-explicit-unknown distinction to preserve. See
+    // powerUpOptimizerScenario.ts's own field doc comment.
+    fastTmOnHand: s.fastTmOnHand ?? null,
+    chargedTmOnHand: s.chargedTmOnHand ?? null,
+    eliteFastTmOnHand: s.eliteFastTmOnHand ?? null,
+    eliteChargedTmOnHand: s.eliteChargedTmOnHand ?? null,
+  };
+}
+
+/** Resolves a species id against the registry, tolerating `null`/an unknown id — shared by normalizePowerUpAssumptions below and PowerUpOptimizerView's own per-slot/boss species lookups. */
+export function resolveSpecies(id: string | null): SpeciesDefinition | null {
+  return id && speciesRegistry.has(id) ? speciesRegistry.get(id) : null;
+}
+
+// clampHalfLevel/clampIv live in run/runPowerUpOptimizer.ts, applied only
+// at that module's own engine-call boundary — see its own doc comment.
+
+/**
+ * Enforces PowerUpSlotInput/runTeamRaid's own invariants BEFORE the engine
+ * ever sees them, same "degrade a stale/hand-edited link instead of
+ * throwing" precedent as TeamRaidView's normalizeTeamAssumptions — extended
+ * here with a THIRD mutual exclusion (Shadow vs. Purified, see powerUp.ts's
+ * powerUpStepCost, which throws if both are set) that Team Raid has no
+ * equivalent of.
+ */
+export function normalizePowerUpAssumptions(a: PowerUpOptimizerAssumptions): PowerUpOptimizerAssumptions {
+  let megaClaimed = false;
+  const slots = a.slots.map((s) => {
+    const species = resolveSpecies(s.speciesId);
+    const hasBoost = !!species?.boost;
+    let isMega = s.isMega;
+    if (isMega) {
+      if (!hasBoost || megaClaimed) isMega = false;
+      else megaClaimed = true;
+    }
+    // Shadow and mega/primal boost are mutually exclusive (shadowAdjustedBaseStats
+    // throws) — same rule as Team Raid's normalizeTeamAssumptions.
+    const isShadow = hasBoost ? false : s.isShadow;
+    // Shadow and Purified are mutually exclusive at the COST layer
+    // (powerUpStepCost throws if both PowerUpCostModifiers flags are set) —
+    // a species already effectively Shadow (either the toggle above or a
+    // registry-pre-flagged "Shadow X" variant) forces Purified off.
+    const isPurified = effectiveIsShadow(species, isShadow) ? false : s.isPurified;
+    return { ...s, isMega, isShadow, isPurified };
+  });
+  return { ...a, slots };
+}
+
 function encodePowerUpOptimizerScenario(scenario: PowerUpOptimizerScenario): string {
   const json = JSON.stringify(scenario);
   return toBase64Url(new TextEncoder().encode(json));
@@ -259,4 +571,11 @@ export function buildPowerUpOptimizerScenarioUrl(baseUrl: string, scenario: Powe
 export function parsePowerUpOptimizerScenarioFromUrl(url: string): PowerUpOptimizerScenario | null {
   const encoded = new URL(url).searchParams.get(POWER_UP_OPTIMIZER_SCENARIO_QUERY_PARAM);
   return encoded ? decodePowerUpOptimizerScenario(encoded) : null;
+}
+
+/** PowerUpOptimizerView's initial `useState` seed — a share link if the page loaded with one, otherwise DEFAULT_ASSUMPTIONS. */
+export function initialAssumptions(): PowerUpOptimizerAssumptions {
+  if (typeof window === "undefined") return DEFAULT_ASSUMPTIONS;
+  const fromUrl = parsePowerUpOptimizerScenarioFromUrl(window.location.href);
+  return fromUrl ? normalizePowerUpAssumptions(scenarioToAssumptions(fromUrl)) : DEFAULT_ASSUMPTIONS;
 }

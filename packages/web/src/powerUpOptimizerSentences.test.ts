@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { budgetStopReasonSentence, noAffordableImprovementSentence } from "./PowerUpOptimizerView.js";
+import { budgetStopReasonSentence, noAffordableImprovementSentence } from "./powerUpOptimizerSentences.js";
 
 describe("budgetStopReasonSentence", () => {
   // TS2366 (missing switch case) is the type-level guard; this locks in the

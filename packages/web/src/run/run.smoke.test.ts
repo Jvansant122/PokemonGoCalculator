@@ -6,7 +6,7 @@ import { DEFAULT_TEAM_ASSUMPTIONS } from "../TeamRaidView.js";
 import { DEFAULT_ASSUMPTIONS as SPECIES_REPORT_DEFAULTS } from "../SpeciesReportView.js";
 import { DEFAULT_ASSUMPTIONS as IV_DEFAULTS } from "../IvBreakpointsView.js";
 import { DEFAULT_ASSUMPTIONS as ADB_DEFAULTS } from "../AttackDefenseBreakpointsView.js";
-import { DEFAULT_ASSUMPTIONS as PU_DEFAULTS } from "../PowerUpOptimizerView.js";
+import { DEFAULT_ASSUMPTIONS as PU_DEFAULTS } from "../powerUpOptimizerScenario.js";
 import { runComparatorScenario } from "./runComparator.js";
 import { runTeamRaidScenario } from "./runTeamRaid.js";
 import { runSpeciesReportScenario } from "./runSpeciesReport.js";

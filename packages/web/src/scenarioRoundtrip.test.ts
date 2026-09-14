@@ -39,13 +39,15 @@ import {
   parseAttackDefenseBreakpointsScenarioFromUrl,
   type AttackDefenseBreakpointsScenario,
 } from "./attackDefenseBreakpointsScenario.js";
+import type { PowerUpOptimizerAssumptions } from "./PowerUpOptimizerAssumptionPanel.js";
 import {
   assumptionsToScenario as puAssumptionsToScenario,
+  buildPowerUpOptimizerScenarioUrl,
   DEFAULT_ASSUMPTIONS as PU_DEFAULTS,
+  parsePowerUpOptimizerScenarioFromUrl,
   scenarioToAssumptions as puScenarioToAssumptions,
-} from "./PowerUpOptimizerView.js";
-import type { PowerUpOptimizerAssumptions } from "./PowerUpOptimizerAssumptionPanel.js";
-import { buildPowerUpOptimizerScenarioUrl, parsePowerUpOptimizerScenarioFromUrl, type PowerUpOptimizerScenario } from "./powerUpOptimizerScenario.js";
+  type PowerUpOptimizerScenario,
+} from "./powerUpOptimizerScenario.js";
 import {
   assumptionsToScenario as rosterAssumptionsToScenario,
   DEFAULT_ASSUMPTIONS as ROSTER_DEFAULTS,

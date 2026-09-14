@@ -26,8 +26,10 @@ import { candidatePickerOptions, speciesRegistry, targetPickerOptions, unmatched
 import { hydrateRosterPool, loadRosterPool } from "./rosterPool.js";
 import { runTeamRaidScenario } from "./run/runTeamRaid.js";
 import { teamAssumptionsToPowerUpOptimizerAssumptions, TEAM_RAID_EXPORT_MISSING_NOTE } from "./teamRaidExport.js";
-import { assumptionsToScenario as powerUpAssumptionsToScenario } from "./PowerUpOptimizerView.js";
-import { buildPowerUpOptimizerScenarioUrl } from "./powerUpOptimizerScenario.js";
+import {
+  assumptionsToScenario as powerUpAssumptionsToScenario,
+  buildPowerUpOptimizerScenarioUrl,
+} from "./powerUpOptimizerScenario.js";
 import { dodgeFastAttackLockoutResultNote } from "./dodgeFastAttackLockout.js";
 
 // A ready-to-run default roster/target so a fresh page load demonstrates a

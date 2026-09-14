@@ -65,13 +65,13 @@ import {
 import { parseAttackDefenseBreakpointsScenarioFromUrl } from "../packages/web/src/attackDefenseBreakpointsScenario.js";
 import { runAttackDefenseBreakpointsScenario } from "../packages/web/src/run/runAttackDefenseBreakpoints.js";
 
+import { blockedCandidateSentence } from "../packages/web/src/powerUpOptimizerSentences.js";
 import {
-  blockedCandidateSentence,
   DEFAULT_ASSUMPTIONS as PU_DEFAULTS,
   normalizePowerUpAssumptions,
+  parsePowerUpOptimizerScenarioFromUrl,
   scenarioToAssumptions as puScenarioToAssumptions,
-} from "../packages/web/src/PowerUpOptimizerView.js";
-import { parsePowerUpOptimizerScenarioFromUrl } from "../packages/web/src/powerUpOptimizerScenario.js";
+} from "../packages/web/src/powerUpOptimizerScenario.js";
 import { runPowerUpOptimizerScenario } from "../packages/web/src/run/runPowerUpOptimizer.js";
 import { runRosterBudgetScenario, runRosterPlannerScenario } from "../packages/web/src/run/runRosterPlanner.js";
 

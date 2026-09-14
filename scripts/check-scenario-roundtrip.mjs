@@ -76,7 +76,7 @@ export const TABS = [
   ['Species Report', 'packages/web/src/SpeciesReportView.tsx', 'SpeciesReportAssumptions', 'packages/web/src/SpeciesReportView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['IV Breakpoints', 'packages/web/src/IvBreakpointsView.tsx', 'IvBreakpointsAssumptions', 'packages/web/src/IvBreakpointsView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['Attack/Defense', 'packages/web/src/AttackDefenseBreakpointsView.tsx', 'AttackDefenseBreakpointsAssumptions', 'packages/web/src/AttackDefenseBreakpointsView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
-  ['Power-Up Optimizer', 'packages/web/src/PowerUpOptimizerAssumptionPanel.tsx', 'PowerUpOptimizerAssumptions', 'packages/web/src/PowerUpOptimizerView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
+  ['Power-Up Optimizer', 'packages/web/src/PowerUpOptimizerAssumptionPanel.tsx', 'PowerUpOptimizerAssumptions', 'packages/web/src/powerUpOptimizerScenario.ts', 'assumptionsToScenario', 'scenarioToAssumptions'],
   ['Roster', 'packages/web/src/RosterView.tsx', 'RosterAssumptions', 'packages/web/src/RosterView.tsx', 'assumptionsToScenario', 'scenarioToAssumptions'],
 ];
 
