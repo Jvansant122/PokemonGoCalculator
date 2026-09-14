@@ -1,10 +1,103 @@
 # Handoff
 
-Last updated: 2026-09-12 (the opening-burst engine cluster deleted). Read `CLAUDE.md`
-first for durable project architecture/conventions — this file is the point-in-time "what's done,
-what's next."
+Last updated: 2026-09-14 (fifteen commits: Best Buddy roster mode, defensive decoders, raid-feed
+freshness, three `.claude/` mechanisms, a bundle split, and the Power-Up Optimizer view refactor).
+Read `CLAUDE.md` first for durable project architecture/conventions — this file is the
+point-in-time "what's done, what's next."
 
-## 2026-09-12 (latest): the "opening burst" path is gone from the engine
+## 2026-09-14 (latest): fifteen commits, all deployed green
+
+Everything below is live — `deploy.yml` reported `success` on each push, not merely committed.
+Working tree clean at `78545f1`. **Nothing is uncommitted or unpushed.**
+
+### Product
+
+- **Best Buddy for the roster planner** (`e861049`). Built because a measurement said to, against
+  a parked caveat that said not to: the single-raid result (every candidate inside a ±0.73 floor)
+  does not generalize, since multi-raid significance is aggregate **OR** per-boss and ~45-55% of a
+  real top-attacker pool clears the per-boss bar. **A latent bug surfaced on the way and is the
+  most valuable part:** `runFullRosterCached` keyed teams on `${entryId}@${level}`, which every
+  prior candidate type happened to vary; a Best Buddy team differs only by a flag at a fixed
+  level, so it collided with the cached baseline and every delta read `0` — a wrong answer that
+  would have agreed with the prior. Checked whether it generalizes: `rosterMoveChange.ts` has no
+  cache at all. **UI is unwired; that is the next product piece.**
+- **A malformed share link no longer blanks the app** (`ead5a2a`), and the engine decoders now
+  degrade per-field instead of throwing (`957999d`). All seven decoders shared one shape —
+  unguarded `fromBase64Url` + `JSON.parse` in a `useState` initializer — and three real inputs
+  emptied the root element entirely. `TabErrorBoundary` catches what's left; `rejectedFields`
+  exists so the UI can say "this link had settings we couldn't read", because a half-restored
+  scenario that looks whole is this project's signature bug in a new place. **Unrecognized keys
+  are preserved byte-for-byte** — the five web codecs ride the same JSON blob.
+- **A Purified import no longer simulates the wrong move** (`c7453ba`). `FRUSTRATION`/`RETURN`
+  appeared in zero of 1,750 species, so the real Poke Genie export's Purified Alolan Raticate
+  silently ran `CRUNCH`. Evidence-gated per species off GAME_MASTER's own `shadow` block, and
+  gated on the literal move ids — Lugia/Ho-oh carry a separate `_S` template naming
+  `AEROBLAST_PLUS`/`SACRED_FIRE_PLUS`. **Appended, never prepended:** `chargedMoves[0]` is the
+  fallback everywhere, so a prepend would have switched a large share of simulations onto a
+  10-power move.
+- **Raid-feed freshness** (`21afd1b`). `data/normalized/_meta.json` carries `fetchedAt` (only
+  stamped on a live feed success, so a fallback run does not overstate freshness), `writtenAt`,
+  and a `source` discriminator separating "nobody synced" from "the feed was down". **The UI half
+  is not built.**
+- **Clear roster** (`2ecd186`) behind a confirm naming the save code as the only recovery path —
+  and removing a second, unguarded whole-pool wipe in the import panel that would have made the
+  new confirm decorative. **Multi-raid stopped claiming a dodge-locked plan was finished**
+  (`b6f54dc`) via a three-way count policy, since with a boss *set* lockout is a count, not a
+  state. Roster summary compressed to one line (`9a9ac51`).
+- **Per-tab lazy chunks** (`3b2f723`): default first load 407.5 KB to **322.4 KB gzip (-21%)**.
+  Measured first, and the measurement reframed it — `species.json` is 85% of RAW bytes but gzip
+  compresses it ~12:1, so code was ~43% of actual transferred bytes. **The remaining lever is the
+  data layer, not the tabs.**
+
+### Machinery
+
+- Three mechanisms (`56d0bbc`): a `PreToolUse` hook blocking scratch writes under
+  `packages/engine/test/` (verified 44/44 real files pass, 16/16 both-direction cases), the
+  fodder-boss trap written into `engine-developer.md`'s body, and a fourth `post-edit.mjs` branch
+  running `check-docs-drift` on `.claude/` and `CLAUDE.md`/`HANDOFF.md` edits.
+- `REJECTED_IDEAS.md` gained a **Tooling and process rejections** section, #15-22 (`b758632`),
+  each with the evidence that killed it. #22 was then narrowed (`81da021`) — it does **not** say
+  single-agent skills are bad; a long, occasionally-relevant, user-invocable one is endorsed.
+- **`/scout-meta-ideas`** (`c2af6c2`) + `meta_ideas.md`: a re-runnable tooling-idea pass that
+  feeds logged and declined ideas back as an exclusion ledger. Asks for **up to** three, never
+  exactly three, and logs zero-result passes so an exhausted seam is not re-mined.
+- **`PowerUpOptimizerView.tsx` 3,792 to 1,700 lines** (`ef4256e`), extract-only across four
+  verified stages. Chosen by measuring code-vs-comment: the engine's big files are 46-64% comment
+  and were left alone. **A moved export typechecked clean and was still broken** —
+  `run-scenario.ts` kept a stale import that `typecheck:web` and `lint` both missed, caught only
+  by `test:scripts` running the CLI under `tsx`.
+
+### Verified directly by the overseer, not taken from agent summaries
+
+`npm run verify:full` green at HEAD (654 engine / 372 web / 257 scripts, 155 round-trip fields,
+e2e 31). Independently re-measured: the friendship grid effect (32-89% of cells at Good Friend),
+the emitted bundle chunks (species chunk 2,571 KB raw / 232 KB gzip), `Frustration`/`Return`
+appended last in every species checked, and `check-scenario-roundtrip.mjs`'s loud-failure paths.
+One agent claim was wrong and corrected: web tests are **372**, not the 377 reported.
+
+## Next
+
+1. **One combined `packages/web` pass** — four items on the same files, so one diff and one
+   verification: **accessibility** (a genuinely broken contract: 7 `role="tab"` buttons, **zero**
+   `role="tabpanel"`, no `aria-controls`, no arrow-key nav, all seven in the tab sequence; 9 SVGs
+   with no title/role/aria-hidden; no skip link — contrast and labelling audited clean),
+   **visual polish** (shell max-width: prose hits 88-98 chars at 1920px; no
+   `prefers-reduced-motion` block despite 6 transition rules), the **raid-freshness indicator**
+   reading `_meta.json`, and **hardening the five web codecs** against `957999d`'s pattern.
+2. **Best Buddy's UI** — engine-complete since `e861049`, unwired.
+3. **`meta_ideas.md`'s two Proposed/Accepted items** — wire `typecheck:scripts` into
+   `post-edit.mjs`'s web branch (today's own incident is the evidence), and the prose count-word
+   regex for `check-docs-drift.mjs`. The latter is genuinely unowned: `scripts/` is product code,
+   outside both `meta-researcher`'s remit and `meta-architect`'s config-only boundary.
+4. **A data-layer split, if wanted** — a lean id/name/image list for pickers versus full stat
+   blobs loaded per simulation. Dwarfs what tab-splitting bought, but it is an architectural
+   change to `registry.ts` and the worker's import constraint, not a tidy-up.
+
+**No `PLAN_*.md` files exist.** `IDEAS.md` #24 shipped and moved to its Shipped table; #5's engine
+half shipped with its UI still open; #25 (the typed damage-modifier builder PAIR) remains parked
+with the reasoning intact.
+
+## 2026-09-12: the "opening burst" path is gone from the engine
 
 The user's instruction was flat: **"There is no opening salvo."** The deterministic Phase 1
 opening-burst cluster is deleted, not deprecated.

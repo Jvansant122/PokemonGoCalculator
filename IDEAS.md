@@ -17,7 +17,7 @@ the premise was false. Mark an item shipped in the same pass that ships it.
 
 ## Open
 
-### 5. Best Buddy as a cost-less candidate — SINGLE-RAID SHIPPED, ROSTER MODE OPEN
+### 5. Best Buddy as a cost-less candidate — SINGLE-RAID SHIPPED; ROSTER ENGINE SHIPPED, ROSTER UI OPEN
 
 **Single-raid mode shipped 2026-09-11.** `PowerUpOptimizerResult.bestBuddyCandidates` (one per
 fielded slot, cost/efficiency fields **absent from the type**, not null — a zero-cost candidate
@@ -26,7 +26,13 @@ divides by zero on both of the tab's axes) and `PowerUpBudgetPlan.bestBuddyRecom
 UI. A pre-existing bug was found and fixed in passing: `toTeamRaidSlots` silently dropped
 `isBestBuddy`, the same shape as an earlier `megaLevel` gap — latent only, since no UI set it.
 
-**Roster/multi-raid mode is NOT built**, scoped out deliberately by `engine-developer`:
+✅ **Roster/multi-raid ENGINE shipped 2026-09-13 (`e861049`)** — `RosterEntry.isBestBuddy`,
+`RosterPlanResult.bestBuddyCandidates` (no cost/efficiency fields at all, matching the single-raid
+precedent) and `RosterBudgetPlan.bestBuddyRecommendation` as a single nullable object, so the
+one-at-a-time constraint is structural. **The UI is unwired — that half is still open.** A latent
+memo-key collision was found and fixed in the same pass (`runFullRosterCached` keyed on
+`${entryId}@${level}`, so a Best Buddy team collided with the cached baseline and every delta read
+0). The original scope-out reasoning, now historical:
 `RosterEntry` has no `isBestBuddy` field, and pricing it correctly needs the same
 aggregate-across-bosses machinery `RosterPowerUpCandidate` uses. That is a materially bigger
 change, not a copy of the single-raid path. The tab tells a multi-raid user this is single-raid
