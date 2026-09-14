@@ -1,11 +1,95 @@
 # Handoff
 
-Last updated: 2026-09-14 (fifteen commits: Best Buddy roster mode, defensive decoders, raid-feed
-freshness, three `.claude/` mechanisms, a bundle split, and the Power-Up Optimizer view refactor).
-Read `CLAUDE.md` first for durable project architecture/conventions — this file is the
-point-in-time "what's done, what's next."
+Last updated: 2026-09-14 (species-moves split Stage 1 shipped, Stage 2 parked; four queued web
+items done; three new mechanisms). Read `CLAUDE.md` first for durable architecture/conventions —
+this file is the point-in-time "what's done, what's next."
 
-## 2026-09-14 (latest): fifteen commits, all deployed green
+## 2026-09-14 (latest): the queue emptied
+
+Everything below is live — `deploy.yml` reported `success` on each push. **Nothing is uncommitted
+or unpushed.** Test counts at HEAD: **654 engine / 413 web / 257 scripts**, 155 round-trip fields,
+**33 e2e**.
+
+### Performance — the species-moves split, Stage 1 only
+
+`registry.ts` now loads `speciesCore.json` + `speciesMoves.json` instead of `species.json`
+(`697b652` data half, `8a03721` registry join). **Comparator cold load 316.0 → 233.8 KB gzip, an
+82 KB cut.**
+
+The win came from a fact nobody had checked: 13,061 move entries across 1,750 species resolve to
+**308 distinct objects, byte-identical by id, zero conflicts**. So the moves became a dictionary
+plus per-species id lists. `deriveSpeciesSplit` **asserts that precondition and aborts the sync** if
+a future GAME_MASTER change breaks it; `check-species-split` (in `npm run check`) proves the derived
+files re-join to exactly `species.json`. `species.json` itself is untouched and still canonical.
+
+⛔ **Stage 2 (dynamic import of the moves) is PARKED with numbers in hand — see `IDEAS.md` #26 for
+the full reasoning.** Short version: Stage 1 already took the bytes out permanently; Stage 2 would
+only reschedule them, because every tab simulates on first render, so the shell paints ~40 KB sooner
+while the first RESULT arrives no earlier. Not worth a permanent async gate, a new error path, and a
+localStorage-corruption window. **Do not revive it without re-reading that entry.**
+
+### The four queued web items, all done
+
+- **Accessibility** (`70b31dd`): full ARIA tabs pattern — `aria-controls` onto a single
+  `role="tabpanel"` declared in `App.tsx` (not inside the lazy chunk, so it exists at first render),
+  roving tabindex with Arrow/Home/End, skip link. `prefers-reduced-motion` added.
+- **Two of my own audit claims were WRONG** and were corrected during that build rather than
+  implemented: the charts already carry `role="img"`+`aria-label` (my probe tested for a `role`
+  attribute, which decorative icons correctly lack, and ran before the charts mounted), and `.app`
+  has had `max-width: 1100px` since 2026-09-04 (I measured `main`). The real width finding was
+  subtler: prose capped at `70-78ch` renders at 83-98 characters because CSS `ch` is the "0" glyph
+  and Inter's average character is narrower.
+- **Raid freshness** surfaced from `_meta.json`, branching on `source` so "nobody synced" and "the
+  feed was down" read differently. **All five web codecs hardened** to degrade per-field with
+  `rejectedFields`, preserving unrecognized keys (the web and engine codecs share one JSON blob).
+- **Best Buddy roster UI** (`8d8206a`): `isBestBuddy` is settable only on the Roster tab's entry
+  form, because the Poke Genie CSV has no such column. A save code written before the field still
+  loads. The table leads with a per-boss breakdown because ~45-55% of a real pool clears the
+  per-boss bar while only 4/49 clear the aggregate.
+
+### Mechanisms added — each mechanizing a rule that was previously prose
+
+- **ESLint worker-import guard** (`a23a320`): `**/*.worker.ts` may not import `registry.ts` or
+  `data/normalized/*`. Proven by breaking it. **No test in this repo can see bytes**, so the worker
+  chunk could have gone 70 KB → 790 KB with a green suite.
+- **`check-docs-drift` now validates CLAUDE.md's hook paragraph** against `settings.json` — count
+  word, event names, script filenames (`ec5f2ed`). Proven in both failure modes. Only *then* was
+  `post-edit.mjs`'s `isDocsSurface` widened to `settings.json`/`hooks/*.mjs`, in that order,
+  because wiring the trigger first would have invoked a checker that knew nothing about those files.
+- **Skill PROSE tab-counts are checked**, not just the Step-0 table (`aaab7a9`). `new-tab` gained a
+  twelfth touch point; its own description then went eleven → twelve, drift created by the very
+  edit that added the check for it.
+- **`post-edit.mjs` runs `typecheck:scripts` on a web edit** (`5defca1`), because
+  `packages/web/tsconfig.json` never includes `scripts/` — a moved export type-checked clean and
+  lint-passed while breaking the CLI.
+
+### Two bugs found in work I had shipped earlier the same day
+
+- **`diff-normalized` had been dead since `21afd1b`.** `_meta.json` is the first non-array file in
+  `data/normalized/`, hit the generic fallback returning a boolean where `printFileResult` called
+  `printClipped`, and died on `arr.slice is not a function`. It always differs (fresh timestamps)
+  and sorts first, so the tool never reached the files it was asked about. Fixed in `697b652`.
+- **A stale agent rule nearly reverted working behaviour.** `web-developer.md` said assumptions must
+  never sit "behind a collapsed panel", while all six panels have been `defaultOpen={false}` since a
+  dated, e2e-tested 2026-09-10 decision. The agent started reverting it and stopped only on finding
+  the e2e evidence. Both that file and `new-tab` now state the rule that actually holds: presence
+  and proximity, not initial open state.
+
+## Next
+
+**The queue is empty.** Nothing is scheduled, nothing is half-built, no `PLAN_*.md` exists.
+
+Recorded but deliberately not scheduled:
+
+1. **`IDEAS.md` #25** — the typed PAIR of damage-modifier builders. Parked on purpose: 12 correct
+   call sites, each commented; worth doing when something else already opens those files.
+2. **`IDEAS.md` #26 Stage 2** — parked with the reasoning above.
+3. **`meta_ideas.md`** — no open items. Six `scout-meta-ideas`-style passes have run; the platform
+   CHANGELOG has been static at 2.1.270 for four of them, so evidence-mined passes are the ones that
+   produce findings, not platform surveys.
+4. **`gh` CLI** — still not installed, so `watch-github-actions` stays as-is.
+
+## 2026-09-14 (earlier): fifteen commits, all deployed green
 
 Everything below is live — `deploy.yml` reported `success` on each push, not merely committed.
 Working tree clean at `78545f1`. **Nothing is uncommitted or unpushed.**
@@ -75,7 +159,7 @@ the emitted bundle chunks (species chunk 2,571 KB raw / 232 KB gzip), `Frustrati
 appended last in every species checked, and `check-scenario-roundtrip.mjs`'s loud-failure paths.
 One agent claim was wrong and corrected: web tests are **372**, not the 377 reported.
 
-## Next
+### Next (as of that section — superseded by the Next above)
 
 1. **One combined `packages/web` pass** — four items on the same files, so one diff and one
    verification: **accessibility** (a genuinely broken contract: 7 `role="tab"` buttons, **zero**

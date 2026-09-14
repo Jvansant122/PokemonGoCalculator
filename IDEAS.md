@@ -89,7 +89,7 @@ incoming ones saying why they omit the field, and an audit confirmed all 12 corr
 touches correctness-critical code across both packages for a readability gain. Worth doing when
 something else already opens those files; not worth a dedicated churn pass.
 
-### 26. Defer the species MOVE arrays out of first load — MEASURED 2026-09-14, not scheduled
+### 26. Defer the species MOVE arrays out of first load — STAGE 1 SHIPPED 2026-09-14, STAGE 2 PARKED
 
 The per-tab lazy split (`3b2f723`) took the default landing path from 407.5 KB to **322.4 KB
 gzip**, and its own measurement said the remaining lever is the data layer, not the tabs. Measured
@@ -119,9 +119,35 @@ than a config change, and both must be respected:
    (CLAUDE.md standing decision), or `species.json` is bundled twice — which would silently undo
    the entire saving.
 
-**`PLAN_species_moves_split.md` exists (2026-09-14) and supersedes the framing above.** Two things
-in this entry turned out to be wrong, both in the same direction — the work is *better* than
-described:
+✅ **Stage 1 shipped 2026-09-14** (`697b652` data half, `8a03721` registry join). **Comparator cold
+load 316.0 → 233.8 KB gzip, an 82 KB cut**, species-bearing chunk 233 → 151 KB. The dedup is visible
+in the COMPILED bundle, not just in source: `VINE_WHIP_FAST` appears 42 times (42 species
+referencing one object) while the `energyGain` key appears 314 times — one per distinct move;
+per-species duplication would have put it in ~13,061 times. `deriveSpeciesSplit` asserts the
+byte-identical precondition and aborts the sync if a future GAME_MASTER change breaks it, and
+`check-species-split` (in `npm run check`) proves the derived files re-join to exactly
+`species.json`, so they cannot drift.
+
+⛔ **Stage 2 — making the moves payload a dynamic import — is PARKED, deliberately, with numbers in
+hand.** Stage 1 already captured the byte reduction; those 82 KB are gone for every visitor. Stage 2
+would not remove bytes, only reschedule them: `ComparatorView` simulates on its FIRST render, as
+does every tab, so essentially every user fetches the moves regardless. The shell would paint
+~40 KB sooner while the first actual RESULT arrives at the same time or marginally later, behind an
+extra round-trip. Against that: a permanent async gate, a loading state, an error path, a vitest
+setup file, a CLI await, a bundle checker that must be built *and falsified*, and a window in which
+a CSV import writes null move ids into localStorage where **the corruption survives the fix**.
+Trading a permanent new failure surface for paint timing, with no change to time-to-first-result,
+is a bad deal on a tool people open in order to read numbers.
+
+**If Stage 2 is ever revived**, the design work is recoverable from git: `PLAN_species_moves_split.md`
+as of `8a03721`, deleted afterwards per the repo's plan convention. Its durable conclusions — an
+async load inside the engine violates the no-I/O invariant; a move-ids redesign is type-honest but
+touches 300+ sites for zero extra bytes; a throwing getter breaks structured-clone across the worker
+boundary; the fill-in-place shape is what leaves the worker and ~130 call sites untouched. Guard 1
+(the ESLint worker-import rule) shipped separately in `a23a320` and stands on its own merits.
+
+**The original framing below is superseded, and kept because its two errors are instructive** — the
+work turned out *better* than described:
 
 - **The moves are massively redundant.** 13,061 move entries across 1,750 species resolve to only
   **308 distinct objects** (80 fast, 228 charged) with **zero structural conflicts** — every
