@@ -1,14 +1,40 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ComparatorPrefill } from "./comparatorPrefill.js";
 import type { TeamRaidPrefill } from "./teamRaidPrefill.js";
-import { AttackDefenseBreakpointsView } from "./AttackDefenseBreakpointsView.js";
-import { ComparatorView } from "./ComparatorView.js";
-import { IvBreakpointsView } from "./IvBreakpointsView.js";
-import { PowerUpOptimizerView } from "./PowerUpOptimizerView.js";
-import { RosterView } from "./RosterView.js";
-import { SpeciesReportView } from "./SpeciesReportView.js";
 import { TabErrorBoundary } from "./TabErrorBoundary.js";
-import { TeamRaidView } from "./TeamRaidView.js";
+import { TabLoadingBar } from "./TabLoadingBar.js";
+
+/**
+ * Every view is a SEPARATE async chunk (site-builder, 2026-09-13 bundle-size
+ * pass): registry.ts (and the ~2.7 MB compact `species.json` it bundles — see
+ * that file's own doc comment) is a shared dependency of all seven views and
+ * so is NOT split by this alone — it lands in whatever chunk the
+ * first-rendered tab needs, same as before. What this DOES split off is each
+ * OTHER tab's own code: a session that only ever opens the Comparator no
+ * longer downloads the Power-Up Optimizer's roster planner (its own
+ * PowerUpOptimizerAssumptionPanel.tsx is 1125 lines) or the Poke Genie CSV
+ * import machinery until that tab is actually opened. Named exports (every
+ * view file also exports plain helpers like DEFAULT_ASSUMPTIONS/
+ * assumptionsToScenario used by scenarioRoundtrip.test.ts and friends), hence
+ * the `.then` reshape rather than a bare `import()` — React.lazy requires a
+ * `default` export.
+ *
+ * `TabErrorBoundary` must stay the OUTER boundary and `Suspense` the INNER
+ * one (see the render tree below): a chunk that fails to fetch on a flaky
+ * mobile connection rejects the dynamic import's promise, which React
+ * surfaces as a thrown render error on the nearest boundary ABOVE the
+ * `Suspense` — reversing the nesting would leave a failed chunk load with no
+ * boundary above it to catch it at all.
+ */
+const ComparatorView = lazy(() => import("./ComparatorView.js").then((m) => ({ default: m.ComparatorView })));
+const TeamRaidView = lazy(() => import("./TeamRaidView.js").then((m) => ({ default: m.TeamRaidView })));
+const SpeciesReportView = lazy(() => import("./SpeciesReportView.js").then((m) => ({ default: m.SpeciesReportView })));
+const IvBreakpointsView = lazy(() => import("./IvBreakpointsView.js").then((m) => ({ default: m.IvBreakpointsView })));
+const AttackDefenseBreakpointsView = lazy(() =>
+  import("./AttackDefenseBreakpointsView.js").then((m) => ({ default: m.AttackDefenseBreakpointsView })),
+);
+const PowerUpOptimizerView = lazy(() => import("./PowerUpOptimizerView.js").then((m) => ({ default: m.PowerUpOptimizerView })));
+const RosterView = lazy(() => import("./RosterView.js").then((m) => ({ default: m.RosterView })));
 
 /** The app's seven views. */
 export type AppTab =
@@ -232,21 +258,28 @@ export function App() {
         masthead and nav stay usable as the fallback's own "way out."
       */}
       <TabErrorBoundary key={tab} tabLabel={TAB_LABELS[tab]} onResetTab={handleResetTab}>
-        {tab === "comparator" ? (
-          <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
-        ) : tab === "team-raid" ? (
-          <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
-        ) : tab === "species-report" ? (
-          <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
-        ) : tab === "iv-breakpoints" ? (
-          <IvBreakpointsView />
-        ) : tab === "attack-defense-breakpoints" ? (
-          <AttackDefenseBreakpointsView />
-        ) : tab === "power-up-optimizer" ? (
-          <PowerUpOptimizerView />
-        ) : (
-          <RosterView />
-        )}
+        {/*
+          Suspense sits INSIDE TabErrorBoundary on purpose — see App.tsx's top
+          doc comment on the lazy view declarations for why a failed chunk
+          fetch needs a boundary ABOVE this, not below it.
+        */}
+        <Suspense fallback={<TabLoadingBar />}>
+          {tab === "comparator" ? (
+            <ComparatorView prefill={comparatorPrefill} onConsumedPrefill={() => setComparatorPrefill(null)} />
+          ) : tab === "team-raid" ? (
+            <TeamRaidView prefill={teamRaidPrefill} onConsumedPrefill={() => setTeamRaidPrefill(null)} />
+          ) : tab === "species-report" ? (
+            <SpeciesReportView onCompare={handleCompareFromSpeciesReport} onSendToTeamRaid={handleSendToTeamRaidFromSpeciesReport} />
+          ) : tab === "iv-breakpoints" ? (
+            <IvBreakpointsView />
+          ) : tab === "attack-defense-breakpoints" ? (
+            <AttackDefenseBreakpointsView />
+          ) : tab === "power-up-optimizer" ? (
+            <PowerUpOptimizerView />
+          ) : (
+            <RosterView />
+          )}
+        </Suspense>
       </TabErrorBoundary>
     </div>
   );
