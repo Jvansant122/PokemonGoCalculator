@@ -270,16 +270,35 @@ the `gh` CLI (still open, awaiting a user install). The one place this repo crea
 `check-mega-gaps.yml` — does it inside the Actions runner via `actions/github-script`, never through
 an agent, so there is no agent-side gap to justify the ongoing cost.
 
-## 22. A dedicated skill for a fact only one agent needs
+## 22. A skill for a SHORT fact that is relevant on essentially every run of one agent
 
-Proposed twice — a vitest worker-OOM skill for `engine-verifier`, a measure-before-building skill for
-`engine-developer` — and declined both times in favour of writing the fact into that agent's own body.
+Proposed twice — a vitest worker-OOM skill for `engine-verifier`, a measure-before-building skill
+for `engine-developer` — and declined both times in favour of writing the fact into that agent's
+own body. Precedents: `5e35bfd`, `56d0bbc`.
 
-**Why not:** a skill costs a line in the always-loaded listing for *every* session; an agent body is
-paid only when that agent runs. Precedents: `5e35bfd`, `56d0bbc`.
+**Why not, and note how narrow this is:** a skill's description sits in the always-loaded listing
+every session (~60-130 tokens each; ~700 for the current seven). An agent body is paid only when
+that agent runs — but paid *in full, every time it runs*. So the deciding axis is
+**length × how often the fact is relevant when that agent runs**, not how many agents need it:
 
-⚠️ Corollary: if a fact is ever needed by *several* agents, a skill becomes the right shape, and the
-subagent `skills:` frontmatter field (verified real against current docs 2026-09-12 — content is
-injected at startup, though invocation by an agent lacking the `Skill` tool is undocumented) is the
-mechanism.
+- The vitest OOM note is ~590 chars and relevant at step zero of EVERY `engine-verifier`
+  diagnosis. A skill would add permanent listing cost for something needed on every run regardless.
+- The fodder-boss trap is ~1,700 chars and relevant whenever `engine-developer` measures.
 
+⚠️ **This entry does NOT say "one consumer means it shouldn't be a skill."** That inverts badly: a
+long procedure one agent needs on one run in ten is CHEAPER as a skill, because the body would pay
+its full length on all ten runs while the skill pays one listing line plus its body only when
+invoked. Two further things a body cannot do, either of which justifies a single-agent skill on its
+own:
+
+1. **A user can invoke it by name.** `/verify-and-ship` is effectively single-purpose; you type it.
+2. **Description matching fires it without anyone remembering it exists** — precisely the failure
+   that put the fodder-boss trap in a body, since it sat in indexed memory and was skimmed past
+   twice anyway.
+
+So: propose a single-agent skill freely when it is long, occasionally relevant, user-invocable, or
+needs to trigger on its own. What was rejected here is only the narrow case above.
+
+⚠️ Corollary unchanged: a fact needed by *several* agents is skill-shaped, and the subagent
+`skills:` frontmatter field (verified real against current docs 2026-09-12 — content is injected at
+startup, though invocation by an agent lacking the `Skill` tool is undocumented) is the mechanism.
