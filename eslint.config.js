@@ -40,6 +40,29 @@ export default tseslint.config(
     },
   },
   {
+    // CLAUDE.md's worker standing decision, mechanized. `rosterPlanner.worker.ts` may import ONLY
+    // `@pogo-analyzer/engine` — never `registry.ts` and never the normalized JSON — or
+    // `species.json` is bundled a second time into the worker chunk, silently doubling what the
+    // app ships while every test still passes (no test in this repo can see bytes). Until now this
+    // was prose in two doc comments and nothing else. The worker chunk is ~70 KB; pulling in the
+    // registry would add ≥717 KB raw.
+    files: ["packages/web/src/**/*.worker.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/registry", "**/registry.js", "**/registry.ts", "**/data/normalized/*"],
+              message:
+                "A worker may import ONLY @pogo-analyzer/engine (CLAUDE.md standing decision). Importing the registry or normalized data bundles species.json a second time. Resolve inputs on the main thread and pass plain JSON through postMessage — see rosterPlannerWorkerClient.ts.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["packages/web/src/**/*.{ts,tsx}"],
     plugins: { "react-hooks": reactHooks },
     rules: {

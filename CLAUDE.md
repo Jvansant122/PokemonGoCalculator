@@ -208,6 +208,8 @@ npm workspaces monorepo, two packages:
   `planRosterBudget` = the joint allocation — same two-questions split as above, don't merge
   them); the sweep runs in `rosterPlanner.worker.ts`, which must import ONLY
   `@pogo-analyzer/engine` and never `registry.ts`, or `species.json` gets bundled twice.
+  **Enforced since 2026-09-14 by a `no-restricted-imports` block in `eslint.config.js`** scoped to
+  `**/*.worker.ts` — it was prose-only before that, and no test in this repo can see bytes.
   Three multi-raid rules that cost real debugging to find: **candy pools per `candyFamilyId`,
   never per species id** (25 families hold >1 entry on a real roster); an entry is excluded only
   when `isFullyEvolved === false`, **never `!== true`** (it is `undefined` for all 61 megas, and
