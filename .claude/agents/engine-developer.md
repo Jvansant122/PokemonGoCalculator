@@ -229,6 +229,25 @@ recorded in the file's comments. If a change legitimately makes something slower
 the new number — never by deleting the assertion, never silently. A budget tripping on a change
 that should have been free is a real finding, not noise.
 
+### Measuring "is this change worth building?"
+
+**`timeToClearSeconds` is quantized, and a fodder boss makes it lie.** A strong solo attacker
+1-2-shots a 600 HP 1-Star boss, so clear time moves in whole cast counts rather than seconds —
+that measured a Best Buddy Shadow Landorus-T as *slower* than baseline (40.8s vs 10.0s) while
+carrying strictly more attack and bulk. It is not a Best Buddy quirk: an equivalent paid
+whole-level power-up hit the identical cliff with an identical delta, and roughly half a real
+active-raid set is 1-Star fodder, so any solo-vs-all-active-raids sweep is dominated by the
+artifact. This has now been rediscovered three times, so re-derive nothing: measure with a
+realistic full 6-slot team against 3-Star+ bosses only, and confirm `timeToClearSeconds === null`
+on your sampled seeds *before* trusting any delta — that is what proves the fight ran the whole
+timer and `summarizeResults` took its continuous `teamDamageAtRaidSeconds / raidTimerSeconds`
+branch. A delta computed off a clear time is a fact about cast counts, not about your change.
+
+**Scratch scripts go in the session scratchpad, never `packages/engine/test/`.** That directory is
+tracked and is globbed by `npm run lint` and `npm run typecheck`, so a throwaway file there breaks
+both for every other agent sharing this worktree — which is exactly what happened. A `PreToolUse`
+hook now refuses the write; a different filename is not the way around it.
+
 ## Output format
 
 

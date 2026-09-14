@@ -4,6 +4,11 @@
 //   packages/engine/src/**/*.ts            -> npm run test:engine        (the original hook)
 //   packages/web/src/**/*.{ts,tsx}         -> tsc --noEmit (web)         (engine<->web interface drift)
 //   any scenario/assumption file (any tab) -> check-scenario-roundtrip   (the shared-link bug class)
+//   .claude/agents|skills, CLAUDE.md, HANDOFF.md -> check-docs-drift     (docs claiming stale counts)
+//
+// The docs-drift branch is a partial net, not a guarantee: check-docs-drift parses structured
+// things (tab counts, query params, command names, agent/skill mentions, a skill's Step-0 table),
+// not free prose. It would not have caught, say, a stale sentence inside a skill body.
 //
 // Exit code 2 surfaces stderr straight into the conversation; 0 is silent. Anything the
 // hook can't parse is ignored rather than blocking an unrelated edit.
@@ -31,11 +36,17 @@ process.stdin.on("end", () => {
   const base = path.basename(fp);
   const isScenarioFile =
     /Scenario\.ts$/.test(base) || /AssumptionPanel\.tsx$/.test(base) || /View\.tsx$/.test(base);
+  const isDocsSurface =
+    /\.claude\/agents\/[^/]+\.md$/.test(fp) ||
+    /\.claude\/skills\/.+\/SKILL\.md$/.test(fp) ||
+    base === "CLAUDE.md" ||
+    base === "HANDOFF.md";
 
   const checks = [];
   if (isEngineSrc) checks.push({ label: "npm run test:engine", cmd: "npm run test:engine" });
   if (isWebSrc) checks.push({ label: "web tsc --noEmit", cmd: "npm run typecheck:web" });
   if (isScenarioFile) checks.push({ label: "npm run check-scenario-roundtrip", cmd: "npm run check-scenario-roundtrip" });
+  if (isDocsSurface) checks.push({ label: "npm run check-docs-drift", cmd: "npm run check-docs-drift" });
   if (checks.length === 0) process.exit(0);
 
   const failures = [];

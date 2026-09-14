@@ -1,7 +1,8 @@
 # Meta-Architect Memory Index
 
-- [Project config shape](project-config-shape.md) — snapshot 2026-09-12: 11 agents, 7 skills, 2 hooks, docs-drift checker; deliberate settings + what the checker does NOT cover.
+- [Project config shape](project-config-shape.md) — snapshot 2026-09-12: 11 agents, 7 skills, 3 hooks as of 2026-09-14, docs-drift checker; deliberate settings + what the checker does NOT cover.
 - [Skills and gates pass](skills-and-gates-2026-09-08.md) — 2026-09-08: 4 skills added, verify-and-ship → `npm run verify`, agents pointed at new suites/CLI; CRLF + heredoc lessons.
+- [PreToolUse scratch guard + docs-drift branch](preToolUse-scratch-guard.md) — 2026-09-14: 3rd hook added; deny-form + Write-only rationale, what the guard and check-docs-drift canNOT see, heredoc fixture trap.
 - [`skills:` preload + why not a skill](skills-frontmatter-preload.md) — 2026-09-12: `skills:` content-preload confirmed, invocation unconfirmed; vitest-OOM note went in engine-verifier's body instead.
 
 - [pogo-player addition](pogo-player-addition.md) — 2026-09-10: 10th agent, user-proxy/product critic; separated from pogo-researcher (no web access) and skeptic (useful vs wrong); 4 archetypes, one evidence-backed.
@@ -12,7 +13,7 @@
 - [Sprite mechanism dropped](sprite-mechanism-dropped.md) — RESOLVED (was a false positive): content was already in data-sync.md/engine-developer.md at d1305f6.
 - [web-developer tool mismatch](web-developer-tool-mismatch.md) — RESOLVED (was a false positive): web-developer.md already hedges on tool availability at d1305f6.
 - [CLAUDE.md changelog drift](claude-md-changelog-drift.md) — recurring pattern: incident narrative creeps into CLAUDE.md instead of staying in HANDOFF.md/git history.
-- [Agent-doc fossilization](agent-doc-fossilization.md) — RECURRING (2026-09-04, 2026-09-07): agent bodies rot silently; grep every named symbol/path/number against packages/+scripts/, never against CLAUDE.md.
+- [Agent-doc fossilization](agent-doc-fossilization.md) — RECURRING (2026-09-04, 2026-09-07, 2026-09-14 engine-verifier/scenarioA): agent bodies rot silently; grep every named symbol/path/number against packages/+scripts/, never against CLAUDE.md.
 - [Site-builder push guardrail](site-builder-push-guardrail.md) — RESOLVED 2026-09-05: settings.json now has a permissions.ask rule on `git push:*`.
 - [data-sync normalize gap](data-sync-normalize-gap.md) — RESOLVED 2026-09-05: data-sync.md now has a "## Normalize" section.
 - [engine-verifier/hook overlap](engine-verifier-hook-overlap.md) — RESOLVED 2026-09-05: description retargeted to hook-aware framing as recommended.

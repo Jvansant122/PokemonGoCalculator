@@ -59,6 +59,19 @@
         ]
       }
     ],
+    "PreToolUse": [
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "export PATH=\"/c/Program Files/nodejs:$PATH\"; node \"/c/Users/Jack/Documents/PokemonGoCalculator/.claude/hooks/block-engine-test-scratch.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking the write path isn't a scratch file in the engine test tree..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
@@ -67,7 +80,7 @@
             "type": "command",
             "command": "export PATH=\"/c/Program Files/nodejs:$PATH\"; node \"/c/Users/Jack/Documents/PokemonGoCalculator/.claude/hooks/post-edit.mjs\"",
             "timeout": 120,
-            "statusMessage": "Running the check that owns the edited file (engine tests / web tsc / scenario round-trip)..."
+            "statusMessage": "Running the check that owns the edited file (engine tests / web tsc / scenario round-trip / docs drift)..."
           }
         ]
       }

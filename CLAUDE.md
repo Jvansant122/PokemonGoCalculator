@@ -398,13 +398,19 @@ can't see), `record-mechanic` (a sourced, dated MECHANICS.md entry ending with t
 status), and `close-session` (HANDOFF/PLAN/MECHANICS/IDEAS back in their lanes, uncommitted work
 stated plainly).
 
-`.claude/settings.json` has two hooks. `SessionStart` runs `.claude/hooks/session-start.sh`:
+`.claude/settings.json` has three hooks. `SessionStart` runs `.claude/hooks/session-start.sh`:
 Node on PATH for the session, then git status, HANDOFF.md's newest section, and any pending
 `PLAN_*.md`. `PostToolUse` on `Edit|Write` runs `.claude/hooks/post-edit.mjs`, which reruns the
 cheapest check that owns the edited file — `npm run test:engine` for `packages/engine/src/**/*.ts`,
 the web type-check for `packages/web/src/**`, `npm run check-scenario-roundtrip` for any
-`*Scenario.ts` / `*AssumptionPanel.tsx` / `*View.tsx` — and surfaces a failure straight into the
-conversation. The permissions allowlist covers read-only git/file commands and every `npm run`
+`*Scenario.ts` / `*AssumptionPanel.tsx` / `*View.tsx`, `npm run check-docs-drift` for
+`.claude/agents/*.md` / `.claude/skills/**/SKILL.md` / `CLAUDE.md` / `HANDOFF.md` — and surfaces a
+failure straight into the conversation. `PreToolUse` on `Write` runs
+`.claude/hooks/block-engine-test-scratch.mjs`, which **denies** creating anything under
+`packages/engine/test/` that isn't a `*.test.ts`, a `*.bench.ts`, or a `test/fixtures/` file:
+that directory is tracked and globbed by lint and typecheck, so a throwaway scratch script there
+breaks both for every concurrent agent. Scratch work belongs in the session scratchpad.
+The permissions allowlist covers read-only git/file commands and every `npm run`
 script above, and asks before any `git push`.
 
 ## For session continuity

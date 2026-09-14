@@ -42,3 +42,11 @@ source, and every one of them had survived at least one prior audit:
 authoritative in-repo source (`scripts/sync-data.ts`'s header comment, `AppTab` in `App.tsx`)
 rather than restating it in the agent body, since restated detail is what fossilizes *and* it
 costs context on every dispatch.
+
+**Third instance, 2026-09-14 (found incidentally, NOT fixed — needs the user's call):**
+`.claude/agents/engine-verifier.md:30` still calls `test/scenarioA.test.ts` "the pinned Scenario A
+set" and treats it as an anchor test. That file and `scenarioB.test.ts` were deleted 2026-09-11
+with the opening-burst cluster (engine-developer's own
+`deletion_opening_burst_cluster_2026_09_11.md`). `git ls-files packages/engine/test` confirms
+neither exists. `check-docs-drift` cannot catch this — it checks command names and agent/skill
+mentions, not test-file paths named inside an agent body.

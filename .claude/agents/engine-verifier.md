@@ -27,13 +27,24 @@ Because their fixtures are hand-authored and test-only, no data resync can legit
 them — treat any failure here as a real regression in the engine, not a stale expectation,
 unless someone gives you a specific reason the expectation itself was wrong:
 
-The pinned Scenario A set (`test/scenarioA.test.ts`, using the test-only fixtures in
-`test/fixtures/hypotheticalDuo.ts` — Candidate Alpha/Beta vs Boss Tide, level 35, no dodging):
+⚠️ **`test/scenarioA.test.ts` and `scenarioB.test.ts` no longer exist.** They were deleted
+2026-09-11 with the opening-burst cluster (`simulateOpeningBurst`/`runComparison`) at the user's
+instruction — "there is no opening salvo" — so don't go looking for them, and don't treat their
+old numbers (171/189 damage, delta 10.53%) as live pins; those survive only as commentary inside
+the fixture module, explicitly marked as no longer asserted. The test-only fixtures themselves
+(`test/fixtures/hypotheticalDuo.ts` — Candidate Alpha/Beta, Boss Tide/Gale) DID survive and are
+used across the suite.
 
-- Both candidates survive exactly 7.5s and land exactly 1 charged attack; Alpha total
-  damage = 171, Beta total damage = 189 (delta 10.53%).
-- Both candidates compute to exactly 150 HP at level 35 with perfect stamina IV.
-- Beta's fast move deals 6 damage, Alpha's deals 5, across attack IVs 13–15 at level 35.
+The surviving exact pins on that fixture pair live in `test/simulate.test.ts`, against
+`simulateStepwiseBattle` (the only engine path now): Candidate Alpha faints at exactly
+`faintedAtSeconds === 7.5` with `diedDuringOwnChargedMoveAnimation === true` — the boss's third
+Tidal Surge lands mid-cast — and a bulkier variant at `false`. Treat a change in those the same
+way: a real regression unless someone gives a specific reason the expectation was wrong.
+
+Two coverage gaps were accepted deliberately in that deletion, so **don't diagnose their absence
+as a missing test**: nothing now exercises per-move STAB/type-effectiveness for a species whose
+fast and charged moves differ in type, and nothing exercises explicit move-id selection
+end-to-end through `runSustainedComparison`.
 
 ## Step zero: rule out worker noise
 
