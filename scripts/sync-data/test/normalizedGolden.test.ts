@@ -125,6 +125,14 @@ const activeRaids: ActiveRaidEntry[] = loadJson<ActiveRaidEntry[]>("activeRaids.
 const raidHistory: RaidHistoryEntry[] = loadJson<RaidHistoryEntry[]>("raidHistory.json");
 const powerUpCosts: PowerUpCosts = loadJson<PowerUpCosts>("powerUpCosts.json");
 
+interface NormalizedMetaEntry {
+  fetchedAt: string | null;
+  writtenAt: string;
+  source: "scrapedduck" | "fallback-file" | "fallback-file-created-empty";
+}
+type NormalizedMeta = Record<string, NormalizedMetaEntry>;
+const normalizedMeta: NormalizedMeta = loadJson<NormalizedMeta>("_meta.json");
+
 function findStep(fromLevel: number) {
   return powerUpCosts.steps.find((s) => s.fromLevel === fromLevel);
 }
@@ -757,5 +765,37 @@ describe("structural invariants (mirrors what check-mega-gates.mjs / check-raid-
     for (const id of activeIds) {
       expect(historyIds.has(id), `active raid speciesId "${id}" has no raidHistory row at all`).toBe(true);
     }
+  });
+});
+
+describe("_meta.json (activeRaids.json freshness provenance, added 2026-09-14)", () => {
+  // A sibling file, not a field ON activeRaids.json — that file stays a bare
+  // array (packages/web/src/registry.ts imports and casts it directly), so a
+  // fetchedAt field lives here instead of as a breaking schema change. See
+  // sync-data.ts's "Freshness provenance sibling file" section for the full
+  // reasoning this pins.
+  it("carries an activeRaids.json entry with fetchedAt, writtenAt, and a recognized source", () => {
+    const entry = normalizedMeta["activeRaids.json"];
+    if (!entry) throw new Error('_meta.json has no "activeRaids.json" entry');
+    expect(["scrapedduck", "fallback-file", "fallback-file-created-empty"]).toContain(entry.source);
+    expect(typeof entry.writtenAt).toBe("string");
+    expect(Number.isNaN(Date.parse(entry.writtenAt)), "writtenAt must be a parseable ISO timestamp").toBe(false);
+    // fetchedAt is null only if the live feed has NEVER once succeeded on
+    // this checkout — on any committed sync (this one included) it's a live
+    // ScrapedDuck fetch, so it must be a real, parseable timestamp here.
+    expect(entry.fetchedAt).not.toBeNull();
+    expect(Number.isNaN(Date.parse(entry.fetchedAt as string)), "fetchedAt must be a parseable ISO timestamp").toBe(false);
+  });
+
+  // fetchedAt and writtenAt are deliberately DIFFERENT timestamps (captured
+  // at different points in the pipeline, not aliases of the same clock read)
+  // — see sync-data.ts's doc comment for why they can diverge on a fallback
+  // run. This asserts they're at least both real and writtenAt is never
+  // earlier than fetchedAt on a live "scrapedduck" run (the feed is always
+  // fetched before this run finishes writing its own output).
+  it("on a live scrapedduck run, writtenAt is not earlier than fetchedAt", () => {
+    const entry = normalizedMeta["activeRaids.json"];
+    if (!entry || entry.source !== "scrapedduck") return; // fallback runs can legitimately have an older fetchedAt
+    expect(Date.parse(entry.writtenAt)).toBeGreaterThanOrEqual(Date.parse(entry.fetchedAt as string));
   });
 });

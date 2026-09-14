@@ -228,6 +228,25 @@ const rawMegaPokemon = await fetchAndCacheMegaPokemon(RAW_DIR);
 await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
 const raidFetchResult = await fetchAndCacheRaids(RAW_DIR, REPO_ROOT);
 const rawRaids = raidFetchResult.entries;
+/**
+ * Freshness provenance for activeRaids.json (2026-09-14 — see the
+ * "Freshness provenance sibling file" section near this script's write step
+ * for the full reasoning). fetchAndCacheRaids only calls recordFetchMeta
+ * (writing data/raw/_meta.json's "raids.json" entry) on a LIVE ScrapedDuck
+ * success — so re-reading that entry here, rather than just stamping "now",
+ * correctly carries forward the last time the feed itself was actually
+ * fetched even on a run that falls back to the project-owned override file
+ * (raidFetchResult.source !== "scrapedduck"), instead of overstating
+ * freshness with today's date for data that's actually older.
+ */
+const activeRaidsFeedFetchedAt: string | null = (() => {
+  try {
+    const rawMetaForRaids = JSON.parse(readFileSync(join(RAW_DIR, "_meta.json"), "utf-8")) as Record<string, { fetchedAt?: string }>;
+    return rawMetaForRaids["raids.json"]?.fetchedAt ?? null;
+  } catch {
+    return null;
+  }
+})();
 await new Promise((resolve) => setTimeout(resolve, 150)); // short delay between sequential live fetches, per project convention
 
 // PRIMARY source for stats/typing/moveset/rarity as of the 2026-09-06
@@ -3175,6 +3194,58 @@ writeFileSync(raidsOutPath, JSON.stringify(activeRaids, null, 2));
 writeFileSync(raidHistoryOutPath, JSON.stringify(raidHistory, null, 2));
 // See shadowFirstPartyAnchorsOutPath's own doc comment above.
 writeFileSync(shadowFirstPartyAnchorsOutPath, JSON.stringify([...shadowSeedBaseIdsFromGameMaster].sort(), null, 2));
+
+// ---------------------------------------------------------------------------
+// Freshness provenance sibling file — data/normalized/_meta.json (2026-09-14)
+// ---------------------------------------------------------------------------
+// activeRaids.json is a bare array — packages/web/src/registry.ts imports it
+// directly and casts it (`activeRaidsData as unknown as RawActiveRaidEntry[]`)
+// — so it can never carry a top-level fetchedAt field itself without a
+// breaking schema change for that consumer. A SIBLING meta file is additive
+// instead, the same convention data/raw/_meta.json already uses for the raw
+// per-endpoint fetch timestamps: nothing that reads activeRaids.json today
+// needs to change, and packages/web can read this file directly at build
+// time (no network call, no backend — it's part of the same static build)
+// to answer "how current is the raid roster I'm showing?"
+//
+// Two independent timestamps are kept, since this pipeline can make them
+// differ:
+//   - fetchedAt: when the ScrapedDuck feed itself was last successfully
+//     fetched (activeRaidsFeedFetchedAt, captured right after
+//     fetchAndCacheRaids above). On a run that falls back to
+//     data/raid-bosses.json (source !== "scrapedduck"), this stays whatever
+//     an EARLIER successful run recorded — it does NOT jump to "now", so a
+//     stale fallback correctly reads as stale rather than freshly-fetched.
+//     null only if the live feed has never once succeeded (e.g. a fresh
+//     checkout with no data/raw/_meta.json yet).
+//   - writtenAt: when THIS sync run wrote activeRaids.json (SYNC_TIMESTAMP).
+//     Always "now" for this run, regardless of source — this is "the file
+//     on disk was last regenerated at X", not "the data in it is from X".
+// `source` mirrors RaidFetchResult.source (see ./sync-data/fetchCache.ts) so
+// a consumer can tell "old because nobody's run a sync in a while" apart
+// from "old because the live feed itself has been down across several syncs"
+// (fallback-file / fallback-file-created-empty).
+//
+// Deliberately NOT extended to every normalized file (see CLAUDE.md's
+// "invented work" review 2026-09-14 for the full argument): species.json
+// changes on the order of game rebalances, not daily rotations, and matters
+// little if it's a sync or two behind; raidHistory.json is accumulate-only
+// and already self-describes recency PER ROW via firstSeenAt/lastSeenAt, so
+// a single top-level timestamp would be redundant and could even mislead (a
+// recent writtenAt says nothing about whether any NEW row was added this
+// run); powerUpCosts.json already embeds its own `fetchedAt` inline (it's an
+// object, not an array, so it never had activeRaids.json's schema-break
+// problem in the first place).
+const normalizedMetaOutPath = join(NORMALIZED_DIR, "_meta.json");
+const normalizedMeta = {
+  "activeRaids.json": {
+    fetchedAt: activeRaidsFeedFetchedAt,
+    writtenAt: SYNC_TIMESTAMP,
+    source: raidFetchResult.source,
+  },
+};
+writeFileSync(normalizedMetaOutPath, JSON.stringify(normalizedMeta, null, 2));
+
 // See this file's "Power-up (level-up) cost table" section above for why a
 // missing/invalid table this run intentionally leaves any existing file untouched.
 if (powerUpCostTable) {
@@ -3214,6 +3285,9 @@ const raidsApproximate = activeRaids.filter((r) => r.isApproximate).length;
 console.log(`SYNCED: GAME_MASTER (primary), pokemon_stats/pokemon_types/fast_moves/charged_moves/current_pokemon_moves (roster + fallback), cp_multiplier, mega_pokemon, scrapedduck-raids, pokebattler-raids (live cross-check + "_LEGACY" archive backfill, see WARNINGS), raid_bosses.previous + bulbapedia-raid-archive + pokebattler-legacy (raidHistory backfill) (${species.length} species [${species.length - megaSpecies.length - shadowSpecies.length - extraFormSpeciesCount} single-form (Normal, or fallback — see WARNINGS) + ${extraFormSpeciesCount} mechanically-distinct extra form (see WARNINGS) + ${megaSpecies.length} mega/primal + ${shadowSpecies.length} Shadow variant (${shadowSeedDurableCount} durably from evidence [raidHistory.json/Pokebattler-legacy/Bulbapedia], ${shadowSpecies.length - shadowSeedDurableCount} from this run's live feed only, isShadow: true, real base stats untouched — see WARNINGS)], ${fastMoveByName.size + chargedMoveByName.size} pogoapi-fallback moves cached + ${gameMasterFetchResult.moves.length} GAME_MASTER moveSettings entries), power-up cost table (${powerUpCostTable ? `${powerUpCostTable.steps.length} steps, see WARNINGS` : "skipped this run, see WARNINGS"})`);
 console.log(`CHANGED (species.json): ${speciesDiffs.length > 0 ? speciesDiffs.join("; ") : "none"}`);
 console.log(`CHANGED (activeRaids.json): ${raidDiffs.length > 0 ? raidDiffs.join("; ") : "none"}`);
+console.log(
+  `CHANGED (_meta.json, new 2026-09-14): activeRaids.json freshness provenance — fetchedAt ${activeRaidsFeedFetchedAt ?? "null (live feed has never once succeeded on this checkout)"}, writtenAt ${SYNC_TIMESTAMP}, source ${raidFetchResult.source}`,
+);
 console.log(
   `CHANGED (raidHistory.json): ${raidHistory.length} total entries (${raidHistoryLiveFeedCount} live-feed, ${raidHistoryResearchedCount} researched-tier, ${raidHistoryPogoapiPreviousCount} pogoapi-previous, ${raidHistoryBulbapediaArchiveCount} bulbapedia-archive, ${raidHistoryPokebattlerLegacyCount} pokebattler-legacy); newly added this run: ${raidHistoryNewlyAdded.length > 0 ? raidHistoryNewlyAdded.join(", ") : "none"}; archive-vs-archive tier upgrades this run: ${raidHistoryArchiveUpgradedCount > 0 ? raidHistoryArchiveUpgraded.join(", ") : "none"}; pokebattler-legacy tier upgrades this run: ${raidHistoryPokebattlerLegacyUpgradedCount > 0 ? raidHistoryPokebattlerLegacyUpgraded.join(", ") : "none"}; stale-row re-resolutions this run: ${raidHistoryMigrations.length > 0 ? raidHistoryMigrations.map((m) => `${m.from} -> ${m.to} (raidName "${m.raidName}"${m.merged ? ", merged into existing correct row" : ""})`).join("; ") : "none"}; species.json lastKnownRaidTier cleared alongside a migration (same-value contamination from the same old mis-resolution): ${raidHistoryMigrationClearedTiers.length > 0 ? raidHistoryMigrationClearedTiers.join(", ") : "none"}; phantom researched-tier rows superseded by a confidently-resolved extra form and removed: ${raidHistoryPhantomTierCleanups.length > 0 ? raidHistoryPhantomTierCleanups.join(", ") : "none"}`,
 );
