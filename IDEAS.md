@@ -119,8 +119,26 @@ than a config change, and both must be respected:
    (CLAUDE.md standing decision), or `species.json` is bundled twice — which would silently undo
    the entire saving.
 
-Worth a `PLAN_*.md` before anyone starts; it is the largest remaining performance lever and also
-the one most able to break the worker's import constraint by accident.
+**`PLAN_species_moves_split.md` exists (2026-09-14) and supersedes the framing above.** Two things
+in this entry turned out to be wrong, both in the same direction — the work is *better* than
+described:
+
+- **The moves are massively redundant.** 13,061 move entries across 1,750 species resolve to only
+  **308 distinct objects** (80 fast, 228 charged) with **zero structural conflicts** — every
+  occurrence of a move id is byte-identical. Verified 2026-09-14. So the deferred payload is a
+  dictionary plus id lists at **42 KB gzip**, not the ~119 KB assumed here.
+- **Deduping alone saves ~90 KB gzip with no async, no gate and no worker risk** — a build-time
+  reshape plus an eager join, shippable and revertable on its own. First load 322 → ~237 KB before
+  any risky work starts; ~195 KB after.
+
+And one objection this entry missed entirely, which the dedup is what defuses: **`ComparatorView`
+simulates on its first render**, as does every other tab, so essentially every user downloads the
+moves anyway. Under the naive shape the trade was "paint sooner, first RESULT one round-trip later,
+total bytes unchanged" — a bad trade, and a fair reason to have declined the whole idea. Deduped,
+total bytes fall (211 → 120 KB) and the chunk is fetched in parallel.
+
+The plan also records that **shipping only its Stage 1 and parking the async half is a legitimate
+outcome**. Read the plan, not this entry, before starting.
 
 ## Unmodelled real mechanics
 
