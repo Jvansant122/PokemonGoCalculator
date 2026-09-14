@@ -244,7 +244,19 @@ Still to confirm before Stage 1: that `diff-normalized.mjs` (dispatches on filen
 `:351`) tolerates two new files in `data/normalized/` without crashing or emitting a useless
 full-file diff.
 
-### Stage 1 — dedup only, still synchronous (ships ~90 KB gzip on its own)
+### Stage 1 — dedup only, still synchronous — ✅ DONE 2026-09-14 (`697b652` + the registry join)
+
+**Measured result: Comparator cold load 316.0 → 233.8 KB gzip, an 82 KB cut**, with the
+species-bearing chunk falling 233 → 151 KB. Slightly under the ~90 KB estimate, and the reason is
+worth keeping: the estimate gzipped the raw JSON in isolation, but gzip already compresses naively
+repeated JSON well, so minification and bundling absorb part of the theoretical gap. Direction and
+magnitude held; the exact figure did not transfer 1:1.
+
+Dedup confirmed in the COMPILED bundle, not just in source: `VINE_WHIP_FAST` appears 42 times (42
+species referencing one object) while the `energyGain` key appears 314 times — one per distinct
+move. Duplicated moves would have put `energyGain` in ~13,061 times.
+
+Original step list, for reference:
 1. `scripts/sync-data.ts` (write block ~line 3192): keep `species.json` **exactly as today** —
    canonical, pretty-printed, every existing script and golden test untouched — and additionally
    write `speciesCore.json` and `speciesMoves.json`

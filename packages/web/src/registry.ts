@@ -2,7 +2,9 @@ import {
   SpeciesRegistry,
   defaultRaidTierForSpecies,
   isKnownRaidTier,
+  type ChargedMove,
   type EvolutionOption,
+  type FastMove,
   type GatedEvolutionOption,
   type PowerUpCostTable,
   type RaidTier,
@@ -16,7 +18,19 @@ import {
 // the box; the relative path reaches outside packages/web on purpose (see
 // vite.config.ts's server.fs.allow and this package's tsconfig.json for the
 // matching allowances).
-import speciesData from "../../../data/normalized/species.json";
+//
+// species.json itself is NOT imported here (PLAN_species_moves_split.md
+// Stage 1b) — it remains the canonical, byte-for-byte source of truth for
+// every other script/checker, but this registry now reads its two derived
+// siblings instead: speciesCore.json (species.json minus fastMoves/
+// chargedMoves) and speciesMoves.json (a deduped move dictionary plus
+// per-species id lists). scripts/check-species-split.mjs (npm run check)
+// asserts the pair re-joins to exactly species.json, so the split can't
+// silently drift. Both imports are still STATIC — Stage 2 (making the moves
+// payload a dynamic import behind a loading gate) is a deliberately separate,
+// not-yet-started piece of work; see the plan before changing that.
+import speciesCoreData from "../../../data/normalized/speciesCore.json";
+import speciesMovesData from "../../../data/normalized/speciesMoves.json";
 import activeRaidsData from "../../../data/normalized/activeRaids.json";
 import raidHistoryData from "../../../data/normalized/raidHistory.json";
 // The Power-Up Optimizer's cost table — the engine's own PowerUpCostTable
@@ -140,7 +154,36 @@ interface RawEvolutionCandyCostEntry {
 
 type RawSpeciesRecord = SpeciesDefinition & { evolutionCandyCosts?: RawEvolutionCandyCostEntry[] };
 
-const RAW_SPECIES = speciesData as unknown as RawSpeciesRecord[];
+/**
+ * `speciesCore.json`'s per-entry shape: exactly `RawSpeciesRecord` minus the
+ * two move arrays, which live in `speciesMoves.json` instead (see
+ * RawSpeciesMovesPayload below and `fillSpeciesMoves`'s doc comment for the
+ * join). Every other field — including `evolutionCandyCosts`, which
+ * `resolveEvolutions` still reads off these objects — is untouched.
+ */
+type RawSpeciesCoreRecord = Omit<RawSpeciesRecord, "fastMoves" | "chargedMoves">;
+
+/**
+ * `speciesMoves.json`'s shape — a deduped move dictionary plus per-species id
+ * lists, split out of `species.json` at build time by
+ * `scripts/sync-data/speciesSplit.ts`'s `deriveSpeciesSplit` (see
+ * PLAN_species_moves_split.md Stage 1). 308 distinct move objects (80 fast +
+ * 228 charged) cover all 13,061 (species, move) occurrences in the synced
+ * data — `deriveSpeciesSplit` ASSERTS every occurrence of a given move id is
+ * byte-identical JSON across every species that carries it and throws the
+ * sync if not; that assertion is the precondition that makes sharing move
+ * OBJECT REFERENCES across species (see `fillSpeciesMoves` below) safe.
+ * `bySpecies[id].f`/`.c` list that species' fast/charged move ids in their
+ * original `species.json` array order.
+ */
+interface RawSpeciesMovesPayload {
+  fastMoves: Record<string, FastMove>;
+  chargedMoves: Record<string, ChargedMove>;
+  bySpecies: Record<string, { f: string[]; c: string[] }>;
+}
+
+const RAW_SPECIES_CORE = speciesCoreData as unknown as RawSpeciesCoreRecord[];
+const RAW_SPECIES_MOVES = speciesMovesData as unknown as RawSpeciesMovesPayload;
 const RAW_ACTIVE_RAIDS = activeRaidsData as unknown as RawActiveRaidEntry[];
 const RAW_RAID_HISTORY = raidHistoryData as unknown as RawRaidHistoryEntry[];
 
@@ -154,7 +197,7 @@ const RAW_RAID_HISTORY = raidHistoryData as unknown as RawRaidHistoryEntry[];
  * `SpeciesDefinition` object — the same id-to-object resolution pattern
  * `resolveMegaBaseCandyFamilyId`/`resolveMegaBaseKmBuddyDistance` already use
  * below. MUST run AFTER every species is registered (a branch can point
- * forward or backward in `RAW_SPECIES`' own array order — Eevee's branches
+ * forward or backward in `RAW_SPECIES_CORE`' own array order — Eevee's branches
  * all point forward to its eeveelutions, for instance), and mutates the
  * ALREADY-REGISTERED species objects in place (`SpeciesRegistry.register`
  * stores the exact reference handed to it, never a copy — see gamemaster.ts),
@@ -167,7 +210,7 @@ const RAW_RAID_HISTORY = raidHistoryData as unknown as RawRaidHistoryEntry[];
  * matching this module's existing "degrade a stale reference rather than
  * crash the app" convention (activeRaidBossOptions, resolveBossTarget, etc).
  */
-function resolveEvolutions(registry: SpeciesRegistry, rawSpecies: RawSpeciesRecord[]): void {
+function resolveEvolutions(registry: SpeciesRegistry, rawSpecies: RawSpeciesCoreRecord[]): void {
   for (const raw of rawSpecies) {
     const rawCosts = raw.evolutionCandyCosts;
     if (!rawCosts || rawCosts.length === 0) continue;
@@ -211,6 +254,58 @@ function resolveEvolutions(registry: SpeciesRegistry, rawSpecies: RawSpeciesReco
 }
 
 /**
+ * Fills every already-registered species' `fastMoves`/`chargedMoves` arrays
+ * from `speciesMoves.json`'s deduped dictionaries (RawSpeciesMovesPayload) —
+ * PLAN_species_moves_split.md Stage 1b, the `registry.ts` half of the split
+ * whose data half (`speciesCore.json`/`speciesMoves.json` themselves) landed
+ * in Stage 1a. Sits beside `resolveEvolutions` and inherits its contract
+ * VERBATIM: `SpeciesRegistry.register` stores the exact reference handed to
+ * it, never a copy, so mutating an already-registered species object in
+ * place here is observed by every other reader of `speciesRegistry.get(id)`.
+ * MUST run after every species is registered (`buildRegistry` calls this
+ * after the register loop, same ordering requirement as `resolveEvolutions`).
+ *
+ * A `bySpecies[id].f`/`.c` entry that resolves to no dictionary entry (a
+ * resync dropped/renamed a move) is skipped for that ONE move only — never
+ * guessed, never thrown — matching `resolveEvolutions`' "degrade a stale
+ * reference rather than crash the app" convention. A species with no
+ * `bySpecies` entry at all keeps whatever it was registered with (empty
+ * arrays — see `buildRegistry`).
+ *
+ * ⚠️ **The 308 move objects here are SHARED BY REFERENCE across every
+ * species that carries that move id** — that sharing IS the saving (13,061
+ * per-species occurrences collapse to 308 objects; see speciesMoves.json's
+ * own generation comment in scripts/sync-data.ts for the dedup-safety
+ * assertion this relies on). Nothing in this codebase mutates a move object
+ * today — confirmed: `megaLevel.ts`'s `chargedMoveAtMegaLevel` returns a
+ * COPY (`{...move, power}`), never mutates in place. **If that ever changes,
+ * an in-place mutation of a move object would silently corrupt every other
+ * species that carries that same move.** Copy before mutating, always.
+ */
+function fillSpeciesMoves(registry: SpeciesRegistry, payload: RawSpeciesMovesPayload): void {
+  for (const id of Object.keys(payload.bySpecies)) {
+    if (!registry.has(id)) continue;
+    const ids = payload.bySpecies[id];
+    if (!ids) continue;
+
+    const fastMoves: FastMove[] = [];
+    for (const moveId of ids.f) {
+      const move = payload.fastMoves[moveId];
+      if (move) fastMoves.push(move);
+    }
+    const chargedMoves: ChargedMove[] = [];
+    for (const moveId of ids.c) {
+      const move = payload.chargedMoves[moveId];
+      if (move) chargedMoves.push(move);
+    }
+
+    const species = registry.get(id);
+    species.fastMoves = fastMoves;
+    species.chargedMoves = chargedMoves;
+  }
+}
+
+/**
  * Single memoized registry for the whole app: every real species from the
  * data layer's normalized output, registered as-is. This project previously
  * also registered 4 hand-defined hypothetical fixtures (Mega Raichu X/Y,
@@ -221,15 +316,23 @@ function resolveEvolutions(registry: SpeciesRegistry, rawSpecies: RawSpeciesReco
  * on `SpeciesDefinition`/`SpeciesRegistry` for any future speculative real
  * data, not dead code tied to these 4 specifically.
  *
- * `resolveEvolutions` runs AFTER every species is registered — see its own
- * doc comment for why order matters and what it mutates.
+ * Each species is registered with EMPTY `fastMoves`/`chargedMoves` arrays
+ * (`speciesCore.json` doesn't carry them at all — see RawSpeciesCoreRecord),
+ * then `resolveEvolutions` and `fillSpeciesMoves` each run AFTER every
+ * species is registered, mutating the registered objects in place — see
+ * their own doc comments for why order matters and what each mutates. Still
+ * fully synchronous, same as before the split: both `speciesCoreData` and
+ * `speciesMovesData` are static imports (Stage 2 of the plan, making the
+ * moves payload a dynamic import behind a loading gate, has not started).
  */
 function buildRegistry(): SpeciesRegistry {
   const registry = new SpeciesRegistry();
-  for (const species of RAW_SPECIES) {
+  for (const core of RAW_SPECIES_CORE) {
+    const species: RawSpeciesRecord = { ...core, fastMoves: [], chargedMoves: [] };
     registry.register(species);
   }
-  resolveEvolutions(registry, RAW_SPECIES);
+  resolveEvolutions(registry, RAW_SPECIES_CORE);
+  fillSpeciesMoves(registry, RAW_SPECIES_MOVES);
   return registry;
 }
 
