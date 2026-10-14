@@ -36,12 +36,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.10.0",
+    "eslint": "^10.12.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.12.0",
+    "globals": "^17.13.0",
     "ts-unused-exports": "^11.0.1",
-    "tsx": "^4.19.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.2",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.71.1"
   }
 }
